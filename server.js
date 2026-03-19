@@ -477,11 +477,12 @@ app.post('/sms/send', async (req, res) => {
     console.log(`SMS: sending to ${toE164} from ${SINCH.sms.number}`);
     console.log(`SMS: using projectId=${SINCH.projectId}, token=${token ? token.slice(0,20) + '...' : 'NONE'}`);
 
-    // Try project-scoped endpoint with OAuth2 token
-    const url = `https://us.sms.api.sinch.com/xms/v1/${SINCH.projectId}/batches`;
+    // Use service plan ID with Bearer token (API token approach)
+    const url = `https://us.sms.api.sinch.com/xms/v1/${SINCH.sms.planId}/batches`;
     console.log(`SMS: POST ${url}`);
 
-    const response = await fetch(url, {
+    // Try with OAuth2 token first
+    let response = await fetch(url, {
         method:  'POST',
         headers: {
           'Content-Type':  'application/json',
@@ -494,6 +495,24 @@ app.post('/sms/send', async (req, res) => {
         }),
       }
     );
+
+    // If 401 with OAuth, try service plan API token (keySecret as bearer)
+    if (response.status === 401) {
+      console.log('SMS: OAuth token rejected, trying API token approach');
+      response = await fetch(url, {
+          method:  'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${SINCH.sms.keySecret}`,
+          },
+          body: JSON.stringify({
+            from: SINCH.sms.number,
+            to:   [toE164],
+            body: text,
+          }),
+        }
+      );
+    }
 
     const responseText = await response.text();
     console.log('SMS API response:', response.status, responseText);
