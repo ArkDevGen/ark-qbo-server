@@ -732,6 +732,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-item" id="nav-taxcenter" onclick="nav('taxcenter')"><span class="ni">🧮</span>Tax Center</div>
     <div class="nav-item" onclick="nav('timecenter')"><span class="ni">⏱</span>Time Center</div>
     <div class="nav-item" id="nav-commcenter" onclick="nav('commcenter')"><span class="ni">📡</span>Comm Center</div>
+    <div class="nav-item" id="nav-payrollcenter" onclick="nav('payrollcenter')"><span class="ni">💰</span>Payroll Center</div>
     <div class="nav-item" id="nav-proposals" onclick="nav('proposals')"><span class="ni">📝</span>Lead Center</div>
     <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
     <div class="nav-item" id="nav-newhirereport" onclick="nav('newhirereport')"><span class="ni">📄</span>New Hire Report</div>
@@ -3655,6 +3656,107 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   </div>
 
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- ════ PAYROLL CENTER ════ -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="view content" id="view-payrollcenter" style="padding:28px 32px;">
+
+    <!-- Page header -->
+    <div style="margin-bottom:22px;">
+      <div style="font-size:22px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">Payroll Center</div>
+      <div style="font-size:12px;color:var(--text-d);margin-top:3px;">Process payroll exports and timesheet calculations</div>
+    </div>
+
+    <!-- Payroll Exports Module -->
+    <div class="card" style="max-width:720px;">
+      <div class="card-header" style="border-bottom:2px solid rgba(184,146,42,.2);">
+        <div>
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">📤</span> Payroll Exports
+          </div>
+          <div class="card-subtitle">Upload a timesheet report and download calculated payroll output</div>
+        </div>
+      </div>
+
+      <div style="padding:20px 22px;display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Step 1: Client Selection -->
+        <div>
+          <label class="field-label">1. Select Client</label>
+          <div style="position:relative;">
+            <input id="pr-client-search" class="field-input" placeholder="Search clients…" autocomplete="off"
+              oninput="prFilterClients(this.value)" onfocus="prShowDD()">
+            <div id="pr-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.1);"></div>
+          </div>
+          <input type="hidden" id="pr-client-id">
+        </div>
+
+        <!-- Step 2: Script indicator (auto-populated) -->
+        <div id="pr-script-wrap" style="display:none;">
+          <label class="field-label">2. Payroll Script</label>
+          <div id="pr-script-display" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;display:flex;align-items:center;gap:8px;"></div>
+        </div>
+
+        <!-- Step 3: File drop zone (shown only when script is mapped) -->
+        <div id="pr-upload-wrap" style="display:none;">
+          <label class="field-label">3. Upload Timesheet Report</label>
+          <div id="pr-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;"
+            onclick="document.getElementById('pr-file-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='rgba(13,27,42,.03)'"
+            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';prHandleDrop(event)">
+            <div id="pr-drop-label" style="font-size:13px;color:var(--text-d);">Drop timesheet file here or click to browse</div>
+            <input type="file" id="pr-file-input" style="display:none" accept=".xlsx,.xls,.csv" onchange="prHandleFile(event)">
+          </div>
+        </div>
+
+        <!-- Step 4: Process button + status -->
+        <div id="pr-process-wrap" style="display:none;">
+          <button onclick="prProcess()" class="btn btn-primary" id="pr-process-btn" style="width:100%;padding:12px;font-size:14px;font-weight:700;">
+            ▶ Process Payroll
+          </button>
+          <div id="pr-status" style="margin-top:8px;font-size:12px;text-align:center;min-height:18px;"></div>
+        </div>
+
+        <!-- Step 5: Download output -->
+        <div id="pr-download-wrap" style="display:none;">
+          <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:22px;">✓</span>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#2e7d32;">Payroll processed successfully</div>
+                <div id="pr-output-name" style="font-size:11px;color:#558b2f;margin-top:2px;"></div>
+              </div>
+            </div>
+            <button onclick="prDownload()" class="btn btn-primary" style="background:#2e7d32;border-color:#2e7d32;">⬇ Download</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Export History -->
+    <div class="card" style="max-width:720px;margin-top:22px;">
+      <div class="card-header">
+        <div class="card-title" style="font-size:13px;">Recent Exports</div>
+        <div class="card-subtitle" id="pr-history-count"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th style="font-size:10px;">Date</th>
+            <th style="font-size:10px;">Client</th>
+            <th style="font-size:10px;">Script</th>
+            <th style="font-size:10px;">Input File</th>
+            <th style="font-size:10px;">Status</th>
+          </tr></thead>
+          <tbody id="pr-history-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
   <!-- /main -->
 
 <!-- ════ CLIENT MODAL ════ -->
@@ -3899,6 +4001,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div id="mc-pr-other-wrap" style="display:none;margin-top:10px;">
               <input id="mc-pr-other-text" class="field-input" placeholder="Specify platform…" style="max-width:280px;">
             </div>
+          </div>
+
+          <hr class="section-divider">
+          <div class="section-label">Payroll Export Script</div>
+          <div class="fg full">
+            <label>Script Name</label>
+            <select id="mc-pr-script">
+              <option value="">— None —</option>
+            </select>
+            <div style="font-size:10px;color:var(--text-d);margin-top:4px;">Used by Payroll Center to auto-select the calculation script for this client</div>
           </div>
 
           <div class="section-label">Payroll Setup</div>
@@ -5658,7 +5770,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',proposals:'lead center',tasks:'production',beta:'insights'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -5671,7 +5783,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',payrollcenter:'Payroll Center'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -5704,6 +5816,7 @@ function nav(page){
   if(page==='salestax'){ stTab('crm'); renderSalesTax(); }
   if(page==='taxcenter'){ renderTaxHub(); }
   if(page==='commcenter'){ ccInit(); }
+  if(page==='payrollcenter'){ renderPayrollCenter(); }
   if(page==='tasks'){ tcRender(); }
   if(page==='proposals'){
     if(!canDo('canViewProposals')){ nav('dashboard'); return; }
@@ -8032,6 +8145,7 @@ function openEditClient(id){
   document.getElementById('mc-notes').value=c.notes||'';
   document.getElementById('mc-ein').value=c.ein||'';
   setPrPlatform(c.prPlatform||'');
+  document.getElementById('mc-pr-script').value=c.prScript||'';
   document.getElementById('mc-pr-swid').value=c.prSwid||'';
   document.getElementById('mc-pr-suta').value=c.prSuta||'';
   document.getElementById('mc-pr-depfreq').value=c.prDepfreq||'';
@@ -8070,6 +8184,7 @@ function openEditClient(id){
   (c.owners||[]).forEach(o=>addOwnerRow(o));
   initWorkLocations(c.locations||[]);
   setPrPlatform(c.prPlatform||'');
+  document.getElementById('mc-pr-script').value=c.prScript||'';
   setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'');
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
@@ -8116,6 +8231,7 @@ function saveClient(){
     owners:getOwners(),
     ein:document.getElementById('mc-ein').value.trim(),
     prPlatform:getPrPlatform(),
+    prScript:document.getElementById('mc-pr-script').value,
     prSwid:document.getElementById('mc-pr-swid').value.trim(),
     prSuta:document.getElementById('mc-pr-suta').value.trim(),
     prDepfreq:document.getElementById('mc-pr-depfreq').value,
@@ -8146,6 +8262,7 @@ function saveClient(){
     taxCpaEmail:document.getElementById('mc-tax-cpa-email').value.trim(),
     taxNotes:document.getElementById('mc-tax-notes').value.trim(),
     prPlatform: getPrPlatform(),
+    prScript: document.getElementById('mc-pr-script').value,
     locations: getWorkLocations(),
     qbType:    document.querySelector('input[name="mc-qb-type"]:checked')?.value||'',
     qboBilling:document.querySelector('input[name="mc-qbo-billing"]:checked')?.value||'',
@@ -12466,6 +12583,215 @@ function ccRenderSMSLog(q){
 
 function smsFilterLog(q){ ccRenderSMSLog(q); }
 function ccDeleteSMS(id){ DB.smsLog=(DB.smsLog||[]).filter(m=>m.id!==id); saveDB(); ccRenderSMSLog(); }
+
+// ════════════════════════════════════════════════════════════════
+// ════ PAYROLL CENTER ════
+// ════════════════════════════════════════════════════════════════
+
+let _prFile = null;
+let _prOutputBlob = null;
+let _prOutputName = '';
+
+function renderPayrollCenter(){
+  prResetForm();
+  prRenderHistory();
+}
+
+// ── Client search & selection ──
+function prFilterClients(q){
+  const f = q.toLowerCase();
+  const list = f ? DB.clients.filter(c=>c.biz.toLowerCase().includes(f) && c.status==='Active') : DB.clients.filter(c=>c.status==='Active');
+  const dd = document.getElementById('pr-client-dd');
+  if(!dd) return;
+  dd.innerHTML = list.slice(0,12).map(c=>{
+    const script = c.prScript ? `<span style="font-size:10px;color:var(--text-d);margin-left:8px;">${c.prScript}</span>` : '';
+    return `<div onclick="prSelectClient('${c.id}')"
+      style="padding:9px 13px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span>${c.biz}</span>${script}
+    </div>`;
+  }).join('') || '<div style="padding:9px 13px;font-size:12px;color:var(--text-d);">No clients found</div>';
+  dd.style.display = 'block';
+}
+
+function prShowDD(){ prFilterClients(document.getElementById('pr-client-search').value||''); }
+
+function prSelectClient(id){
+  const client = DB.clients.find(c=>c.id===id);
+  if(!client) return;
+  document.getElementById('pr-client-id').value = id;
+  document.getElementById('pr-client-search').value = client.biz;
+  document.getElementById('pr-client-dd').style.display = 'none';
+
+  const scriptWrap = document.getElementById('pr-script-wrap');
+  const scriptDisp = document.getElementById('pr-script-display');
+  const uploadWrap = document.getElementById('pr-upload-wrap');
+  const processWrap = document.getElementById('pr-process-wrap');
+
+  scriptWrap.style.display = '';
+
+  if(client.prScript){
+    scriptDisp.innerHTML = `<span style="color:#2e7d32;font-size:16px;">✓</span> <strong>${client.prScript}</strong>`;
+    uploadWrap.style.display = '';
+    processWrap.style.display = 'none';
+  } else {
+    scriptDisp.innerHTML = `<span style="color:#c0392b;font-size:16px;">✗</span> <span style="color:var(--text-d);">No payroll script assigned — configure in Client Center → Payroll tab</span>`;
+    uploadWrap.style.display = 'none';
+    processWrap.style.display = 'none';
+  }
+
+  // Reset file and output
+  _prFile = null;
+  _prOutputBlob = null;
+  document.getElementById('pr-file-input').value = '';
+  document.getElementById('pr-drop-label').textContent = 'Drop timesheet file here or click to browse';
+  document.getElementById('pr-drop-label').style.color = '';
+  document.getElementById('pr-drop-zone').style.borderColor = 'var(--border)';
+  document.getElementById('pr-drop-zone').style.borderStyle = 'dashed';
+  document.getElementById('pr-download-wrap').style.display = 'none';
+  prStatus('','');
+}
+
+// ── File handling ──
+function prHandleDrop(e){
+  const file = e.dataTransfer.files[0];
+  if(file) prSetFile(file);
+}
+function prHandleFile(e){
+  const file = e.target.files[0];
+  if(file) prSetFile(file);
+}
+function prSetFile(file){
+  _prFile = file;
+  const lbl = document.getElementById('pr-drop-label');
+  const zone = document.getElementById('pr-drop-zone');
+  lbl.textContent = `📄 ${file.name}`;
+  lbl.style.color = 'var(--navy)';
+  zone.style.borderColor = 'var(--navy)';
+  zone.style.borderStyle = 'solid';
+  document.getElementById('pr-process-wrap').style.display = '';
+  document.getElementById('pr-download-wrap').style.display = 'none';
+  _prOutputBlob = null;
+  prStatus('','');
+}
+
+// ── Process (placeholder — scripts will be plugged in here) ──
+async function prProcess(){
+  const clientId = document.getElementById('pr-client-id').value;
+  const client = DB.clients.find(c=>c.id===clientId);
+  if(!client || !client.prScript){ prStatus('No script assigned','#c0392b'); return; }
+  if(!_prFile){ prStatus('No file uploaded','#c0392b'); return; }
+
+  const btn = document.getElementById('pr-process-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing…';
+  prStatus('Running payroll script…','var(--text-d)');
+
+  try {
+    // ── SCRIPT DISPATCH ──
+    // Each client.prScript maps to a processing function.
+    // Add new scripts here as: PAYROLL_SCRIPTS['Script Name'] = async (file, client) => { return {blob, fileName}; }
+    const handler = PAYROLL_SCRIPTS[client.prScript];
+    if(!handler){
+      prStatus(`Script "${client.prScript}" not yet implemented — coming soon!`,'#856404');
+      prSaveHistory(client, 'not implemented');
+      return;
+    }
+    const result = await handler(_prFile, client);
+    _prOutputBlob = result.blob;
+    _prOutputName = result.fileName;
+    document.getElementById('pr-output-name').textContent = _prOutputName;
+    document.getElementById('pr-download-wrap').style.display = '';
+    prStatus('','');
+    prSaveHistory(client, 'success');
+  } catch(err){
+    prStatus(`✗ Error: ${err.message}`,'#c0392b');
+    prSaveHistory(client, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Process Payroll';
+  }
+}
+
+// Script registry — add payroll calculation functions here
+const PAYROLL_SCRIPTS = {};
+
+function prDownload(){
+  if(!_prOutputBlob) return;
+  const url = URL.createObjectURL(_prOutputBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = _prOutputName; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function prStatus(msg, color){
+  const el = document.getElementById('pr-status');
+  if(el){ el.textContent = msg; el.style.color = color; }
+}
+
+function prResetForm(){
+  _prFile = null;
+  _prOutputBlob = null;
+  _prOutputName = '';
+  const s = id => document.getElementById(id);
+  if(s('pr-client-search')) s('pr-client-search').value = '';
+  if(s('pr-client-id')) s('pr-client-id').value = '';
+  if(s('pr-script-wrap')) s('pr-script-wrap').style.display = 'none';
+  if(s('pr-upload-wrap')) s('pr-upload-wrap').style.display = 'none';
+  if(s('pr-process-wrap')) s('pr-process-wrap').style.display = 'none';
+  if(s('pr-download-wrap')) s('pr-download-wrap').style.display = 'none';
+  if(s('pr-file-input')) s('pr-file-input').value = '';
+  if(s('pr-drop-label')){ s('pr-drop-label').textContent = 'Drop timesheet file here or click to browse'; s('pr-drop-label').style.color = ''; }
+  if(s('pr-drop-zone')){ s('pr-drop-zone').style.borderColor = 'var(--border)'; s('pr-drop-zone').style.borderStyle = 'dashed'; }
+  prStatus('','');
+}
+
+// ── History ──
+function prSaveHistory(client, status){
+  if(!DB.payrollHistory) DB.payrollHistory = [];
+  DB.payrollHistory.unshift({
+    id: uid(),
+    clientId: client.id,
+    clientName: client.biz,
+    script: client.prScript,
+    inputFile: _prFile?.name || '',
+    status,
+    processedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
+    processedAt: new Date().toISOString()
+  });
+  saveDB();
+  prRenderHistory();
+}
+
+function prRenderHistory(){
+  const body = document.getElementById('pr-history-body');
+  const countEl = document.getElementById('pr-history-count');
+  if(!body) return;
+  const list = DB.payrollHistory || [];
+  if(countEl) countEl.textContent = `${list.length} export${list.length!==1?'s':''}`;
+  if(!list.length){
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-d);font-style:italic;padding:20px;">No exports yet.</td></tr>';
+    return;
+  }
+  const sc = { success:'#2e7d5e', error:'#c0392b', 'not implemented':'#856404' };
+  const sb = { success:'#eaf4ef', error:'#fdf0f0', 'not implemented':'#fff3cd' };
+  body.innerHTML = list.slice(0,25).map(h=>`
+    <tr>
+      <td style="font-size:12px;white-space:nowrap;">${new Date(h.processedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td>
+      <td style="font-size:12px;font-weight:600;">${h.clientName}</td>
+      <td style="font-size:12px;font-family:monospace;">${h.script||'—'}</td>
+      <td style="font-size:12px;">${h.inputFile||'—'}</td>
+      <td><span style="font-size:10px;font-weight:700;text-transform:uppercase;background:${sb[h.status]||'#f0f0f0'};color:${sc[h.status]||'#555'};padding:2px 8px;border-radius:8px;">${h.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ── Close dropdown on outside click ──
+document.addEventListener('click', e => {
+  const dd = document.getElementById('pr-client-dd');
+  const search = document.getElementById('pr-client-search');
+  if(dd && !dd.contains(e.target) && e.target !== search) dd.style.display = 'none';
+});
 
 // ── NH Report → quick fax launcher ──
 function nhSendFaxFromReport(){
