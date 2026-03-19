@@ -272,11 +272,6 @@ app.post('/qbo/api', async (req, res) => {
   } else {
     res.status(400).json({ error: `Unknown action: "${action}"` });
   }
-
-  // ── Unknown action ────────────────────────────────────────────
-  } else {
-    res.status(400).json({ error: `Unknown action: "${action}"` });
-  }
 });
 
 // ─────────────────────────────────────────────────────────────────
