@@ -151,6 +151,17 @@ app.get('/qbo/status', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// ROUTE 3b: Disconnect — clear tokens and force re-auth
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/disconnect', (req, res) => {
+  tokenData = null;
+  realmId = null;
+  try { fs.unlinkSync(TOKEN_FILE); } catch(_) {}
+  console.log('QBO disconnected — tokens cleared');
+  res.json({ disconnected: true });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // HELPER: Get a valid QBO client, refreshing token if needed
 // This is called internally before every API action
 // ─────────────────────────────────────────────────────────────────
