@@ -298,8 +298,7 @@ const SINCH = {
     number:     process.env.SINCH_FAX_NUMBER,
   },
   sms: {
-    keyId:      process.env.SINCH_SMS_KEY_ID,
-    keySecret:  process.env.SINCH_SMS_KEY_SECRET,
+    apiToken:   process.env.SINCH_SMS_API_TOKEN,
     planId:     process.env.SINCH_SMS_PLAN_ID,
     number:     process.env.SINCH_SMS_NUMBER,
   },
@@ -311,7 +310,7 @@ const SINCH = {
 app.get('/comm/status', (req, res) => {
   res.json({
     fax: !!(SINCH.projectId && SINCH.fax.keyId && SINCH.fax.keySecret),
-    sms: !!(SINCH.sms.planId && SINCH.sms.keyId),
+    sms: !!(SINCH.sms.planId && SINCH.sms.apiToken),
     faxNumber: SINCH.fax.number || null,
     smsNumber: SINCH.sms.number || null,
   });
@@ -412,50 +411,7 @@ app.get('/fax/status/:faxId', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// SMS: OAuth2 token cache for Sinch SMS API
-// ─────────────────────────────────────────────────────────────────
-let _smsToken = null;
-let _smsTokenExpiry = 0;
-
-async function getSinchSmsToken() {
-  if (_smsToken && Date.now() < _smsTokenExpiry) return _smsToken;
-
-  console.log(`SMS OAuth: using keyId=${SINCH.sms.keyId}, secret=${SINCH.sms.keySecret ? '***' + SINCH.sms.keySecret.slice(-4) : 'MISSING'}`);
-  const auth = Buffer.from(SINCH.sms.keyId + ':' + SINCH.sms.keySecret).toString('base64');
-  const resp = await fetch('https://auth.sinch.com/oauth2/token', {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${auth}`,
-    },
-    body: 'grant_type=client_credentials',
-  });
-
-  const rawBody = await resp.text();
-  if (!resp.ok) {
-    throw new Error(`Sinch OAuth failed (${resp.status}): ${rawBody}`);
-  }
-
-  const data = JSON.parse(rawBody);
-  _smsToken = data.access_token;
-  _smsTokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
-  console.log('✓ Sinch SMS OAuth token refreshed');
-  return _smsToken;
-}
-
-// Diagnostic: test SMS OAuth token
-app.get('/sms/test-auth', async (req, res) => {
-  try {
-    _smsToken = null; _smsTokenExpiry = 0; // force refresh
-    const token = await getSinchSmsToken();
-    res.json({ ok: true, tokenPrefix: token.slice(0, 20) + '...' });
-  } catch(e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────
-// SMS: Send via Sinch SMS API
+// SMS: Send via Sinch SMS API (service plan API token auth)
 // Dashboard sends: { to, text }
 // Server handles all auth — credentials never leave the server
 // ─────────────────────────────────────────────────────────────────
@@ -464,29 +420,22 @@ app.post('/sms/send', async (req, res) => {
 
   if (!to)   return res.status(400).json({ error: 'Recipient number missing' });
   if (!text) return res.status(400).json({ error: 'Message text missing' });
-  if (!SINCH.sms.planId || !SINCH.sms.keyId) {
+  if (!SINCH.sms.planId || !SINCH.sms.apiToken) {
     return res.status(500).json({ error: 'Sinch SMS not configured on server' });
   }
 
   try {
-    const token = await getSinchSmsToken();
     const digits = to.replace(/\D/g, '');
-    // Ensure E.164 format
     const toE164 = digits.startsWith('1') ? '+' + digits : '+1' + digits;
 
     console.log(`SMS: sending to ${toE164} from ${SINCH.sms.number}`);
-    console.log(`SMS: using projectId=${SINCH.projectId}, token=${token ? token.slice(0,20) + '...' : 'NONE'}`);
 
-    // Use service plan ID with Bearer token (API token approach)
     const url = `https://us.sms.api.sinch.com/xms/v1/${SINCH.sms.planId}/batches`;
-    console.log(`SMS: POST ${url}`);
-
-    // Try with OAuth2 token first
-    let response = await fetch(url, {
+    const response = await fetch(url, {
         method:  'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${SINCH.sms.apiToken}`,
         },
         body: JSON.stringify({
           from: SINCH.sms.number,
@@ -494,23 +443,6 @@ app.post('/sms/send', async (req, res) => {
           body: text,
         }),
       }
-    );
-
-    // If 401 with OAuth, try service plan API token (keySecret as bearer)
-    if (response.status === 401) {
-      console.log('SMS: OAuth token rejected, trying API token approach');
-      response = await fetch(url, {
-          method:  'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${SINCH.sms.keySecret}`,
-          },
-          body: JSON.stringify({
-            from: SINCH.sms.number,
-            to:   [toE164],
-            body: text,
-          }),
-        }
       );
     }
 
@@ -547,6 +479,6 @@ app.post('/sms/send', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
-  const smsOk = SINCH.sms.keyId ? '✓' : '✗';
+  const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}`);
 });
