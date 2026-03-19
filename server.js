@@ -420,6 +420,7 @@ let _smsTokenExpiry = 0;
 async function getSinchSmsToken() {
   if (_smsToken && Date.now() < _smsTokenExpiry) return _smsToken;
 
+  console.log(`SMS OAuth: using keyId=${SINCH.sms.keyId}, secret=${SINCH.sms.keySecret ? '***' + SINCH.sms.keySecret.slice(-4) : 'MISSING'}`);
   const auth = Buffer.from(SINCH.sms.keyId + ':' + SINCH.sms.keySecret).toString('base64');
   const resp = await fetch('https://auth.sinch.com/oauth2/token', {
     method:  'POST',
@@ -442,6 +443,17 @@ async function getSinchSmsToken() {
   return _smsToken;
 }
 
+// Diagnostic: test SMS OAuth token
+app.get('/sms/test-auth', async (req, res) => {
+  try {
+    _smsToken = null; _smsTokenExpiry = 0; // force refresh
+    const token = await getSinchSmsToken();
+    res.json({ ok: true, tokenPrefix: token.slice(0, 20) + '...' });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────
 // SMS: Send via Sinch SMS API
 // Dashboard sends: { to, text }
@@ -460,13 +472,16 @@ app.post('/sms/send', async (req, res) => {
     const token = await getSinchSmsToken();
     const digits = to.replace(/\D/g, '');
     // Ensure E.164 format
-    const toE164 = digits.startsWith('1') ? digits : '1' + digits;
+    const toE164 = digits.startsWith('1') ? '+' + digits : '+1' + digits;
 
     console.log(`SMS: sending to ${toE164} from ${SINCH.sms.number}`);
+    console.log(`SMS: using projectId=${SINCH.projectId}, token=${token ? token.slice(0,20) + '...' : 'NONE'}`);
 
-    const response = await fetch(
-      `https://us.sms.api.sinch.com/xms/v1/${SINCH.projectId}/batches`,
-      {
+    // Try project-scoped endpoint with OAuth2 token
+    const url = `https://us.sms.api.sinch.com/xms/v1/${SINCH.projectId}/batches`;
+    console.log(`SMS: POST ${url}`);
+
+    const response = await fetch(url, {
         method:  'POST',
         headers: {
           'Content-Type':  'application/json',
@@ -474,7 +489,7 @@ app.post('/sms/send', async (req, res) => {
         },
         body: JSON.stringify({
           from: SINCH.sms.number,
-          to:   ['+' + toE164],
+          to:   [toE164],
           body: text,
         }),
       }
