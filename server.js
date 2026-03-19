@@ -248,6 +248,17 @@ app.post('/qbo/api', async (req, res) => {
     });
 
   // ── Action: Get Vendors ───────────────────────────────────────
+  } else if (action === 'getVendors') {
+    qbo.findVendors({ Active: true }, (err, data) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const vendors = (data.QueryResponse?.Vendor || []).map(v => ({
+        id:   v.Id,
+        name: v.DisplayName,
+      }));
+      res.json({ success: true, vendors });
+    });
+
+  // ── Action: Get Company Info ──────────────────────────────────
   } else if (action === 'getCompanyInfo') {
     qbo.getCompanyInfo(realmId, (err, data) => {
       if (err) {
@@ -256,6 +267,11 @@ app.post('/qbo/api', async (req, res) => {
       }
       res.json({ companyInfo: data });
     });
+
+  // ── Unknown action ────────────────────────────────────────────
+  } else {
+    res.status(400).json({ error: `Unknown action: "${action}"` });
+  }
 
   // ── Unknown action ────────────────────────────────────────────
   } else {
