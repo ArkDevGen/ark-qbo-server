@@ -248,14 +248,13 @@ app.post('/qbo/api', async (req, res) => {
     });
 
   // ── Action: Get Vendors ───────────────────────────────────────
-  } else if (action === 'getVendors') {
-    qbo.findVendors({ Active: true }, (err, data) => {
-      if (err) return res.status(500).json({ error: err.message });
-      const vendors = (data.QueryResponse?.Vendor || []).map(v => ({
-        id:   v.Id,
-        name: v.DisplayName,
-      }));
-      res.json({ success: true, vendors });
+  } else if (action === 'getCompanyInfo') {
+    qbo.getCompanyInfo(realmId, (err, data) => {
+      if (err) {
+        console.error('getCompanyInfo error:', err);
+        return res.status(500).json({ error: err.message || 'getCompanyInfo failed' });
+      }
+      res.json({ companyInfo: data.CompanyInfo });
     });
 
   // ── Unknown action ────────────────────────────────────────────
@@ -268,6 +267,81 @@ app.post('/qbo/api', async (req, res) => {
 // Start the server
 // ─────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+// ── FAX: Send via Sinch/Phaxio API ──────────────────────────────
+app.post('/fax/send', async (req, res) => {
+  const { apiKey, apiSecret, fromNumber, toNumber, fileName, fileData, headerText } = req.body;
+
+  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'API credentials missing' });
+  if (!toNumber)             return res.status(400).json({ error: 'Recipient number missing' });
+  if (!fileData)             return res.status(400).json({ error: 'No file data provided' });
+
+  try {
+    const fileBuffer = Buffer.from(fileData, 'base64');
+    const FormData   = require('form-data');
+    const form       = new FormData();
+    form.append('to',   toNumber.replace(/\D/g, ''));
+    form.append('file', fileBuffer, { filename: fileName || 'document.pdf', contentType: 'application/pdf' });
+    if (headerText) form.append('header_text', headerText);
+    if (fromNumber) form.append('caller_id',   fromNumber.replace(/\D/g, ''));
+
+    const response = await fetch('https://api.phaxio.com/v2/faxes', {
+      method:  'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
+        ...form.getHeaders()
+      },
+      body: form
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch(e) {
+    console.error('Fax send error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── FAX: Check status ────────────────────────────────────────────
+app.get('/fax/status/:faxId', async (req, res) => {
+  const { apiKey, apiSecret } = req.query;
+  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'Credentials missing' });
+
+  try {
+    const response = await fetch(`https://api.phaxio.com/v2/faxes/${req.params.faxId}`, {
+      headers: { 'Authorization': 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64') }
+    });
+    res.json(await response.json());
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+// ── SMS: Send via Vonage/Nexmo ────────────────────────────────────
+app.post('/sms/send', async (req, res) => {
+  const { apiKey, apiSecret, from, to, text } = req.body;
+
+  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'API credentials missing' });
+  if (!to)   return res.status(400).json({ error: 'Recipient number missing' });
+  if (!text) return res.status(400).json({ error: 'Message text missing' });
+
+  try {
+    const response = await fetch('https://rest.nexmo.com/sms/json', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key:    apiKey,
+        api_secret: apiSecret,
+        to:   to.replace(/\D/g, ''),
+        from: from.replace(/\D/g, ''),
+        text
+      })
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch(e) {
+    console.error('SMS send error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
   console.log(`Network access: http://192.168.254.137:${PORT}`);  // your actual IP
