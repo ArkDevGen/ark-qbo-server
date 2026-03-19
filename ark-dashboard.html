@@ -12379,7 +12379,9 @@ async function ccSendSMS(){
       ccResetSMSForm();
     } else {
       ccSaveSMSLog(clientId, clientName, toNumber, message, 'failed', '');
-      smsStatus(`✗ Failed: ${data.message||data.error||'Unknown error'}`, '#c0392b');
+      const errMsg = data.message || data.error || 'Unknown error';
+      const extra = data.raw ? ` [${data.httpStatus}: ${data.raw.slice(0,200)}]` : '';
+      smsStatus(`✗ Failed: ${errMsg}${extra}`, '#c0392b');
     }
   } catch(err){
     ccSaveSMSLog(clientId, clientName, toNumber, message, 'error', '');

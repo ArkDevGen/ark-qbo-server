@@ -490,6 +490,8 @@ app.post('/sms/send', async (req, res) => {
       return res.status(response.status).json({
         error: data.text || data.message || responseText || 'Sinch SMS API error',
         detail: data,
+        raw: responseText,
+        httpStatus: response.status,
       });
     }
 
