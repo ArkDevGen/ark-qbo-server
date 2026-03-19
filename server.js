@@ -7,6 +7,8 @@ require('dotenv').config();
 const express     = require('express');
 const OAuthClient = require('intuit-oauth');
 const QuickBooks  = require('node-quickbooks');
+const path        = require('path');
+const crypto      = require('crypto');
 
 const app = express();
 
@@ -283,82 +285,229 @@ app.post('/qbo/api', async (req, res) => {
 // Start the server
 // ─────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-// ── FAX: Send via Sinch/Phaxio API ──────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
+// SINCH CONFIGURATION
+// All credentials stored in env vars — never passed from client
+// ─────────────────────────────────────────────────────────────────
+const SINCH = {
+  projectId:    process.env.SINCH_PROJECT_ID,
+  fax: {
+    keyId:      process.env.SINCH_FAX_KEY_ID,
+    keySecret:  process.env.SINCH_FAX_KEY_SECRET,
+    number:     process.env.SINCH_FAX_NUMBER,
+  },
+  sms: {
+    keyId:      process.env.SINCH_SMS_KEY_ID,
+    keySecret:  process.env.SINCH_SMS_KEY_SECRET,
+    planId:     process.env.SINCH_SMS_PLAN_ID,
+    number:     process.env.SINCH_SMS_NUMBER,
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────
+// COMM STATUS — Dashboard checks this to know if fax/SMS are live
+// ─────────────────────────────────────────────────────────────────
+app.get('/comm/status', (req, res) => {
+  res.json({
+    fax: !!(SINCH.projectId && SINCH.fax.keyId && SINCH.fax.keySecret),
+    sms: !!(SINCH.sms.planId && SINCH.sms.keyId),
+    faxNumber: SINCH.fax.number || null,
+    smsNumber: SINCH.sms.number || null,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// TEMP FILE SERVING — Sinch Fax pulls content from a URL
+// ─────────────────────────────────────────────────────────────────
+const TEMP_DIR = path.join(require('os').tmpdir(), 'ark-fax-temp');
+fs.mkdirSync(TEMP_DIR, { recursive: true });
+app.use('/temp', express.static(TEMP_DIR));
+
+// Increase JSON body limit for fax file uploads (base64 PDFs can be large)
+app.use('/fax/send', express.json({ limit: '25mb' }));
+
+// ─────────────────────────────────────────────────────────────────
+// FAX: Send via Sinch Fax API v3
+// Dashboard sends: { toNumber, fileName, fileData (base64) }
+// Server handles all auth — credentials never leave the server
+// ─────────────────────────────────────────────────────────────────
 app.post('/fax/send', async (req, res) => {
-  const { apiKey, apiSecret, fromNumber, toNumber, fileName, fileData, headerText } = req.body;
+  const { toNumber, fileName, fileData } = req.body;
 
-  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'API credentials missing' });
-  if (!toNumber)             return res.status(400).json({ error: 'Recipient number missing' });
-  if (!fileData)             return res.status(400).json({ error: 'No file data provided' });
+  if (!toNumber) return res.status(400).json({ error: 'Recipient fax number missing' });
+  if (!fileData) return res.status(400).json({ error: 'No file data provided' });
+  if (!SINCH.projectId || !SINCH.fax.keyId) {
+    return res.status(500).json({ error: 'Sinch Fax not configured on server' });
+  }
 
+  let tempPath = null;
   try {
-    const fileBuffer = Buffer.from(fileData, 'base64');
-    const FormData   = require('form-data');
-    const form       = new FormData();
-    form.append('to',   toNumber.replace(/\D/g, ''));
-    form.append('file', fileBuffer, { filename: fileName || 'document.pdf', contentType: 'application/pdf' });
-    if (headerText) form.append('header_text', headerText);
-    if (fromNumber) form.append('caller_id',   fromNumber.replace(/\D/g, ''));
+    // Save base64 file to temp directory so Sinch can pull it via URL
+    const safeName = crypto.randomUUID() + '-' + (fileName || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    tempPath = path.join(TEMP_DIR, safeName);
+    fs.writeFileSync(tempPath, Buffer.from(fileData, 'base64'));
 
-    const response = await fetch('https://api.phaxio.com/v2/faxes', {
-      method:  'POST',
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
-        ...form.getHeaders()
-      },
-      body: form
-    });
+    // Build the public URL that Sinch will fetch
+    const serverUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    const contentUrl = `${serverUrl}/temp/${safeName}`;
+
+    console.log(`Fax: sending to ${toNumber}, contentUrl: ${contentUrl}`);
+
+    // Call Sinch Fax API v3
+    const faxAuth = Buffer.from(SINCH.fax.keyId + ':' + SINCH.fax.keySecret).toString('base64');
+    const response = await fetch(
+      `https://fax.api.sinch.com/v3/projects/${SINCH.projectId}/faxes`,
+      {
+        method:  'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${faxAuth}`,
+        },
+        body: JSON.stringify({
+          to:         toNumber.replace(/[^\d+]/g, ''),
+          from:       SINCH.fax.number,
+          contentUrl: contentUrl,
+        }),
+      }
+    );
 
     const data = await response.json();
-    res.json(data);
+    console.log('Fax API response:', JSON.stringify(data));
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.message || data.detail || 'Sinch Fax API error', detail: data });
+    }
+
+    res.json({ success: true, faxId: data.id, ...data });
   } catch(e) {
     console.error('Fax send error:', e);
     res.status(500).json({ error: e.message });
+  } finally {
+    // Clean up temp file after 5 minutes (give Sinch time to pull it)
+    if (tempPath) {
+      setTimeout(() => { try { fs.unlinkSync(tempPath); } catch(e){} }, 300000);
+    }
   }
 });
 
-// ── FAX: Check status ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// FAX: Check status via Sinch Fax API v3
+// ─────────────────────────────────────────────────────────────────
 app.get('/fax/status/:faxId', async (req, res) => {
-  const { apiKey, apiSecret } = req.query;
-  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'Credentials missing' });
+  if (!SINCH.projectId || !SINCH.fax.keyId) {
+    return res.status(500).json({ error: 'Sinch Fax not configured' });
+  }
 
   try {
-    const response = await fetch(`https://api.phaxio.com/v2/faxes/${req.params.faxId}`, {
-      headers: { 'Authorization': 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64') }
-    });
+    const faxAuth = Buffer.from(SINCH.fax.keyId + ':' + SINCH.fax.keySecret).toString('base64');
+    const response = await fetch(
+      `https://fax.api.sinch.com/v3/projects/${SINCH.projectId}/faxes/${req.params.faxId}`,
+      { headers: { 'Authorization': `Basic ${faxAuth}` } }
+    );
     res.json(await response.json());
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
 });
-// ── SMS: Send via Vonage/Nexmo ────────────────────────────────────
-app.post('/sms/send', async (req, res) => {
-  const { apiKey, apiSecret, from, to, text } = req.body;
 
-  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'API credentials missing' });
+// ─────────────────────────────────────────────────────────────────
+// SMS: OAuth2 token cache for Sinch SMS API
+// ─────────────────────────────────────────────────────────────────
+let _smsToken = null;
+let _smsTokenExpiry = 0;
+
+async function getSinchSmsToken() {
+  if (_smsToken && Date.now() < _smsTokenExpiry) return _smsToken;
+
+  const auth = Buffer.from(SINCH.sms.keyId + ':' + SINCH.sms.keySecret).toString('base64');
+  const resp = await fetch('https://auth.sinch.com/oauth2/token', {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${auth}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Sinch OAuth failed: ${err}`);
+  }
+
+  const data = await resp.json();
+  _smsToken = data.access_token;
+  _smsTokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
+  console.log('✓ Sinch SMS OAuth token refreshed');
+  return _smsToken;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SMS: Send via Sinch SMS API
+// Dashboard sends: { to, text }
+// Server handles all auth — credentials never leave the server
+// ─────────────────────────────────────────────────────────────────
+app.post('/sms/send', async (req, res) => {
+  const { to, text } = req.body;
+
   if (!to)   return res.status(400).json({ error: 'Recipient number missing' });
   if (!text) return res.status(400).json({ error: 'Message text missing' });
+  if (!SINCH.sms.planId || !SINCH.sms.keyId) {
+    return res.status(500).json({ error: 'Sinch SMS not configured on server' });
+  }
 
   try {
-    const response = await fetch('https://rest.nexmo.com/sms/json', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key:    apiKey,
-        api_secret: apiSecret,
-        to:   to.replace(/\D/g, ''),
-        from: from.replace(/\D/g, ''),
-        text
-      })
-    });
+    const token = await getSinchSmsToken();
+    const digits = to.replace(/\D/g, '');
+    // Ensure E.164 format
+    const toE164 = digits.startsWith('1') ? digits : '1' + digits;
+
+    console.log(`SMS: sending to ${toE164} from ${SINCH.sms.number}`);
+
+    const response = await fetch(
+      `https://us.sms.api.sinch.com/xms/v1/${SINCH.sms.planId}/batches`,
+      {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          from: SINCH.sms.number.replace(/\D/g, ''),
+          to:   [toE164],
+          body: text,
+        }),
+      }
+    );
+
     const data = await response.json();
-    res.json(data);
+    console.log('SMS API response:', JSON.stringify(data));
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data.text || data.message || 'Sinch SMS API error',
+        detail: data,
+      });
+    }
+
+    // Sinch SMS returns batch info with an id
+    res.json({
+      success: true,
+      messageId: data.id,
+      status: 'sent',
+    });
   } catch(e) {
     console.error('SMS send error:', e);
     res.status(500).json({ error: e.message });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Start listening
+// ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
-  console.log(`Network access: http://192.168.254.137:${PORT}`);  // your actual IP
+  const faxOk = SINCH.fax.keyId ? '✓' : '✗';
+  const smsOk = SINCH.sms.keyId ? '✓' : '✗';
+  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}`);
 });

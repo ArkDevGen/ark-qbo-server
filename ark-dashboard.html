@@ -12001,53 +12001,47 @@ function ccInit(){
 }
 
 function ccCheckApiConfig(){
-  const cfg = DB.commConfig||{};
-  const faxConfigured = !!(cfg.phaxioKey && cfg.phaxioSecret);
-  const smsConfigured = !!(cfg.smsKey && cfg.smsFrom);
+  // Check server-side Sinch config instead of localStorage credentials
+  fetch('https://ark-qbo-server.onrender.com/comm/status')
+    .then(r => r.json())
+    .then(data => {
+      const faxConfigured = !!data.fax;
+      const smsConfigured = !!data.sms;
 
-  const faxBanner = document.getElementById('cc-fax-api-banner');
-  const smsBanner = document.getElementById('cc-sms-api-banner');
-  if(faxBanner) faxBanner.style.display = faxConfigured ? 'none' : 'flex';
-  if(smsBanner) smsBanner.style.display = smsConfigured ? 'none' : 'flex';
+      const faxBanner = document.getElementById('cc-fax-api-banner');
+      const smsBanner = document.getElementById('cc-sms-api-banner');
+      if(faxBanner) faxBanner.style.display = faxConfigured ? 'none' : 'flex';
+      if(smsBanner) smsBanner.style.display = smsConfigured ? 'none' : 'flex';
 
-  // Update header dot indicators
-  const faxDot = document.getElementById('cc-fax-api-banner-dot');
-  const smsDot = document.getElementById('cc-sms-api-banner-dot');
-  if(faxDot){ faxDot.style.background = faxConfigured ? '#4dffa0' : '#f0b429'; faxDot.title = faxConfigured ? 'Fax API connected' : 'Fax API not configured'; }
-  if(smsDot){ smsDot.style.background = smsConfigured ? '#4dffa0' : '#f0b429'; smsDot.title = smsConfigured ? 'SMS API connected' : 'SMS API not configured'; }
+      const faxDot = document.getElementById('cc-fax-api-banner-dot');
+      const smsDot = document.getElementById('cc-sms-api-banner-dot');
+      if(faxDot){ faxDot.style.background = faxConfigured ? '#4dffa0' : '#f0b429'; faxDot.title = faxConfigured ? 'Fax API connected' : 'Fax API not configured'; }
+      if(smsDot){ smsDot.style.background = smsConfigured ? '#4dffa0' : '#f0b429'; smsDot.title = smsConfigured ? 'SMS API connected' : 'SMS API not configured'; }
+
+      // Store server numbers for display
+      if(data.faxNumber) DB.commConfig.phaxioFrom = data.faxNumber;
+      if(data.smsNumber) DB.commConfig.smsFrom = data.smsNumber;
+    })
+    .catch(() => {
+      // Server unreachable — show warnings
+      const faxBanner = document.getElementById('cc-fax-api-banner');
+      const smsBanner = document.getElementById('cc-sms-api-banner');
+      if(faxBanner) faxBanner.style.display = 'flex';
+      if(smsBanner) smsBanner.style.display = 'flex';
+    });
 }
 
 // ── API Config modals ──
 function ccConfigFax(){
-  const cfg = DB.commConfig||{};
-  const key    = prompt('Sinch Fax API Key:', cfg.phaxioKey||'');
-  if(key===null) return;
-  const secret = prompt('Sinch Fax API Secret:', cfg.phaxioSecret||'');
-  if(secret===null) return;
-  const from   = prompt('Your Sinch fax number (e.g. 14025213033):', cfg.phaxioFrom||'');
-  if(from===null) return;
-  DB.commConfig.phaxioKey    = key.trim();
-  DB.commConfig.phaxioSecret = secret.trim();
-  DB.commConfig.phaxioFrom   = from.trim();
-  saveDB();
+  // Credentials are now server-side — just re-check connection
   ccCheckApiConfig();
-  showToast('✓ Sinch Fax credentials saved');
+  showToast('Fax credentials are managed server-side. Checking connection…');
 }
 
 function ccConfigSMS(){
-  const cfg = DB.commConfig||{};
-  const key    = prompt('SMS API Key (Phaxio or Vonage):', cfg.smsKey||'');
-  if(key===null) return;
-  const secret = prompt('SMS API Secret:', cfg.smsSecret||'');
-  if(secret===null) return;
-  const from   = prompt('Your SMS from number (e.g. 14025213033):', cfg.smsFrom||'');
-  if(from===null) return;
-  DB.commConfig.smsKey    = key.trim();
-  DB.commConfig.smsSecret = secret.trim();
-  DB.commConfig.smsFrom   = from.trim();
-  saveDB();
+  // Credentials are now server-side — just re-check connection
   ccCheckApiConfig();
-  showToast('✓ SMS credentials saved');
+  showToast('SMS credentials are managed server-side. Checking connection…');
 }
 
 // ══════════════════════════════════════════════
@@ -12097,19 +12091,15 @@ function faxFileToBase64(file){
 }
 
 // ── Helper: send fax via local server proxy ───────────────────────
-async function faxSendViaServer(cfg, toNumber, file, fileName, headerText){
+async function faxSendViaServer(toNumber, file, fileName, headerText){
   const fileData = await faxFileToBase64(file);
   const resp = await fetch('https://ark-qbo-server.onrender.com/fax/send', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      apiKey:     cfg.phaxioKey,
-      apiSecret:  cfg.phaxioSecret,
-      fromNumber: cfg.phaxioFrom || '',
       toNumber,
       fileName:   fileName || 'document.pdf',
       fileData,
-      headerText: headerText || '',
     })
   });
   return resp.json();
@@ -12125,35 +12115,22 @@ async function ccSendFax(){
 
   faxStatus('Sending…','var(--text-d)');
 
-  const cfg = DB.commConfig||{};
-  const hasCredentials = cfg.phaxioKey && cfg.phaxioSecret;
-
-  if(hasCredentials){
-    // ── Real send via server proxy (avoids CORS) ──
-    try {
-      const data = await faxSendViaServer(cfg, toNumber, _faxFile, _faxFile.name, coverMsg);
-      if(data.success){
-        ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'sent', data.id||'');
-        faxStatus(`✓ Fax sent successfully (ID: ${data.id||'—'})`, '#2e7d5e');
-        ccResetFaxForm();
-      } else {
-        ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'failed', '');
-        faxStatus(`✗ Send failed: ${data.message||'Unknown error'}`, '#c0392b');
-      }
-    } catch(err){
-      ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'error', '');
-      // Give a helpful message if the server isn't running
-      const msg = err.message.includes('fetch') || err.message.includes('Failed')
-        ? 'Server not running — start server.js first (node server.js)'
-        : err.message;
-      faxStatus(`✗ ${msg}`, '#c0392b');
+  try {
+    const data = await faxSendViaServer(toNumber, _faxFile, _faxFile.name, coverMsg);
+    if(data.success){
+      ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'sent', data.faxId||'');
+      faxStatus(`✓ Fax sent successfully (ID: ${data.faxId||'—'})`, '#2e7d5e');
+      ccResetFaxForm();
+    } else {
+      ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'failed', '');
+      faxStatus(`✗ Send failed: ${data.message||'Unknown error'}`, '#c0392b');
     }
-  } else {
-    // ── Simulated send (no credentials yet) ──
-    await new Promise(r=>setTimeout(r,1200));
-    ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'simulated', 'SIM-'+Date.now());
-    faxStatus('✓ Fax logged (simulated — configure Sinch credentials first)', '#856404');
-    ccResetFaxForm();
+  } catch(err){
+    ccSaveFaxOutbox(toName, toNumber, _faxFile.name, coverMsg, 'error', '');
+    const msg = err.message.includes('fetch') || err.message.includes('Failed')
+      ? 'Server not running — start server.js first (node server.js)'
+      : err.message;
+    faxStatus(`✗ ${msg}`, '#c0392b');
   }
 
   ccRenderOutbox();
@@ -12384,48 +12361,32 @@ async function ccSendSMS(){
 
   smsStatus('Sending…','var(--text-d)');
 
-  const cfg = DB.commConfig||{};
-  const hasCredentials = cfg.smsKey && cfg.smsFrom;
   const digits = toNumber.replace(/\D/g,'');
 
-  if(hasCredentials){
-    // ── Real SMS send via server proxy (avoids CORS) ──
-    try {
-      const resp = await fetch('https://ark-qbo-server.onrender.com/sms/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey:    cfg.smsKey,
-          apiSecret: cfg.smsSecret,
-          from:      cfg.smsFrom,
-          to:        digits,
-          text:      message
-        })
-      });
-      const data = await resp.json();
-      const msg0 = data.messages?.[0];
-      if(msg0?.status === '0'){
-        ccSaveSMSLog(clientId, clientName, toNumber, message, 'sent', msg0['message-id']||'');
-        smsStatus('✓ Message sent','#2e7d5e');
-        ccResetSMSForm();
-      } else {
-        ccSaveSMSLog(clientId, clientName, toNumber, message, 'failed', '');
-        const errText = msg0?.['error-text'] || data.error || 'Unknown error';
-        smsStatus(`✗ Failed: ${errText}`, '#c0392b');
-      }
-    } catch(err){
-      ccSaveSMSLog(clientId, clientName, toNumber, message, 'error', '');
-      const msg = err.message.includes('fetch') || err.message.includes('Failed')
-        ? 'Server not running — start server.js first (node server.js)'
-        : err.message;
-      smsStatus(`✗ ${msg}`, '#c0392b');
+  try {
+    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to:   digits,
+        text: message
+      })
+    });
+    const data = await resp.json();
+    if(data.success){
+      ccSaveSMSLog(clientId, clientName, toNumber, message, 'sent', data.messageId||'');
+      smsStatus('✓ Message sent','#2e7d5e');
+      ccResetSMSForm();
+    } else {
+      ccSaveSMSLog(clientId, clientName, toNumber, message, 'failed', '');
+      smsStatus(`✗ Failed: ${data.message||'Unknown error'}`, '#c0392b');
     }
-  } else {
-    // ── Simulated ──
-    await new Promise(r=>setTimeout(r,800));
-    ccSaveSMSLog(clientId, clientName, toNumber, message, 'simulated', 'SIM-'+Date.now());
-    smsStatus('✓ Message logged (simulated — no API key yet)', '#856404');
-    ccResetSMSForm();
+  } catch(err){
+    ccSaveSMSLog(clientId, clientName, toNumber, message, 'error', '');
+    const msg = err.message.includes('fetch') || err.message.includes('Failed')
+      ? 'Server not running — start server.js first (node server.js)'
+      : err.message;
+    smsStatus(`✗ ${msg}`, '#c0392b');
   }
 
   ccRenderSMSLog();
