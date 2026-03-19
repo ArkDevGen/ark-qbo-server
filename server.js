@@ -254,7 +254,7 @@ app.post('/qbo/api', async (req, res) => {
         console.error('getCompanyInfo error:', err);
         return res.status(500).json({ error: err.message || 'getCompanyInfo failed' });
       }
-      res.json({ companyInfo: data.CompanyInfo });
+      res.json({ companyInfo: data });
     });
 
   // ── Unknown action ────────────────────────────────────────────
