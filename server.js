@@ -13,6 +13,11 @@ const app = express();
 // Parse JSON request bodies (needed so we can read req.body)
 app.use(express.json());
 
+// Serve the ARK dashboard at the root URL
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/ark-dashboard.html');
+});
+
 // ─────────────────────────────────────────────────────────────────
 // CORS — Cross-Origin Resource Sharing
 // Your ARK dashboard (running at file:// or localhost) is a 
