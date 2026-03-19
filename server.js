@@ -12,8 +12,8 @@ const crypto      = require('crypto');
 
 const app = express();
 
-// Parse JSON request bodies (needed so we can read req.body)
-app.use(express.json());
+// Parse JSON request bodies — 25mb limit for fax file uploads
+app.use(express.json({ limit: '25mb' }));
 
 // Serve the ARK dashboard at the root URL
 app.get('/', (req, res) => {
@@ -322,9 +322,6 @@ app.get('/comm/status', (req, res) => {
 const TEMP_DIR = path.join(require('os').tmpdir(), 'ark-fax-temp');
 fs.mkdirSync(TEMP_DIR, { recursive: true });
 app.use('/temp', express.static(TEMP_DIR));
-
-// Increase JSON body limit for fax file uploads (base64 PDFs can be large)
-app.use('/fax/send', express.json({ limit: '25mb' }));
 
 // ─────────────────────────────────────────────────────────────────
 // FAX: Send via Sinch Fax API v3
