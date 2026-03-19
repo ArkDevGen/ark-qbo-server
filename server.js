@@ -465,7 +465,7 @@ app.post('/sms/send', async (req, res) => {
     console.log(`SMS: sending to ${toE164} from ${SINCH.sms.number}`);
 
     const response = await fetch(
-      `https://us.sms.api.sinch.com/xms/v1/${SINCH.sms.planId}/batches`,
+      `https://us.sms.api.sinch.com/xms/v1/${SINCH.projectId}/batches`,
       {
         method:  'POST',
         headers: {
