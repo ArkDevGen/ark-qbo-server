@@ -443,8 +443,7 @@ app.post('/sms/send', async (req, res) => {
           body: text,
         }),
       }
-      );
-    }
+    );
 
     const responseText = await response.text();
     console.log('SMS API response:', response.status, responseText);
