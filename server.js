@@ -430,12 +430,12 @@ async function getSinchSmsToken() {
     body: 'grant_type=client_credentials',
   });
 
+  const rawBody = await resp.text();
   if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Sinch OAuth failed: ${err}`);
+    throw new Error(`Sinch OAuth failed (${resp.status}): ${rawBody}`);
   }
 
-  const data = await resp.json();
+  const data = JSON.parse(rawBody);
   _smsToken = data.access_token;
   _smsTokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
   console.log('✓ Sinch SMS OAuth token refreshed');
@@ -473,19 +473,22 @@ app.post('/sms/send', async (req, res) => {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          from: SINCH.sms.number.replace(/\D/g, ''),
-          to:   [toE164],
+          from: SINCH.sms.number,
+          to:   ['+' + toE164],
           body: text,
         }),
       }
     );
 
-    const data = await response.json();
-    console.log('SMS API response:', JSON.stringify(data));
+    const responseText = await response.text();
+    console.log('SMS API response:', response.status, responseText);
+
+    let data;
+    try { data = JSON.parse(responseText); } catch(_) { data = {}; }
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.text || data.message || 'Sinch SMS API error',
+        error: data.text || data.message || responseText || 'Sinch SMS API error',
         detail: data,
       });
     }
