@@ -562,31 +562,30 @@ if (fs.existsSync(PAYROLL_FILE)) {
   }
 }
 
-// Sync: if repo copy has employees that persistent disk is missing, merge them in
+// Sync: if repo copy has more store/employee data, replace the client config
+// (preserves submissions and session tokens on disk, but overwrites client configs from repo)
 const localCopy = path.join(__dirname, 'payroll-data.json');
 if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
   try {
     const repoCopy = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
     let updated = false;
     for (const [slug, repoClient] of Object.entries(repoCopy.clients || {})) {
-      if (!payrollData.clients[slug]) {
-        payrollData.clients[slug] = repoClient;
+      const diskClient = payrollData.clients[slug];
+      // Count total employees in repo vs disk
+      const repoEmpCount = Object.values(repoClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0);
+      const diskEmpCount = diskClient ? Object.values(diskClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0) : 0;
+      const repoStoreCount = Object.keys(repoClient.stores || {}).length;
+      const diskStoreCount = diskClient ? Object.keys(diskClient.stores || {}).length : 0;
+
+      if (!diskClient || repoEmpCount > diskEmpCount || repoStoreCount > diskStoreCount) {
+        // Repo has more data — use repo version but preserve session token & notifications
+        const preserved = {
+          _sessionToken: diskClient?._sessionToken || null,
+          _notifications: diskClient?._notifications || [],
+        };
+        payrollData.clients[slug] = { ...repoClient, ...preserved };
         updated = true;
-      } else {
-        const diskClient = payrollData.clients[slug];
-        for (const [storeId, repoStore] of Object.entries(repoClient.stores || {})) {
-          const diskStore = (diskClient.stores || {})[storeId];
-          if (repoStore.employees && repoStore.employees.length > 0 &&
-              (!diskStore || !diskStore.employees || diskStore.employees.length === 0)) {
-            if (!diskClient.stores) diskClient.stores = {};
-            diskClient.stores[storeId] = repoStore;
-            updated = true;
-          }
-        }
-        if (repoClient.workLocations && repoClient.workLocations.length > (diskClient.workLocations || []).length) {
-          diskClient.workLocations = repoClient.workLocations;
-          updated = true;
-        }
+        console.log(`  → Synced ${slug}: ${repoStoreCount} stores, ${repoEmpCount} employees`);
       }
     }
     if (updated) {
@@ -635,10 +634,12 @@ app.post('/payroll/login', (req, res) => {
     success: true,
     token,
     clientName: client.name,
-    stores: Object.entries(client.stores || {}).map(([id, s]) => ({
-      id,
-      name: s.name,
-    })),
+    stores: Object.entries(client.stores || {})
+      .filter(([id]) => id !== 'admin')
+      .map(([id, s]) => ({
+        id,
+        name: s.name,
+      })),
     payFrequency: client.payFrequency || '',
     workLocations: client.workLocations || [],
   });
