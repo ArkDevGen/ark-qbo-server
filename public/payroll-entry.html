@@ -84,6 +84,10 @@
   .btn-dd { background: var(--orange); color: #0d1b2a; padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
   .btn-dd:hover { background: #e89a3d; }
   .btn-dd:disabled { opacity: .5; cursor: not-allowed; }
+  .pay-rate-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-end; }
+  .pay-rate-row > div { flex: 1; }
+  .pay-rate-row .pr-remove { flex: 0 0 32px; padding: 8px 0; text-align: center; color: var(--red); cursor: pointer; font-size: 18px; border: 1px solid var(--border); border-radius: 4px; background: transparent; transition: all .2s; }
+  .pay-rate-row .pr-remove:hover { border-color: var(--red); background: rgba(255,92,92,.1); }
 
   /* Responsive */
   @media (max-width: 768px) {
@@ -212,6 +216,7 @@
   <div class="modal">
     <h3>Add New Employee</h3>
 
+    <!-- Personal Information -->
     <h4 style="border-top:none;margin-top:0;padding-top:0;">Personal Information</h4>
     <div class="row">
       <div><label>First Name <span class="required-star">*</span></label><input type="text" id="new-emp-first"></div>
@@ -221,7 +226,12 @@
       <div><label>SSN <span class="required-star">*</span></label><input type="text" id="new-emp-ssn" placeholder="XXX-XX-XXXX" maxlength="11" oninput="formatSSN(this)"></div>
       <div><label>Date of Birth <span class="required-star">*</span></label><input type="date" id="new-emp-dob"></div>
     </div>
+    <div class="row">
+      <div><label>Hire Date <span class="required-star">*</span></label><input type="date" id="new-emp-hire"></div>
+      <div><label>Email <span class="required-star">*</span></label><input type="email" id="new-emp-email" placeholder="employee@email.com"></div>
+    </div>
 
+    <!-- Address -->
     <h4>Address</h4>
     <div class="row">
       <div style="flex:2;"><label>Street Address <span class="required-star">*</span></label><input type="text" id="new-emp-street" placeholder="123 Main St"></div>
@@ -247,26 +257,58 @@
       <div><label>Zip <span class="required-star">*</span></label><input type="text" id="new-emp-zip" placeholder="68101" maxlength="10"></div>
     </div>
 
-    <h4>Pay Information</h4>
+    <!-- Work Information -->
+    <h4>Work Information</h4>
     <div class="row">
-      <div><label>Position <span class="required-star">*</span></label><input type="text" id="new-emp-position" placeholder="e.g. Barista, Manager"></div>
+      <div>
+        <label>Work Location <span class="required-star">*</span></label>
+        <select id="new-emp-location"></select>
+      </div>
+      <div>
+        <label>Pay Schedule</label>
+        <input type="text" id="new-emp-schedule" readonly style="color:var(--green);">
+      </div>
+    </div>
+
+    <!-- Pay Rates (multiple) -->
+    <h4>Pay Rates <span class="required-star">*</span></h4>
+    <div id="pay-rates-list"></div>
+    <button class="btn btn-outline btn-sm" onclick="addPayRateRow()" style="margin-top:6px;">+ Add Pay Rate</button>
+
+    <!-- Direct Deposit -->
+    <h4>Direct Deposit <span style="color:var(--muted);font-weight:400;font-size:12px;">(Optional)</span></h4>
+    <div class="row">
+      <div><label>Routing Number</label><input type="text" id="new-emp-routing" placeholder="9 digits" maxlength="9" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+      <div><label>Account Number</label><input type="text" id="new-emp-account" placeholder="Account number" oninput="this.value=this.value.replace(/\D/g,'')"></div>
     </div>
     <div class="row">
       <div>
-        <label>Pay Type <span class="required-star">*</span></label>
-        <select id="new-emp-paytype">
-          <option value="hourly">Hourly</option>
-          <option value="salary">Salary</option>
+        <label>Account Type</label>
+        <select id="new-emp-accttype">
+          <option value="">— Select —</option>
+          <option value="checking">Checking</option>
+          <option value="savings">Savings</option>
         </select>
       </div>
-      <div><label>Pay Rate <span class="required-star">*</span></label><input type="text" id="new-emp-rate" placeholder="e.g. 15.00"></div>
+      <div></div>
     </div>
 
-    <h4>Direct Deposit <span style="color:var(--muted);font-weight:400;font-size:12px;">(Optional)</span></h4>
-    <div class="dd-link-box">
-      <p>Direct deposit information is collected securely through our New Hire Paperwork form. Click below to open the form — it will be pre-filled with the information you've entered above.</p>
-      <button class="btn btn-dd" id="btn-new-hire-link" onclick="openNewHirePaperwork()" disabled>Complete New Hire Paperwork</button>
-      <p style="font-size:11px;margin-top:8px;color:var(--muted);">You must fill out the required fields above first.</p>
+    <!-- Tax Information -->
+    <h4>Tax Information</h4>
+    <div class="row">
+      <div>
+        <label>Filing Status <span class="required-star">*</span></label>
+        <select id="new-emp-filing">
+          <option value="">— Select —</option>
+          <option value="single">Single or Married Filing Separately</option>
+          <option value="married">Married Filing Jointly</option>
+          <option value="head">Head of Household</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div><label>Number of Allowances</label><input type="number" id="new-emp-allowances" placeholder="0" min="0"></div>
+      <div><label>Additional Withholding ($)</label><input type="number" id="new-emp-addlwh" placeholder="0.00" step="0.01" min="0"></div>
     </div>
 
     <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
@@ -285,6 +327,8 @@ let _clientName = '';
 let _stores = [];
 let _employees = [];
 let _rateChanges = {};  // { employeeId: { from: oldRate, to: newRate, name: 'First Last' } }
+let _workLocations = [];
+let _payFrequency = '';
 const API = window.location.origin;
 
 // ─── Login ───────────────────────────────────────────────────────
@@ -320,6 +364,8 @@ async function doLogin() {
     _clientSlug = slug;
     _clientName = data.clientName;
     _stores = data.stores || [];
+    _workLocations = data.workLocations || [];
+    _payFrequency = data.payFrequency || '';
 
     // Populate UI
     document.getElementById('entry-client-name').textContent = _clientName;
@@ -497,95 +543,82 @@ function formatSSN(el) {
   if (v.length > 5) v = v.slice(0,3) + '-' + v.slice(3,5) + '-' + v.slice(5);
   else if (v.length > 3) v = v.slice(0,3) + '-' + v.slice(3);
   el.value = v;
-  checkNewHireReady();
 }
 
-// Enable "Complete New Hire Paperwork" button when required fields are filled
-function checkNewHireReady() {
-  const first = document.getElementById('new-emp-first').value.trim();
-  const last = document.getElementById('new-emp-last').value.trim();
-  const ssn = document.getElementById('new-emp-ssn').value.trim();
-  const dob = document.getElementById('new-emp-dob').value;
-  const street = document.getElementById('new-emp-street').value.trim();
-  const city = document.getElementById('new-emp-city').value.trim();
-  const state = document.getElementById('new-emp-state').value;
-  const zip = document.getElementById('new-emp-zip').value.trim();
-  const position = document.getElementById('new-emp-position').value.trim();
-  const rate = document.getElementById('new-emp-rate').value.trim();
+// ─── Pay Rate Rows (multiple) ────────────────────────────────────
+let _payRateCount = 0;
 
-  const ready = first && last && ssn.length === 11 && dob && street && city && state && zip && position && rate;
-  document.getElementById('btn-new-hire-link').disabled = !ready;
+function addPayRateRow(label, rate, type) {
+  const idx = _payRateCount++;
+  const container = document.getElementById('pay-rates-list');
+  const div = document.createElement('div');
+  div.className = 'pay-rate-row';
+  div.id = `pr-row-${idx}`;
+  div.innerHTML = `
+    <div style="flex:2;"><label>Position / Label <span class="required-star">*</span></label><input type="text" id="pr-label-${idx}" placeholder="e.g. Barista, Shift Lead" value="${label||''}"></div>
+    <div><label>Rate <span class="required-star">*</span></label><input type="number" step="0.01" min="0" id="pr-rate-${idx}" placeholder="15.00" value="${rate||''}"></div>
+    <div><label>Type</label><select id="pr-type-${idx}"><option value="hourly" ${type==='salary'?'':'selected'}>Hourly</option><option value="salary" ${type==='salary'?'selected':''}>Salary</option></select></div>
+    <button class="pr-remove" onclick="removePayRateRow(${idx})" title="Remove">&times;</button>
+  `;
+  container.appendChild(div);
 }
 
-// Attach listeners to all required fields to check readiness
-['new-emp-first','new-emp-last','new-emp-dob','new-emp-street','new-emp-city','new-emp-state','new-emp-zip','new-emp-position','new-emp-rate'].forEach(id => {
-  document.getElementById(id).addEventListener('input', checkNewHireReady);
-  document.getElementById(id).addEventListener('change', checkNewHireReady);
-});
+function removePayRateRow(idx) {
+  const row = document.getElementById(`pr-row-${idx}`);
+  if (row) row.remove();
+  // Ensure at least one row
+  if (document.querySelectorAll('.pay-rate-row').length === 0) addPayRateRow();
+}
+
+function getPayRates() {
+  const rates = [];
+  document.querySelectorAll('.pay-rate-row').forEach(row => {
+    const idx = row.id.replace('pr-row-', '');
+    const label = document.getElementById(`pr-label-${idx}`)?.value.trim() || '';
+    const rate = document.getElementById(`pr-rate-${idx}`)?.value.trim() || '';
+    const type = document.getElementById(`pr-type-${idx}`)?.value || 'hourly';
+    if (label || rate) rates.push({ label, rate, type });
+  });
+  return rates;
+}
 
 // ─── Add Employee Modal ──────────────────────────────────────────
 function showAddEmployee() {
+  // Populate work location dropdown
+  const locSel = document.getElementById('new-emp-location');
+  locSel.innerHTML = '<option value="">— Select —</option>';
+  _workLocations.forEach(loc => {
+    const opt = document.createElement('option');
+    opt.value = loc;
+    opt.textContent = loc;
+    locSel.appendChild(opt);
+  });
+
+  // Set pay schedule (read-only, client-specific)
+  document.getElementById('new-emp-schedule').value = _payFrequency || 'Not set';
+
+  // Reset pay rate rows and add one empty row
+  document.getElementById('pay-rates-list').innerHTML = '';
+  _payRateCount = 0;
+  addPayRateRow();
+
   document.getElementById('modal-add-emp').classList.remove('hidden');
   document.getElementById('new-emp-first').focus();
 }
 
 function closeAddEmployee() {
   document.getElementById('modal-add-emp').classList.add('hidden');
-  const fields = ['new-emp-first','new-emp-last','new-emp-ssn','new-emp-dob','new-emp-street','new-emp-city','new-emp-zip','new-emp-position','new-emp-rate'];
-  fields.forEach(id => document.getElementById(id).value = '');
+  const fields = ['new-emp-first','new-emp-last','new-emp-ssn','new-emp-dob','new-emp-hire',
+    'new-emp-email','new-emp-street','new-emp-city','new-emp-zip',
+    'new-emp-routing','new-emp-account','new-emp-allowances','new-emp-addlwh'];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('new-emp-state').value = '';
-  document.getElementById('new-emp-paytype').value = 'hourly';
-  document.getElementById('btn-new-hire-link').disabled = true;
+  document.getElementById('new-emp-location').value = '';
+  document.getElementById('new-emp-accttype').value = '';
+  document.getElementById('new-emp-filing').value = '';
+  document.getElementById('pay-rates-list').innerHTML = '';
+  _payRateCount = 0;
   document.getElementById('add-emp-status').className = 'status';
-}
-
-// ─── Open New Hire Paperwork (pre-filled) ────────────────────────
-async function openNewHirePaperwork() {
-  const statusEl = document.getElementById('add-emp-status');
-  const empData = {
-    firstName: document.getElementById('new-emp-first').value.trim(),
-    lastName: document.getElementById('new-emp-last').value.trim(),
-    ssn: document.getElementById('new-emp-ssn').value.trim(),
-    dob: document.getElementById('new-emp-dob').value,
-    street: document.getElementById('new-emp-street').value.trim(),
-    city: document.getElementById('new-emp-city').value.trim(),
-    state: document.getElementById('new-emp-state').value,
-    zip: document.getElementById('new-emp-zip').value.trim(),
-    position: document.getElementById('new-emp-position').value.trim(),
-    payType: document.getElementById('new-emp-paytype').value,
-    payRate: document.getElementById('new-emp-rate').value.trim(),
-    clientSlug: _clientSlug,
-    clientName: _clientName,
-    storeId: document.getElementById('entry-store').value,
-    storeName: document.getElementById('entry-store').selectedOptions[0]?.textContent || '',
-  };
-
-  try {
-    statusEl.className = 'status info';
-    statusEl.textContent = 'Generating secure link...';
-
-    const resp = await fetch(`${API}/payroll/new-hire-token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${_token}`,
-      },
-      body: JSON.stringify(empData),
-    });
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      statusEl.className = 'status error';
-      statusEl.textContent = data.error || 'Failed to generate link.';
-      return;
-    }
-
-    statusEl.className = 'status';
-    window.open(`${API}/new-hire?token=${data.token}`, '_blank');
-  } catch(e) {
-    statusEl.className = 'status error';
-    statusEl.textContent = 'Connection error. Please try again.';
-  }
 }
 
 async function addEmployee() {
@@ -593,24 +626,37 @@ async function addEmployee() {
   const last = document.getElementById('new-emp-last').value.trim();
   const ssn = document.getElementById('new-emp-ssn').value.trim();
   const dob = document.getElementById('new-emp-dob').value;
+  const hireDate = document.getElementById('new-emp-hire').value;
+  const email = document.getElementById('new-emp-email').value.trim();
   const street = document.getElementById('new-emp-street').value.trim();
   const city = document.getElementById('new-emp-city').value.trim();
   const state = document.getElementById('new-emp-state').value;
   const zip = document.getElementById('new-emp-zip').value.trim();
-  const position = document.getElementById('new-emp-position').value.trim();
-  const payRate = document.getElementById('new-emp-rate').value.trim();
-  const payType = document.getElementById('new-emp-paytype').value;
+  const workLocation = document.getElementById('new-emp-location').value;
+  const filingStatus = document.getElementById('new-emp-filing').value;
+  const allowances = document.getElementById('new-emp-allowances').value || '0';
+  const additionalWithholding = document.getElementById('new-emp-addlwh').value || '0';
+  const routingNumber = document.getElementById('new-emp-routing').value.trim();
+  const accountNumber = document.getElementById('new-emp-account').value.trim();
+  const accountType = document.getElementById('new-emp-accttype').value;
+  const payRates = getPayRates();
   const statusEl = document.getElementById('add-emp-status');
 
-  // Validate all required fields
+  // Validate required fields
   if (!first || !last) { statusEl.className = 'status error'; statusEl.textContent = 'First and last name are required.'; return; }
   if (ssn.length !== 11) { statusEl.className = 'status error'; statusEl.textContent = 'Please enter a valid SSN (XXX-XX-XXXX).'; return; }
   if (!dob) { statusEl.className = 'status error'; statusEl.textContent = 'Date of birth is required.'; return; }
+  if (!hireDate) { statusEl.className = 'status error'; statusEl.textContent = 'Hire date is required.'; return; }
+  if (!email) { statusEl.className = 'status error'; statusEl.textContent = 'Email is required.'; return; }
   if (!street || !city || !state || !zip) { statusEl.className = 'status error'; statusEl.textContent = 'Complete address is required.'; return; }
-  if (!position) { statusEl.className = 'status error'; statusEl.textContent = 'Position is required.'; return; }
-  if (!payRate) { statusEl.className = 'status error'; statusEl.textContent = 'Pay rate is required.'; return; }
+  if (!workLocation) { statusEl.className = 'status error'; statusEl.textContent = 'Work location is required.'; return; }
+  if (!payRates.length || !payRates[0].label || !payRates[0].rate) { statusEl.className = 'status error'; statusEl.textContent = 'At least one pay rate with position and rate is required.'; return; }
+  if (!filingStatus) { statusEl.className = 'status error'; statusEl.textContent = 'Filing status is required.'; return; }
 
   const storeId = document.getElementById('entry-store').value;
+  statusEl.className = 'status info';
+  statusEl.textContent = 'Adding employee...';
+
   try {
     const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}`, {
       method: 'POST',
@@ -619,9 +665,11 @@ async function addEmployee() {
         'Authorization': `Bearer ${_token}`,
       },
       body: JSON.stringify({
-        firstName: first, lastName: last, ssn, dob,
+        firstName: first, lastName: last, ssn, dob, hireDate, email,
         street, city, state, zip,
-        position, payRate, payType,
+        workLocation, paySchedule: _payFrequency, payRates,
+        routingNumber, accountNumber, accountType,
+        filingStatus, allowances, additionalWithholding,
       }),
     });
     const data = await resp.json();
@@ -748,6 +796,8 @@ function doLogout() {
   _stores = [];
   _employees = [];
   _rateChanges = {};
+  _workLocations = [];
+  _payFrequency = '';
 
   document.getElementById('screen-entry').classList.add('hidden');
   document.getElementById('screen-success').classList.add('hidden');

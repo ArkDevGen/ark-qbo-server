@@ -3,16 +3,33 @@
     "iheartcoffee": {
       "name": "iHeartCoffee",
       "password": "ihc2026!",
+      "payFrequency": "Bi-Weekly",
+      "workLocations": [
+        "Admin",
+        "Store 737",
+        "Store 738",
+        "Store 739",
+        "Store 740",
+        "Store 741",
+        "Store 1192",
+        "Store 1193",
+        "Store 1194"
+      ],
       "stores": {
-        "store1": {
-          "name": "Store #1",
-          "employees": []
-        }
+        "admin": { "name": "Admin", "employees": [] },
+        "store-737": { "name": "Store 737", "employees": [] },
+        "store-738": { "name": "Store 738", "employees": [] },
+        "store-739": { "name": "Store 739", "employees": [] },
+        "store-740": { "name": "Store 740", "employees": [] },
+        "store-741": { "name": "Store 741", "employees": [] },
+        "store-1192": { "name": "Store 1192", "employees": [] },
+        "store-1193": { "name": "Store 1193", "employees": [] },
+        "store-1194": { "name": "Store 1194", "employees": [] }
       },
-      "payFrequency": "",
       "_sessionToken": null,
       "_notifications": []
     }
   },
-  "submissions": []
+  "submissions": [],
+  "newHireReports": []
 }

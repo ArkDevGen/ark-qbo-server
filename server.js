@@ -607,6 +607,7 @@ app.post('/payroll/login', (req, res) => {
       name: s.name,
     })),
     payFrequency: client.payFrequency || '',
+    workLocations: client.workLocations || [],
   });
 });
 
@@ -648,26 +649,59 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
-  const { firstName, lastName, ssn, dob, street, city, state, zip, position, payRate, payType } = req.body;
-  if (!firstName || !lastName) return res.status(400).json({ error: 'First and last name required' });
+  const b = req.body;
+  if (!b.firstName || !b.lastName) return res.status(400).json({ error: 'First and last name required' });
 
   const newEmp = {
     id: crypto.randomUUID(),
-    firstName,
-    lastName,
-    ssn: ssn || '',
-    dob: dob || '',
-    address: { street: street || '', city: city || '', state: state || '', zip: zip || '' },
-    position: position || '',
-    payRate: payRate || '',
-    payType: payType || 'hourly',
+    firstName: b.firstName,
+    lastName: b.lastName,
+    ssn: b.ssn || '',
+    dob: b.dob || '',
+    hireDate: b.hireDate || '',
+    email: b.email || '',
+    address: { street: b.street || '', city: b.city || '', state: b.state || '', zip: b.zip || '' },
+    workLocation: b.workLocation || '',
+    paySchedule: b.paySchedule || '',
+    payRates: b.payRates || [],  // [{ label, rate, type }]
+    // Legacy single rate (used in hours grid display)
+    payRate: (b.payRates && b.payRates.length) ? b.payRates[0].rate : (b.payRate || ''),
+    payType: (b.payRates && b.payRates.length) ? b.payRates[0].type : (b.payType || 'hourly'),
+    position: (b.payRates && b.payRates.length) ? b.payRates[0].label : (b.position || ''),
+    directDeposit: {
+      routingNumber: b.routingNumber || '',
+      accountNumber: b.accountNumber || '',
+      accountType: b.accountType || '',
+    },
+    tax: {
+      filingStatus: b.filingStatus || '',
+      allowances: b.allowances || '',
+      additionalWithholding: b.additionalWithholding || '',
+    },
     addedByClient: true,
     addedAt: new Date().toISOString(),
   };
 
   if (!store.employees) store.employees = [];
   store.employees.push(newEmp);
-  savePayrollData();
+
+  // Also create a New Hire Report (basic info only)
+  if (!payrollData.newHireReports) payrollData.newHireReports = [];
+  payrollData.newHireReports.push({
+    id: crypto.randomUUID(),
+    clientSlug,
+    clientName: client.name,
+    storeId,
+    storeName: store.name,
+    firstName: b.firstName,
+    lastName: b.lastName,
+    ssn: b.ssn || '',
+    dob: b.dob || '',
+    hireDate: b.hireDate || '',
+    address: { street: b.street || '', city: b.city || '', state: b.state || '', zip: b.zip || '' },
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  });
 
   // Flag for notification (dashboard will check this)
   if (!client._notifications) client._notifications = [];
@@ -675,11 +709,10 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     type: 'new-employee',
     storeId,
     storeName: store.name,
-    employee: `${firstName} ${lastName}`,
-    position: position || '',
-    payRate: payRate || '',
-    payType: payType || 'hourly',
-    address: `${city || ''}, ${state || ''}`,
+    employee: `${b.firstName} ${b.lastName}`,
+    workLocation: b.workLocation || '',
+    payRates: b.payRates || [],
+    email: b.email || '',
     timestamp: new Date().toISOString(),
   });
   savePayrollData();
