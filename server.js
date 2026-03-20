@@ -21,6 +21,23 @@ app.get('/', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// Public website pages (privacy policy, terms, about, contact)
+// These are needed for 10DLC campaign verification and brand presence
+// ─────────────────────────────────────────────────────────────────
+app.get('/about', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
+app.get('/privacy-policy', (req, res) => {
+  res.sendFile(__dirname + '/public/privacy-policy.html');
+});
+app.get('/terms', (req, res) => {
+  res.sendFile(__dirname + '/public/terms.html');
+});
+app.get('/contact', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
+
+// ─────────────────────────────────────────────────────────────────
 // CORS — Cross-Origin Resource Sharing
 // Your ARK dashboard (running at file:// or localhost) is a 
 // different "origin" than your server (localhost:3000).
