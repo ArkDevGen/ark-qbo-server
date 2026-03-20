@@ -587,7 +587,7 @@ function showAddEmployee() {
   // Populate work location dropdown
   const locSel = document.getElementById('new-emp-location');
   locSel.innerHTML = '<option value="">— Select —</option>';
-  _workLocations.forEach(loc => {
+  _workLocations.filter(loc => loc.toLowerCase() !== 'admin').forEach(loc => {
     const opt = document.createElement('option');
     opt.value = loc;
     opt.textContent = loc;
