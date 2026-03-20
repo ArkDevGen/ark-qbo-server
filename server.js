@@ -481,6 +481,43 @@ app.post('/sms/send', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// SMS: Inbound message buffer
+// Stores inbound messages in memory. Dashboard polls and pulls them.
+// Buffer clears after dashboard fetches — localStorage is the
+// permanent store, server is just a pass-through.
+// ─────────────────────────────────────────────────────────────────
+let _smsInbox = [];
+
+// Sinch inbound webhook — receives MO (mobile-originated) messages
+app.post('/sms/inbound', (req, res) => {
+  const msg = req.body;
+  console.log('SMS inbound:', JSON.stringify(msg));
+
+  // Sinch sends 'from' without '+', normalize to E.164
+  const fromRaw = (msg.from || '').replace(/\D/g, '');
+  const from = fromRaw.startsWith('1') ? '+' + fromRaw : '+1' + fromRaw;
+
+  _smsInbox.push({
+    id: crypto.randomUUID(),
+    direction: 'inbound',
+    phone: from,
+    body: msg.body || '',
+    timestamp: msg.received_at || new Date().toISOString(),
+    sinchId: msg.id || '',
+  });
+
+  console.log(`SMS received from ${from}: ${(msg.body || '').slice(0, 50)}`);
+  res.status(200).json({ ok: true });
+});
+
+// Dashboard polls this to get new inbound messages, then clears buffer
+app.get('/sms/inbox', (req, res) => {
+  const messages = [..._smsInbox];
+  _smsInbox = [];
+  res.json({ messages });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {

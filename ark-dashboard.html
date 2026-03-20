@@ -1984,16 +1984,58 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- ══ CARD 3: Coming Soon ══ -->
-      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
-        <div style="font-size:28px;">⬜</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
-      </div>
+      <!-- ══ CARD 3: SMS Conversations (spans full bottom row) ══ -->
+      <div class="card" style="grid-column:1/-1;display:flex;flex-direction:column;min-height:420px;overflow:hidden;">
+        <div class="card-header" style="border-bottom:2px solid rgba(46,125,94,.15);flex-shrink:0;">
+          <div>
+            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">💬</span> Messages
+            </div>
+            <div class="card-subtitle" id="sms-convo-count">0 conversations</div>
+          </div>
+          <button onclick="smsNewConvo()" class="btn btn-primary btn-sm">+ New Message</button>
+        </div>
 
-      <!-- ══ CARD 4: Coming Soon ══ -->
-      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
-        <div style="font-size:28px;">⬜</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
+        <div style="display:flex;flex:1;min-height:0;">
+
+          <!-- Left: Conversation list -->
+          <div style="width:320px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;">
+            <div style="padding:10px 12px;border-bottom:1px solid var(--border);">
+              <input id="sms-convo-search" class="field-input" placeholder="Search conversations…" style="margin:0;font-size:12px;" oninput="smsRenderConvoList(this.value)">
+            </div>
+            <div id="sms-convo-list" style="flex:1;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Right: Thread view -->
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+            <!-- Thread header -->
+            <div id="sms-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                  <div id="sms-thread-name" style="font-size:14px;font-weight:700;color:var(--navy);"></div>
+                  <div id="sms-thread-phone" style="font-size:11px;font-family:monospace;color:var(--text-d);margin-top:1px;"></div>
+                </div>
+                <div id="sms-thread-client-link"></div>
+              </div>
+            </div>
+
+            <!-- Messages area -->
+            <div id="sms-thread-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-d);font-size:13px;font-style:italic;">
+                Select a conversation to view messages
+              </div>
+            </div>
+
+            <!-- Reply box -->
+            <div id="sms-thread-reply" style="display:none;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;">
+              <div style="display:flex;gap:8px;">
+                <input id="sms-reply-input" class="field-input" placeholder="Type a message…" style="margin:0;flex:1;font-size:13px;" onkeydown="if(event.key==='Enter')smsReplySend()">
+                <button onclick="smsReplySend()" class="btn btn-primary" style="padding:8px 16px;white-space:nowrap;">Send</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
     </div>
@@ -4939,6 +4981,7 @@ function saveDB(){
       faxOutbox:      DB.faxOutbox||[],
       faxInbox:       DB.faxInbox||[],
       smsLog:         DB.smsLog||[],
+      smsMessages:    DB.smsMessages||[],
       commConfig:     DB.commConfig||{},
       timePTO:        DB.timePTO||{},
       nachaCfg:       DB.nachaCfg||{},
@@ -5027,6 +5070,7 @@ function exportDBBackup(){
       faxOutbox:      DB.faxOutbox||[],
       faxInbox:       DB.faxInbox||[],
       smsLog:         DB.smsLog||[],
+      smsMessages:    DB.smsMessages||[],
       commConfig:     DB.commConfig||{},
       timePTO:        DB.timePTO||{},
       nachaCfg:       DB.nachaCfg||{},
@@ -12081,7 +12125,8 @@ function tcPrintTimecard(){
 // ── Persistent storage ──
 if(!DB.faxOutbox)  DB.faxOutbox  = [];
 if(!DB.faxInbox)   DB.faxInbox   = [];
-if(!DB.smsLog)     DB.smsLog     = [];
+if(!DB.smsLog)      DB.smsLog      = [];
+if(!DB.smsMessages) DB.smsMessages = [];
 if(!DB.commConfig) DB.commConfig = { phaxioKey:'', phaxioSecret:'', phaxioFrom:'', smsKey:'', smsSecret:'', smsFrom:'' };
 
 // ── Tab switching (legacy — kept for safety, panels are now always visible) ──
@@ -12115,6 +12160,12 @@ function ccInit(){
   ccRenderSMSLog();
   smsPopulateDD();
   ccCheckApiConfig();
+  // Init conversations
+  smsRenderConvoList();
+  smsPollInbox();
+  // Poll for new inbound messages every 15 seconds while on Comm Center
+  clearInterval(window._smsPollInterval);
+  window._smsPollInterval = setInterval(smsPollInbox, 15000);
 }
 
 function ccCheckApiConfig(){
@@ -12542,11 +12593,27 @@ function ccResetSMSForm(manual=false){
 }
 
 function ccSaveSMSLog(clientId, clientName, toNumber, message, status, msgId){
+  const ts = new Date().toISOString();
   DB.smsLog.unshift({
     id: uid(), msgId, clientId, clientName, toNumber, message, status,
     sentBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
-    sentAt: new Date().toISOString()
+    sentAt: ts
   });
+  // Also save to conversations store
+  if(status==='sent' && toNumber){
+    if(!DB.smsMessages) DB.smsMessages = [];
+    DB.smsMessages.push({
+      id: uid(),
+      direction: 'outbound',
+      phone: smsNormPhone(toNumber),
+      body: message,
+      timestamp: ts,
+      messageId: msgId||'',
+      clientId: clientId||null,
+      clientName: clientName||null,
+      read: true
+    });
+  }
   logAct(`SMS sent to ${clientName} (${toNumber}): "${message.slice(0,40)}${message.length>40?'…':''}" (${status})`);
   saveDB();
 }
@@ -12583,6 +12650,242 @@ function ccRenderSMSLog(q){
 
 function smsFilterLog(q){ ccRenderSMSLog(q); }
 function ccDeleteSMS(id){ DB.smsLog=(DB.smsLog||[]).filter(m=>m.id!==id); saveDB(); ccRenderSMSLog(); }
+
+// ════════════════════════════════════════════════════════════════
+// ════ SMS CONVERSATIONS ════
+// ════════════════════════════════════════════════════════════════
+
+let _smsActivePhone = null; // currently selected conversation phone number
+
+// ── Normalize phone to +1XXXXXXXXXX ──
+function smsNormPhone(p){
+  const d = (p||'').replace(/\D/g,'');
+  if(d.length===11 && d.startsWith('1')) return '+'+d;
+  if(d.length===10) return '+1'+d;
+  return '+'+d;
+}
+
+// ── Match phone to client ──
+function smsMatchClient(phone){
+  const digits = phone.replace(/\D/g,'').slice(-10);
+  for(const c of DB.clients||[]){
+    for(const o of (c.owners||[])){
+      const od = (o.phone||'').replace(/\D/g,'').slice(-10);
+      if(od && od === digits) return { clientId:c.id, clientName:c.biz, ownerName:`${o.fname||''} ${o.lname||''}`.trim() };
+    }
+  }
+  return null;
+}
+
+// ── Get all conversations grouped by phone ──
+function smsGetConversations(){
+  const msgs = DB.smsMessages || [];
+  const byPhone = {};
+  msgs.forEach(m=>{
+    const key = m.phone;
+    if(!byPhone[key]) byPhone[key] = { phone:key, messages:[], clientId:null, clientName:null, ownerName:null };
+    byPhone[key].messages.push(m);
+    if(m.clientId){ byPhone[key].clientId = m.clientId; byPhone[key].clientName = m.clientName; }
+  });
+  // Try to match unmatched conversations to clients
+  Object.values(byPhone).forEach(c=>{
+    if(!c.clientId){
+      const match = smsMatchClient(c.phone);
+      if(match){ c.clientId=match.clientId; c.clientName=match.clientName; c.ownerName=match.ownerName; }
+    }
+  });
+  // Sort by most recent message
+  return Object.values(byPhone).sort((a,b)=>{
+    const la = a.messages[a.messages.length-1]?.timestamp||'';
+    const lb = b.messages[b.messages.length-1]?.timestamp||'';
+    return lb.localeCompare(la);
+  });
+}
+
+// ── Render conversation list (left panel) ──
+function smsRenderConvoList(q){
+  const el = document.getElementById('sms-convo-list');
+  const countEl = document.getElementById('sms-convo-count');
+  if(!el) return;
+  const convos = smsGetConversations();
+  const f = (q||'').toLowerCase();
+  const filtered = f ? convos.filter(c=>
+    (c.clientName||'').toLowerCase().includes(f) || c.phone.includes(f) ||
+    c.messages.some(m=>(m.body||'').toLowerCase().includes(f))
+  ) : convos;
+  if(countEl) countEl.textContent = `${filtered.length} conversation${filtered.length!==1?'s':''}`;
+  if(!filtered.length){
+    el.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text-d);font-size:12px;font-style:italic;">No conversations yet.<br>Send a message or receive one to start.</div>';
+    return;
+  }
+  el.innerHTML = filtered.map(c=>{
+    const last = c.messages[c.messages.length-1];
+    const name = c.clientName || c.ownerName || c.phone;
+    const preview = (last.body||'').slice(0,45) + ((last.body||'').length>45?'…':'');
+    const time = last.timestamp ? new Date(last.timestamp).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+    const isActive = _smsActivePhone === c.phone;
+    const unread = c.messages.some(m=>m.direction==='inbound' && !m.read);
+    const arrow = last.direction==='outbound' ? '<span style="color:var(--text-d);font-size:10px;">You: </span>' : '';
+    return `<div onclick="smsOpenThread('${c.phone}')"
+      style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:${isActive?'var(--surface2)':''};"
+      onmouseover="if(!${isActive})this.style.background='var(--surface2)'" onmouseout="if(!${isActive})this.style.background=''">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <div style="font-size:13px;font-weight:${unread?'800':'600'};color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${name}</div>
+        <div style="font-size:10px;color:var(--text-d);white-space:nowrap;margin-left:8px;">${time}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${unread?'font-weight:600;color:var(--text);':''}">
+        ${arrow}${preview||'<em>No message</em>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Open a conversation thread ──
+function smsOpenThread(phone){
+  _smsActivePhone = phone;
+  smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
+
+  const convos = smsGetConversations();
+  const convo = convos.find(c=>c.phone===phone);
+  if(!convo) return;
+
+  // Mark inbound messages as read
+  (DB.smsMessages||[]).forEach(m=>{
+    if(m.phone===phone && m.direction==='inbound') m.read = true;
+  });
+  saveDB();
+
+  // Header
+  const name = convo.clientName || convo.ownerName || phone;
+  document.getElementById('sms-thread-header').style.display = '';
+  document.getElementById('sms-thread-name').textContent = name;
+  document.getElementById('sms-thread-phone').textContent = phone;
+  const linkEl = document.getElementById('sms-thread-client-link');
+  if(convo.clientId){
+    linkEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openClient('${convo.clientId}')" style="font-size:11px;">View Client</button>`;
+  } else {
+    linkEl.innerHTML = '<span style="font-size:10px;color:var(--text-d);">Unknown contact</span>';
+  }
+
+  // Messages
+  const msgEl = document.getElementById('sms-thread-messages');
+  const msgs = convo.messages.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+  let html = '';
+  let lastDate = '';
+  msgs.forEach(m=>{
+    const dt = m.timestamp ? new Date(m.timestamp) : new Date();
+    const dateStr = dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    if(dateStr !== lastDate){
+      html += `<div style="text-align:center;font-size:10px;color:var(--text-d);padding:8px 0;font-weight:600;">${dateStr}</div>`;
+      lastDate = dateStr;
+    }
+    const timeStr = dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const isOut = m.direction==='outbound';
+    html += `<div style="display:flex;justify-content:${isOut?'flex-end':'flex-start'};padding:2px 0;">
+      <div style="max-width:75%;padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.4;position:relative;
+        ${isOut
+          ? 'background:#2e7d5e;color:#fff;border-bottom-right-radius:4px;'
+          : 'background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;'
+        }">
+        ${m.body||''}
+        <div style="font-size:9px;margin-top:4px;opacity:.7;text-align:${isOut?'right':'left'};">${timeStr}</div>
+      </div>
+    </div>`;
+  });
+  msgEl.innerHTML = html;
+  msgEl.scrollTop = msgEl.scrollHeight;
+
+  // Show reply box
+  document.getElementById('sms-thread-reply').style.display = '';
+  document.getElementById('sms-reply-input').value = '';
+  document.getElementById('sms-reply-input').focus();
+}
+
+// ── Send reply from thread ──
+async function smsReplySend(){
+  if(!_smsActivePhone) return;
+  const input = document.getElementById('sms-reply-input');
+  const text = input.value.trim();
+  if(!text) return;
+
+  input.disabled = true;
+
+  try {
+    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ to:_smsActivePhone.replace(/\D/g,''), text })
+    });
+    const data = await resp.json();
+    if(data.success){
+      // Add to conversation store
+      const match = smsMatchClient(_smsActivePhone);
+      if(!DB.smsMessages) DB.smsMessages = [];
+      DB.smsMessages.push({
+        id: uid(),
+        direction: 'outbound',
+        phone: _smsActivePhone,
+        body: text,
+        timestamp: new Date().toISOString(),
+        messageId: data.messageId||'',
+        clientId: match?.clientId||null,
+        clientName: match?.clientName||null,
+        read: true
+      });
+      saveDB();
+      input.value = '';
+      smsOpenThread(_smsActivePhone);
+      smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
+    } else {
+      showToast(`SMS failed: ${data.message||data.error||'Unknown error'}`);
+    }
+  } catch(err){
+    showToast(`SMS error: ${err.message}`);
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// ── Poll server for inbound messages ──
+async function smsPollInbox(){
+  try {
+    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/inbox');
+    const data = await resp.json();
+    if(data.messages && data.messages.length > 0){
+      if(!DB.smsMessages) DB.smsMessages = [];
+      data.messages.forEach(m=>{
+        // Dedupe by sinchId
+        if(m.sinchId && DB.smsMessages.some(x=>x.sinchId===m.sinchId)) return;
+        const match = smsMatchClient(m.phone);
+        DB.smsMessages.push({
+          ...m,
+          clientId: match?.clientId||null,
+          clientName: match?.clientName||null,
+          read: false
+        });
+      });
+      saveDB();
+      smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
+      // If viewing the thread that got a new message, refresh it
+      if(_smsActivePhone && data.messages.some(m=>m.phone===_smsActivePhone)){
+        smsOpenThread(_smsActivePhone);
+      }
+    }
+  } catch(e){
+    // Silently fail — server might be sleeping
+  }
+}
+
+// ── Start new conversation (switches to SMS send form) ──
+function smsNewConvo(){
+  // Scroll up to the SMS send card and focus the client search
+  const el = document.getElementById('sms-client-search') || document.getElementById('sms-manual-number');
+  if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); }
+}
+
+// ── Also save outbound messages from the main SMS send form to conversations ──
+const _origCcSaveSMSLog = typeof ccSaveSMSLog === 'function' ? ccSaveSMSLog : null;
 
 // ════════════════════════════════════════════════════════════════
 // ════ PAYROLL CENTER ════
