@@ -538,6 +538,238 @@ app.get('/sms/inbox', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// PAYROLL ENTRY SYSTEM
+// Public-facing form for clients to submit payroll data
+// Server stores config (clients, stores, employees) and submissions
+// ─────────────────────────────────────────────────────────────────
+const PAYROLL_FILE = './payroll-data.json';
+
+// Load payroll data from file
+let payrollData = { clients: {}, submissions: [] };
+if (fs.existsSync(PAYROLL_FILE)) {
+  try {
+    payrollData = JSON.parse(fs.readFileSync(PAYROLL_FILE, 'utf8'));
+    console.log('✓ Payroll data loaded from file');
+  } catch(e) {
+    console.log('Could not load payroll data, starting fresh');
+  }
+}
+
+function savePayrollData() {
+  fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+}
+
+// Serve the payroll entry page
+app.get('/payroll-entry', (req, res) => {
+  res.sendFile(__dirname + '/public/payroll-entry.html');
+});
+
+// ── Client Authentication ────────────────────────────────────────
+app.post('/payroll/login', (req, res) => {
+  const { clientSlug, password } = req.body;
+  if (!clientSlug || !password) return res.status(400).json({ error: 'Missing credentials' });
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client.password !== password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  // Generate a simple session token
+  const token = crypto.randomUUID();
+  client._sessionToken = token;
+  savePayrollData();
+
+  res.json({
+    success: true,
+    token,
+    clientName: client.name,
+    stores: Object.entries(client.stores || {}).map(([id, s]) => ({
+      id,
+      name: s.name,
+    })),
+    payFrequency: client.payFrequency || '',
+  });
+});
+
+// ── Get employees for a store ────────────────────────────────────
+app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  res.json({
+    employees: (store.employees || []).map(e => ({
+      id: e.id,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      position: e.position || '',
+      payRate: e.payRate || '',
+      payType: e.payType || 'hourly',
+    })),
+  });
+});
+
+// ── Client adds a new employee on the fly ────────────────────────
+app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const { firstName, lastName, position, payRate, payType } = req.body;
+  if (!firstName || !lastName) return res.status(400).json({ error: 'First and last name required' });
+
+  const newEmp = {
+    id: crypto.randomUUID(),
+    firstName,
+    lastName,
+    position: position || '',
+    payRate: payRate || '',
+    payType: payType || 'hourly',
+    addedByClient: true,
+    addedAt: new Date().toISOString(),
+  };
+
+  if (!store.employees) store.employees = [];
+  store.employees.push(newEmp);
+  savePayrollData();
+
+  // Flag for notification (dashboard will check this)
+  if (!client._notifications) client._notifications = [];
+  client._notifications.push({
+    type: 'new-employee',
+    storeId,
+    storeName: store.name,
+    employee: `${firstName} ${lastName}`,
+    timestamp: new Date().toISOString(),
+  });
+  savePayrollData();
+
+  res.json({ success: true, employee: newEmp });
+});
+
+// ── Submit payroll data ──────────────────────────────────────────
+app.post('/payroll/submit', (req, res) => {
+  const { clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries } = req.body;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!storeId || !payPeriodStart || !payPeriodEnd || !payDate || !entries?.length) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const submission = {
+    id: crypto.randomUUID(),
+    clientSlug,
+    clientName: client.name,
+    storeId,
+    storeName: (client.stores[storeId] || {}).name || storeId,
+    payPeriodStart,
+    payPeriodEnd,
+    payDate,
+    entries,
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  };
+
+  payrollData.submissions.push(submission);
+  savePayrollData();
+
+  console.log(`Payroll submitted: ${client.name} / ${submission.storeName} — ${entries.length} employees`);
+  res.json({ success: true, submissionId: submission.id });
+});
+
+// ── Dashboard: Get all payroll config ────────────────────────────
+app.get('/payroll/config', (req, res) => {
+  // Return config without passwords and session tokens
+  const safe = {};
+  for (const [slug, client] of Object.entries(payrollData.clients)) {
+    safe[slug] = {
+      ...client,
+      password: '••••••',
+      _sessionToken: undefined,
+    };
+  }
+  res.json({ clients: safe });
+});
+
+// ── Dashboard: Save/update a payroll client config ───────────────
+app.post('/payroll/config', (req, res) => {
+  const { slug, name, password, stores, payFrequency } = req.body;
+  if (!slug || !name) return res.status(400).json({ error: 'Slug and name required' });
+
+  const existing = payrollData.clients[slug];
+  payrollData.clients[slug] = {
+    name,
+    password: password || (existing ? existing.password : ''),
+    stores: stores || (existing ? existing.stores : {}),
+    payFrequency: payFrequency || (existing ? existing.payFrequency : ''),
+    _sessionToken: existing ? existing._sessionToken : null,
+    _notifications: existing ? existing._notifications : [],
+  };
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Delete a payroll client config ────────────────────
+app.delete('/payroll/config/:slug', (req, res) => {
+  delete payrollData.clients[req.params.slug];
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Get pending submissions ───────────────────────────
+app.get('/payroll/submissions', (req, res) => {
+  res.json({ submissions: payrollData.submissions });
+});
+
+// ── Dashboard: Update submission status ──────────────────────────
+app.patch('/payroll/submissions/:id', (req, res) => {
+  const sub = payrollData.submissions.find(s => s.id === req.params.id);
+  if (!sub) return res.status(404).json({ error: 'Submission not found' });
+  if (req.body.status) sub.status = req.body.status;
+  savePayrollData();
+  res.json({ success: true, submission: sub });
+});
+
+// ── Dashboard: Get notifications (new employees, etc.) ───────────
+app.get('/payroll/notifications', (req, res) => {
+  const all = [];
+  for (const [slug, client] of Object.entries(payrollData.clients)) {
+    if (client._notifications?.length) {
+      all.push(...client._notifications.map(n => ({ ...n, clientSlug: slug, clientName: client.name })));
+    }
+  }
+  res.json({ notifications: all });
+});
+
+// ── Dashboard: Clear notifications ───────────────────────────────
+app.post('/payroll/notifications/clear', (req, res) => {
+  for (const client of Object.values(payrollData.clients)) {
+    client._notifications = [];
+  }
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {

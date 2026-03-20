@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ark Financial — Payroll Entry</title>
+<style>
+  :root {
+    --bg: #0d1b2a; --surface: #13243a; --card: #182d45;
+    --border: #243b56; --text: #e8f0f8; --muted: #6b8aaa;
+    --accent: #4da6ff; --green: #4dffa0; --red: #ff5c5c;
+    --orange: #ffa94d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  .logo-bar { text-align: center; padding: 24px 0 8px; }
+  .logo-bar h1 { font-size: 24px; color: var(--accent); font-weight: 600; }
+  .logo-bar p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin-bottom: 20px; }
+  .card h2 { font-size: 18px; color: var(--accent); margin-bottom: 16px; font-weight: 600; }
+  .card h3 { font-size: 15px; color: var(--text); margin-bottom: 12px; font-weight: 600; }
+
+  /* Form elements */
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  input, select { width: 100%; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; outline: none; transition: border-color .2s; }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface); color: var(--text); }
+  .row { display: flex; gap: 14px; margin-bottom: 14px; }
+  .row > div { flex: 1; }
+
+  /* Buttons */
+  .btn { padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #0d1b2a; }
+  .btn-primary:hover { background: #3d96ef; }
+  .btn-green { background: var(--green); color: #0d1b2a; }
+  .btn-green:hover { background: #3de890; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Data table */
+  .data-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .data-table th { background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .data-table input { width: 100%; padding: 7px 8px; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text); text-align: right; }
+  .data-table input:focus { border-color: var(--accent); }
+  .data-table .emp-name { text-align: left; font-weight: 500; white-space: nowrap; }
+  .data-table .emp-pos { color: var(--muted); font-size: 12px; }
+
+  /* Login */
+  .login-card { max-width: 400px; margin: 80px auto; }
+  .login-card input { margin-bottom: 14px; }
+
+  /* Status messages */
+  .status { padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-size: 14px; display: none; }
+  .status.success { display: block; background: rgba(77,255,160,.1); border: 1px solid var(--green); color: var(--green); }
+  .status.error { display: block; background: rgba(255,92,92,.1); border: 1px solid var(--red); color: var(--red); }
+  .status.info { display: block; background: rgba(77,166,255,.1); border: 1px solid var(--accent); color: var(--accent); }
+
+  /* Hidden */
+  .hidden { display: none !important; }
+
+  /* Add employee modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; width: 420px; max-width: 90vw; }
+  .modal h3 { color: var(--accent); margin-bottom: 16px; }
+  .modal .row { margin-bottom: 10px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .row { flex-direction: column; gap: 10px; }
+    .data-table { font-size: 12px; }
+    .data-table input { font-size: 12px; padding: 5px 4px; }
+    .container { padding: 12px 8px; }
+  }
+
+  /* Success screen */
+  .success-screen { text-align: center; padding: 60px 20px; }
+  .success-screen .check { font-size: 64px; margin-bottom: 16px; }
+  .success-screen h2 { color: var(--green); margin-bottom: 8px; }
+  .success-screen p { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="logo-bar">
+  <h1>Ark Financial</h1>
+  <p>Payroll Data Entry Portal</p>
+</div>
+
+<div class="container">
+
+  <!-- ═══ LOGIN SCREEN ═══ -->
+  <div id="screen-login">
+    <div class="card login-card">
+      <h2>Sign In</h2>
+      <label>Company Code</label>
+      <input type="text" id="login-slug" placeholder="e.g. iheartcoffee" autocomplete="off">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="Enter password">
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign In</button>
+      <div id="login-status" class="status"></div>
+    </div>
+  </div>
+
+  <!-- ═══ ENTRY SCREEN ═══ -->
+  <div id="screen-entry" class="hidden">
+
+    <!-- Header bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div>
+        <span style="font-size:18px;font-weight:600;" id="entry-client-name"></span>
+        <span style="color:var(--muted);font-size:13px;margin-left:8px;" id="entry-pay-freq"></span>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+    </div>
+
+    <!-- Step 1: Select store, pay period, pay date -->
+    <div class="card">
+      <h2>Payroll Details</h2>
+      <div class="row">
+        <div>
+          <label>Store / Location</label>
+          <select id="entry-store" onchange="onStoreChange()">
+            <option value="">— Select Store —</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Pay Period Start</label>
+          <input type="date" id="entry-period-start">
+        </div>
+        <div>
+          <label>Pay Period End</label>
+          <input type="date" id="entry-period-end">
+        </div>
+        <div>
+          <label>Pay Date</label>
+          <input type="date" id="entry-pay-date">
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Employee hours grid -->
+    <div id="employee-section" class="card hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin-bottom:0;">Employee Hours</h2>
+        <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="emp-table">
+          <thead>
+            <tr>
+              <th style="min-width:160px;">Employee</th>
+              <th style="min-width:85px;">Reg Hours</th>
+              <th style="min-width:85px;">OT Hours</th>
+              <th style="min-width:85px;">PTO Hours</th>
+              <th style="min-width:85px;">Holiday</th>
+              <th style="min-width:95px;">Tips ($)</th>
+              <th style="min-width:95px;">Mileage</th>
+              <th style="min-width:110px;">Reimburse ($)</th>
+              <th style="min-width:95px;">Bonus ($)</th>
+              <th style="min-width:130px;">Notes</th>
+            </tr>
+          </thead>
+          <tbody id="emp-tbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-green" onclick="submitPayroll()">Submit Payroll</button>
+      </div>
+      <div id="submit-status" class="status"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ SUCCESS SCREEN ═══ -->
+  <div id="screen-success" class="hidden">
+    <div class="card success-screen">
+      <div class="check">&#10003;</div>
+      <h2>Payroll Submitted!</h2>
+      <p>Your payroll data has been received by Ark Financial.</p>
+      <p style="margin-top:4px;">Submission ID: <strong id="success-id"></strong></p>
+      <button class="btn btn-primary" style="margin-top:24px;" onclick="resetForm()">Submit Another</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ ADD EMPLOYEE MODAL ═══ -->
+<div id="modal-add-emp" class="modal-overlay hidden" onclick="if(event.target===this)closeAddEmployee()">
+  <div class="modal">
+    <h3>Add New Employee</h3>
+    <div class="row">
+      <div><label>First Name</label><input type="text" id="new-emp-first"></div>
+      <div><label>Last Name</label><input type="text" id="new-emp-last"></div>
+    </div>
+    <div class="row">
+      <div><label>Position</label><input type="text" id="new-emp-position" placeholder="e.g. Barista, Manager"></div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Pay Type</label>
+        <select id="new-emp-paytype">
+          <option value="hourly">Hourly</option>
+          <option value="salary">Salary</option>
+        </select>
+      </div>
+      <div><label>Pay Rate</label><input type="text" id="new-emp-rate" placeholder="e.g. 15.00"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeAddEmployee()">Cancel</button>
+      <button class="btn btn-primary" onclick="addEmployee()">Add Employee</button>
+    </div>
+    <div id="add-emp-status" class="status"></div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────
+let _token = '';
+let _clientSlug = '';
+let _clientName = '';
+let _stores = [];
+let _employees = [];
+const API = window.location.origin;
+
+// ─── Login ───────────────────────────────────────────────────────
+async function doLogin() {
+  const slug = document.getElementById('login-slug').value.trim().toLowerCase().replace(/\s+/g, '');
+  const password = document.getElementById('login-pass').value;
+  const statusEl = document.getElementById('login-status');
+
+  if (!slug || !password) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Please enter company code and password.';
+    return;
+  }
+
+  statusEl.className = 'status info';
+  statusEl.textContent = 'Signing in...';
+
+  try {
+    const resp = await fetch(`${API}/payroll/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientSlug: slug, password }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Login failed';
+      return;
+    }
+
+    _token = data.token;
+    _clientSlug = slug;
+    _clientName = data.clientName;
+    _stores = data.stores || [];
+
+    // Populate UI
+    document.getElementById('entry-client-name').textContent = _clientName;
+    document.getElementById('entry-pay-freq').textContent = data.payFrequency ? `(${data.payFrequency})` : '';
+
+    const storeSel = document.getElementById('entry-store');
+    storeSel.innerHTML = '<option value="">— Select Store —</option>';
+    _stores.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      storeSel.appendChild(opt);
+    });
+
+    // If only one store, auto-select it
+    if (_stores.length === 1) {
+      storeSel.value = _stores[0].id;
+      onStoreChange();
+    }
+
+    document.getElementById('screen-login').classList.add('hidden');
+    document.getElementById('screen-entry').classList.remove('hidden');
+
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// Allow Enter key to submit login
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// ─── Store change → load employees ──────────────────────────────
+async function onStoreChange() {
+  const storeId = document.getElementById('entry-store').value;
+  const section = document.getElementById('employee-section');
+
+  if (!storeId) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}`, {
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    const data = await resp.json();
+    _employees = data.employees || [];
+    renderEmployeeTable();
+    section.classList.remove('hidden');
+  } catch(e) {
+    console.error('Failed to load employees:', e);
+  }
+}
+
+// ─── Render employee data entry table ────────────────────────────
+function renderEmployeeTable() {
+  const tbody = document.getElementById('emp-tbody');
+  tbody.innerHTML = '';
+
+  _employees.forEach((emp, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="emp-name">${emp.firstName} ${emp.lastName}</div>
+        <div class="emp-pos">${emp.position || ''}</div>
+      </td>
+      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="regHours" placeholder="0"></td>
+      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="otHours" placeholder="0"></td>
+      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="ptoHours" placeholder="0"></td>
+      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="holidayHours" placeholder="0"></td>
+      <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="tips" placeholder="0.00"></td>
+      <td><input type="number" step="0.1" min="0" data-idx="${i}" data-field="mileage" placeholder="0"></td>
+      <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="reimbursement" placeholder="0.00"></td>
+      <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="bonus" placeholder="0.00"></td>
+      <td><input type="text" data-idx="${i}" data-field="notes" placeholder="" style="text-align:left;"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (_employees.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">No employees found for this store. Click "+ Add Employee" to get started.</td></tr>';
+  }
+}
+
+// ─── Add Employee Modal ──────────────────────────────────────────
+function showAddEmployee() {
+  document.getElementById('modal-add-emp').classList.remove('hidden');
+  document.getElementById('new-emp-first').focus();
+}
+
+function closeAddEmployee() {
+  document.getElementById('modal-add-emp').classList.add('hidden');
+  document.getElementById('new-emp-first').value = '';
+  document.getElementById('new-emp-last').value = '';
+  document.getElementById('new-emp-position').value = '';
+  document.getElementById('new-emp-rate').value = '';
+  document.getElementById('new-emp-paytype').value = 'hourly';
+  document.getElementById('add-emp-status').className = 'status';
+}
+
+async function addEmployee() {
+  const first = document.getElementById('new-emp-first').value.trim();
+  const last = document.getElementById('new-emp-last').value.trim();
+  const position = document.getElementById('new-emp-position').value.trim();
+  const payRate = document.getElementById('new-emp-rate').value.trim();
+  const payType = document.getElementById('new-emp-paytype').value;
+  const statusEl = document.getElementById('add-emp-status');
+
+  if (!first || !last) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'First and last name are required.';
+    return;
+  }
+
+  const storeId = document.getElementById('entry-store').value;
+  try {
+    const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${_token}`,
+      },
+      body: JSON.stringify({ firstName: first, lastName: last, position, payRate, payType }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Failed to add employee.';
+      return;
+    }
+
+    _employees.push(data.employee);
+    renderEmployeeTable();
+    closeAddEmployee();
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// ─── Submit Payroll ──────────────────────────────────────────────
+async function submitPayroll() {
+  const storeId = document.getElementById('entry-store').value;
+  const payPeriodStart = document.getElementById('entry-period-start').value;
+  const payPeriodEnd = document.getElementById('entry-period-end').value;
+  const payDate = document.getElementById('entry-pay-date').value;
+  const statusEl = document.getElementById('submit-status');
+
+  if (!storeId || !payPeriodStart || !payPeriodEnd || !payDate) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Please fill in store, pay period, and pay date.';
+    return;
+  }
+
+  // Collect all entries from the table
+  const entries = [];
+  _employees.forEach((emp, i) => {
+    const get = (field) => {
+      const el = document.querySelector(`input[data-idx="${i}"][data-field="${field}"]`);
+      return el ? el.value : '';
+    };
+
+    const regHours = parseFloat(get('regHours')) || 0;
+    const otHours = parseFloat(get('otHours')) || 0;
+    const ptoHours = parseFloat(get('ptoHours')) || 0;
+    const holidayHours = parseFloat(get('holidayHours')) || 0;
+    const tips = parseFloat(get('tips')) || 0;
+    const mileage = parseFloat(get('mileage')) || 0;
+    const reimbursement = parseFloat(get('reimbursement')) || 0;
+    const bonus = parseFloat(get('bonus')) || 0;
+    const notes = get('notes');
+
+    // Only include employees with at least some data entered
+    if (regHours || otHours || ptoHours || holidayHours || tips || mileage || reimbursement || bonus || notes) {
+      entries.push({
+        employeeId: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        position: emp.position,
+        payRate: emp.payRate,
+        payType: emp.payType,
+        regHours, otHours, ptoHours, holidayHours,
+        tips, mileage, reimbursement, bonus, notes,
+      });
+    }
+  });
+
+  if (entries.length === 0) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Please enter hours/data for at least one employee.';
+    return;
+  }
+
+  statusEl.className = 'status info';
+  statusEl.textContent = 'Submitting payroll data...';
+
+  try {
+    const resp = await fetch(`${API}/payroll/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${_token}`,
+      },
+      body: JSON.stringify({ clientSlug: _clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Submission failed.';
+      return;
+    }
+
+    // Show success screen
+    document.getElementById('success-id').textContent = data.submissionId;
+    document.getElementById('screen-entry').classList.add('hidden');
+    document.getElementById('screen-success').classList.remove('hidden');
+
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// ─── Reset / Logout ──────────────────────────────────────────────
+function resetForm() {
+  document.getElementById('screen-success').classList.add('hidden');
+  document.getElementById('screen-entry').classList.remove('hidden');
+
+  // Clear form but keep store selected
+  document.getElementById('entry-period-start').value = '';
+  document.getElementById('entry-period-end').value = '';
+  document.getElementById('entry-pay-date').value = '';
+  document.getElementById('submit-status').className = 'status';
+
+  // Reload employees (clears entered data)
+  onStoreChange();
+}
+
+function doLogout() {
+  _token = '';
+  _clientSlug = '';
+  _clientName = '';
+  _stores = [];
+  _employees = [];
+
+  document.getElementById('screen-entry').classList.add('hidden');
+  document.getElementById('screen-success').classList.add('hidden');
+  document.getElementById('screen-login').classList.remove('hidden');
+  document.getElementById('login-slug').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-status').className = 'status';
+}
+</script>
+</body>
+</html>

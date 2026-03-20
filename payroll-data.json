@@ -1,0 +1,18 @@
+{
+  "clients": {
+    "iheartcoffee": {
+      "name": "iHeartCoffee",
+      "password": "ihc2026!",
+      "stores": {
+        "store1": {
+          "name": "Store #1",
+          "employees": []
+        }
+      },
+      "payFrequency": "",
+      "_sessionToken": null,
+      "_notifications": []
+    }
+  },
+  "submissions": []
+}
