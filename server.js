@@ -33,6 +33,9 @@ app.get('/privacy-policy', (req, res) => {
 app.get('/terms', (req, res) => {
   res.sendFile(__dirname + '/public/terms.html');
 });
+app.get('/opt-in', (req, res) => {
+  res.sendFile(__dirname + '/public/opt-in.html');
+});
 app.get('/contact', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
 });

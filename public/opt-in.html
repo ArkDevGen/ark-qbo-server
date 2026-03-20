@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMS Opt-In — Ark Financial</title>
+  <style>
+    :root {
+      --navy: #0D1B2A;
+      --accent: #1B3A5C;
+      --light: #F4F6F8;
+      --border: #D1D9E0;
+      --text: #333;
+      --text-light: #666;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      background: #fff;
+    }
+    header {
+      background: var(--navy);
+      color: #fff;
+    }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 24px 36px;
+    }
+    header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    header p.tagline {
+      font-size: 15px;
+      color: #B0BEC5;
+    }
+    nav {
+      background: var(--accent);
+    }
+    nav .nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+    nav a {
+      color: #fff;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 20px;
+      transition: background 0.15s;
+    }
+    nav a:hover { background: rgba(255,255,255,0.1); }
+    nav a.active { background: rgba(255,255,255,0.15); }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 24px 60px;
+    }
+    .policy-content { max-width: 720px; }
+    h2 {
+      font-size: 22px;
+      color: var(--navy);
+      margin: 32px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    h2:first-of-type { margin-top: 0; }
+    p { margin-bottom: 12px; font-size: 14.5px; }
+    ul { margin: 8px 0 16px 24px; }
+    li { margin-bottom: 4px; font-size: 14.5px; }
+    .page-title { font-size: 26px; color: var(--navy); margin-bottom: 4px; }
+    .effective-date { font-size: 13px; color: var(--text-light); margin-bottom: 24px; }
+    footer {
+      background: var(--navy);
+      color: #B0BEC5;
+      text-align: center;
+      padding: 20px 24px;
+      font-size: 12px;
+    }
+    .consent-box {
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px 28px;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .consent-box p { margin-bottom: 8px; }
+    .consent-box strong { color: var(--navy); }
+    .disclosure-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    @media (max-width: 600px) {
+      header h1 { font-size: 24px; }
+      nav .nav-inner { flex-wrap: wrap; }
+      nav a { padding: 10px 14px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <h1>Ark Financial</h1>
+      <p class="tagline">Accounting &bull; Tax Preparation &bull; Payroll &bull; Bookkeeping</p>
+    </div>
+  </header>
+  <nav>
+    <div class="nav-inner">
+      <a href="/about">About</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms &amp; Conditions</a>
+      <a href="/opt-in" class="active">SMS Opt-In</a>
+      <a href="/contact">Contact</a>
+    </div>
+  </nav>
+
+  <main>
+    <div class="policy-content">
+      <h1 class="page-title">SMS Opt-In Process</h1>
+      <p class="effective-date">Effective Date: March 20, 2026</p>
+
+      <h2>How Clients Opt In</h2>
+      <p>
+        Ark Financial collects SMS consent from clients during the onboarding process. When a new
+        client engages Ark Financial for accounting, tax, payroll, or bookkeeping services, they
+        complete a client intake form that includes a dedicated SMS consent section.
+      </p>
+      <p>
+        The client provides their mobile phone number and signs the intake form acknowledging
+        they agree to receive account-related text messages. No SMS messages are sent without
+        prior written consent.
+      </p>
+
+      <h2>SMS Consent Disclosure</h2>
+      <p>The following disclosure is included on the Ark Financial client intake form:</p>
+
+      <div class="consent-box">
+        <p class="disclosure-label">SMS Consent Disclosure</p>
+        <p>
+          By providing my phone number below, I agree to receive account-related text messages
+          from <strong>Ark Financial</strong>, including appointment reminders, payroll notifications,
+          tax filing updates, and billing notices.
+        </p>
+        <ul>
+          <li>Message frequency varies (typically 1&ndash;5 messages per month)</li>
+          <li>Message and data rates may apply</li>
+          <li>Reply <strong>STOP</strong> at any time to opt out</li>
+          <li>Reply <strong>HELP</strong> for assistance</li>
+        </ul>
+        <p>
+          Consent is voluntary and is not a condition of service. For questions, contact Ark Financial
+          at (402) 287-7085 or <a href="mailto:ark.devgen@gmail.com">ark.devgen@gmail.com</a>.
+        </p>
+        <p>
+          View our <a href="/terms">SMS Terms &amp; Conditions</a> and
+          <a href="/privacy-policy">Privacy Policy</a>.
+        </p>
+      </div>
+
+      <h2>Opt-In Methods</h2>
+      <ul>
+        <li><strong>In-Person:</strong> Client signs the intake form during their onboarding meeting at our office</li>
+        <li><strong>Engagement Letter:</strong> Client signs and returns the engagement letter which includes the SMS consent disclosure</li>
+        <li><strong>Direct Request:</strong> Existing clients may contact our office to opt in to SMS notifications</li>
+      </ul>
+
+      <h2>Consent Record Keeping</h2>
+      <p>
+        All signed consent forms are stored in the client's file and maintained for the duration of
+        the client relationship plus seven (7) years in accordance with our data retention policy.
+        Consent records include the date of consent, the phone number provided, and the signed
+        disclosure form.
+      </p>
+
+      <h2>Opt-Out Process</h2>
+      <p>Clients may opt out of SMS messages at any time by:</p>
+      <ul>
+        <li>Replying <strong>STOP</strong> to any message from Ark Financial</li>
+        <li>Calling us at <a href="tel:+14022877085">(402) 287-7085</a></li>
+        <li>Emailing <a href="mailto:ark.devgen@gmail.com">ark.devgen@gmail.com</a></li>
+      </ul>
+      <p>
+        Upon receiving an opt-out request, the client's number is immediately removed from all
+        SMS communications and a confirmation message is sent.
+      </p>
+
+      <h2>Contact Us</h2>
+      <p>If you have questions about our SMS opt-in process, please contact us:</p>
+      <p>
+        <strong>Ark Financial</strong><br>
+        Phone: <a href="tel:+14022877085">(402) 287-7085</a><br>
+        Email: <a href="mailto:ark.devgen@gmail.com">ark.devgen@gmail.com</a>
+      </p>
+    </div>
+  </main>
+
+  <footer>
+    &copy; 2026 Ark Financial. All rights reserved.
+  </footer>
+
+</body>
+</html>
