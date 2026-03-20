@@ -658,15 +658,29 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
+  // Include admin employees in every store so managers show up everywhere
+  const adminStore = (client.stores || {}).admin;
+  const adminEmps = (adminStore && adminStore.employees || []).map(e => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    position: e.position || '(Admin)',
+    payRate: e.payRate || '',
+    payType: e.payType || 'hourly',
+    isAdmin: true,
+  }));
+
+  const storeEmps = (store.employees || []).map(e => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    position: e.position || '',
+    payRate: e.payRate || '',
+    payType: e.payType || 'hourly',
+  }));
+
   res.json({
-    employees: (store.employees || []).map(e => ({
-      id: e.id,
-      firstName: e.firstName,
-      lastName: e.lastName,
-      position: e.position || '',
-      payRate: e.payRate || '',
-      payType: e.payType || 'hourly',
-    })),
+    employees: [...adminEmps, ...storeEmps],
   });
 });
 
