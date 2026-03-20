@@ -73,10 +73,17 @@
   .hidden { display: none !important; }
 
   /* Add employee modal */
-  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; width: 420px; max-width: 90vw; }
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; overflow-y: auto; padding: 20px 0; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; width: 560px; max-width: 94vw; max-height: 90vh; overflow-y: auto; }
   .modal h3 { color: var(--accent); margin-bottom: 16px; }
+  .modal h4 { color: var(--text); font-size: 14px; margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--border); }
   .modal .row { margin-bottom: 10px; }
+  .required-star { color: var(--red); }
+  .dd-link-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 10px; text-align: center; }
+  .dd-link-box p { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .btn-dd { background: var(--orange); color: #0d1b2a; padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-dd:hover { background: #e89a3d; }
+  .btn-dd:disabled { opacity: .5; cursor: not-allowed; }
 
   /* Responsive */
   @media (max-width: 768px) {
@@ -204,24 +211,65 @@
 <div id="modal-add-emp" class="modal-overlay hidden" onclick="if(event.target===this)closeAddEmployee()">
   <div class="modal">
     <h3>Add New Employee</h3>
+
+    <h4 style="border-top:none;margin-top:0;padding-top:0;">Personal Information</h4>
     <div class="row">
-      <div><label>First Name</label><input type="text" id="new-emp-first"></div>
-      <div><label>Last Name</label><input type="text" id="new-emp-last"></div>
+      <div><label>First Name <span class="required-star">*</span></label><input type="text" id="new-emp-first"></div>
+      <div><label>Last Name <span class="required-star">*</span></label><input type="text" id="new-emp-last"></div>
     </div>
     <div class="row">
-      <div><label>Position</label><input type="text" id="new-emp-position" placeholder="e.g. Barista, Manager"></div>
+      <div><label>SSN <span class="required-star">*</span></label><input type="text" id="new-emp-ssn" placeholder="XXX-XX-XXXX" maxlength="11" oninput="formatSSN(this)"></div>
+      <div><label>Date of Birth <span class="required-star">*</span></label><input type="date" id="new-emp-dob"></div>
+    </div>
+
+    <h4>Address</h4>
+    <div class="row">
+      <div style="flex:2;"><label>Street Address <span class="required-star">*</span></label><input type="text" id="new-emp-street" placeholder="123 Main St"></div>
+    </div>
+    <div class="row">
+      <div style="flex:2;"><label>City <span class="required-star">*</span></label><input type="text" id="new-emp-city"></div>
+      <div><label>State <span class="required-star">*</span></label>
+        <select id="new-emp-state">
+          <option value="">--</option>
+          <option>AL</option><option>AK</option><option>AZ</option><option>AR</option><option>CA</option>
+          <option>CO</option><option>CT</option><option>DE</option><option>FL</option><option>GA</option>
+          <option>HI</option><option>ID</option><option>IL</option><option>IN</option><option>IA</option>
+          <option>KS</option><option>KY</option><option>LA</option><option>ME</option><option>MD</option>
+          <option>MA</option><option>MI</option><option>MN</option><option>MS</option><option>MO</option>
+          <option>MT</option><option>NE</option><option>NV</option><option>NH</option><option>NJ</option>
+          <option>NM</option><option>NY</option><option>NC</option><option>ND</option><option>OH</option>
+          <option>OK</option><option>OR</option><option>PA</option><option>RI</option><option>SC</option>
+          <option>SD</option><option>TN</option><option>TX</option><option>UT</option><option>VT</option>
+          <option>VA</option><option>WA</option><option>WV</option><option>WI</option><option>WY</option>
+          <option>DC</option>
+        </select>
+      </div>
+      <div><label>Zip <span class="required-star">*</span></label><input type="text" id="new-emp-zip" placeholder="68101" maxlength="10"></div>
+    </div>
+
+    <h4>Pay Information</h4>
+    <div class="row">
+      <div><label>Position <span class="required-star">*</span></label><input type="text" id="new-emp-position" placeholder="e.g. Barista, Manager"></div>
     </div>
     <div class="row">
       <div>
-        <label>Pay Type</label>
+        <label>Pay Type <span class="required-star">*</span></label>
         <select id="new-emp-paytype">
           <option value="hourly">Hourly</option>
           <option value="salary">Salary</option>
         </select>
       </div>
-      <div><label>Pay Rate</label><input type="text" id="new-emp-rate" placeholder="e.g. 15.00"></div>
+      <div><label>Pay Rate <span class="required-star">*</span></label><input type="text" id="new-emp-rate" placeholder="e.g. 15.00"></div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+
+    <h4>Direct Deposit <span style="color:var(--muted);font-weight:400;font-size:12px;">(Optional)</span></h4>
+    <div class="dd-link-box">
+      <p>Direct deposit information is collected securely through our New Hire Paperwork form. Click below to open the form — it will be pre-filled with the information you've entered above.</p>
+      <button class="btn btn-dd" id="btn-new-hire-link" onclick="openNewHirePaperwork()" disabled>Complete New Hire Paperwork</button>
+      <p style="font-size:11px;margin-top:8px;color:var(--muted);">You must fill out the required fields above first.</p>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
       <button class="btn btn-outline" onclick="closeAddEmployee()">Cancel</button>
       <button class="btn btn-primary" onclick="addEmployee()">Add Employee</button>
     </div>
@@ -443,6 +491,38 @@ function restoreTableData(data) {
   }
 }
 
+// ─── SSN Formatter ───────────────────────────────────────────────
+function formatSSN(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 9);
+  if (v.length > 5) v = v.slice(0,3) + '-' + v.slice(3,5) + '-' + v.slice(5);
+  else if (v.length > 3) v = v.slice(0,3) + '-' + v.slice(3);
+  el.value = v;
+  checkNewHireReady();
+}
+
+// Enable "Complete New Hire Paperwork" button when required fields are filled
+function checkNewHireReady() {
+  const first = document.getElementById('new-emp-first').value.trim();
+  const last = document.getElementById('new-emp-last').value.trim();
+  const ssn = document.getElementById('new-emp-ssn').value.trim();
+  const dob = document.getElementById('new-emp-dob').value;
+  const street = document.getElementById('new-emp-street').value.trim();
+  const city = document.getElementById('new-emp-city').value.trim();
+  const state = document.getElementById('new-emp-state').value;
+  const zip = document.getElementById('new-emp-zip').value.trim();
+  const position = document.getElementById('new-emp-position').value.trim();
+  const rate = document.getElementById('new-emp-rate').value.trim();
+
+  const ready = first && last && ssn.length === 11 && dob && street && city && state && zip && position && rate;
+  document.getElementById('btn-new-hire-link').disabled = !ready;
+}
+
+// Attach listeners to all required fields to check readiness
+['new-emp-first','new-emp-last','new-emp-dob','new-emp-street','new-emp-city','new-emp-state','new-emp-zip','new-emp-position','new-emp-rate'].forEach(id => {
+  document.getElementById(id).addEventListener('input', checkNewHireReady);
+  document.getElementById(id).addEventListener('change', checkNewHireReady);
+});
+
 // ─── Add Employee Modal ──────────────────────────────────────────
 function showAddEmployee() {
   document.getElementById('modal-add-emp').classList.remove('hidden');
@@ -451,27 +531,84 @@ function showAddEmployee() {
 
 function closeAddEmployee() {
   document.getElementById('modal-add-emp').classList.add('hidden');
-  document.getElementById('new-emp-first').value = '';
-  document.getElementById('new-emp-last').value = '';
-  document.getElementById('new-emp-position').value = '';
-  document.getElementById('new-emp-rate').value = '';
+  const fields = ['new-emp-first','new-emp-last','new-emp-ssn','new-emp-dob','new-emp-street','new-emp-city','new-emp-zip','new-emp-position','new-emp-rate'];
+  fields.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('new-emp-state').value = '';
   document.getElementById('new-emp-paytype').value = 'hourly';
+  document.getElementById('btn-new-hire-link').disabled = true;
   document.getElementById('add-emp-status').className = 'status';
+}
+
+// ─── Open New Hire Paperwork (pre-filled) ────────────────────────
+async function openNewHirePaperwork() {
+  const statusEl = document.getElementById('add-emp-status');
+  const empData = {
+    firstName: document.getElementById('new-emp-first').value.trim(),
+    lastName: document.getElementById('new-emp-last').value.trim(),
+    ssn: document.getElementById('new-emp-ssn').value.trim(),
+    dob: document.getElementById('new-emp-dob').value,
+    street: document.getElementById('new-emp-street').value.trim(),
+    city: document.getElementById('new-emp-city').value.trim(),
+    state: document.getElementById('new-emp-state').value,
+    zip: document.getElementById('new-emp-zip').value.trim(),
+    position: document.getElementById('new-emp-position').value.trim(),
+    payType: document.getElementById('new-emp-paytype').value,
+    payRate: document.getElementById('new-emp-rate').value.trim(),
+    clientSlug: _clientSlug,
+    clientName: _clientName,
+    storeId: document.getElementById('entry-store').value,
+    storeName: document.getElementById('entry-store').selectedOptions[0]?.textContent || '',
+  };
+
+  try {
+    statusEl.className = 'status info';
+    statusEl.textContent = 'Generating secure link...';
+
+    const resp = await fetch(`${API}/payroll/new-hire-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${_token}`,
+      },
+      body: JSON.stringify(empData),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Failed to generate link.';
+      return;
+    }
+
+    statusEl.className = 'status';
+    window.open(`${API}/new-hire?token=${data.token}`, '_blank');
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
 }
 
 async function addEmployee() {
   const first = document.getElementById('new-emp-first').value.trim();
   const last = document.getElementById('new-emp-last').value.trim();
+  const ssn = document.getElementById('new-emp-ssn').value.trim();
+  const dob = document.getElementById('new-emp-dob').value;
+  const street = document.getElementById('new-emp-street').value.trim();
+  const city = document.getElementById('new-emp-city').value.trim();
+  const state = document.getElementById('new-emp-state').value;
+  const zip = document.getElementById('new-emp-zip').value.trim();
   const position = document.getElementById('new-emp-position').value.trim();
   const payRate = document.getElementById('new-emp-rate').value.trim();
   const payType = document.getElementById('new-emp-paytype').value;
   const statusEl = document.getElementById('add-emp-status');
 
-  if (!first || !last) {
-    statusEl.className = 'status error';
-    statusEl.textContent = 'First and last name are required.';
-    return;
-  }
+  // Validate all required fields
+  if (!first || !last) { statusEl.className = 'status error'; statusEl.textContent = 'First and last name are required.'; return; }
+  if (ssn.length !== 11) { statusEl.className = 'status error'; statusEl.textContent = 'Please enter a valid SSN (XXX-XX-XXXX).'; return; }
+  if (!dob) { statusEl.className = 'status error'; statusEl.textContent = 'Date of birth is required.'; return; }
+  if (!street || !city || !state || !zip) { statusEl.className = 'status error'; statusEl.textContent = 'Complete address is required.'; return; }
+  if (!position) { statusEl.className = 'status error'; statusEl.textContent = 'Position is required.'; return; }
+  if (!payRate) { statusEl.className = 'status error'; statusEl.textContent = 'Pay rate is required.'; return; }
 
   const storeId = document.getElementById('entry-store').value;
   try {
@@ -481,7 +618,11 @@ async function addEmployee() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${_token}`,
       },
-      body: JSON.stringify({ firstName: first, lastName: last, position, payRate, payType }),
+      body: JSON.stringify({
+        firstName: first, lastName: last, ssn, dob,
+        street, city, state, zip,
+        position, payRate, payType,
+      }),
     });
     const data = await resp.json();
 

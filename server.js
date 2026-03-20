@@ -629,13 +629,16 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
-  const { firstName, lastName, position, payRate, payType } = req.body;
+  const { firstName, lastName, ssn, dob, street, city, state, zip, position, payRate, payType } = req.body;
   if (!firstName || !lastName) return res.status(400).json({ error: 'First and last name required' });
 
   const newEmp = {
     id: crypto.randomUUID(),
     firstName,
     lastName,
+    ssn: ssn || '',
+    dob: dob || '',
+    address: { street: street || '', city: city || '', state: state || '', zip: zip || '' },
     position: position || '',
     payRate: payRate || '',
     payType: payType || 'hourly',
@@ -654,11 +657,122 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     storeId,
     storeName: store.name,
     employee: `${firstName} ${lastName}`,
+    position: position || '',
+    payRate: payRate || '',
+    payType: payType || 'hourly',
+    address: `${city || ''}, ${state || ''}`,
     timestamp: new Date().toISOString(),
   });
   savePayrollData();
 
   res.json({ success: true, employee: newEmp });
+});
+
+// ── New Hire Paperwork — token generation ─────────────────────────
+const _newHireTokens = {};
+
+app.post('/payroll/new-hire-token', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[req.body.clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const nhToken = crypto.randomUUID();
+  _newHireTokens[nhToken] = {
+    ...req.body,
+    createdAt: Date.now(),
+  };
+
+  // Expire tokens after 2 hours
+  setTimeout(() => { delete _newHireTokens[nhToken]; }, 7200000);
+
+  res.json({ success: true, token: nhToken });
+});
+
+// ── New Hire Paperwork — serve page ───────────────────────────────
+app.get('/new-hire', (req, res) => {
+  res.sendFile(__dirname + '/public/new-hire.html');
+});
+
+// ── New Hire Paperwork — get pre-filled data ──────────────────────
+app.get('/payroll/new-hire-data/:token', (req, res) => {
+  const data = _newHireTokens[req.params.token];
+  if (!data) return res.status(404).json({ error: 'Link expired or invalid' });
+  // Don't expose SSN in the GET — it's already on the form that generated this
+  res.json({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    dob: data.dob,
+    street: data.street,
+    city: data.city,
+    state: data.state,
+    zip: data.zip,
+    position: data.position,
+    payType: data.payType,
+    payRate: data.payRate,
+    clientName: data.clientName,
+    storeName: data.storeName,
+  });
+});
+
+// ── New Hire Paperwork — submit completed form ────────────────────
+app.post('/payroll/new-hire-submit', (req, res) => {
+  const { token, routingNumber, accountNumber, accountType, filingStatus, allowances, additionalWithholding, signature } = req.body;
+
+  const data = _newHireTokens[token];
+  if (!data) return res.status(404).json({ error: 'Link expired or invalid' });
+
+  const client = payrollData.clients[data.clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  // Store the new hire report
+  if (!payrollData.newHireReports) payrollData.newHireReports = [];
+  payrollData.newHireReports.push({
+    id: crypto.randomUUID(),
+    clientSlug: data.clientSlug,
+    clientName: data.clientName,
+    storeId: data.storeId,
+    storeName: data.storeName,
+    employee: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      ssn: data.ssn,
+      dob: data.dob,
+      address: { street: data.street, city: data.city, state: data.state, zip: data.zip },
+      position: data.position,
+      payType: data.payType,
+      payRate: data.payRate,
+    },
+    directDeposit: {
+      routingNumber: routingNumber || '',
+      accountNumber: accountNumber || '',
+      accountType: accountType || '',
+    },
+    tax: {
+      filingStatus: filingStatus || '',
+      allowances: allowances || '',
+      additionalWithholding: additionalWithholding || '',
+    },
+    signature: signature || '',
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  });
+
+  // Add notification
+  if (!client._notifications) client._notifications = [];
+  client._notifications.push({
+    type: 'new-hire-paperwork',
+    employee: `${data.firstName} ${data.lastName}`,
+    storeName: data.storeName,
+    timestamp: new Date().toISOString(),
+  });
+
+  savePayrollData();
+  delete _newHireTokens[token];
+
+  console.log(`New hire paperwork submitted: ${data.firstName} ${data.lastName} (${data.clientName})`);
+  res.json({ success: true });
 });
 
 // ── Submit payroll data ──────────────────────────────────────────
