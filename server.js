@@ -560,17 +560,50 @@ if (fs.existsSync(PAYROLL_FILE)) {
   } catch(e) {
     console.log('Could not load payroll data, starting fresh');
   }
-} else {
-  // First deploy with persistent disk — seed from repo copy if it exists
-  const localCopy = path.join(__dirname, 'payroll-data.json');
-  if (fs.existsSync(localCopy)) {
-    try {
-      payrollData = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
-      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
-      console.log('✓ Payroll data seeded to persistent disk from repo');
-    } catch(e) {
-      console.log('Could not seed payroll data');
+}
+
+// Sync: if repo copy has employees that persistent disk is missing, merge them in
+const localCopy = path.join(__dirname, 'payroll-data.json');
+if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
+  try {
+    const repoCopy = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+    let updated = false;
+    for (const [slug, repoClient] of Object.entries(repoCopy.clients || {})) {
+      if (!payrollData.clients[slug]) {
+        payrollData.clients[slug] = repoClient;
+        updated = true;
+      } else {
+        const diskClient = payrollData.clients[slug];
+        for (const [storeId, repoStore] of Object.entries(repoClient.stores || {})) {
+          const diskStore = (diskClient.stores || {})[storeId];
+          if (repoStore.employees && repoStore.employees.length > 0 &&
+              (!diskStore || !diskStore.employees || diskStore.employees.length === 0)) {
+            if (!diskClient.stores) diskClient.stores = {};
+            diskClient.stores[storeId] = repoStore;
+            updated = true;
+          }
+        }
+        if (repoClient.workLocations && repoClient.workLocations.length > (diskClient.workLocations || []).length) {
+          diskClient.workLocations = repoClient.workLocations;
+          updated = true;
+        }
+      }
     }
+    if (updated) {
+      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+      console.log('✓ Payroll data synced from repo to persistent disk');
+    }
+  } catch(e) {
+    console.log('Could not sync payroll data from repo:', e.message);
+  }
+} else if (!fs.existsSync(PAYROLL_FILE) && fs.existsSync(localCopy)) {
+  // First deploy — seed from repo
+  try {
+    payrollData = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+    fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+    console.log('✓ Payroll data seeded to persistent disk from repo');
+  } catch(e) {
+    console.log('Could not seed payroll data');
   }
 }
 
