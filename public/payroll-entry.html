@@ -50,6 +50,14 @@
   .data-table input:focus { border-color: var(--accent); }
   .data-table .emp-name { text-align: left; font-weight: 500; white-space: nowrap; }
   .data-table .emp-pos { color: var(--muted); font-size: 12px; }
+  .data-table .emp-rate { font-size: 12px; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+  .data-table .emp-rate span { color: var(--green); font-weight: 500; }
+  .data-table .emp-rate .rate-edit { width: 70px; padding: 2px 5px; font-size: 12px; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; color: var(--text); display: none; }
+  .data-table .emp-rate .rate-edit:focus { border-color: var(--accent); }
+  .data-table .emp-rate .rate-display { cursor: pointer; border-bottom: 1px dashed var(--border); }
+  .data-table .emp-rate .rate-display:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  .data-table .emp-rate .rate-changed { color: var(--orange) !important; }
+  .rate-badge { display: inline-block; background: var(--orange); color: #0d1b2a; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
 
   /* Login */
   .login-card { max-width: 400px; margin: 80px auto; }
@@ -228,6 +236,7 @@ let _clientSlug = '';
 let _clientName = '';
 let _stores = [];
 let _employees = [];
+let _rateChanges = {};  // { employeeId: { from: oldRate, to: newRate, name: 'First Last' } }
 const API = window.location.origin;
 
 // ─── Login ───────────────────────────────────────────────────────
@@ -321,16 +330,31 @@ async function onStoreChange() {
 }
 
 // ─── Render employee data entry table ────────────────────────────
+function fmtRate(emp) {
+  if (!emp.payRate) return '<span style="color:var(--muted)">No rate set</span>';
+  const symbol = emp.payType === 'salary' ? '/yr' : '/hr';
+  return `$${parseFloat(emp.payRate).toFixed(2)}${symbol}`;
+}
+
 function renderEmployeeTable() {
   const tbody = document.getElementById('emp-tbody');
   tbody.innerHTML = '';
 
   _employees.forEach((emp, i) => {
+    const changed = _rateChanges[emp.id];
+    const changedBadge = changed ? '<span class="rate-badge">UPDATED</span>' : '';
+    const rateClass = changed ? 'rate-display rate-changed' : 'rate-display';
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <div class="emp-name">${emp.firstName} ${emp.lastName}</div>
         <div class="emp-pos">${emp.position || ''}</div>
+        <div class="emp-rate">
+          <span class="${rateClass}" onclick="startEditRate(${i})" id="rate-disp-${i}" title="Click to update">${fmtRate(emp)}</span>${changedBadge}
+          <input class="rate-edit" type="number" step="0.01" min="0" id="rate-input-${i}"
+            onblur="finishEditRate(${i})" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){cancelEditRate(${i});}">
+        </div>
       </td>
       <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="regHours" placeholder="0"></td>
       <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="otHours" placeholder="0"></td>
@@ -347,6 +371,75 @@ function renderEmployeeTable() {
 
   if (_employees.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">No employees found for this store. Click "+ Add Employee" to get started.</td></tr>';
+  }
+}
+
+// ─── Inline pay rate editing ─────────────────────────────────────
+function startEditRate(idx) {
+  const emp = _employees[idx];
+  const disp = document.getElementById(`rate-disp-${idx}`);
+  const input = document.getElementById(`rate-input-${idx}`);
+  disp.style.display = 'none';
+  input.style.display = 'inline-block';
+  input.value = emp.payRate || '';
+  input.focus();
+  input.select();
+}
+
+function cancelEditRate(idx) {
+  const disp = document.getElementById(`rate-disp-${idx}`);
+  const input = document.getElementById(`rate-input-${idx}`);
+  input.style.display = 'none';
+  disp.style.display = '';
+}
+
+function finishEditRate(idx) {
+  const emp = _employees[idx];
+  const input = document.getElementById(`rate-input-${idx}`);
+  const newRate = input.value.trim();
+  const oldRate = emp.payRate || '';
+
+  // Hide input, show display
+  input.style.display = 'none';
+  const disp = document.getElementById(`rate-disp-${idx}`);
+  disp.style.display = '';
+
+  // If rate changed, track it
+  if (newRate && newRate !== oldRate) {
+    const originalRate = _rateChanges[emp.id] ? _rateChanges[emp.id].from : oldRate;
+    _rateChanges[emp.id] = {
+      from: originalRate,
+      to: newRate,
+      name: `${emp.firstName} ${emp.lastName}`,
+    };
+    emp.payRate = newRate;
+    // Re-render to show updated badge
+    const savedData = collectTableData();
+    renderEmployeeTable();
+    restoreTableData(savedData);
+  }
+}
+
+// Save/restore table input data across re-renders
+function collectTableData() {
+  const data = {};
+  _employees.forEach((emp, i) => {
+    const fields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus','notes'];
+    data[i] = {};
+    fields.forEach(f => {
+      const el = document.querySelector(`input[data-idx="${i}"][data-field="${f}"]`);
+      if (el) data[i][f] = el.value;
+    });
+  });
+  return data;
+}
+
+function restoreTableData(data) {
+  for (const [idx, fields] of Object.entries(data)) {
+    for (const [f, v] of Object.entries(fields)) {
+      const el = document.querySelector(`input[data-idx="${idx}"][data-field="${f}"]`);
+      if (el && v) el.value = v;
+    }
   }
 }
 
@@ -470,7 +563,7 @@ async function submitPayroll() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${_token}`,
       },
-      body: JSON.stringify({ clientSlug: _clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries }),
+      body: JSON.stringify({ clientSlug: _clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries, rateChanges: Object.keys(_rateChanges).length ? _rateChanges : null }),
     });
     const data = await resp.json();
 
@@ -502,6 +595,7 @@ function resetForm() {
   document.getElementById('entry-pay-date').value = '';
   document.getElementById('submit-status').className = 'status';
 
+  _rateChanges = {};
   // Reload employees (clears entered data)
   onStoreChange();
 }
@@ -512,6 +606,7 @@ function doLogout() {
   _clientName = '';
   _stores = [];
   _employees = [];
+  _rateChanges = {};
 
   document.getElementById('screen-entry').classList.add('hidden');
   document.getElementById('screen-success').classList.add('hidden');

@@ -663,7 +663,7 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
 
 // ── Submit payroll data ──────────────────────────────────────────
 app.post('/payroll/submit', (req, res) => {
-  const { clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries } = req.body;
+  const { clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries, rateChanges } = req.body;
   const token = req.headers.authorization?.replace('Bearer ', '');
 
   const client = payrollData.clients[clientSlug];
@@ -673,6 +673,32 @@ app.post('/payroll/submit', (req, res) => {
 
   if (!storeId || !payPeriodStart || !payPeriodEnd || !payDate || !entries?.length) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Process pay rate changes — update stored employee data and create notifications
+  if (rateChanges && Object.keys(rateChanges).length > 0) {
+    const store = (client.stores || {})[storeId];
+    if (store && store.employees) {
+      const changeList = [];
+      for (const [empId, change] of Object.entries(rateChanges)) {
+        const emp = store.employees.find(e => e.id === empId);
+        if (emp) {
+          const oldRate = emp.payRate || 'none';
+          emp.payRate = change.to;
+          changeList.push(`${change.name}: $${oldRate} → $${change.to}`);
+        }
+      }
+      if (changeList.length > 0) {
+        if (!client._notifications) client._notifications = [];
+        client._notifications.push({
+          type: 'pay-rate-change',
+          storeId,
+          storeName: store.name,
+          changes: changeList,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
   }
 
   const submission = {
@@ -685,6 +711,7 @@ app.post('/payroll/submit', (req, res) => {
     payPeriodEnd,
     payDate,
     entries,
+    rateChanges: rateChanges || null,
     submittedAt: new Date().toISOString(),
     status: 'pending',
   };
@@ -693,6 +720,7 @@ app.post('/payroll/submit', (req, res) => {
   savePayrollData();
 
   console.log(`Payroll submitted: ${client.name} / ${submission.storeName} — ${entries.length} employees`);
+  if (rateChanges) console.log(`  Rate changes: ${Object.keys(rateChanges).length}`);
   res.json({ success: true, submissionId: submission.id });
 });
 
