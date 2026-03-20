@@ -1859,16 +1859,48 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </button>
           </div>
 
-          <!-- Message log -->
+          <!-- Conversations -->
           <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);">Message Log</div>
-              <div style="font-size:11px;color:var(--text-d);" id="sms-log-count"></div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);">Messages</div>
+              <div style="font-size:11px;color:var(--text-d);" id="sms-convo-count">0 conversations</div>
             </div>
             <div style="margin-bottom:8px;">
-              <input class="field-input" placeholder="Search messages…" oninput="smsFilterLog(this.value)" style="margin:0;font-size:12px;">
+              <input id="sms-convo-search" class="field-input" placeholder="Search conversations…" oninput="smsRenderConvoList(this.value)" style="margin:0;font-size:12px;">
             </div>
-            <div id="sms-log-list" style="max-height:260px;overflow-y:auto;"></div>
+            <!-- Conversation list + thread in split view -->
+            <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:360px;">
+              <!-- Left: conversation list -->
+              <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;max-height:400px;flex-shrink:0;">
+                <div id="sms-convo-list"></div>
+              </div>
+              <!-- Right: thread view -->
+              <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+                <!-- Thread header -->
+                <div id="sms-thread-header" style="padding:10px 14px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                      <div id="sms-thread-name" style="font-size:13px;font-weight:700;color:var(--navy);"></div>
+                      <div id="sms-thread-phone" style="font-size:10px;font-family:monospace;color:var(--text-d);margin-top:1px;"></div>
+                    </div>
+                    <div id="sms-thread-client-link"></div>
+                  </div>
+                </div>
+                <!-- Messages -->
+                <div id="sms-thread-messages" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;max-height:280px;">
+                  <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-d);font-size:12px;font-style:italic;">
+                    Select a conversation
+                  </div>
+                </div>
+                <!-- Reply box -->
+                <div id="sms-thread-reply" style="display:none;padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0;">
+                  <div style="display:flex;gap:6px;">
+                    <input id="sms-reply-input" class="field-input" placeholder="Type a message…" style="margin:0;flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')smsReplySend()">
+                    <button onclick="smsReplySend()" class="btn btn-primary" style="padding:6px 12px;font-size:12px;white-space:nowrap;">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -1984,58 +2016,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- ══ CARD 3: SMS Conversations (spans full bottom row) ══ -->
-      <div class="card" style="grid-column:1/-1;display:flex;flex-direction:column;min-height:420px;overflow:hidden;">
-        <div class="card-header" style="border-bottom:2px solid rgba(46,125,94,.15);flex-shrink:0;">
-          <div>
-            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:18px;">💬</span> Messages
-            </div>
-            <div class="card-subtitle" id="sms-convo-count">0 conversations</div>
-          </div>
-          <button onclick="smsNewConvo()" class="btn btn-primary btn-sm">+ New Message</button>
-        </div>
+      <!-- ══ CARD 3: Coming Soon ══ -->
+      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
+        <div style="font-size:28px;">⬜</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
+      </div>
 
-        <div style="display:flex;flex:1;min-height:0;">
-
-          <!-- Left: Conversation list -->
-          <div style="width:320px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;">
-            <div style="padding:10px 12px;border-bottom:1px solid var(--border);">
-              <input id="sms-convo-search" class="field-input" placeholder="Search conversations…" style="margin:0;font-size:12px;" oninput="smsRenderConvoList(this.value)">
-            </div>
-            <div id="sms-convo-list" style="flex:1;overflow-y:auto;"></div>
-          </div>
-
-          <!-- Right: Thread view -->
-          <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
-            <!-- Thread header -->
-            <div id="sms-thread-header" style="padding:12px 16px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
-              <div style="display:flex;align-items:center;justify-content:space-between;">
-                <div>
-                  <div id="sms-thread-name" style="font-size:14px;font-weight:700;color:var(--navy);"></div>
-                  <div id="sms-thread-phone" style="font-size:11px;font-family:monospace;color:var(--text-d);margin-top:1px;"></div>
-                </div>
-                <div id="sms-thread-client-link"></div>
-              </div>
-            </div>
-
-            <!-- Messages area -->
-            <div id="sms-thread-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px;">
-              <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-d);font-size:13px;font-style:italic;">
-                Select a conversation to view messages
-              </div>
-            </div>
-
-            <!-- Reply box -->
-            <div id="sms-thread-reply" style="display:none;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;">
-              <div style="display:flex;gap:8px;">
-                <input id="sms-reply-input" class="field-input" placeholder="Type a message…" style="margin:0;flex:1;font-size:13px;" onkeydown="if(event.key==='Enter')smsReplySend()">
-                <button onclick="smsReplySend()" class="btn btn-primary" style="padding:8px 16px;white-space:nowrap;">Send</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
+      <!-- ══ CARD 4: Coming Soon ══ -->
+      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
+        <div style="font-size:28px;">⬜</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
       </div>
 
     </div>
