@@ -610,6 +610,36 @@ function savePayrollData() {
   fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
 }
 
+// ── Admin: Force-reset payroll data from repo copy ───────────────
+app.post('/payroll/force-sync', (req, res) => {
+  const repoFile = path.join(__dirname, 'payroll-data.json');
+  if (!fs.existsSync(repoFile)) return res.status(404).json({ error: 'No repo copy found' });
+  try {
+    const repoCopy = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+    // Preserve submissions, session tokens, notifications from disk
+    repoCopy.submissions = payrollData.submissions || [];
+    for (const [slug, client] of Object.entries(repoCopy.clients || {})) {
+      const diskClient = payrollData.clients[slug];
+      if (diskClient) {
+        client._sessionToken = diskClient._sessionToken || null;
+        client._notifications = diskClient._notifications || [];
+      }
+    }
+    payrollData = repoCopy;
+    savePayrollData();
+    const stats = {};
+    for (const [slug, client] of Object.entries(payrollData.clients)) {
+      stats[slug] = {
+        stores: Object.keys(client.stores || {}).length,
+        employees: Object.values(client.stores || {}).reduce((s, st) => s + (st.employees || []).length, 0),
+      };
+    }
+    res.json({ success: true, stats });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve the payroll entry page
 app.get('/payroll-entry', (req, res) => {
   res.sendFile(__dirname + '/public/payroll-entry.html');
