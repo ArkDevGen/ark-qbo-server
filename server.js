@@ -9,8 +9,16 @@ const OAuthClient = require('intuit-oauth');
 const QuickBooks  = require('node-quickbooks');
 const path        = require('path');
 const crypto      = require('crypto');
+const fs          = require('fs');
 
 const app = express();
+
+// ─────────────────────────────────────────────────────────────────
+// Persistent data directory
+// On Render with a persistent disk mounted at /data, files survive deploys.
+// Locally (no /data mount), falls back to current directory.
+// ─────────────────────────────────────────────────────────────────
+const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 
 // Parse JSON request bodies — 25mb limit for fax file uploads
 app.use(express.json({ limit: '25mb' }));
@@ -49,7 +57,7 @@ app.get('/contact', (req, res) => {
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   // OPTIONS is a "preflight" request browsers send before POST
   // We just say OK and stop processing it
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -73,8 +81,7 @@ const oauthClient = new OAuthClient({
 // For sandbox testing, memory is fine — tokens reset when 
 // you restart the server, just re-authorize.
 // ─────────────────────────────────────────────────────────────────
-const fs = require('fs');
-const TOKEN_FILE = './tokens.json';
+const TOKEN_FILE = path.join(DATA_DIR, 'tokens.json');
 
 // Load tokens from file if they exist
 let tokenData = null;
@@ -542,16 +549,28 @@ app.get('/sms/inbox', (req, res) => {
 // Public-facing form for clients to submit payroll data
 // Server stores config (clients, stores, employees) and submissions
 // ─────────────────────────────────────────────────────────────────
-const PAYROLL_FILE = './payroll-data.json';
+const PAYROLL_FILE = path.join(DATA_DIR, 'payroll-data.json');
 
-// Load payroll data from file
+// Load payroll data from persistent disk, or seed from repo copy if first deploy
 let payrollData = { clients: {}, submissions: [] };
 if (fs.existsSync(PAYROLL_FILE)) {
   try {
     payrollData = JSON.parse(fs.readFileSync(PAYROLL_FILE, 'utf8'));
-    console.log('✓ Payroll data loaded from file');
+    console.log(`✓ Payroll data loaded from ${PAYROLL_FILE}`);
   } catch(e) {
     console.log('Could not load payroll data, starting fresh');
+  }
+} else {
+  // First deploy with persistent disk — seed from repo copy if it exists
+  const localCopy = path.join(__dirname, 'payroll-data.json');
+  if (fs.existsSync(localCopy)) {
+    try {
+      payrollData = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+      console.log('✓ Payroll data seeded to persistent disk from repo');
+    } catch(e) {
+      console.log('Could not seed payroll data');
+    }
   }
 }
 
@@ -916,6 +935,7 @@ app.post('/payroll/notifications/clear', (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
+  console.log(`  Data dir: ${DATA_DIR}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}`);
