@@ -9,6 +9,11 @@ const OAuthClient = require('intuit-oauth');
 const QuickBooks  = require('node-quickbooks');
 const path        = require('path');
 const crypto      = require('crypto');
+const multer      = require('multer');
+const { S3Client, ListObjectsV2Command, PutObjectCommand,
+        GetObjectCommand, DeleteObjectCommand, CopyObjectCommand,
+        HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
 
@@ -538,11 +543,271 @@ app.get('/sms/inbox', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// BACKBLAZE B2 — S3-Compatible File Storage
+// All file operations go through the server so B2 credentials
+// never leave the backend. Dashboard sends/receives files via
+// these /files/* endpoints.
+// ─────────────────────────────────────────────────────────────────
+const s3 = new S3Client({
+  endpoint:    process.env.B2_ENDPOINT,
+  region:      process.env.B2_REGION || 'us-east-005',
+  credentials: {
+    accessKeyId:     process.env.B2_KEY_ID,
+    secretAccessKey: process.env.B2_APP_KEY,
+  },
+  forcePathStyle: true, // B2 requires path-style URLs
+});
+const B2_BUCKET = process.env.B2_BUCKET || 'ark-files';
+
+// Multer — stores uploads in memory (streamed straight to B2)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB per file
+});
+
+// ── Helper: check if B2 is configured ──
+function b2Ready() {
+  return !!(process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_ENDPOINT);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Status — Dashboard checks if file storage is available
+// ─────────────────────────────────────────────────────────────────
+app.get('/files/status', (req, res) => {
+  res.json({ available: b2Ready(), bucket: B2_BUCKET });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: List — Returns all files (optionally filtered by prefix)
+// Query params: ?prefix=clients/abc123/tax/  &delimiter=/
+// ─────────────────────────────────────────────────────────────────
+app.get('/files/list', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  try {
+    const prefix    = req.query.prefix || '';
+    const delimiter = req.query.delimiter || undefined;
+
+    const command = new ListObjectsV2Command({
+      Bucket:    B2_BUCKET,
+      Prefix:    prefix,
+      Delimiter: delimiter,
+      MaxKeys:   1000,
+    });
+
+    const data = await s3.send(command);
+
+    // Files in this "folder"
+    const files = (data.Contents || []).map(obj => ({
+      key:      obj.Key,
+      name:     obj.Key.split('/').filter(Boolean).pop(),
+      size:     obj.Size,
+      modified: obj.LastModified,
+    }));
+
+    // "Sub-folders" (common prefixes)
+    const folders = (data.CommonPrefixes || []).map(p => ({
+      prefix: p.Prefix,
+      name:   p.Prefix.replace(prefix, '').replace(/\/$/, ''),
+    }));
+
+    res.json({ success: true, files, folders, prefix });
+  } catch (e) {
+    console.error('Files list error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Upload — Multipart upload, streams to B2
+// Form fields: folder (the B2 prefix), file (the file)
+// Optional: uploadedBy (AM name for metadata)
+// ─────────────────────────────────────────────────────────────────
+app.post('/files/upload', upload.single('file'), async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!req.file)  return res.status(400).json({ error: 'No file provided' });
+
+  try {
+    const folder     = (req.body.folder || '').replace(/\/+$/, '');
+    const safeName   = req.file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+    const key        = folder ? `${folder}/${safeName}` : safeName;
+    const uploadedBy = req.body.uploadedBy || 'Unknown';
+
+    const command = new PutObjectCommand({
+      Bucket:      B2_BUCKET,
+      Key:         key,
+      Body:        req.file.buffer,
+      ContentType: req.file.mimetype || 'application/octet-stream',
+      Metadata:    { uploadedby: uploadedBy, uploadedat: new Date().toISOString() },
+    });
+
+    await s3.send(command);
+    console.log(`File uploaded: ${key} (${(req.file.size / 1024).toFixed(1)} KB) by ${uploadedBy}`);
+
+    res.json({ success: true, key, name: safeName, size: req.file.size });
+  } catch (e) {
+    console.error('File upload error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Download — Returns a pre-signed URL (valid 15 min)
+// Query param: ?key=clients/abc123/tax/return.pdf
+// ─────────────────────────────────────────────────────────────────
+app.get('/files/download', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ error: 'File key is required' });
+
+  try {
+    const command = new GetObjectCommand({ Bucket: B2_BUCKET, Key: key });
+    const url = await getSignedUrl(s3, command, { expiresIn: 900 }); // 15 min
+    res.json({ success: true, url, key });
+  } catch (e) {
+    console.error('File download error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Delete — Remove a file from B2
+// Body: { key: 'clients/abc123/tax/return.pdf' }
+// ─────────────────────────────────────────────────────────────────
+app.post('/files/delete', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: 'File key is required' });
+
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: key }));
+    console.log(`File deleted: ${key}`);
+    res.json({ success: true, key });
+  } catch (e) {
+    console.error('File delete error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Rename / Move — Copy to new key, delete old key
+// Body: { oldKey, newKey }
+// ─────────────────────────────────────────────────────────────────
+app.post('/files/rename', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  const { oldKey, newKey } = req.body;
+  if (!oldKey || !newKey) return res.status(400).json({ error: 'oldKey and newKey are required' });
+
+  try {
+    // Copy to new location
+    await s3.send(new CopyObjectCommand({
+      Bucket:     B2_BUCKET,
+      CopySource: `${B2_BUCKET}/${oldKey}`,
+      Key:        newKey,
+    }));
+    // Delete old
+    await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: oldKey }));
+    console.log(`File renamed: ${oldKey} → ${newKey}`);
+    res.json({ success: true, oldKey, newKey });
+  } catch (e) {
+    console.error('File rename error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Create folder — Puts an empty placeholder object
+// Body: { prefix: 'clients/abc123/tax/2025/' }
+// ─────────────────────────────────────────────────────────────────
+app.post('/files/folder', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  let { prefix } = req.body;
+  if (!prefix) return res.status(400).json({ error: 'Folder prefix is required' });
+  if (!prefix.endsWith('/')) prefix += '/';
+
+  try {
+    // Check if folder already exists
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: B2_BUCKET, Key: prefix }));
+      // If HeadObject succeeds, the folder already exists
+      return res.status(409).json({ error: 'A folder with that name already exists' });
+    } catch (headErr) {
+      // 404 = doesn't exist = good, proceed to create
+      if (headErr.name !== 'NotFound' && headErr.$metadata?.httpStatusCode !== 404) throw headErr;
+    }
+
+    await s3.send(new PutObjectCommand({
+      Bucket:      B2_BUCKET,
+      Key:         prefix,
+      Body:        Buffer.alloc(0),
+      ContentType: 'application/x-directory',
+    }));
+    console.log(`Folder created: ${prefix}`);
+    res.json({ success: true, prefix });
+  } catch (e) {
+    console.error('Folder create error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILES: Bulk list — All files across all clients (for File Center)
+// Returns everything in the bucket with full metadata
+// ─────────────────────────────────────────────────────────────────
+app.get('/files/all', async (req, res) => {
+  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+
+  try {
+    let allFiles = [];
+    let continuationToken = undefined;
+
+    // Paginate through all objects
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket:            B2_BUCKET,
+        MaxKeys:           1000,
+        ContinuationToken: continuationToken,
+      });
+      const data = await s3.send(command);
+
+      (data.Contents || []).forEach(obj => {
+        // Skip folder placeholders (0-byte objects ending in /)
+        if (obj.Size === 0 && obj.Key.endsWith('/')) return;
+
+        const parts = obj.Key.split('/');
+        allFiles.push({
+          key:      obj.Key,
+          name:     parts[parts.length - 1],
+          size:     obj.Size,
+          modified: obj.LastModified,
+          // Parse path structure: clients/{clientId}/{category}/...
+          clientId: parts[0] === 'clients' ? parts[1] : null,
+          category: parts[0] === 'clients' ? (parts[2] || 'general') : (parts[0] || 'general'),
+          path:     parts.slice(0, -1).join('/'),
+        });
+      });
+
+      continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    res.json({ success: true, files: allFiles, count: allFiles.length });
+  } catch (e) {
+    console.error('Files all error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
-  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}`);
+  const b2Ok  = b2Ready() ? '✓' : '✗';
+  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}`);
 });
