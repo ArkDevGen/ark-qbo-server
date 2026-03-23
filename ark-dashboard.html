@@ -5593,11 +5593,20 @@ async function loginAs(userId){
   applyNavPermissions(u);
   document.getElementById('sidebar-footer').textContent = `Logged in: ${u.fname}`;
   notifInit();
+
+  // Persist session so refresh keeps you logged in
+  sessionStorage.setItem('ark_session', JSON.stringify({
+    userId: u.id,
+    token: _serverToken,
+    view: 'dashboard',
+  }));
 }
 
 function signOut(){
   if(!confirm('Sign out and return to the user selection screen?')) return;
   currentUser = null;
+  _serverToken = null;
+  sessionStorage.removeItem('ark_session');
   document.getElementById('login-screen').style.display = 'flex';
   renderLoginScreen();
   applyNavPermissions(null);
@@ -6042,6 +6051,11 @@ function closeAllModals(){
 
 function nav(page){
   closeAllModals();
+  // Persist current view for refresh
+  try {
+    const s = JSON.parse(sessionStorage.getItem('ark_session') || 'null');
+    if (s) { s.view = page; sessionStorage.setItem('ark_session', JSON.stringify(s)); }
+  } catch(e){}
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
@@ -10062,6 +10076,24 @@ function renderCalWidget(){
 
 renderDashboard();
 renderLoginScreen();
+
+// ── Restore session on refresh ──
+// sessionStorage survives F5/Ctrl+R but clears when the tab is closed
+(async () => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('ark_session') || 'null');
+    if (saved && saved.userId) {
+      await loginAs(saved.userId);
+      // Restore server token from session (avoids re-auth if still valid)
+      if (saved.token) _serverToken = saved.token;
+      // Navigate to the view they were on
+      if (saved.view && saved.view !== 'dashboard') nav(saved.view);
+    }
+  } catch (e) {
+    console.warn('Session restore failed:', e.message);
+  }
+})();
+
 // Default: auto-generate on nav to this page is handled in nav()
 
 // ══════════════════════════════════════════════════════════
