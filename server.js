@@ -9,6 +9,7 @@ const OAuthClient = require('intuit-oauth');
 const QuickBooks  = require('node-quickbooks');
 const path        = require('path');
 const crypto      = require('crypto');
+const fs          = require('fs');
 const multer      = require('multer');
 const { S3Client, ListObjectsV2Command, PutObjectCommand,
         GetObjectCommand, DeleteObjectCommand, CopyObjectCommand,
@@ -16,6 +17,13 @@ const { S3Client, ListObjectsV2Command, PutObjectCommand,
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
+
+// ─────────────────────────────────────────────────────────────────
+// Persistent data directory
+// On Render with a persistent disk mounted at /data, files survive deploys.
+// Locally (no /data mount), falls back to current directory.
+// ─────────────────────────────────────────────────────────────────
+const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 
 // Parse JSON request bodies — 25mb limit for fax file uploads
 app.use(express.json({ limit: '25mb' }));
@@ -54,7 +62,7 @@ app.get('/contact', (req, res) => {
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   // OPTIONS is a "preflight" request browsers send before POST
   // We just say OK and stop processing it
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -78,8 +86,7 @@ const oauthClient = new OAuthClient({
 // For sandbox testing, memory is fine — tokens reset when 
 // you restart the server, just re-authorize.
 // ─────────────────────────────────────────────────────────────────
-const fs = require('fs');
-const TOKEN_FILE = './tokens.json';
+const TOKEN_FILE = path.join(DATA_DIR, 'tokens.json');
 
 // Load tokens from file if they exist
 let tokenData = null;
@@ -802,10 +809,508 @@ app.get('/files/all', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// PAYROLL ENTRY SYSTEM
+// Public-facing form for clients to submit payroll data
+// Server stores config (clients, stores, employees) and submissions
+// ─────────────────────────────────────────────────────────────────
+const PAYROLL_FILE = path.join(DATA_DIR, 'payroll-data.json');
+
+// Load payroll data from persistent disk, or seed from repo copy if first deploy
+let payrollData = { clients: {}, submissions: [] };
+if (fs.existsSync(PAYROLL_FILE)) {
+  try {
+    payrollData = JSON.parse(fs.readFileSync(PAYROLL_FILE, 'utf8'));
+    console.log(`✓ Payroll data loaded from ${PAYROLL_FILE}`);
+  } catch(e) {
+    console.log('Could not load payroll data, starting fresh');
+  }
+}
+
+// Sync: if repo copy has more store/employee data, replace the client config
+// (preserves submissions and session tokens on disk, but overwrites client configs from repo)
+const localCopy = path.join(__dirname, 'payroll-data.json');
+if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
+  try {
+    const repoCopy = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+    let updated = false;
+    for (const [slug, repoClient] of Object.entries(repoCopy.clients || {})) {
+      const diskClient = payrollData.clients[slug];
+      // Count total employees in repo vs disk
+      const repoEmpCount = Object.values(repoClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0);
+      const diskEmpCount = diskClient ? Object.values(diskClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0) : 0;
+      const repoStoreCount = Object.keys(repoClient.stores || {}).length;
+      const diskStoreCount = diskClient ? Object.keys(diskClient.stores || {}).length : 0;
+
+      if (!diskClient || repoEmpCount > diskEmpCount || repoStoreCount > diskStoreCount) {
+        // Repo has more data — use repo version but preserve session token & notifications
+        const preserved = {
+          _sessionToken: diskClient?._sessionToken || null,
+          _notifications: diskClient?._notifications || [],
+        };
+        payrollData.clients[slug] = { ...repoClient, ...preserved };
+        updated = true;
+        console.log(`  → Synced ${slug}: ${repoStoreCount} stores, ${repoEmpCount} employees`);
+      }
+    }
+    if (updated) {
+      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+      console.log('✓ Payroll data synced from repo to persistent disk');
+    }
+  } catch(e) {
+    console.log('Could not sync payroll data from repo:', e.message);
+  }
+} else if (!fs.existsSync(PAYROLL_FILE) && fs.existsSync(localCopy)) {
+  // First deploy — seed from repo
+  try {
+    payrollData = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+    fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+    console.log('✓ Payroll data seeded to persistent disk from repo');
+  } catch(e) {
+    console.log('Could not seed payroll data');
+  }
+}
+
+function savePayrollData() {
+  fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+}
+
+// ── Admin: Force-reset payroll data from repo copy ───────────────
+app.post('/payroll/force-sync', (req, res) => {
+  const repoFile = path.join(__dirname, 'payroll-data.json');
+  if (!fs.existsSync(repoFile)) return res.status(404).json({ error: 'No repo copy found' });
+  try {
+    const repoCopy = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+    // Preserve submissions, session tokens, notifications from disk
+    repoCopy.submissions = payrollData.submissions || [];
+    for (const [slug, client] of Object.entries(repoCopy.clients || {})) {
+      const diskClient = payrollData.clients[slug];
+      if (diskClient) {
+        client._sessionToken = diskClient._sessionToken || null;
+        client._notifications = diskClient._notifications || [];
+      }
+    }
+    payrollData = repoCopy;
+    savePayrollData();
+    const stats = {};
+    for (const [slug, client] of Object.entries(payrollData.clients)) {
+      stats[slug] = {
+        stores: Object.keys(client.stores || {}).length,
+        employees: Object.values(client.stores || {}).reduce((s, st) => s + (st.employees || []).length, 0),
+      };
+    }
+    res.json({ success: true, stats });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Serve the payroll entry page
+app.get('/payroll-entry', (req, res) => {
+  res.sendFile(__dirname + '/public/payroll-entry.html');
+});
+
+// ── Client Authentication ────────────────────────────────────────
+app.post('/payroll/login', (req, res) => {
+  const { clientSlug, password } = req.body;
+  if (!clientSlug || !password) return res.status(400).json({ error: 'Missing credentials' });
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client.password !== password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  // Generate a simple session token
+  const token = crypto.randomUUID();
+  client._sessionToken = token;
+  savePayrollData();
+
+  res.json({
+    success: true,
+    token,
+    clientName: client.name,
+    stores: Object.entries(client.stores || {})
+      .filter(([id]) => id !== 'admin')
+      .map(([id, s]) => ({
+        id,
+        name: s.name,
+      })),
+    payFrequency: client.payFrequency || '',
+    workLocations: client.workLocations || [],
+  });
+});
+
+// ── Get employees for a store ────────────────────────────────────
+app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  // Include admin employees in every store so managers show up everywhere
+  const adminStore = (client.stores || {}).admin;
+  const adminEmps = (adminStore && adminStore.employees || []).map(e => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    position: e.position || '(Admin)',
+    payRate: e.payRate || '',
+    payType: e.payType || 'hourly',
+    isAdmin: true,
+  }));
+
+  const storeEmps = (store.employees || []).map(e => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    position: e.position || '',
+    payRate: e.payRate || '',
+    payType: e.payType || 'hourly',
+  }));
+
+  res.json({
+    employees: [...adminEmps, ...storeEmps],
+  });
+});
+
+// ── Client adds a new employee on the fly ────────────────────────
+app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const b = req.body;
+  if (!b.firstName || !b.lastName) return res.status(400).json({ error: 'First and last name required' });
+
+  const newEmp = {
+    id: crypto.randomUUID(),
+    firstName: b.firstName,
+    lastName: b.lastName,
+    ssn: b.ssn || '',
+    dob: b.dob || '',
+    hireDate: b.hireDate || '',
+    email: b.email || '',
+    address: { street: b.street || '', city: b.city || '', state: b.state || '', zip: b.zip || '' },
+    workLocation: b.workLocation || '',
+    paySchedule: b.paySchedule || '',
+    payRates: b.payRates || [],  // [{ label, rate, type }]
+    // Legacy single rate (used in hours grid display)
+    payRate: (b.payRates && b.payRates.length) ? b.payRates[0].rate : (b.payRate || ''),
+    payType: (b.payRates && b.payRates.length) ? b.payRates[0].type : (b.payType || 'hourly'),
+    position: (b.payRates && b.payRates.length) ? b.payRates[0].label : (b.position || ''),
+    directDeposit: {
+      routingNumber: b.routingNumber || '',
+      accountNumber: b.accountNumber || '',
+      accountType: b.accountType || '',
+    },
+    tax: {
+      filingStatus: b.filingStatus || '',
+      allowances: b.allowances || '',
+      additionalWithholding: b.additionalWithholding || '',
+    },
+    addedByClient: true,
+    addedAt: new Date().toISOString(),
+  };
+
+  if (!store.employees) store.employees = [];
+  store.employees.push(newEmp);
+
+  // Also create a New Hire Report (basic info only)
+  if (!payrollData.newHireReports) payrollData.newHireReports = [];
+  payrollData.newHireReports.push({
+    id: crypto.randomUUID(),
+    clientSlug,
+    clientName: client.name,
+    storeId,
+    storeName: store.name,
+    firstName: b.firstName,
+    lastName: b.lastName,
+    ssn: b.ssn || '',
+    dob: b.dob || '',
+    hireDate: b.hireDate || '',
+    address: { street: b.street || '', city: b.city || '', state: b.state || '', zip: b.zip || '' },
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  });
+
+  // Flag for notification (dashboard will check this)
+  if (!client._notifications) client._notifications = [];
+  client._notifications.push({
+    type: 'new-employee',
+    storeId,
+    storeName: store.name,
+    employee: `${b.firstName} ${b.lastName}`,
+    workLocation: b.workLocation || '',
+    payRates: b.payRates || [],
+    email: b.email || '',
+    timestamp: new Date().toISOString(),
+  });
+  savePayrollData();
+
+  res.json({ success: true, employee: newEmp });
+});
+
+// ── New Hire Paperwork — token generation ─────────────────────────
+const _newHireTokens = {};
+
+app.post('/payroll/new-hire-token', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[req.body.clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const nhToken = crypto.randomUUID();
+  _newHireTokens[nhToken] = {
+    ...req.body,
+    createdAt: Date.now(),
+  };
+
+  // Expire tokens after 2 hours
+  setTimeout(() => { delete _newHireTokens[nhToken]; }, 7200000);
+
+  res.json({ success: true, token: nhToken });
+});
+
+// ── New Hire Paperwork — serve page ───────────────────────────────
+app.get('/new-hire', (req, res) => {
+  res.sendFile(__dirname + '/public/new-hire.html');
+});
+
+// ── New Hire Paperwork — get pre-filled data ──────────────────────
+app.get('/payroll/new-hire-data/:token', (req, res) => {
+  const data = _newHireTokens[req.params.token];
+  if (!data) return res.status(404).json({ error: 'Link expired or invalid' });
+  // Don't expose SSN in the GET — it's already on the form that generated this
+  res.json({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    dob: data.dob,
+    street: data.street,
+    city: data.city,
+    state: data.state,
+    zip: data.zip,
+    position: data.position,
+    payType: data.payType,
+    payRate: data.payRate,
+    clientName: data.clientName,
+    storeName: data.storeName,
+  });
+});
+
+// ── New Hire Paperwork — submit completed form ────────────────────
+app.post('/payroll/new-hire-submit', (req, res) => {
+  const { token, routingNumber, accountNumber, accountType, filingStatus, allowances, additionalWithholding, signature } = req.body;
+
+  const data = _newHireTokens[token];
+  if (!data) return res.status(404).json({ error: 'Link expired or invalid' });
+
+  const client = payrollData.clients[data.clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  // Store the new hire report
+  if (!payrollData.newHireReports) payrollData.newHireReports = [];
+  payrollData.newHireReports.push({
+    id: crypto.randomUUID(),
+    clientSlug: data.clientSlug,
+    clientName: data.clientName,
+    storeId: data.storeId,
+    storeName: data.storeName,
+    employee: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      ssn: data.ssn,
+      dob: data.dob,
+      address: { street: data.street, city: data.city, state: data.state, zip: data.zip },
+      position: data.position,
+      payType: data.payType,
+      payRate: data.payRate,
+    },
+    directDeposit: {
+      routingNumber: routingNumber || '',
+      accountNumber: accountNumber || '',
+      accountType: accountType || '',
+    },
+    tax: {
+      filingStatus: filingStatus || '',
+      allowances: allowances || '',
+      additionalWithholding: additionalWithholding || '',
+    },
+    signature: signature || '',
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  });
+
+  // Add notification
+  if (!client._notifications) client._notifications = [];
+  client._notifications.push({
+    type: 'new-hire-paperwork',
+    employee: `${data.firstName} ${data.lastName}`,
+    storeName: data.storeName,
+    timestamp: new Date().toISOString(),
+  });
+
+  savePayrollData();
+  delete _newHireTokens[token];
+
+  console.log(`New hire paperwork submitted: ${data.firstName} ${data.lastName} (${data.clientName})`);
+  res.json({ success: true });
+});
+
+// ── Submit payroll data ──────────────────────────────────────────
+app.post('/payroll/submit', (req, res) => {
+  const { clientSlug, storeId, payPeriodStart, payPeriodEnd, payDate, entries, rateChanges } = req.body;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!storeId || !payPeriodStart || !payPeriodEnd || !payDate || !entries?.length) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Process pay rate changes — update stored employee data and create notifications
+  if (rateChanges && Object.keys(rateChanges).length > 0) {
+    const store = (client.stores || {})[storeId];
+    if (store && store.employees) {
+      const changeList = [];
+      for (const [empId, change] of Object.entries(rateChanges)) {
+        const emp = store.employees.find(e => e.id === empId);
+        if (emp) {
+          const oldRate = emp.payRate || 'none';
+          emp.payRate = change.to;
+          changeList.push(`${change.name}: $${oldRate} → $${change.to}`);
+        }
+      }
+      if (changeList.length > 0) {
+        if (!client._notifications) client._notifications = [];
+        client._notifications.push({
+          type: 'pay-rate-change',
+          storeId,
+          storeName: store.name,
+          changes: changeList,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  const submission = {
+    id: crypto.randomUUID(),
+    clientSlug,
+    clientName: client.name,
+    storeId,
+    storeName: (client.stores[storeId] || {}).name || storeId,
+    payPeriodStart,
+    payPeriodEnd,
+    payDate,
+    entries,
+    rateChanges: rateChanges || null,
+    submittedAt: new Date().toISOString(),
+    status: 'pending',
+  };
+
+  payrollData.submissions.push(submission);
+  savePayrollData();
+
+  console.log(`Payroll submitted: ${client.name} / ${submission.storeName} — ${entries.length} employees`);
+  if (rateChanges) console.log(`  Rate changes: ${Object.keys(rateChanges).length}`);
+  res.json({ success: true, submissionId: submission.id });
+});
+
+// ── Dashboard: Get all payroll config ────────────────────────────
+app.get('/payroll/config', (req, res) => {
+  // Return config without passwords and session tokens
+  const safe = {};
+  for (const [slug, client] of Object.entries(payrollData.clients)) {
+    safe[slug] = {
+      ...client,
+      password: '••••••',
+      _sessionToken: undefined,
+    };
+  }
+  res.json({ clients: safe });
+});
+
+// ── Dashboard: Save/update a payroll client config ───────────────
+app.post('/payroll/config', (req, res) => {
+  const { slug, name, password, stores, payFrequency } = req.body;
+  if (!slug || !name) return res.status(400).json({ error: 'Slug and name required' });
+
+  const existing = payrollData.clients[slug];
+  payrollData.clients[slug] = {
+    name,
+    password: password || (existing ? existing.password : ''),
+    stores: stores || (existing ? existing.stores : {}),
+    payFrequency: payFrequency || (existing ? existing.payFrequency : ''),
+    _sessionToken: existing ? existing._sessionToken : null,
+    _notifications: existing ? existing._notifications : [],
+  };
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Delete a payroll client config ────────────────────
+app.delete('/payroll/config/:slug', (req, res) => {
+  delete payrollData.clients[req.params.slug];
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Get pending submissions ───────────────────────────
+app.get('/payroll/submissions', (req, res) => {
+  res.json({ submissions: payrollData.submissions });
+});
+
+// ── Dashboard: Update submission status ──────────────────────────
+app.patch('/payroll/submissions/:id', (req, res) => {
+  const sub = payrollData.submissions.find(s => s.id === req.params.id);
+  if (!sub) return res.status(404).json({ error: 'Submission not found' });
+  if (req.body.status) sub.status = req.body.status;
+  savePayrollData();
+  res.json({ success: true, submission: sub });
+});
+
+// ── Dashboard: Get notifications (new employees, etc.) ───────────
+app.get('/payroll/notifications', (req, res) => {
+  const all = [];
+  for (const [slug, client] of Object.entries(payrollData.clients)) {
+    if (client._notifications?.length) {
+      all.push(...client._notifications.map(n => ({ ...n, clientSlug: slug, clientName: client.name })));
+    }
+  }
+  res.json({ notifications: all });
+});
+
+// ── Dashboard: Clear notifications ───────────────────────────────
+app.post('/payroll/notifications/clear', (req, res) => {
+  for (const client of Object.values(payrollData.clients)) {
+    client._notifications = [];
+  }
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
+  console.log(`  Data dir: ${DATA_DIR}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
   const b2Ok  = b2Ready() ? '✓' : '✗';

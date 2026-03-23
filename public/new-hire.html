@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ark Financial — New Hire Paperwork</title>
+<style>
+  :root {
+    --bg: #0d1b2a; --surface: #13243a; --card: #182d45;
+    --border: #243b56; --text: #e8f0f8; --muted: #6b8aaa;
+    --accent: #4da6ff; --green: #4dffa0; --red: #ff5c5c;
+    --orange: #ffa94d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
+  .logo-bar { text-align: center; padding: 24px 0 8px; }
+  .logo-bar h1 { font-size: 24px; color: var(--accent); font-weight: 600; }
+  .logo-bar p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin-bottom: 20px; }
+  .card h2 { font-size: 18px; color: var(--accent); margin-bottom: 6px; font-weight: 600; }
+  .card h3 { font-size: 15px; color: var(--text); margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--border); font-weight: 600; }
+  .card .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  input, select { width: 100%; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; outline: none; transition: border-color .2s; }
+  input:focus, select:focus { border-color: var(--accent); }
+  input:read-only { color: var(--muted); cursor: not-allowed; }
+  select option { background: var(--surface); color: var(--text); }
+  .row { display: flex; gap: 14px; margin-bottom: 14px; }
+  .row > div { flex: 1; }
+  .required-star { color: var(--red); }
+
+  .btn { padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-green { background: var(--green); color: #0d1b2a; }
+  .btn-green:hover { background: #3de890; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .status { padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-size: 14px; display: none; }
+  .status.success { display: block; background: rgba(77,255,160,.1); border: 1px solid var(--green); color: var(--green); }
+  .status.error { display: block; background: rgba(255,92,92,.1); border: 1px solid var(--red); color: var(--red); }
+  .status.info { display: block; background: rgba(77,166,255,.1); border: 1px solid var(--accent); color: var(--accent); }
+
+  .prefilled-tag { display: inline-block; background: var(--accent); color: #0d1b2a; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+
+  .secure-badge { display: flex; align-items: center; gap: 6px; background: rgba(77,255,160,.08); border: 1px solid rgba(77,255,160,.2); border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--green); }
+  .secure-badge svg { flex-shrink: 0; }
+
+  .success-screen { text-align: center; padding: 60px 20px; }
+  .success-screen .check { font-size: 64px; margin-bottom: 16px; color: var(--green); }
+  .success-screen h2 { color: var(--green); margin-bottom: 8px; }
+  .success-screen p { color: var(--muted); }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 600px) {
+    .row { flex-direction: column; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="logo-bar">
+  <h1>Ark Financial</h1>
+  <p>New Hire Paperwork</p>
+</div>
+
+<div class="container">
+
+  <!-- Loading -->
+  <div id="screen-loading" class="card" style="text-align:center;padding:40px;">
+    <p style="color:var(--muted);">Loading paperwork...</p>
+  </div>
+
+  <!-- Expired/Invalid -->
+  <div id="screen-expired" class="card hidden" style="text-align:center;padding:40px;">
+    <p style="color:var(--red);font-size:18px;font-weight:600;">Link Expired or Invalid</p>
+    <p style="color:var(--muted);margin-top:8px;">This new hire paperwork link has expired. Please request a new one from the payroll entry portal.</p>
+  </div>
+
+  <!-- Form -->
+  <div id="screen-form" class="hidden">
+
+    <div class="card">
+      <h2>New Hire Information</h2>
+      <div class="subtitle" id="form-subtitle"></div>
+
+      <div class="secure-badge">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm-2 6V5a2 2 0 1 1 4 0v2H6z"/></svg>
+        This form is transmitted securely. Sensitive information is encrypted.
+      </div>
+
+      <!-- Pre-filled personal info (read-only) -->
+      <h3 style="border-top:none;margin-top:0;padding-top:0;">Personal Information <span class="prefilled-tag">PRE-FILLED</span></h3>
+      <div class="row">
+        <div><label>First Name</label><input type="text" id="nh-first" readonly></div>
+        <div><label>Last Name</label><input type="text" id="nh-last" readonly></div>
+      </div>
+      <div class="row">
+        <div><label>Date of Birth</label><input type="text" id="nh-dob" readonly></div>
+        <div><label>Position</label><input type="text" id="nh-position" readonly></div>
+      </div>
+      <div class="row">
+        <div style="flex:2;"><label>Street Address</label><input type="text" id="nh-street" readonly></div>
+      </div>
+      <div class="row">
+        <div style="flex:2;"><label>City</label><input type="text" id="nh-city" readonly></div>
+        <div><label>State</label><input type="text" id="nh-state" readonly></div>
+        <div><label>Zip</label><input type="text" id="nh-zip" readonly></div>
+      </div>
+      <div class="row">
+        <div><label>Pay Type</label><input type="text" id="nh-paytype" readonly></div>
+        <div><label>Pay Rate</label><input type="text" id="nh-payrate" readonly></div>
+      </div>
+
+      <!-- Direct Deposit -->
+      <h3>Direct Deposit Information <span style="color:var(--muted);font-weight:400;font-size:12px;">(Optional)</span></h3>
+      <div class="row">
+        <div><label>Routing Number</label><input type="text" id="nh-routing" placeholder="9 digits" maxlength="9" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+        <div><label>Account Number</label><input type="text" id="nh-account" placeholder="Account number" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Account Type</label>
+          <select id="nh-acct-type">
+            <option value="">— Select —</option>
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tax Withholding (W-4) -->
+      <h3>Federal Tax Withholding (W-4)</h3>
+      <div class="row">
+        <div>
+          <label>Filing Status <span class="required-star">*</span></label>
+          <select id="nh-filing">
+            <option value="">— Select —</option>
+            <option value="single">Single or Married Filing Separately</option>
+            <option value="married">Married Filing Jointly</option>
+            <option value="head">Head of Household</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Number of Allowances</label><input type="number" id="nh-allowances" placeholder="0" min="0"></div>
+        <div><label>Additional Withholding ($)</label><input type="number" id="nh-addl-wh" placeholder="0.00" step="0.01" min="0"></div>
+      </div>
+
+      <!-- Signature -->
+      <h3>Signature</h3>
+      <div class="row">
+        <div>
+          <label>Type your full legal name as your electronic signature <span class="required-star">*</span></label>
+          <input type="text" id="nh-signature" placeholder="e.g. John A. Doe" style="font-style:italic;">
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:-8px;">By typing your name above, you certify that the information provided is true and correct to the best of your knowledge.</p>
+
+      <div style="margin-top:20px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-green" onclick="submitNewHire()" style="padding:12px 32px;font-size:15px;">Submit New Hire Paperwork</button>
+      </div>
+      <div id="nh-status" class="status"></div>
+    </div>
+
+  </div>
+
+  <!-- Success -->
+  <div id="screen-success" class="hidden">
+    <div class="card success-screen">
+      <div class="check">&#10003;</div>
+      <h2>Paperwork Submitted!</h2>
+      <p>Your new hire paperwork has been received by Ark Financial.</p>
+      <p style="margin-top:8px;">You may now close this window.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = window.location.origin;
+let _nhToken = '';
+
+// Get token from URL
+const params = new URLSearchParams(window.location.search);
+_nhToken = params.get('token') || '';
+
+if (!_nhToken) {
+  document.getElementById('screen-loading').classList.add('hidden');
+  document.getElementById('screen-expired').classList.remove('hidden');
+} else {
+  loadData();
+}
+
+async function loadData() {
+  try {
+    const resp = await fetch(`${API}/payroll/new-hire-data/${_nhToken}`);
+    if (!resp.ok) {
+      document.getElementById('screen-loading').classList.add('hidden');
+      document.getElementById('screen-expired').classList.remove('hidden');
+      return;
+    }
+    const data = await resp.json();
+
+    // Populate pre-filled fields
+    document.getElementById('nh-first').value = data.firstName || '';
+    document.getElementById('nh-last').value = data.lastName || '';
+    document.getElementById('nh-dob').value = data.dob ? new Date(data.dob + 'T00:00:00').toLocaleDateString() : '';
+    document.getElementById('nh-position').value = data.position || '';
+    document.getElementById('nh-street').value = data.street || '';
+    document.getElementById('nh-city').value = data.city || '';
+    document.getElementById('nh-state').value = data.state || '';
+    document.getElementById('nh-zip').value = data.zip || '';
+    document.getElementById('nh-paytype').value = (data.payType || '').charAt(0).toUpperCase() + (data.payType || '').slice(1);
+    document.getElementById('nh-payrate').value = data.payRate ? `$${parseFloat(data.payRate).toFixed(2)}${data.payType === 'salary' ? '/yr' : '/hr'}` : '';
+
+    document.getElementById('form-subtitle').textContent = `${data.clientName} — ${data.storeName}`;
+
+    document.getElementById('screen-loading').classList.add('hidden');
+    document.getElementById('screen-form').classList.remove('hidden');
+  } catch(e) {
+    document.getElementById('screen-loading').classList.add('hidden');
+    document.getElementById('screen-expired').classList.remove('hidden');
+  }
+}
+
+async function submitNewHire() {
+  const statusEl = document.getElementById('nh-status');
+  const filing = document.getElementById('nh-filing').value;
+  const signature = document.getElementById('nh-signature').value.trim();
+
+  if (!filing) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Please select a filing status.';
+    return;
+  }
+  if (!signature) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Please type your name as your electronic signature.';
+    return;
+  }
+
+  statusEl.className = 'status info';
+  statusEl.textContent = 'Submitting paperwork...';
+
+  try {
+    const resp = await fetch(`${API}/payroll/new-hire-submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: _nhToken,
+        routingNumber: document.getElementById('nh-routing').value.trim(),
+        accountNumber: document.getElementById('nh-account').value.trim(),
+        accountType: document.getElementById('nh-acct-type').value,
+        filingStatus: filing,
+        allowances: document.getElementById('nh-allowances').value || '0',
+        additionalWithholding: document.getElementById('nh-addl-wh').value || '0',
+        signature: signature,
+      }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Submission failed.';
+      return;
+    }
+
+    document.getElementById('screen-form').classList.add('hidden');
+    document.getElementById('screen-success').classList.remove('hidden');
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
+}
+</script>
+</body>
+</html>
