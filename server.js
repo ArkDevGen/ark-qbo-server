@@ -54,20 +54,147 @@ app.get('/contact', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// CORS — Cross-Origin Resource Sharing
-// Your ARK dashboard (running at file:// or localhost) is a 
-// different "origin" than your server (localhost:3000).
-// Without this, the browser blocks requests between them.
+// CORS — Only allow requests from the dashboard origin
+// Blocks random websites/scripts from hitting our API
 // ─────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://ark-qbo-server.onrender.com',
+];
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  // Allow same-origin requests (no Origin header) and allowed origins
+  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  // OPTIONS is a "preflight" request browsers send before POST
-  // We just say OK and stop processing it
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
+
+// ─────────────────────────────────────────────────────────────────
+// SESSION AUTHENTICATION
+// Dashboard logs in with the API key, gets a session token.
+// All /files/* endpoints require a valid session token.
+// ─────────────────────────────────────────────────────────────────
+const _sessions = new Map(); // token → { userId, userName, role, createdAt }
+const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Clean up expired sessions every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of _sessions) {
+    if (now - session.createdAt > SESSION_TTL) _sessions.delete(token);
+  }
+}, 3600000);
+
+// Login — dashboard sends API key + user info, gets a session token
+app.post('/auth/login', (req, res) => {
+  const { apiKey, userId, userName, role } = req.body;
+
+  if (!apiKey || apiKey !== process.env.ARK_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  if (!userId || !userName) {
+    return res.status(400).json({ error: 'User info required' });
+  }
+
+  const token = crypto.randomUUID();
+  _sessions.set(token, {
+    userId,
+    userName,
+    role: role || 'am',
+    createdAt: Date.now(),
+  });
+
+  console.log(`Auth: session created for ${userName} (${role || 'am'})`);
+  res.json({ success: true, token });
+});
+
+// Logout — invalidate session
+app.post('/auth/logout', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (token) _sessions.delete(token);
+  res.json({ success: true });
+});
+
+// Auth middleware — validates Bearer token on protected routes
+function requireAuth(req, res, next) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+  const session = _sessions.get(token);
+  if (!session) return res.status(401).json({ error: 'Invalid or expired session' });
+
+  // Check expiry
+  if (Date.now() - session.createdAt > SESSION_TTL) {
+    _sessions.delete(token);
+    return res.status(401).json({ error: 'Session expired' });
+  }
+
+  // Attach session to request for audit logging
+  req.arkUser = session;
+  next();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FILE AUDIT LOG
+// Logs every file operation for compliance & accountability
+// ─────────────────────────────────────────────────────────────────
+const AUDIT_FILE = path.join(DATA_DIR, 'file-audit.json');
+let _auditLog = [];
+
+// Load existing audit log
+if (fs.existsSync(AUDIT_FILE)) {
+  try { _auditLog = JSON.parse(fs.readFileSync(AUDIT_FILE, 'utf8')); }
+  catch(e) { console.log('Could not load audit log, starting fresh'); }
+}
+
+function auditLog(action, key, user, ip) {
+  const entry = {
+    action,          // 'upload', 'download', 'delete', 'rename', 'folder'
+    key,             // file path in B2
+    user: user ? `${user.userName} (${user.userId})` : 'unknown',
+    role: user?.role || 'unknown',
+    ip: ip || 'unknown',
+    timestamp: new Date().toISOString(),
+  };
+  _auditLog.push(entry);
+  // Keep last 10,000 entries
+  if (_auditLog.length > 10000) _auditLog = _auditLog.slice(-10000);
+  try { fs.writeFileSync(AUDIT_FILE, JSON.stringify(_auditLog, null, 2)); }
+  catch(e) { console.error('Audit log write error:', e.message); }
+}
+
+// Admin: view audit log
+app.get('/files/audit', requireAuth, (req, res) => {
+  if (req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const limit = parseInt(req.query.limit) || 100;
+  res.json({ success: true, entries: _auditLog.slice(-limit) });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FILE TYPE WHITELIST
+// Only allow safe document types — blocks executables & scripts
+// ─────────────────────────────────────────────────────────────────
+const ALLOWED_EXTENSIONS = new Set([
+  // Documents
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'csv', 'txt', 'rtf',
+  // Presentations
+  'ppt', 'pptx',
+  // Images
+  'png', 'jpg', 'jpeg', 'gif', 'tif', 'tiff', 'bmp', 'webp',
+  // Archives
+  'zip',
+  // Accounting
+  'qbx', 'qbb', 'iif', 'ofx', 'qfx', 'ach',
+]);
+
+function isAllowedFile(filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  return ALLOWED_EXTENSIONS.has(ext);
+}
 
 // ─────────────────────────────────────────────────────────────────
 // OAuth Client Setup
@@ -580,7 +707,7 @@ function b2Ready() {
 // ─────────────────────────────────────────────────────────────────
 // FILES: Status — Dashboard checks if file storage is available
 // ─────────────────────────────────────────────────────────────────
-app.get('/files/status', (req, res) => {
+app.get('/files/status', requireAuth, (req, res) => {
   res.json({ available: b2Ready(), bucket: B2_BUCKET });
 });
 
@@ -588,7 +715,7 @@ app.get('/files/status', (req, res) => {
 // FILES: List — Returns all files (optionally filtered by prefix)
 // Query params: ?prefix=clients/abc123/tax/  &delimiter=/
 // ─────────────────────────────────────────────────────────────────
-app.get('/files/list', async (req, res) => {
+app.get('/files/list', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   try {
@@ -604,7 +731,6 @@ app.get('/files/list', async (req, res) => {
 
     const data = await s3.send(command);
 
-    // Files in this "folder"
     const files = (data.Contents || []).map(obj => ({
       key:      obj.Key,
       name:     obj.Key.split('/').filter(Boolean).pop(),
@@ -612,7 +738,6 @@ app.get('/files/list', async (req, res) => {
       modified: obj.LastModified,
     }));
 
-    // "Sub-folders" (common prefixes)
     const folders = (data.CommonPrefixes || []).map(p => ({
       prefix: p.Prefix,
       name:   p.Prefix.replace(prefix, '').replace(/\/$/, ''),
@@ -627,12 +752,17 @@ app.get('/files/list', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Upload — Multipart upload, streams to B2
-// Form fields: folder (the B2 prefix), file (the file)
-// Optional: uploadedBy (AM name for metadata)
+// Auth + file type whitelist + SSE encryption + audit log
 // ─────────────────────────────────────────────────────────────────
-app.post('/files/upload', upload.single('file'), async (req, res) => {
+app.post('/files/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
   if (!req.file)  return res.status(400).json({ error: 'No file provided' });
+
+  // File type whitelist check
+  if (!isAllowedFile(req.file.originalname)) {
+    const ext = req.file.originalname.split('.').pop();
+    return res.status(400).json({ error: `File type ".${ext}" is not allowed. Only documents, images, and accounting files are permitted.` });
+  }
 
   try {
     const folder     = (req.body.folder || '').replace(/\/+$/, '');
@@ -641,14 +771,16 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
     const uploadedBy = req.body.uploadedBy || 'Unknown';
 
     const command = new PutObjectCommand({
-      Bucket:      B2_BUCKET,
-      Key:         key,
-      Body:        req.file.buffer,
-      ContentType: req.file.mimetype || 'application/octet-stream',
-      Metadata:    { uploadedby: uploadedBy, uploadedat: new Date().toISOString() },
+      Bucket:               B2_BUCKET,
+      Key:                  key,
+      Body:                 req.file.buffer,
+      ContentType:          req.file.mimetype || 'application/octet-stream',
+      ServerSideEncryption: 'AES256',
+      Metadata:             { uploadedby: uploadedBy, uploadedat: new Date().toISOString() },
     });
 
     await s3.send(command);
+    auditLog('upload', key, req.arkUser, req.ip);
     console.log(`File uploaded: ${key} (${(req.file.size / 1024).toFixed(1)} KB) by ${uploadedBy}`);
 
     res.json({ success: true, key, name: safeName, size: req.file.size });
@@ -660,9 +792,9 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Download — Returns a pre-signed URL (valid 15 min)
-// Query param: ?key=clients/abc123/tax/return.pdf
+// Auth + audit log
 // ─────────────────────────────────────────────────────────────────
-app.get('/files/download', async (req, res) => {
+app.get('/files/download', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   const key = req.query.key;
@@ -671,6 +803,7 @@ app.get('/files/download', async (req, res) => {
   try {
     const command = new GetObjectCommand({ Bucket: B2_BUCKET, Key: key });
     const url = await getSignedUrl(s3, command, { expiresIn: 900 }); // 15 min
+    auditLog('download', key, req.arkUser, req.ip);
     res.json({ success: true, url, key });
   } catch (e) {
     console.error('File download error:', e);
@@ -680,9 +813,9 @@ app.get('/files/download', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Delete — Remove a file from B2
-// Body: { key: 'clients/abc123/tax/return.pdf' }
+// Auth + audit log
 // ─────────────────────────────────────────────────────────────────
-app.post('/files/delete', async (req, res) => {
+app.post('/files/delete', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   const { key } = req.body;
@@ -690,6 +823,7 @@ app.post('/files/delete', async (req, res) => {
 
   try {
     await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: key }));
+    auditLog('delete', key, req.arkUser, req.ip);
     console.log(`File deleted: ${key}`);
     res.json({ success: true, key });
   } catch (e) {
@@ -700,23 +834,22 @@ app.post('/files/delete', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Rename / Move — Copy to new key, delete old key
-// Body: { oldKey, newKey }
+// Auth + audit log
 // ─────────────────────────────────────────────────────────────────
-app.post('/files/rename', async (req, res) => {
+app.post('/files/rename', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   const { oldKey, newKey } = req.body;
   if (!oldKey || !newKey) return res.status(400).json({ error: 'oldKey and newKey are required' });
 
   try {
-    // Copy to new location
     await s3.send(new CopyObjectCommand({
       Bucket:     B2_BUCKET,
       CopySource: `${B2_BUCKET}/${oldKey}`,
       Key:        newKey,
     }));
-    // Delete old
     await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: oldKey }));
+    auditLog('rename', `${oldKey} → ${newKey}`, req.arkUser, req.ip);
     console.log(`File renamed: ${oldKey} → ${newKey}`);
     res.json({ success: true, oldKey, newKey });
   } catch (e) {
@@ -727,9 +860,9 @@ app.post('/files/rename', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Create folder — Puts an empty placeholder object
-// Body: { prefix: 'clients/abc123/tax/2025/' }
+// Auth + SSE encryption + audit log
 // ─────────────────────────────────────────────────────────────────
-app.post('/files/folder', async (req, res) => {
+app.post('/files/folder', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   let { prefix } = req.body;
@@ -740,19 +873,19 @@ app.post('/files/folder', async (req, res) => {
     // Check if folder already exists
     try {
       await s3.send(new HeadObjectCommand({ Bucket: B2_BUCKET, Key: prefix }));
-      // If HeadObject succeeds, the folder already exists
       return res.status(409).json({ error: 'A folder with that name already exists' });
     } catch (headErr) {
-      // 404 = doesn't exist = good, proceed to create
       if (headErr.name !== 'NotFound' && headErr.$metadata?.httpStatusCode !== 404) throw headErr;
     }
 
     await s3.send(new PutObjectCommand({
-      Bucket:      B2_BUCKET,
-      Key:         prefix,
-      Body:        Buffer.alloc(0),
-      ContentType: 'application/x-directory',
+      Bucket:               B2_BUCKET,
+      Key:                  prefix,
+      Body:                 Buffer.alloc(0),
+      ContentType:          'application/x-directory',
+      ServerSideEncryption: 'AES256',
     }));
+    auditLog('folder', prefix, req.arkUser, req.ip);
     console.log(`Folder created: ${prefix}`);
     res.json({ success: true, prefix });
   } catch (e) {
@@ -763,9 +896,9 @@ app.post('/files/folder', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Bulk list — All files across all clients (for File Center)
-// Returns everything in the bucket with full metadata
+// Auth required
 // ─────────────────────────────────────────────────────────────────
-app.get('/files/all', async (req, res) => {
+app.get('/files/all', requireAuth, async (req, res) => {
   if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
 
   try {

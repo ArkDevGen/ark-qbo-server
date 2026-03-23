@@ -5544,20 +5544,53 @@ function renderLoginScreen(){
   }).join('');
 }
 
-function loginAs(userId){
+// ── Server session token (for authenticated /files/* requests) ──
+let _serverToken = null;
+const _ARK_API_KEY = '4293e3d7616147502b20f4071dbd708d65e6f1846b9b258735dc53fe909119f3';
+
+// Authenticated fetch — adds Bearer token to all requests
+function authFetch(url, options = {}) {
+  if (_serverToken) {
+    if (!options.headers) options.headers = {};
+    options.headers['Authorization'] = 'Bearer ' + _serverToken;
+  }
+  return fetch(url, options);
+}
+
+async function loginAs(userId){
   const users = loadUsers();
   const u = users.find(x => x.id === userId);
   if(!u) return;
   currentUser = u;
-  document.getElementById('login-screen').style.display = 'none';
-  // Update pill
+
+  // Authenticate with the server to get a session token
   const fullName = u.lname ? `${u.fname} ${u.lname}` : u.fname;
+  try {
+    const resp = await fetch(fcServerUrl() + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: _ARK_API_KEY,
+        userId: u.id,
+        userName: fullName,
+        role: u.role || 'am',
+      }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      _serverToken = data.token;
+    } else {
+      console.warn('Server auth failed:', data.error);
+    }
+  } catch (e) {
+    console.warn('Server auth unavailable:', e.message);
+  }
+
+  document.getElementById('login-screen').style.display = 'none';
   document.getElementById('pill-name').textContent = fullName;
   document.getElementById('pill-av').textContent = initials(fullName);
   document.getElementById('pill-av').style.background = u.color || '#1a2440';
-  // Apply nav permissions
   applyNavPermissions(u);
-  // Update sidebar footer
   document.getElementById('sidebar-footer').textContent = `Logged in: ${u.fname}`;
   notifInit();
 }
@@ -21709,7 +21742,7 @@ async function mcfLoadFiles() {
   list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>';
 
   try {
-    const resp = await fetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_mcfPrefix) + '&delimiter=/');
+    const resp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_mcfPrefix) + '&delimiter=/');
     const data = await resp.json();
     if (!data.success) throw new Error(data.error);
 
@@ -21810,7 +21843,7 @@ async function mcfHandleFiles(fileList) {
       form.append('file', file);
       form.append('folder', _mcfPrefix);
       form.append('uploadedBy', userName);
-      const resp = await fetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
+      const resp = await authFetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
       const data = await resp.json();
       if (data.success) uploaded++;
       else showToast(`❌ ${file.name}: ${data.error}`, 'error');
@@ -21837,7 +21870,7 @@ async function mcfNewFolder() {
     showToast(`❌ A folder named "${safeName}" already exists`, 'error');
     return;
   }
-  fetch(fcServerUrl() + '/files/folder', {
+  authFetch(fcServerUrl() + '/files/folder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prefix: _mcfPrefix + safeName + '/' }),
@@ -21856,7 +21889,7 @@ async function mcfDelete(key, name) {
   });
   if (!ok) return;
   try {
-    const resp = await fetch(fcServerUrl() + '/files/delete', {
+    const resp = await authFetch(fcServerUrl() + '/files/delete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key }),
     });
@@ -21876,11 +21909,11 @@ async function mcfDeleteFolder(prefix) {
   });
   if (!ok) return;
   try {
-    const lr = await fetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
+    const lr = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
     const ld = await lr.json();
     const allKeys = [...(ld.files || []).map(f => f.key), prefix];
     for (const k of allKeys) {
-      await fetch(fcServerUrl() + '/files/delete', {
+      await authFetch(fcServerUrl() + '/files/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: k }),
       });
@@ -21967,7 +22000,7 @@ async function fcLoadFiles() {
   list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-size:13px;">Loading files…</div>';
 
   try {
-    const resp = await fetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_fcCurrentPrefix) + '&delimiter=/');
+    const resp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_fcCurrentPrefix) + '&delimiter=/');
     const data = await resp.json();
 
     if (!data.success) throw new Error(data.error || 'Failed to load files');
@@ -21975,7 +22008,7 @@ async function fcLoadFiles() {
     // Also load all files for search/stats (cached)
     if (_fcAllFiles.length === 0) {
       try {
-        const allResp = await fetch(fcServerUrl() + '/files/all');
+        const allResp = await authFetch(fcServerUrl() + '/files/all');
         const allData = await allResp.json();
         if (allData.success) _fcAllFiles = allData.files;
       } catch (e) { /* non-critical */ }
@@ -22185,7 +22218,7 @@ async function fcHandleFiles(fileList) {
       form.append('folder', folder);
       form.append('uploadedBy', userName);
 
-      const resp = await fetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
+      const resp = await authFetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
       const data = await resp.json();
 
       if (data.success) {
@@ -22243,7 +22276,7 @@ function fcSetupDragDrop() {
 // ── Download ──
 async function fcDownload(key) {
   try {
-    const resp = await fetch(fcServerUrl() + '/files/download?key=' + encodeURIComponent(key));
+    const resp = await authFetch(fcServerUrl() + '/files/download?key=' + encodeURIComponent(key));
     const data = await resp.json();
     if (data.success && data.url) {
       window.open(data.url, '_blank');
@@ -22329,7 +22362,7 @@ async function fcDelete(key, name) {
   if (!ok) return;
 
   try {
-    const resp = await fetch(fcServerUrl() + '/files/delete', {
+    const resp = await authFetch(fcServerUrl() + '/files/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key }),
@@ -22360,11 +22393,11 @@ async function fcDeleteFolder(prefix) {
   if (!ok) return;
 
   try {
-    const listResp = await fetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
+    const listResp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
     const listData = await listResp.json();
     const allKeys = [...(listData.files || []).map(f => f.key), prefix];
     for (const k of allKeys) {
-      await fetch(fcServerUrl() + '/files/delete', {
+      await authFetch(fcServerUrl() + '/files/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: k }),
@@ -22395,7 +22428,7 @@ async function fcRename(oldKey, oldName) {
   const newKey = parts.join('/');
 
   try {
-    const resp = await fetch(fcServerUrl() + '/files/rename', {
+    const resp = await authFetch(fcServerUrl() + '/files/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldKey, newKey }),
@@ -22437,7 +22470,7 @@ async function fcNewFolder() {
   const prefix = _fcCurrentPrefix + safeName + '/';
 
   try {
-    const resp = await fetch(fcServerUrl() + '/files/folder', {
+    const resp = await authFetch(fcServerUrl() + '/files/folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefix }),
