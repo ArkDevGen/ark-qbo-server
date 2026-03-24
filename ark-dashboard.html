@@ -56,6 +56,7 @@
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes numberPop{0%{transform:scale(.92);opacity:0;}60%{transform:scale(1.03);}100%{transform:scale(1);opacity:1;}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;font-size:14px;-webkit-font-smoothing:antialiased;}
 
@@ -3111,7 +3112,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- Tool grid -->
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-d);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <span>Integration Tools</span>
-      <span style="font-size:10px;font-weight:400;font-family:'DM Mono',monospace;color:var(--text-d);">2 active · 4 planned</span>
+      <span style="font-size:10px;font-weight:400;font-family:'DM Mono',monospace;color:var(--text-d);">3 active · 3 planned</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;">
 
@@ -3143,11 +3144,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;">Planned</div>
       </div>
 
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,10,10,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📈</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Financial Reports</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Pull P&amp;L, Balance Sheet, and tax liability reports from QBO into the dashboard.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;">Planned</div>
+      <div onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,10,10,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📊</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">P&amp;L Digester</div>
+        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">AI-powered P&amp;L analysis — flags errors, misclassifications, and anomalies with suggested fixes.</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
@@ -3282,6 +3283,137 @@ input[type="checkbox"]{accent-color:var(--navy);}
                   Push to QBO
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P&L Digester Workspace -->
+        <div id="qbo-pl-workspace" style="display:none;">
+          <div class="card" style="overflow:visible;position:relative;z-index:10;">
+            <div class="card-header" style="padding:12px 18px;">
+              <div class="card-title" style="font-size:12px;">P&L Digester</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="pl-status-badge" style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--surface2);color:var(--text-d);letter-spacing:.04em;text-transform:uppercase;">Ready</span>
+              </div>
+            </div>
+            <div style="padding:16px 18px;">
+              <!-- Client selector -->
+              <div style="display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:center;margin-bottom:10px;">
+                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;">Client</label>
+                <select id="pl-client-select" class="field-input" style="font-size:12px;" onchange="plOnClientChange()">
+                  <option value="">Select a client…</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" onclick="plPopulateClients()" style="font-size:10px;">Refresh</button>
+              </div>
+              <!-- Client info bar -->
+              <div id="pl-client-info" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                  <div>
+                    <span id="pl-client-name" style="font-weight:600;font-size:13px;color:var(--navy);"></span>
+                    <span id="pl-client-realm" style="font-size:11px;color:var(--text-d);margin-left:8px;font-family:'DM Mono',monospace;"></span>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <span id="pl-client-qb-badge" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(44,160,28,.12);color:#2ca01c;letter-spacing:.04em;text-transform:uppercase;"></span>
+                  </div>
+                </div>
+              </div>
+              <!-- Period selector -->
+              <div style="display:grid;grid-template-columns:110px 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:10px;">
+                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;">Period</label>
+                <input type="date" id="pl-start-date" class="field-input" style="font-family:'DM Mono',monospace;font-size:12px;">
+                <input type="date" id="pl-end-date" class="field-input" style="font-family:'DM Mono',monospace;font-size:12px;">
+                <select id="pl-quick-period" class="field-input" style="font-size:11px;width:auto;" onchange="plSetQuickPeriod()">
+                  <option value="">Quick…</option>
+                  <option value="last-month">Last Month</option>
+                  <option value="this-month">This Month</option>
+                  <option value="last-quarter">Last Quarter</option>
+                  <option value="ytd">Year to Date</option>
+                </select>
+              </div>
+              <!-- Report type -->
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;margin-bottom:14px;">
+                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;">Report</label>
+                <div style="display:flex;gap:8px;">
+                  <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+                    <input type="radio" name="pl-report-type" value="summary" checked> Summary
+                  </label>
+                  <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+                    <input type="radio" name="pl-report-type" value="detail"> Detail
+                  </label>
+                </div>
+              </div>
+              <!-- Actions -->
+              <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--border);">
+                <button class="btn btn-ghost btn-sm" onclick="plGetHistory()">Get History (12mo)</button>
+                <button class="btn btn-ghost btn-sm" onclick="plClearResults()">Clear</button>
+                <button id="pl-run-btn" class="btn btn-primary btn-sm" onclick="plRunDigest()" disabled>
+                  Run P&L Digester
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress bar -->
+          <div id="pl-progress-wrap" style="display:none;margin-top:12px;">
+            <div class="card" style="padding:14px 18px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <div id="pl-progress-spinner" style="width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite;"></div>
+                <span id="pl-progress-text" style="font-size:12px;color:var(--text-m);">Pulling P&L from QBO...</span>
+              </div>
+              <div style="background:var(--surface2);border-radius:4px;height:4px;overflow:hidden;">
+                <div id="pl-progress-bar" style="width:0%;height:100%;background:var(--navy);border-radius:4px;transition:width .3s ease;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="pl-results-wrap" style="display:none;margin-top:12px;">
+            <!-- Stats row -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
+              <div class="stat-card" style="padding:14px 16px;">
+                <div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Total Flags</div>
+                <div id="pl-stat-total" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--navy);">0</div>
+              </div>
+              <div class="stat-card" style="padding:14px 16px;">
+                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Critical</div>
+                <div id="pl-stat-critical" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--red);">0</div>
+              </div>
+              <div class="stat-card" style="padding:14px 16px;">
+                <div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Warnings</div>
+                <div id="pl-stat-warnings" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--amber);">0</div>
+              </div>
+              <div class="stat-card" style="padding:14px 16px;">
+                <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Resolved</div>
+                <div id="pl-stat-resolved" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--green);">0</div>
+              </div>
+            </div>
+
+            <!-- Filter bar -->
+            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+              <button class="btn btn-sm pl-filter-btn active" onclick="plFilterFlags('all')" data-filter="all" style="font-size:10px;">All</button>
+              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('CRITICAL')" data-filter="CRITICAL" style="font-size:10px;color:var(--red);">Critical</button>
+              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('WARNING')" data-filter="WARNING" style="font-size:10px;color:var(--amber);">Warning</button>
+              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('INFO')" data-filter="INFO" style="font-size:10px;color:var(--blue);">Info</button>
+              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('resolved')" data-filter="resolved" style="font-size:10px;color:var(--green);">Resolved</button>
+              <div style="flex:1;"></div>
+              <button class="btn btn-ghost btn-sm" onclick="plExportReport('exception')" style="font-size:10px;">Export Exceptions</button>
+              <button class="btn btn-ghost btn-sm" onclick="plExportReport('summary')" style="font-size:10px;">Export Summary</button>
+              <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:10px;">Full Audit</button>
+              <button class="btn btn-primary btn-sm" onclick="plSaveToClient()" style="font-size:10px;">Save to Client</button>
+            </div>
+
+            <!-- Flags list -->
+            <div id="pl-flags-list"></div>
+          </div>
+
+          <!-- History panel -->
+          <div id="pl-history-wrap" style="display:none;margin-top:12px;">
+            <div class="card" style="overflow:hidden;">
+              <div class="card-header" style="padding:10px 16px;">
+                <div class="card-title" style="font-size:12px;">Historical Data</div>
+                <span id="pl-history-count" style="font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;">0 periods</span>
+              </div>
+              <div id="pl-history-body" style="max-height:200px;overflow-y:auto;"></div>
             </div>
           </div>
         </div>
@@ -4314,6 +4446,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </label>
 
             </div>
+          </div>
+
+          <!-- QBO Realm ID — for P&L Digester integration -->
+          <div class="fg" id="mc-qbo-realm-wrap" style="display:none;">
+            <label>QBO Realm ID <span style="font-size:11px;font-weight:400;color:var(--text-d);">— links this client to their QBO company</span></label>
+            <input id="mc-qbo-realm-id" class="field-input" placeholder="e.g. 4620816365182..." style="font-family:'DM Mono',monospace;font-size:12px;">
           </div>
 
           <!-- QBO options — shown when QBO selected -->
@@ -7894,6 +8032,7 @@ let mcCurrentTab = 0;
 function onQBTypeChange(){
   const val = document.querySelector('input[name="mc-qb-type"]:checked')?.value||'';
   document.getElementById('mc-qbo-billing-wrap').style.display = val==='QBO' ? '' : 'none';
+  document.getElementById('mc-qbo-realm-wrap').style.display   = val==='QBO' ? '' : 'none';
   document.getElementById('mc-qbd-user-wrap').style.display    = val==='QBD' ? '' : 'none';
   document.getElementById('mc-qbd-pass-wrap').style.display    = val==='QBD' ? '' : 'none';
   if(val!=='QBO'){ document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false); document.getElementById('mc-qbo-billing-hint').textContent=''; }
@@ -8486,6 +8625,7 @@ function openEditClient(id){
   setPrPlatform(c.prPlatform||'');
   document.getElementById('mc-pr-script').value=c.prScript||'';
   setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'');
+  const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
   setBiennial(c.biennialId||'', c.biennialCycle||'');
@@ -8568,6 +8708,7 @@ function saveClient(){
     locations: getWorkLocations(),
     qbType:    document.querySelector('input[name="mc-qb-type"]:checked')?.value||'',
     qboBilling:document.querySelector('input[name="mc-qbo-billing"]:checked')?.value||'',
+    qboRealmId:document.getElementById('mc-qbo-realm-id')?.value.trim()||'',
     qbdUser:   (document.getElementById('mc-qbd-user')?.value||'').trim(),
     qbdPass:   document.getElementById('mc-qbd-pass')?.value||'',
     nameBilling: document.getElementById('mc-name-billing')?.value.trim()||'',
@@ -9241,8 +9382,9 @@ function openDetail(id){
       <div class="detail-box"><h4>QuickBooks</h4>
         <div class="drow"><span class="dk">Platform</span><span class="dv">${c.qbType}</span></div>
         ${c.qbType==='QBO'&&c.qboBilling?`<div class="drow"><span class="dk">Billing</span><span class="dv">${c.qboBilling} Billed</span></div>`:''}
+        ${c.qbType==='QBO'&&c.qboRealmId?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
         ${c.qbType==='QBD'&&c.qbdUser?`<div class="drow"><span class="dk">Username</span><span class="dv" style="font-family:monospace;">${c.qbdUser}</span></div>`:''}
-      </div>`:''} 
+      </div>`:''}
       ${c.ein||c.prSwid||c.prSuta||c.prPayschedule||c.prPlatform?`
       <div class="detail-box"><h4>Payroll</h4>
         ${c.prPlatform?`<div class="drow"><span class="dk">Platform</span><span class="dv" style="font-weight:600;color:var(--navy);">${c.prPlatform}</span></div>`:''}
@@ -20255,10 +20397,15 @@ function qboPopulateDropdowns() {
 function qboOpenTool(tool) {
   document.getElementById('qbo-gje-workspace').style.display     = 'none';
   document.getElementById('qbo-expense-workspace').style.display = 'none';
+  document.getElementById('qbo-pl-workspace').style.display      = 'none';
   document.getElementById('qbo-default-workspace').style.display = 'none';
   if (tool === 'gje') {
     document.getElementById('qbo-gje-workspace').style.display = '';
     if (qboLineCount === 0) { qboAddGJELine(); qboAddGJELine(); }
+  } else if (tool === 'pldigest') {
+    document.getElementById('qbo-pl-workspace').style.display = '';
+    plPopulateClients();
+    plSetQuickPeriod('last-month');
   } else if (tool === 'expense') {
     document.getElementById('qbo-expense-workspace').style.display = '';
     // Repopulate vendor and account dropdowns with live data
@@ -20593,6 +20740,617 @@ function qboClearActivity() {
 }
 
 
+
+
+// ══════════════════════════════════════════════════════════════════
+//  P&L DIGESTER
+// ══════════════════════════════════════════════════════════════════
+
+let plFlags = [];        // current run flags
+let plResolvedFlags = {}; // { index: { note, resolvedAt } }
+let plCurrentFilter = 'all';
+let plSelectedClient = null;
+let plRawReport = null;
+
+// ── Scooters COA Rule Engine ─────────────────────────────────────
+const PL_ALWAYS_FLAG = ['Uncategorized Expense','Uncategorized Income','Uncategorized Asset','Ask My Accountant','Reconciliation Discrepancies'];
+const PL_EXPECTED_MONTHLY = ['Store Sales','Royalty Fees','Ad Fund National','Technology Fee','Payroll:Wages','Payroll:Payroll Taxes','Rent','Cost of Goods Sold'];
+const PL_BENCHMARKS = {
+  'Royalty Fees':   { pctOfSales: [5, 7],   label: '~6% of sales' },
+  'Ad Fund National':{ pctOfSales: [1.5, 3], label: '~2% of sales' },
+  'Cost of Goods Sold':{ pctOfSales: [18, 35], label: '20-35% of sales' },
+  'Payroll':         { pctOfSales: [25, 45], label: '<45% of sales' },
+};
+
+// ── Populate client dropdown ─────────────────────────────────────
+function plPopulateClients() {
+  const sel = document.getElementById('pl-client-select');
+  if (!sel) return;
+  const clients = (DB.clients||[]).filter(c => c.qbType === 'QBO' && c.qboRealmId);
+  sel.innerHTML = '<option value="">Select a client…</option>' +
+    clients.sort((a,b) => (a.biz||'').localeCompare(b.biz||''))
+      .map(c => `<option value="${c.id}">${c.biz}${c.qboRealmId ? ' ('+c.qboRealmId.slice(0,8)+'…)' : ''}</option>`)
+      .join('');
+  // Also show clients without realm for awareness
+  const noRealm = (DB.clients||[]).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  if (noRealm.length) {
+    sel.innerHTML += '<optgroup label="Missing QBO Realm ID">' +
+      noRealm.map(c => `<option value="" disabled style="color:var(--text-d);">${c.biz} — needs Realm ID</option>`).join('') +
+      '</optgroup>';
+  }
+}
+
+function plOnClientChange() {
+  const sel = document.getElementById('pl-client-select');
+  const clientId = sel?.value;
+  const client = clientId ? DB.clients.find(c => c.id === clientId) : null;
+  plSelectedClient = client;
+
+  const infoBar = document.getElementById('pl-client-info');
+  const runBtn = document.getElementById('pl-run-btn');
+  if (client) {
+    infoBar.style.display = '';
+    document.getElementById('pl-client-name').textContent = client.biz;
+    document.getElementById('pl-client-realm').textContent = client.qboRealmId || '—';
+    document.getElementById('pl-client-qb-badge').textContent = client.qboRealmId ? 'QBO Connected' : 'No Realm ID';
+    document.getElementById('pl-client-qb-badge').style.color = client.qboRealmId ? '#2ca01c' : 'var(--red)';
+    document.getElementById('pl-client-qb-badge').style.background = client.qboRealmId ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
+    runBtn.disabled = !client.qboRealmId;
+  } else {
+    infoBar.style.display = 'none';
+    runBtn.disabled = true;
+  }
+}
+
+// ── Quick period selector ────────────────────────────────────────
+function plSetQuickPeriod(val) {
+  const v = val || document.getElementById('pl-quick-period')?.value;
+  if (!v) return;
+  const now = new Date();
+  let start, end;
+  if (v === 'last-month') {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else if (v === 'this-month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = now;
+  } else if (v === 'last-quarter') {
+    const q = Math.floor((now.getMonth()) / 3);
+    start = new Date(now.getFullYear(), (q-1)*3, 1);
+    end = new Date(now.getFullYear(), q*3, 0);
+  } else if (v === 'ytd') {
+    start = new Date(now.getFullYear(), 0, 1);
+    end = now;
+  }
+  if (start) document.getElementById('pl-start-date').value = start.toISOString().slice(0,10);
+  if (end)   document.getElementById('pl-end-date').value   = end.toISOString().slice(0,10);
+}
+
+// ── Run the full digest ──────────────────────────────────────────
+async function plRunDigest() {
+  if (!plSelectedClient?.qboRealmId) { showToast('Select a client with a QBO Realm ID'); return; }
+  const startDate = document.getElementById('pl-start-date').value;
+  const endDate   = document.getElementById('pl-end-date').value;
+  if (!startDate || !endDate) { showToast('Select a date range'); return; }
+  const reportType = document.querySelector('input[name="pl-report-type"]:checked')?.value || 'summary';
+
+  // Reset state
+  plFlags = [];
+  plResolvedFlags = {};
+  plCurrentFilter = 'all';
+
+  // Show progress
+  const progWrap = document.getElementById('pl-progress-wrap');
+  progWrap.style.display = '';
+  plProgress(10, 'Pulling P&L from QBO...');
+
+  try {
+    // Step 1: Pull P&L from QBO
+    const plRes = await fetch(`${QBO_SERVER}/qbo/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType } }),
+    }).then(r => r.json());
+
+    if (!plRes.success) throw new Error(plRes.error || 'Failed to fetch P&L');
+    plRawReport = plRes.report;
+    plProgress(30, 'P&L received — parsing accounts...');
+
+    // Step 2: Parse the QBO report into account lines
+    const accounts = plParseReport(plRes.report);
+    plProgress(40, `Parsed ${accounts.length} accounts — running rule engine...`);
+
+    // Step 3: Run local rule engine
+    const ruleFlags = plRunRuleEngine(accounts);
+    plProgress(50, `${ruleFlags.length} rule flags — loading fleet data...`);
+
+    // Step 4: Get fleet data
+    let fleetContext = null;
+    try {
+      const fleetRes = await fetch(`${QBO_SERVER}/pl/fleet`).then(r => r.json());
+      fleetContext = fleetRes.fleet;
+    } catch(e) { console.log('Fleet data unavailable'); }
+
+    // Step 5: Get history for this store
+    let historyContext = null;
+    try {
+      const histRes = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
+      historyContext = histRes.history;
+    } catch(e) { console.log('History unavailable'); }
+
+    plProgress(60, 'Sending to AI for deep analysis...');
+
+    // Step 6: AI analysis
+    const summary = plBuildSummary(accounts);
+    let aiFlags = [];
+    try {
+      const aiRes = await fetch(`${QBO_SERVER}/pl/digest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plData: accounts,
+          preFlags: ruleFlags,
+          summary,
+          history: historyContext,
+          fleetContext,
+          clientName: plSelectedClient.biz,
+        }),
+      }).then(r => r.json());
+      if (aiRes.success) aiFlags = aiRes.flags || [];
+    } catch(e) {
+      console.error('AI analysis failed:', e);
+      aiFlags = [{ severity: 'INFO', category: 'System', account: '', amount: null, message: 'AI analysis unavailable — showing rule engine results only.', suggestedAccount: null, variance: null }];
+    }
+
+    plProgress(85, 'Merging results...');
+
+    // Step 7: Merge rule + AI flags, dedup
+    plFlags = plMergeFlags(ruleFlags, aiFlags);
+
+    // Step 8: Save to history
+    try {
+      const period = `${startDate}_${endDate}`;
+      await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, metrics: summary, accounts: accounts.map(a => a.name) }),
+      });
+    } catch(e) { console.log('Failed to save history'); }
+
+    // Step 9: Contribute to fleet
+    try {
+      await fetch(`${QBO_SERVER}/pl/fleet/contribute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, accounts: accounts.map(a => a.name) }),
+      });
+    } catch(e) { console.log('Failed to contribute to fleet'); }
+
+    plProgress(100, 'Done!');
+    setTimeout(() => { progWrap.style.display = 'none'; }, 600);
+
+    // Render results
+    plRenderResults();
+    qboLog('success', `P&L Digest complete: <strong>${plFlags.length} flags</strong> for ${plSelectedClient.biz}`);
+
+  } catch (e) {
+    progWrap.style.display = 'none';
+    showToast('Error: ' + e.message);
+    qboLog('error', 'P&L Digest failed: ' + e.message);
+  }
+}
+
+function plProgress(pct, msg) {
+  const bar = document.getElementById('pl-progress-bar');
+  const txt = document.getElementById('pl-progress-text');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = msg;
+}
+
+// ── Parse QBO report JSON into flat account list ─────────────────
+function plParseReport(report) {
+  const accounts = [];
+  function walk(rows, parentName) {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.Header?.ColData) {
+        const name = row.Header.ColData[0]?.value || '';
+        const fullName = parentName ? `${parentName}:${name}` : name;
+        // Check for amount in header
+        const amt = parseFloat(row.Header.ColData[1]?.value) || 0;
+        if (row.Rows?.Row) {
+          walk(row.Rows.Row, fullName);
+        }
+        // Summary row from header
+        if (row.Summary?.ColData) {
+          const total = parseFloat(row.Summary.ColData[1]?.value) || 0;
+          if (name && total !== 0) accounts.push({ name: fullName, amount: total, type: 'section' });
+        }
+      } else if (row.ColData) {
+        const name = row.ColData[0]?.value || '';
+        const amt = parseFloat(row.ColData[1]?.value) || 0;
+        const fullName = parentName ? `${parentName}:${name}` : name;
+        if (name && name !== '' && amt !== 0) {
+          accounts.push({ name: fullName, amount: amt, type: 'account' });
+        }
+      }
+      if (row.Rows?.Row && !row.Header) {
+        walk(row.Rows.Row, parentName);
+      }
+    }
+  }
+
+  const rows = report?.Rows?.Row || [];
+  walk(rows, '');
+  return accounts;
+}
+
+// ── Build summary metrics from parsed accounts ───────────────────
+function plBuildSummary(accounts) {
+  const find = (pattern) => {
+    const acct = accounts.find(a => a.name.toLowerCase().includes(pattern.toLowerCase()));
+    return acct ? acct.amount : 0;
+  };
+  const sales = find('Store Sales') || find('Total Income') || find('Income');
+  const cogs = find('Cost of Goods Sold') || find('COGS');
+  const payroll = accounts.filter(a => a.name.toLowerCase().includes('payroll')).reduce((s,a) => s + Math.abs(a.amount), 0);
+  const royalty = find('Royalty Fees') || find('Royalty');
+  const rent = find('Rent');
+  const net = find('Net Income') || find('Net Ordinary Income');
+  return { sales: Math.abs(sales), cogs: Math.abs(cogs), payroll, royalty: Math.abs(royalty), rent: Math.abs(rent), netIncome: net, accountCount: accounts.length };
+}
+
+// ── Local rule engine ────────────────────────────────────────────
+function plRunRuleEngine(accounts) {
+  const flags = [];
+  const summary = plBuildSummary(accounts);
+  const sales = summary.sales || 1; // avoid div by zero
+
+  // Always-flag accounts
+  for (const acct of accounts) {
+    for (const bad of PL_ALWAYS_FLAG) {
+      if (acct.name.toLowerCase().includes(bad.toLowerCase()) && acct.amount !== 0) {
+        flags.push({
+          severity: 'CRITICAL', category: 'Always Flag', account: acct.name,
+          amount: acct.amount, message: `${acct.name} has a balance of $${Math.abs(acct.amount).toLocaleString('en-US',{minimumFractionDigits:2})}. This account should ALWAYS be zero — transactions need to be recategorized.`,
+          suggestedAccount: null, variance: null, source: 'rule',
+        });
+      }
+    }
+  }
+
+  // Missing expected accounts
+  for (const expected of PL_EXPECTED_MONTHLY) {
+    const found = accounts.some(a => a.name.toLowerCase().includes(expected.toLowerCase()));
+    if (!found) {
+      flags.push({
+        severity: 'WARNING', category: 'Missing Account', account: expected,
+        amount: null, message: `Expected monthly account "${expected}" has no balance this period. Verify this is correct.`,
+        suggestedAccount: null, variance: 'MISSING', source: 'rule',
+      });
+    }
+  }
+
+  // Benchmark checks
+  for (const [name, bench] of Object.entries(PL_BENCHMARKS)) {
+    const acct = accounts.find(a => a.name.toLowerCase().includes(name.toLowerCase()));
+    if (acct) {
+      const pct = (Math.abs(acct.amount) / sales) * 100;
+      if (pct < bench.pctOfSales[0] || pct > bench.pctOfSales[1]) {
+        flags.push({
+          severity: pct > bench.pctOfSales[1] * 1.5 ? 'CRITICAL' : 'WARNING',
+          category: 'Benchmark Variance', account: acct.name,
+          amount: acct.amount,
+          message: `${acct.name} is ${pct.toFixed(1)}% of sales ($${Math.abs(acct.amount).toLocaleString('en-US',{minimumFractionDigits:2})} / $${sales.toLocaleString('en-US',{minimumFractionDigits:2})}). Expected: ${bench.label}.`,
+          suggestedAccount: null, variance: `${pct.toFixed(1)}% vs ${bench.pctOfSales[0]}-${bench.pctOfSales[1]}%`, source: 'rule',
+        });
+      }
+    }
+  }
+
+  return flags;
+}
+
+// ── Merge rule + AI flags ────────────────────────────────────────
+function plMergeFlags(ruleFlags, aiFlags) {
+  const merged = [...ruleFlags];
+  for (const af of aiFlags) {
+    af.source = 'ai';
+    // Avoid exact dupes
+    const isDupe = merged.some(rf =>
+      rf.account === af.account && rf.category === af.category
+    );
+    if (!isDupe) merged.push(af);
+  }
+  // Sort: CRITICAL first, then WARNING, then INFO
+  const order = { CRITICAL: 0, WARNING: 1, INFO: 2 };
+  merged.sort((a,b) => (order[a.severity]||9) - (order[b.severity]||9));
+  return merged;
+}
+
+// ── Render results ───────────────────────────────────────────────
+function plRenderResults() {
+  document.getElementById('pl-results-wrap').style.display = '';
+  plUpdateStats();
+  plRenderFlags();
+}
+
+function plUpdateStats() {
+  const resolved = Object.keys(plResolvedFlags).length;
+  const critical = plFlags.filter(f => f.severity === 'CRITICAL').length;
+  const warnings = plFlags.filter(f => f.severity === 'WARNING').length;
+  document.getElementById('pl-stat-total').textContent = plFlags.length;
+  document.getElementById('pl-stat-critical').textContent = critical;
+  document.getElementById('pl-stat-warnings').textContent = warnings;
+  document.getElementById('pl-stat-resolved').textContent = resolved;
+
+  const badge = document.getElementById('pl-status-badge');
+  if (badge) {
+    if (critical > 0) { badge.textContent = `${critical} Critical`; badge.style.background = 'rgba(176,58,58,.12)'; badge.style.color = 'var(--red)'; }
+    else if (warnings > 0) { badge.textContent = `${warnings} Warnings`; badge.style.background = 'rgba(176,106,26,.12)'; badge.style.color = 'var(--amber)'; }
+    else { badge.textContent = 'Clean'; badge.style.background = 'rgba(46,125,94,.12)'; badge.style.color = 'var(--green)'; }
+  }
+}
+
+function plRenderFlags() {
+  const list = document.getElementById('pl-flags-list');
+  if (!list) return;
+
+  const filtered = plFlags.filter((f, i) => {
+    if (plCurrentFilter === 'all') return true;
+    if (plCurrentFilter === 'resolved') return !!plResolvedFlags[i];
+    return f.severity === plCurrentFilter;
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="card" style="padding:32px;text-align:center;"><div style="font-size:13px;color:var(--text-d);">No flags match this filter.</div></div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map((f, _fi) => {
+    const i = plFlags.indexOf(f);
+    const resolved = plResolvedFlags[i];
+    const sevColor = f.severity === 'CRITICAL' ? 'var(--red)' : f.severity === 'WARNING' ? 'var(--amber)' : 'var(--blue)';
+    const sevBg = f.severity === 'CRITICAL' ? 'var(--red-bg)' : f.severity === 'WARNING' ? 'var(--amber-bg)' : 'var(--blue-bg)';
+    const srcIcon = f.source === 'ai' ? '🤖' : '📋';
+
+    return `<div class="card" style="margin-bottom:8px;${resolved?'opacity:.55;':''}overflow:visible;">
+      <div style="padding:12px 16px;cursor:pointer;" onclick="plToggleFlag(${i})">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${sevBg};color:${sevColor};letter-spacing:.04em;text-transform:uppercase;">${f.severity}</span>
+          <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--surface2);color:var(--text-d);">${f.category}</span>
+          <span title="${f.source === 'ai' ? 'AI Analysis' : 'Rule Engine'}" style="font-size:11px;">${srcIcon}</span>
+          ${f.amount != null ? `<span style="font-size:11px;font-weight:600;color:var(--navy);font-family:'DM Mono',monospace;">$${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}</span>` : ''}
+          ${f.variance ? `<span style="font-size:10px;color:${sevColor};font-family:'DM Mono',monospace;">${f.variance}</span>` : ''}
+          ${resolved ? '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--green-bg);color:var(--green);">RESOLVED</span>' : ''}
+          <div style="flex:1;"></div>
+          <span style="font-size:11px;color:var(--text-d);">▾</span>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:6px;">${f.account || '—'}</div>
+        <div style="font-size:11px;color:var(--text-m);margin-top:3px;line-height:1.5;">${f.message}</div>
+      </div>
+      <div id="pl-flag-detail-${i}" style="display:none;padding:0 16px 12px;border-top:1px solid var(--border);">
+        <div style="padding-top:10px;">
+          ${f.suggestedAccount ? `<div style="font-size:11px;margin-bottom:8px;"><strong style="color:var(--green);">Suggested account:</strong> ${f.suggestedAccount}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:flex-start;">
+            <textarea id="pl-note-${i}" class="field-input" rows="2" placeholder="Override note…" style="font-size:11px;flex:1;resize:vertical;">${resolved?.note||''}</textarea>
+            <button class="btn btn-sm" onclick="plResolveFlag(${i})" style="font-size:10px;white-space:nowrap;${resolved?'background:var(--green-bg);color:var(--green);':''}">
+              ${resolved ? '✓ Resolved' : 'Mark Resolved'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function plToggleFlag(i) {
+  const el = document.getElementById(`pl-flag-detail-${i}`);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function plResolveFlag(i) {
+  const note = document.getElementById(`pl-note-${i}`)?.value || '';
+  if (plResolvedFlags[i]) {
+    delete plResolvedFlags[i]; // unresolve
+  } else {
+    plResolvedFlags[i] = { note, resolvedAt: new Date().toISOString() };
+  }
+  plUpdateStats();
+  plRenderFlags();
+}
+
+function plFilterFlags(filter) {
+  plCurrentFilter = filter;
+  document.querySelectorAll('.pl-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === filter);
+    b.style.background = b.dataset.filter === filter ? 'var(--navy)' : '';
+    b.style.color = b.dataset.filter === filter ? '#fff' : '';
+  });
+  plRenderFlags();
+}
+
+// ── Get 12 months of history ─────────────────────────────────────
+async function plGetHistory() {
+  if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
+  const progWrap = document.getElementById('pl-progress-wrap');
+  progWrap.style.display = '';
+
+  const periods = [];
+  const now = new Date();
+  for (let i = 1; i <= 12; i++) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    periods.push({
+      startDate: start.toISOString().slice(0,10),
+      endDate: end.toISOString().slice(0,10),
+      label: start.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    });
+  }
+
+  plProgress(10, `Pulling 12 months of P&L history...`);
+
+  try {
+    const res = await fetch(`${QBO_SERVER}/qbo/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'getProfitAndLossHistory',
+        realmId: plSelectedClient.qboRealmId,
+        payload: { periods },
+      }),
+    }).then(r => r.json());
+
+    if (!res.success) throw new Error(res.error || 'Failed');
+
+    // Save each period to history
+    let saved = 0;
+    for (const result of res.results) {
+      const accounts = plParseReport(result.report);
+      const metrics = plBuildSummary(accounts);
+      const period = `${result.startDate}_${result.endDate}`;
+      plProgress(10 + (saved/res.results.length)*80, `Saving ${result.label}...`);
+      await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, metrics, accounts: accounts.map(a => a.name) }),
+      });
+      saved++;
+    }
+
+    plProgress(95, `${saved} months saved. ${res.errors?.length||0} errors.`);
+    if (res.errors?.length) qboLog('warning', `History: ${res.errors.length} periods failed`);
+
+    // Render history panel
+    await plLoadHistoryPanel();
+
+    plProgress(100, 'History loaded!');
+    setTimeout(() => { progWrap.style.display = 'none'; }, 800);
+    showToast(`✓ ${saved} months of history loaded`);
+    qboLog('success', `P&L history: ${saved} months loaded for ${plSelectedClient.biz}`);
+
+  } catch(e) {
+    progWrap.style.display = 'none';
+    showToast('Error: ' + e.message);
+    qboLog('error', 'History pull failed: ' + e.message);
+  }
+}
+
+async function plLoadHistoryPanel() {
+  if (!plSelectedClient?.qboRealmId) return;
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
+    const history = res.history || {};
+    const periods = Object.keys(history).sort().reverse();
+    const wrap = document.getElementById('pl-history-wrap');
+    const body = document.getElementById('pl-history-body');
+    const count = document.getElementById('pl-history-count');
+    if (periods.length) {
+      wrap.style.display = '';
+      count.textContent = `${periods.length} periods`;
+      body.innerHTML = periods.map(p => {
+        const h = history[p];
+        const m = h.metrics || {};
+        return `<div style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:11px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-family:'DM Mono',monospace;color:var(--navy);font-weight:600;">${p.replace('_',' → ')}</span>
+          <div style="display:flex;gap:12px;color:var(--text-d);">
+            <span>Sales: $${(m.sales||0).toLocaleString()}</span>
+            <span>COGS: $${(m.cogs||0).toLocaleString()}</span>
+            <span>Payroll: $${(m.payroll||0).toLocaleString()}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) { console.log('Failed to load history panel'); }
+}
+
+// ── Clear results ────────────────────────────────────────────────
+function plClearResults() {
+  plFlags = [];
+  plResolvedFlags = {};
+  plRawReport = null;
+  document.getElementById('pl-results-wrap').style.display = 'none';
+  document.getElementById('pl-progress-wrap').style.display = 'none';
+  document.getElementById('pl-status-badge').textContent = 'Ready';
+  document.getElementById('pl-status-badge').style.background = 'var(--surface2)';
+  document.getElementById('pl-status-badge').style.color = 'var(--text-d)';
+}
+
+// ── Save results to client record ────────────────────────────────
+function plSaveToClient() {
+  if (!plSelectedClient || !plFlags.length) { showToast('No results to save'); return; }
+  const client = DB.clients.find(c => c.id === plSelectedClient.id);
+  if (!client) return;
+
+  if (!client.plReports) client.plReports = [];
+  client.plReports.push({
+    date: new Date().toISOString(),
+    period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
+    totalFlags: plFlags.length,
+    critical: plFlags.filter(f => f.severity === 'CRITICAL').length,
+    warnings: plFlags.filter(f => f.severity === 'WARNING').length,
+    resolved: Object.keys(plResolvedFlags).length,
+    flags: plFlags.map((f, i) => ({
+      ...f,
+      resolved: plResolvedFlags[i] || null,
+    })),
+  });
+
+  saveDB();
+  showToast(`✓ Report saved to ${client.biz}`);
+  qboLog('info', `P&L report saved to client record: ${client.biz}`);
+}
+
+// ── Export reports ────────────────────────────────────────────────
+function plExportReport(type) {
+  let content = '';
+  const title = `P&L Digester Report — ${plSelectedClient?.biz || 'Unknown'}`;
+  const period = `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`;
+  const header = `${title}\nPeriod: ${period}\nGenerated: ${new Date().toLocaleString()}\n${'═'.repeat(60)}\n\n`;
+
+  if (type === 'exception') {
+    content = header + 'EXCEPTION REPORT — Unresolved Flags Only\n\n';
+    plFlags.forEach((f, i) => {
+      if (!plResolvedFlags[i]) {
+        content += `[${f.severity}] ${f.account || '—'}\n  ${f.message}\n`;
+        if (f.amount != null) content += `  Amount: $${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}\n`;
+        if (f.suggestedAccount) content += `  Suggested: ${f.suggestedAccount}\n`;
+        content += '\n';
+      }
+    });
+  } else if (type === 'summary') {
+    content = header + 'SUMMARY REPORT\n\n';
+    content += `Total Flags: ${plFlags.length}\n`;
+    content += `  Critical: ${plFlags.filter(f => f.severity === 'CRITICAL').length}\n`;
+    content += `  Warnings: ${plFlags.filter(f => f.severity === 'WARNING').length}\n`;
+    content += `  Info:     ${plFlags.filter(f => f.severity === 'INFO').length}\n`;
+    content += `  Resolved: ${Object.keys(plResolvedFlags).length}\n\n`;
+    content += 'Top Issues:\n';
+    plFlags.filter(f => f.severity === 'CRITICAL').forEach(f => {
+      content += `  • ${f.account}: ${f.message}\n`;
+    });
+  } else if (type === 'audit') {
+    content = header + 'FULL AUDIT TRAIL\n\n';
+    plFlags.forEach((f, i) => {
+      const res = plResolvedFlags[i];
+      content += `[${f.severity}] ${f.account || '—'} (${f.source === 'ai' ? 'AI' : 'Rule Engine'})\n`;
+      content += `  ${f.message}\n`;
+      if (f.amount != null) content += `  Amount: $${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}\n`;
+      if (f.suggestedAccount) content += `  Suggested: ${f.suggestedAccount}\n`;
+      if (f.variance) content += `  Variance: ${f.variance}\n`;
+      if (res) content += `  ✓ RESOLVED: ${res.note || '(no note)'} — ${new Date(res.resolvedAt).toLocaleString()}\n`;
+      content += '\n';
+    });
+  }
+
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pl-digest-${type}-${plSelectedClient?.biz?.replace(/[^a-z0-9]/gi,'-')||'report'}-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 
 // ══════════════════════════════════════════════════════════════════
@@ -20952,6 +21710,7 @@ const IMPORT_ARK_FIELDS = [
   // QB
   { key:'qbType',         label:'QuickBooks Type',          required:false, tier:'A', enum:['QBO','QBD'] },
   { key:'qboBilling',     label:'QBO Billing',              required:false, tier:'A', enum:['Client','Firm'] },
+  { key:'qboRealmId',     label:'QBO Realm ID',             required:false, tier:'A' },
   // Admin
   { key:'sharefileUrl',   label:'ShareFile URL',            required:false, tier:'A' },
   { key:'folderPath',     label:'Folder Path',              required:false, tier:'A' },
@@ -21187,7 +21946,7 @@ Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank ac
 function importHeuristicMapping() {
   const heuristics = {
     'business name':   'biz',   'legal name':   'biz',    'company':    'biz',
-    'billing name':    'nameBilling',            'qb name':    'nameQb',
+    'billing name':    'nameBilling',            'qb name':    'nameQb',   'realm id': 'qboRealmId', 'qbo realm': 'qboRealmId',
     'entity':          'entity', 'entity type':  'entity',
     'status':          'status',
     'since':           'since',  'client since': 'since',  'start date': 'since',

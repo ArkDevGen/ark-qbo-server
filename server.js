@@ -208,24 +208,46 @@ const oauthClient = new OAuthClient({
 });
 
 // ─────────────────────────────────────────────────────────────────
-// Token Storage
-// In production this goes in a database, encrypted.
-// For sandbox testing, memory is fine — tokens reset when 
-// you restart the server, just re-authorize.
+// Token Storage — Multi-Company
+// Stores tokens per realmId so AMs can switch between QBO companies
+// without re-authorizing. Format: { realmId: { access_token, ... } }
 // ─────────────────────────────────────────────────────────────────
 const TOKEN_FILE = path.join(DATA_DIR, 'tokens.json');
 
-// Load tokens from file if they exist
-let tokenData = null;
-let realmId = process.env.QBO_REALM_ID || null;
+// tokenStore: { [realmId]: tokenData }
+let tokenStore = {};
+// activeRealmId tracks the "current" company for backward compat
+let activeRealmId = process.env.QBO_REALM_ID || null;
 
 if (fs.existsSync(TOKEN_FILE)) {
   try {
-    tokenData = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
-    console.log('✓ Tokens loaded from file');
+    const raw = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+    // Migrate from old single-token format to multi-company map
+    if (raw.access_token) {
+      // Old format — wrap it under the active realm
+      const rid = activeRealmId || 'unknown';
+      tokenStore = { [rid]: raw };
+      console.log('✓ Migrated single-token format to multi-company store');
+    } else {
+      tokenStore = raw;
+      console.log(`✓ Token store loaded — ${Object.keys(tokenStore).length} company(ies)`);
+    }
   } catch(e) {
     console.log('Could not load saved tokens, will need to re-authorize');
   }
+}
+
+function saveTokenStore() {
+  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore, null, 2));
+}
+
+// Backward-compat helpers
+function getTokenData(rid) {
+  return tokenStore[rid || activeRealmId] || null;
+}
+function setTokenData(rid, data) {
+  tokenStore[rid] = data;
+  saveTokenStore();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -254,14 +276,15 @@ app.get('/qbo/callback', async (req, res) => {
 
     // Exchange the authorization code for tokens
     const authResponse = await oauthClient.createToken(req.url);
-    tokenData = authResponse.getJson();
-    realmId = req.query.realmId || realmId;
-    fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenData)); // ← add this
-    
+    const newTokens = authResponse.getJson();
+    const rid = req.query.realmId || activeRealmId;
+    activeRealmId = rid;
+    setTokenData(rid, newTokens);
+
     console.log('✓ Tokens received successfully');
-    console.log('  Realm ID (Company ID):', realmId);
-    console.log('  Access token expires in:', tokenData.expires_in, 'seconds');
-    console.log('  Refresh token expires in:', tokenData.x_refresh_token_expires_in, 'seconds');
+    console.log('  Realm ID (Company ID):', rid);
+    console.log('  Access token expires in:', newTokens.expires_in, 'seconds');
+    console.log('  Refresh token expires in:', newTokens.x_refresh_token_expires_in, 'seconds');
 
     // Send a success page back to the browser
     // The postMessage call notifies the ARK dashboard window if it opened this as a popup
@@ -273,12 +296,12 @@ app.get('/qbo/callback', async (req, res) => {
     <div style="font-size:48px;margin-bottom:16px;">✓</div>
     <h2 style="color:#4dffa0;margin-bottom:8px;">Connected to QuickBooks!</h2>
     <p style="color:#8bafc8;">Tokens stored. This window will close automatically.</p>
-    <p style="color:#4a6f8a;font-size:12px;margin-top:16px;">Realm ID: ${realmId}</p>
+    <p style="color:#4a6f8a;font-size:12px;margin-top:16px;">Realm ID: ${rid}</p>
   </div>
   <script>
     // Tell the ARK dashboard the connection succeeded
     if (window.opener) {
-      window.opener.postMessage({ type: 'qbo-connected', realmId: '${realmId}' }, '*');
+      window.opener.postMessage({ type: 'qbo-connected', realmId: '${rid}' }, '*');
     }
     setTimeout(() => window.close(), 3000);
   </script>
@@ -300,12 +323,16 @@ app.get('/qbo/callback', async (req, res) => {
 // ARK dashboard calls this to know if the server is connected
 // ─────────────────────────────────────────────────────────────────
 app.get('/qbo/status', (req, res) => {
+  // Support ?realmId= query param for multi-company status check
+  const rid = req.query.realmId || activeRealmId;
+  const td = getTokenData(rid);
+  const allRealms = Object.keys(tokenStore);
   res.json({
-    connected:  !!tokenData,
-    realmId:    realmId,
-    expiresAt:  tokenData
-      ? new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
-      : null,
+    connected:   !!td,
+    realmId:     rid,
+    allRealms:   allRealms,
+    expiresAt:   td ? new Date(Date.now() + (td.expires_in * 1000)).toISOString() : null,
+    environment: process.env.QBO_ENVIRONMENT || 'production',
   });
 });
 
@@ -313,46 +340,59 @@ app.get('/qbo/status', (req, res) => {
 // ROUTE 3b: Disconnect — clear tokens and force re-auth
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/disconnect', (req, res) => {
-  tokenData = null;
-  realmId = null;
-  try { fs.unlinkSync(TOKEN_FILE); } catch(_) {}
-  console.log('QBO disconnected — tokens cleared');
-  res.json({ disconnected: true });
+  const rid = req.body.realmId || activeRealmId;
+  if (rid && tokenStore[rid]) {
+    delete tokenStore[rid];
+    saveTokenStore();
+    console.log(`QBO disconnected — tokens cleared for realm ${rid}`);
+  }
+  if (rid === activeRealmId) activeRealmId = Object.keys(tokenStore)[0] || null;
+  res.json({ disconnected: true, realmId: rid });
 });
 
 // ─────────────────────────────────────────────────────────────────
 // HELPER: Get a valid QBO client, refreshing token if needed
 // This is called internally before every API action
 // ─────────────────────────────────────────────────────────────────
-async function getQBOClient() {
-  if (!tokenData) throw new Error('Not connected to QBO — run the auth flow first');
+async function getQBOClient(rid) {
+  const targetRealm = rid || activeRealmId;
+  const td = getTokenData(targetRealm);
+  if (!td) throw new Error(`Not connected to QBO for realm ${targetRealm} — run the auth flow first`);
 
   // Check if the access token is still valid
   // Access tokens last 60 minutes; refresh tokens last 100 days
   if (!oauthClient.isAccessTokenValid()) {
-    console.log('Access token expired, refreshing...');
+    console.log(`Access token expired for realm ${targetRealm}, refreshing...`);
     try {
+      // Set the token on the oauthClient before refreshing
+      oauthClient.setToken(td);
       const refreshResponse = await oauthClient.refresh();
-      tokenData = refreshResponse.getJson();
+      const newTokens = refreshResponse.getJson();
+      setTokenData(targetRealm, newTokens);
       console.log('✓ Token refreshed successfully');
+      return buildQBOClient(targetRealm, newTokens);
     } catch (e) {
-      tokenData = null; // force re-auth
+      delete tokenStore[targetRealm];
+      saveTokenStore();
       throw new Error('Token refresh failed — please reconnect to QBO');
     }
   }
 
-  // Create and return a configured QuickBooks client
+  return buildQBOClient(targetRealm, td);
+}
+
+function buildQBOClient(rid, td) {
   return new QuickBooks(
     process.env.QBO_CLIENT_ID,
     process.env.QBO_CLIENT_SECRET,
-    tokenData.access_token,
+    td.access_token,
     false,                                            // no token secret (OAuth2 doesn't use one)
-    realmId,                                          // company ID
+    rid,                                              // company ID
     process.env.QBO_ENVIRONMENT === 'sandbox',        // true = sandbox, false = production
     false,                                            // debug logging (set true to see raw API calls)
     null,                                             // minor version
     '2.0',                                            // OAuth version
-    tokenData.refresh_token
+    td.refresh_token
   );
 }
 
@@ -363,12 +403,13 @@ async function getQBOClient() {
 // This keeps all QBO logic server-side where tokens are safe
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/api', async (req, res) => {
-  const { action, payload } = req.body;
-  console.log(`QBO API call: ${action}`);
+  const { action, payload, realmId: reqRealmId } = req.body;
+  const targetRealm = reqRealmId || activeRealmId;
+  console.log(`QBO API call: ${action} (realm: ${targetRealm})`);
 
   let qbo;
   try {
-    qbo = await getQBOClient();
+    qbo = await getQBOClient(targetRealm);
   } catch (e) {
     return res.status(401).json({ error: e.message });
   }
@@ -461,13 +502,77 @@ app.post('/qbo/api', async (req, res) => {
 
   // ── Action: Get Company Info ──────────────────────────────────
   } else if (action === 'getCompanyInfo') {
-    qbo.getCompanyInfo(realmId, (err, data) => {
+    qbo.getCompanyInfo(targetRealm, (err, data) => {
       if (err) {
         console.error('getCompanyInfo error:', err);
         return res.status(500).json({ error: err.message || 'getCompanyInfo failed' });
       }
       res.json({ companyInfo: data });
     });
+
+  // ── Action: Get P&L Report (Summary or Detail) ────────────────
+  } else if (action === 'getProfitAndLoss') {
+    // payload: { startDate, endDate, reportType: 'summary'|'detail' }
+    const { startDate, endDate, reportType } = payload || {};
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate required' });
+    }
+    const params = {
+      start_date: startDate,
+      end_date: endDate,
+    };
+
+    const method = reportType === 'detail' ? 'reportProfitAndLossDetail' : 'reportProfitAndLoss';
+    qbo[method](params, (err, data) => {
+      if (err) {
+        console.error(`${method} error:`, JSON.stringify(err, null, 2));
+        return res.status(500).json({
+          error: err.message || `Failed to fetch P&L ${reportType || 'summary'}`,
+          detail: err.Fault || err,
+        });
+      }
+      console.log(`  ✓ P&L ${reportType || 'summary'} returned for ${startDate} → ${endDate}`);
+      res.json({ success: true, report: data });
+    });
+
+  // ── Action: Get P&L for Multiple Periods (history batch) ──────
+  } else if (action === 'getProfitAndLossHistory') {
+    // payload: { periods: [{ startDate, endDate, label }] }
+    const { periods } = payload || {};
+    if (!periods || !periods.length) {
+      return res.status(400).json({ error: 'periods array required' });
+    }
+
+    const results = [];
+    let errors = [];
+
+    // Sequential to avoid rate limiting
+    for (const period of periods) {
+      try {
+        const data = await new Promise((resolve, reject) => {
+          qbo.reportProfitAndLoss({
+            start_date: period.startDate,
+            end_date: period.endDate,
+          }, (err, d) => err ? reject(err) : resolve(d));
+        });
+        results.push({ label: period.label, startDate: period.startDate, endDate: period.endDate, report: data });
+      } catch (e) {
+        errors.push({ label: period.label, error: e.message || 'Failed' });
+      }
+    }
+
+    console.log(`  ✓ P&L history batch: ${results.length} ok, ${errors.length} errors`);
+    res.json({ success: true, results, errors });
+
+  // ── Action: Switch Active Realm ────────────────────────────────
+  } else if (action === 'switchRealm') {
+    const rid = payload?.realmId;
+    if (!rid || !tokenStore[rid]) {
+      return res.status(400).json({ error: `No tokens for realm ${rid}` });
+    }
+    activeRealmId = rid;
+    console.log(`  ✓ Switched active realm to ${rid}`);
+    res.json({ success: true, activeRealmId: rid });
 
   // ── Unknown action ────────────────────────────────────────────
   } else {
@@ -1462,6 +1567,198 @@ app.post('/payroll/notifications/clear', (req, res) => {
   res.json({ success: true });
 });
 
+// ═════════════════════════════════════════════════════════════════
+// P&L DIGESTER — AI ANALYSIS + FLEET DATA + HISTORY
+// ═════════════════════════════════════════════════════════════════
+
+const PL_HISTORY_FILE = path.join(DATA_DIR, 'pl-history.json');
+const FLEET_DATA_FILE = path.join(DATA_DIR, 'fleet-data.json');
+const PL_THRESHOLDS_FILE = path.join(DATA_DIR, 'pl-thresholds.json');
+
+// Load persisted data
+let plHistory = {};    // { [realmId]: { [period]: { metrics, accounts, date } } }
+let fleetData = {};    // { accounts: { [accountName]: { storeCount, totalAmount } }, storeCount: 0 }
+let plThresholds = {}; // { _global: {...}, [realmId]: {...} }
+
+function loadJsonFile(filepath, fallback) {
+  if (!fs.existsSync(filepath)) return fallback;
+  try { return JSON.parse(fs.readFileSync(filepath, 'utf8')); }
+  catch(e) { return fallback; }
+}
+plHistory   = loadJsonFile(PL_HISTORY_FILE, {});
+fleetData   = loadJsonFile(FLEET_DATA_FILE, { accounts: {}, storeCount: 0 });
+plThresholds = loadJsonFile(PL_THRESHOLDS_FILE, { _global: {} });
+
+function savePlHistory()   { fs.writeFileSync(PL_HISTORY_FILE, JSON.stringify(plHistory, null, 2)); }
+function saveFleetData()   { fs.writeFileSync(FLEET_DATA_FILE, JSON.stringify(fleetData, null, 2)); }
+function savePlThresholds(){ fs.writeFileSync(PL_THRESHOLDS_FILE, JSON.stringify(plThresholds, null, 2)); }
+
+// ── P&L History CRUD ─────────────────────────────────────────────
+app.get('/pl/history/:realmId', (req, res) => {
+  res.json({ history: plHistory[req.params.realmId] || {} });
+});
+
+app.post('/pl/history/:realmId', (req, res) => {
+  const rid = req.params.realmId;
+  const { period, metrics, accounts } = req.body;
+  if (!period) return res.status(400).json({ error: 'period required' });
+  if (!plHistory[rid]) plHistory[rid] = {};
+  plHistory[rid][period] = { metrics, accounts, savedAt: new Date().toISOString() };
+  savePlHistory();
+  res.json({ success: true });
+});
+
+app.delete('/pl/history/:realmId/:period', (req, res) => {
+  const rid = req.params.realmId;
+  if (plHistory[rid]) {
+    delete plHistory[rid][req.params.period];
+    savePlHistory();
+  }
+  res.json({ success: true });
+});
+
+// ── Fleet Intelligence ───────────────────────────────────────────
+app.get('/pl/fleet', (req, res) => {
+  res.json({ fleet: fleetData });
+});
+
+app.post('/pl/fleet/contribute', (req, res) => {
+  const { realmId, accounts } = req.body;
+  if (!accounts || !Array.isArray(accounts)) return res.status(400).json({ error: 'accounts array required' });
+
+  // Track which stores have contributed (use realmId as unique store key)
+  if (!fleetData._stores) fleetData._stores = {};
+  const isNew = !fleetData._stores[realmId];
+  fleetData._stores[realmId] = Date.now();
+  fleetData.storeCount = Object.keys(fleetData._stores).length;
+
+  // Merge account usage
+  for (const acct of accounts) {
+    const name = acct.name || acct;
+    if (!fleetData.accounts[name]) {
+      fleetData.accounts[name] = { storeCount: 0, stores: [] };
+    }
+    if (!fleetData.accounts[name].stores.includes(realmId)) {
+      fleetData.accounts[name].stores.push(realmId);
+      fleetData.accounts[name].storeCount = fleetData.accounts[name].stores.length;
+    }
+  }
+
+  saveFleetData();
+  res.json({ success: true, storeCount: fleetData.storeCount });
+});
+
+// ── Variance Thresholds ──────────────────────────────────────────
+app.get('/pl/thresholds', (req, res) => {
+  res.json({ thresholds: plThresholds });
+});
+
+app.post('/pl/thresholds', (req, res) => {
+  const { realmId, thresholds } = req.body;
+  const key = realmId || '_global';
+  plThresholds[key] = { ...plThresholds[key], ...thresholds };
+  savePlThresholds();
+  res.json({ success: true });
+});
+
+// ── AI Analysis Endpoint ─────────────────────────────────────────
+app.post('/pl/digest', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+  }
+
+  const { plData, preFlags, summary, history, fleetContext, clientName } = req.body;
+
+  const systemPrompt = `You are a senior forensic bookkeeper reviewing a monthly P&L for a Scooters Coffee franchise store.
+You work for ARK Financial Services. Your job is to identify errors, misclassifications, missing items, and anomalies.
+
+RULES:
+- Always include dollar amounts and percentages in your explanations
+- When flagging a misclassification, suggest the SPECIFIC correct account from the Scooters COA
+- Severity levels: CRITICAL (likely error), WARNING (review needed), INFO (informational)
+- Be specific — "COGS is 42% of sales ($7,560 / $18,000) which exceeds the 35% benchmark" not "COGS seems high"
+- If history data is provided, compare against rolling average and same-month-last-year
+- If fleet data is provided, flag accounts that differ from 75%+ of other stores
+
+Known Scooters COA structure:
+- Revenue: Store Sales, Catering Income, Tip Income
+- COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
+- Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
+- Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses
+- Occupancy: Rent, CAM, Utilities, Property Tax
+- Operating: Bank Charges, Insurance, Repairs, Supplies, Marketing
+- ALWAYS FLAG: Uncategorized Expense, Uncategorized Income, Uncategorized Asset, Ask My Accountant, Reconciliation Discrepancies
+
+Return JSON array of flags: [{ severity, category, account, amount, message, suggestedAccount, variance }]`;
+
+  const userPrompt = `Client: ${clientName || 'Unknown'}
+
+P&L Data:
+${JSON.stringify(plData, null, 2)}
+
+${preFlags ? `Pre-analysis flags from rule engine:\n${JSON.stringify(preFlags, null, 2)}` : ''}
+${summary ? `Summary metrics:\n${JSON.stringify(summary, null, 2)}` : ''}
+${history ? `Historical comparison data:\n${JSON.stringify(history, null, 2)}` : ''}
+${fleetContext ? `Fleet intelligence (other stores):\n${JSON.stringify(fleetContext, null, 2)}` : ''}
+
+Analyze this P&L and return a JSON array of flags. Each flag: { severity: "CRITICAL"|"WARNING"|"INFO", category: string, account: string, amount: number|null, message: string, suggestedAccount: string|null, variance: string|null }`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Anthropic API error:', response.status, errBody);
+      return res.status(502).json({ error: `AI service error: ${response.status}` });
+    }
+
+    const aiData = await response.json();
+    const content = aiData.content?.[0]?.text || '[]';
+
+    // Try to parse the JSON from the AI response
+    let flags = [];
+    try {
+      // AI sometimes wraps in markdown code blocks
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) flags = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('Failed to parse AI flags:', e.message);
+      flags = [{ severity: 'INFO', category: 'System', account: '', amount: null, message: 'AI analysis returned non-parseable results. Raw: ' + content.slice(0, 200), suggestedAccount: null, variance: null }];
+    }
+
+    console.log(`  ✓ P&L Digest: ${flags.length} AI flags generated`);
+    res.json({ success: true, flags, usage: aiData.usage });
+
+  } catch (e) {
+    console.error('P&L Digest error:', e.message);
+    res.status(500).json({ error: 'AI analysis failed: ' + e.message });
+  }
+});
+
+// Health check for P&L Digester
+app.get('/pl/health', (req, res) => {
+  res.json({
+    aiConfigured: !!process.env.ANTHROPIC_API_KEY,
+    historyStores: Object.keys(plHistory).length,
+    fleetStores: fleetData.storeCount || 0,
+    thresholdSets: Object.keys(plThresholds).length,
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
@@ -1471,5 +1768,6 @@ app.listen(PORT, '0.0.0.0', () => {
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
   const b2Ok  = b2Ready() ? '✓' : '✗';
-  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}`);
+  const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
+  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}  |  AI: ${aiOk}`);
 });
