@@ -5707,13 +5707,45 @@ function renderLoginScreen(){
 let _serverToken = null;
 const _ARK_API_KEY = '4293e3d7616147502b20f4071dbd708d65e6f1846b9b258735dc53fe909119f3';
 
-// Authenticated fetch — adds Bearer token to all requests
-function authFetch(url, options = {}) {
+// Re-authenticate with the server (e.g. after deploy wipes sessions)
+async function _reAuth() {
+  if (!currentUser) return false;
+  const fullName = currentUser.lname ? `${currentUser.fname} ${currentUser.lname}` : currentUser.fname;
+  try {
+    const resp = await fetch(fcServerUrl() + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: _ARK_API_KEY, userId: currentUser.id, userName: fullName, role: currentUser.role || 'am' }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      _serverToken = data.token;
+      const saved = JSON.parse(sessionStorage.getItem('ark_session') || '{}');
+      saved.token = _serverToken;
+      sessionStorage.setItem('ark_session', JSON.stringify(saved));
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+// Authenticated fetch — adds Bearer token, auto-retries on 401
+async function authFetch(url, options = {}) {
   if (_serverToken) {
     if (!options.headers) options.headers = {};
     options.headers['Authorization'] = 'Bearer ' + _serverToken;
   }
-  return fetch(url, options);
+  const resp = await fetch(url, options);
+  // If 401, try re-authenticating once and retry
+  if (resp.status === 401 && currentUser) {
+    const ok = await _reAuth();
+    if (ok) {
+      if (!options.headers) options.headers = {};
+      options.headers['Authorization'] = 'Bearer ' + _serverToken;
+      return fetch(url, options);
+    }
+  }
+  return resp;
 }
 
 async function loginAs(userId){
