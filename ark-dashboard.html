@@ -3082,6 +3082,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="qbo-company-bar" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;margin-bottom:20px;align-items:center;gap:14px;">
       <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;">Active Company</div>
       <select id="qbo-company-select" onchange="qboSwitchCompany()" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 12px;cursor:pointer;"></select>
+      <button class="btn btn-ghost btn-sm" onclick="qboOpenConnectModal()" title="Connect another QBO company" style="padding:4px 10px;font-size:14px;font-weight:700;line-height:1;">+</button>
       <div id="qbo-company-meta" style="display:flex;gap:18px;font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;white-space:nowrap;"></div>
     </div>
 
@@ -4448,10 +4449,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
           </div>
 
-          <!-- QBO Realm ID — for P&L Digester integration -->
-          <div class="fg" id="mc-qbo-realm-wrap" style="display:none;">
-            <label>QBO Realm ID <span style="font-size:11px;font-weight:400;color:var(--text-d);">— links this client to their QBO company</span></label>
-            <input id="mc-qbo-realm-id" class="field-input" placeholder="e.g. 4620816365182..." style="font-family:'DM Mono',monospace;font-size:12px;">
+          <!-- QBO Company Link — shown when QBO selected -->
+          <div class="fg full" id="mc-qbo-link-wrap" style="display:none;">
+            <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:8px;">QBO Company Link</label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="text" id="mc-qbo-realm-id" class="field-input" placeholder="Not linked" readonly
+                     style="font-family:'DM Mono',monospace;font-size:12px;flex:1;background:var(--surface2);">
+              <button class="btn btn-sm" onclick="qboLinkClient()" style="background:#2ca01c;border-color:#2ca01c;color:#fff;white-space:nowrap;">
+                Link to QBO
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="qboUnlinkClient()" id="mc-qbo-unlink-btn" style="display:none;color:var(--red);border-color:var(--red);white-space:nowrap;">
+                Unlink
+              </button>
+            </div>
+            <div id="mc-qbo-link-info" style="font-size:11px;color:var(--text-d);margin-top:6px;min-height:16px;"></div>
           </div>
 
           <!-- QBO options — shown when QBO selected -->
@@ -8034,7 +8045,7 @@ let mcCurrentTab = 0;
 function onQBTypeChange(){
   const val = document.querySelector('input[name="mc-qb-type"]:checked')?.value||'';
   document.getElementById('mc-qbo-billing-wrap').style.display = val==='QBO' ? '' : 'none';
-  document.getElementById('mc-qbo-realm-wrap').style.display   = val==='QBO' ? '' : 'none';
+  document.getElementById('mc-qbo-link-wrap').style.display    = val==='QBO' ? '' : 'none';
   document.getElementById('mc-qbd-user-wrap').style.display    = val==='QBD' ? '' : 'none';
   document.getElementById('mc-qbd-pass-wrap').style.display    = val==='QBD' ? '' : 'none';
   if(val!=='QBO'){ document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false); document.getElementById('mc-qbo-billing-hint').textContent=''; }
@@ -8058,14 +8069,141 @@ function onQBOBillingChange(){
     lbl.style.background=r.checked?'#eef1f8':'var(--surface2)';
   });
 }
-function setQBType(type, billing, qbdUser, qbdPass){
+function setQBType(type, billing, qbdUser, qbdPass, qboRealmId){
   document.querySelectorAll('input[name="mc-qb-type"]').forEach(r=>r.checked=false);
   document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false);
   if(type){ const r=document.querySelector(`input[name="mc-qb-type"][value="${type}"]`); if(r) r.checked=true; }
   onQBTypeChange();
   if(type==='QBO'&&billing){ const r=document.querySelector(`input[name="mc-qbo-billing"][value="${billing}"]`); if(r){ r.checked=true; onQBOBillingChange(); } }
   if(type==='QBD'){ document.getElementById('mc-qbd-user').value=qbdUser||''; document.getElementById('mc-qbd-pass').value=qbdPass||''; }
+  // Populate QBO realm ID and link status
+  const realmEl = document.getElementById('mc-qbo-realm-id');
+  if(realmEl) realmEl.value = qboRealmId || '';
+  const unlinkBtn = document.getElementById('mc-qbo-unlink-btn');
+  if(unlinkBtn) unlinkBtn.style.display = qboRealmId ? '' : 'none';
+  const linkInfo = document.getElementById('mc-qbo-link-info');
+  if(linkInfo) linkInfo.textContent = qboRealmId ? `Linked to QBO company ${qboRealmId}` : '';
 }
+
+// ── QBO Link — opens picker modal to link client to a QBO company ──
+async function qboLinkClient() {
+  const clientId = DB._editClient;
+  if (!clientId) { showToast('Save the client first'); return; }
+  let companies = {};
+  try {
+    const res = await fetch(`${QBO_SERVER}/qbo/status`);
+    const data = await res.json();
+    companies = data.companies || {};
+  } catch(e) {}
+
+  const realmIds = Object.keys(companies);
+  let listHtml = '';
+  if (realmIds.length > 0) {
+    listHtml = realmIds.map(rid => {
+      const info = companies[rid];
+      const name = info.companyName || 'Unnamed Company';
+      const linked = (info.linkedClients || [])
+        .map(cid => { const cl = DB.clients.find(c=>c.id===cid); return cl ? cl.biz : cid; })
+        .filter(Boolean);
+      const linkedStr = linked.length ? `<div style="font-size:11px;color:var(--text-d);margin-top:4px;">Linked: ${linked.join(', ')}</div>` : '<div style="font-size:11px;color:var(--text-d);margin-top:4px;">No clients linked yet</div>';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;color:var(--text);">${name}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-d);margin-top:2px;">Realm: ${rid}</div>
+          ${linkedStr}
+        </div>
+        <button class="btn btn-sm" onclick="qboLinkClientToRealm('${rid}')" style="background:var(--navy);border-color:var(--navy);color:#fff;white-space:nowrap;">Select</button>
+      </div>`;
+    }).join('');
+  } else {
+    listHtml = '<p style="color:var(--text-d);font-size:12px;text-align:center;padding:20px 0;">No QBO companies connected yet. Connect one below.</p>';
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'qbo-link-picker-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Link to QBO Company</h3>
+          <p style="margin:4px 0 0;font-size:12px;color:var(--text-d);">Select an existing company or connect a new one</p>
+        </div>
+        <button onclick="document.getElementById('qbo-link-picker-overlay')?.remove()" style="background:none;border:none;color:var(--text-d);font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+      <div style="padding:16px 24px;">${listHtml}</div>
+      <div style="padding:16px 24px;border-top:1px solid var(--border);text-align:center;">
+        <button class="btn" onclick="qboLinkClientNewOAuth()" style="background:var(--green);border-color:var(--green);color:#fff;">+ Connect New QBO Company</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+}
+
+async function qboLinkClientToRealm(realmId) {
+  const clientId = DB._editClient;
+  if (!clientId) return;
+  try {
+    await fetch(`${QBO_SERVER}/qbo/link-client`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, clientId })
+    });
+    document.getElementById('mc-qbo-realm-id').value = realmId;
+    document.getElementById('mc-qbo-unlink-btn').style.display = '';
+    document.getElementById('mc-qbo-link-info').textContent = `Linked to QBO company ${realmId}`;
+    showToast('✓ Linked to QBO company');
+  } catch(e) { showToast('Failed to link: ' + e.message); }
+  document.getElementById('qbo-link-picker-overlay')?.remove();
+}
+
+function qboLinkClientNewOAuth() {
+  const clientId = DB._editClient;
+  document.getElementById('qbo-link-picker-overlay')?.remove();
+  const popup = window.open(`${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId || '')}`, 'qbo-auth', 'width=600,height=700,left=200,top=100');
+  window.addEventListener('message', async function handler(e) {
+    if (e.data?.type !== 'qbo-connected') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+    const realmId = e.data.realmId;
+    if (realmId) {
+      document.getElementById('mc-qbo-realm-id').value = realmId;
+      document.getElementById('mc-qbo-unlink-btn').style.display = '';
+      document.getElementById('mc-qbo-link-info').textContent = `Linked to QBO company ${realmId}`;
+      showToast('✓ Connected and linked to QBO');
+    }
+  });
+}
+
+function qboOpenFromClient(clientId) {
+  const client = DB.clients.find(c => c.id === clientId);
+  if (!client?.qboRealmId) { showToast('This client is not linked to a QBO company'); return; }
+  nav('qbo');
+  setTimeout(async () => {
+    const sel = document.getElementById('qbo-company-select');
+    if (sel && [...sel.options].some(o => o.value === client.qboRealmId)) {
+      sel.value = client.qboRealmId;
+      await qboSwitchCompany();
+    } else { showToast(`QBO company ${client.qboRealmId} is not connected on the server`); }
+  }, 100);
+}
+
+async function qboUnlinkClient() {
+  const clientId = DB._editClient;
+  const realmId = document.getElementById('mc-qbo-realm-id')?.value;
+  if (!clientId || !realmId) return;
+  if (!confirm('Unlink this client from QBO? The QBO connection stays active — only this client is unlinked.')) return;
+  try {
+    await fetch(`${QBO_SERVER}/qbo/unlink-client`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, clientId })
+    });
+  } catch(e) {}
+  document.getElementById('mc-qbo-realm-id').value = '';
+  document.getElementById('mc-qbo-unlink-btn').style.display = 'none';
+  document.getElementById('mc-qbo-link-info').textContent = '';
+  showToast('Client unlinked from QBO');
+}
+
 // ── ACH helpers ──
 function openBankUrl(){
   const url = document.getElementById('mc-bank-url')?.value.trim();
@@ -8626,7 +8764,7 @@ function openEditClient(id){
   initWorkLocations(c.locations||[]);
   setPrPlatform(c.prPlatform||'');
   document.getElementById('mc-pr-script').value=c.prScript||'';
-  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'');
+  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'');
   const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
@@ -9385,6 +9523,7 @@ function openDetail(id){
         <div class="drow"><span class="dk">Platform</span><span class="dv">${c.qbType}</span></div>
         ${c.qbType==='QBO'&&c.qboBilling?`<div class="drow"><span class="dk">Billing</span><span class="dv">${c.qboBilling} Billed</span></div>`:''}
         ${c.qbType==='QBO'&&c.qboRealmId?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
+        ${c.qboRealmId?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
         ${c.qbType==='QBD'&&c.qbdUser?`<div class="drow"><span class="dk">Username</span><span class="dv" style="font-family:monospace;">${c.qbdUser}</span></div>`:''}
       </div>`:''}
       ${c.ein||c.prSwid||c.prSuta||c.prPayschedule||c.prPlatform?`
@@ -20085,6 +20224,8 @@ function stcToast(msg) {
 // ── State ─────────────────────────────────────────────────────────
 let qboConnected = false;
 let qboCurrentCompany = null;
+let qboActiveRealmId = null;       // currently selected realmId in QBO Center
+let qboAllCompanies = {};          // { realmId: { companyName, linkedClients[], ... } }
 let qboLineCount = 0;
 let qboStats = { gje: 0, exp: 0, api: 0 };
 let qboActiveTool = null;
@@ -20096,12 +20237,13 @@ let qboLiveDepts    = []; // populated from real QBO departments (locations)
 // ── Server URL — update this if your port changes ─────────────────
 const QBO_SERVER = 'https://ark-qbo-server.onrender.com';
 
-// ── Helper: call your local server ───────────────────────────────
-async function qboCall(action, payload = {}) {
+// ── Helper: call your local server (now includes realmId) ────────
+async function qboCall(action, payload = {}, realmId) {
+  const rid = realmId || qboActiveRealmId;
   const res = await fetch(`${QBO_SERVER}/qbo/api`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, payload }),
+    body: JSON.stringify({ action, payload, realmId: rid }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `Server error ${res.status}`);
@@ -20119,24 +20261,43 @@ function qboInit() {
   qboCheckServerStatus();
 }
 
-// ── Check if server is already connected (survives page refresh) ──
+// ── Check if server has any connected companies ──────────────────
 async function qboCheckServerStatus() {
   try {
     const res = await fetch(`${QBO_SERVER}/qbo/status`);
     const data = await res.json();
-    if (data.connected) {
-      // Server already has tokens — auto-connect the UI
+    qboAllCompanies = data.companies || {};
+    const realmIds = Object.keys(qboAllCompanies).filter(rid => qboAllCompanies[rid].connected);
+
+    if (realmIds.length > 0) {
       qboConnected = true;
-      qboCurrentCompany = { id: data.realmId, name: 'QBO Company', industry: '', created: '' };
-      qboUpdateBannerConnected(data);
+      qboPopulateCompanySelector(qboAllCompanies);
+      // Auto-select the most recently used company
+      const sorted = realmIds.sort((a,b) => (qboAllCompanies[b].lastUsed||'') > (qboAllCompanies[a].lastUsed||'') ? 1 : -1);
+      qboActiveRealmId = sorted[0];
+      const info = qboAllCompanies[qboActiveRealmId];
+      qboCurrentCompany = { id: qboActiveRealmId, name: info.companyName || 'QBO Company' };
+      qboUpdateBannerConnected({ realmId: qboActiveRealmId });
       await qboLoadAccountsAndVendors();
-      await qboFetchCompanyName();
-      qboLog('info', 'Reconnected — server tokens still valid');
+      if (!info.companyName) await qboFetchCompanyName();
+      qboLog('info', `Reconnected — ${realmIds.length} QBO company${realmIds.length !== 1 ? 'ies' : ''} available`);
     }
   } catch(e) {
-    // Server not running — silently stay disconnected
     console.log('QBO server not reachable:', e.message);
   }
+}
+
+function qboPopulateCompanySelector(companies) {
+  const sel = document.getElementById('qbo-company-select');
+  if (!sel) return;
+  const realmIds = Object.keys(companies).filter(rid => companies[rid].connected !== false);
+  sel.innerHTML = realmIds.map(rid => {
+    const info = companies[rid];
+    const name = info.companyName || 'Unnamed Company';
+    const fmtId = String(rid).replace(/(\d{4})(?=\d)/g, '$1 ');
+    return `<option value="${rid}">${name} — ${fmtId}</option>`;
+  }).join('');
+  if (qboActiveRealmId) sel.value = qboActiveRealmId;
 }
 
 // ── Firm Settings ─────────────────────────────────────────────────
@@ -20153,26 +20314,34 @@ function qboOpenConnectModal() {
     'width=600,height=700,left=200,top=100'
   );
 
-  // Listen for the callback page to post back "qbo-connected"
   window.addEventListener('message', async function handler(e) {
     if (e.data?.type !== 'qbo-connected') return;
     window.removeEventListener('message', handler);
     if (popup && !popup.closed) popup.close();
 
-    qboLog('info', 'OAuth callback received — loading company data…');
+    const newRealmId = e.data.realmId;
+    qboLog('info', `OAuth callback received — realm ${newRealmId}`);
     showToast('✓ Authorized! Loading accounts…');
 
-    // Small delay to let server store tokens
     await new Promise(r => setTimeout(r, 800));
 
     try {
-      const status = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
+      const statusRes = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
+      qboAllCompanies = statusRes.companies || {};
+      qboPopulateCompanySelector(qboAllCompanies);
+
+      qboActiveRealmId = newRealmId;
       qboConnected = true;
-      qboCurrentCompany = { id: status.realmId, name: 'QBO Company', industry: '', created: '' };
-      qboUpdateBannerConnected(status);
+      const info = qboAllCompanies[newRealmId] || {};
+      qboCurrentCompany = { id: newRealmId, name: info.companyName || 'QBO Company' };
+
+      const sel = document.getElementById('qbo-company-select');
+      if (sel) sel.value = newRealmId;
+
+      qboUpdateBannerConnected({ realmId: newRealmId });
       await qboLoadAccountsAndVendors();
       await qboFetchCompanyName();
-      logAct(`QBO connected: Realm ${status.realmId}`);
+      logAct(`QBO connected: Realm ${newRealmId}`);
       showToast('✓ Connected to QuickBooks Online');
     } catch(e) {
       showToast('Connection error: ' + e.message);
@@ -20183,7 +20352,7 @@ function qboOpenConnectModal() {
 
 // ── Update banner UI to connected state ───────────────────────────
 function qboUpdateBannerConnected(status) {
-  const realmId = status.realmId || qboCurrentCompany?.id || '';
+  const realmId = status.realmId || qboActiveRealmId || qboCurrentCompany?.id || '';
 
   const banner = document.getElementById('qbo-conn-banner');
   if (banner) { banner.style.borderColor = '#1a6b30'; banner.style.background = 'linear-gradient(135deg, #0a1a10, var(--surface2))'; }
@@ -20207,9 +20376,13 @@ function qboUpdateBannerConnected(status) {
   const bar = document.getElementById('qbo-company-bar');
   if (bar) { bar.style.display = 'flex'; }
   const sel = document.getElementById('qbo-company-select');
-  const fmtId = String(realmId).replace(/(\d{4})(?=\d)/g, '$1 ');
-  // Set placeholder — qboFetchCompanyName will update with real company name
-  if (sel) sel.innerHTML = `<option value="${realmId}">Loading... — ${fmtId}</option>`;
+  if (sel) {
+    if (!sel.options.length) {
+      const fmtId = String(realmId).replace(/(\d{4})(?=\d)/g, '$1 ');
+      sel.innerHTML = `<option value="${realmId}">Loading… — ${fmtId}</option>`;
+    }
+    sel.value = realmId;
+  }
 
   const stats = document.getElementById('qbo-stats-row');
   if (stats) stats.style.display = 'grid';
@@ -20244,14 +20417,21 @@ async function qboFetchCompanyName() {
     const name = info?.CompanyName || info?.LegalName || info?.Name || null;
     if (name) {
       qboCurrentCompany.name = name;
-      // Refresh the display
-      const realmId = qboCurrentCompany.id;
+      const realmId = qboActiveRealmId || qboCurrentCompany.id;
       const fmtRealm = String(realmId).replace(/(\d{4})(?=\d)/g, '$1 ');
       const sel = document.getElementById('qbo-company-select');
-      if (sel && sel.options[0]) sel.options[0].text = `${name} — ${fmtRealm}`;
+      if (sel) {
+        const opt = [...sel.options].find(o => o.value === realmId);
+        if (opt) opt.text = `${name} — ${fmtRealm}`;
+      }
       const detail = document.getElementById('qbo-conn-detail');
       if (detail) detail.innerHTML = `<strong style="color:var(--green)">${name}</strong> · ${fmtRealm} · tokens valid`;
       qboLog('info', `Company: ${name}`);
+      // Persist company name server-side
+      fetch(`${QBO_SERVER}/qbo/update-company-name`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId, companyName: name })
+      }).catch(() => {});
     } else {
       qboLog('info', 'Company info loaded but name not found — check response structure');
       console.log('getCompanyInfo response:', JSON.stringify(data));
@@ -20384,54 +20564,90 @@ function qboRebuildLocationSelects() {
   });
 }
 
-function qboDisconnect() {
-  if (!confirm('Disconnect from QuickBooks Online?')) return;
-  qboConnected = false;
-  qboCurrentCompany = null;
-  qboLiveAccounts = [];
-  const banner = document.getElementById('qbo-conn-banner');
-  if (banner) { banner.style.borderColor = 'var(--border)'; banner.style.background = ''; }
-  const dot = document.getElementById('qbo-conn-dot');
-  if (dot) { dot.style.background = 'var(--text-d)'; dot.style.boxShadow = ''; }
-  const title = document.getElementById('qbo-conn-title');
-  if (title) title.textContent = 'Not Connected';
-  const detail = document.getElementById('qbo-conn-detail');
-  if (detail) detail.textContent = 'Connect a QuickBooks Online company to get started';
-  const actions = document.getElementById('qbo-conn-actions');
-  if (actions) actions.innerHTML = `<button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:#2ca01c;border-color:#2ca01c;display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;background:rgba(255,255,255,.2);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">QB</span>Connect to QuickBooks</button>`;
-  const bar = document.getElementById('qbo-company-bar');
-  if (bar) bar.style.display = 'none';
-  const stats = document.getElementById('qbo-stats-row');
-  if (stats) stats.style.display = 'none';
-  const oauthEl = document.getElementById('qbo-cfg-oauth');
-  if (oauthEl) { oauthEl.textContent = 'Disconnected'; oauthEl.style.background = 'rgba(255,107,107,.12)'; oauthEl.style.color = 'var(--red)'; }
-  const tokenEl = document.getElementById('qbo-cfg-token');
-  if (tokenEl) tokenEl.textContent = '—';
-  const scopeEl = document.getElementById('qbo-cfg-scope');
-  if (scopeEl) scopeEl.textContent = '—';
-  const gjeBtn = document.getElementById('qbo-gje-push-btn');
-  const expBtn = document.getElementById('qbo-exp-push-btn');
-  if (gjeBtn) gjeBtn.disabled = true;
-  if (expBtn) expBtn.disabled = true;
-  qboLog('error', 'Disconnected from QuickBooks Online');
-  showToast('Disconnected from QBO');
-}
+async function qboDisconnect() {
+  if (!qboActiveRealmId) return;
+  const name = qboCurrentCompany?.name || qboActiveRealmId;
+  if (!confirm(`Disconnect "${name}" from QuickBooks?\n\nThis removes the connection for this company.`)) return;
 
-async function qboRefreshToken() {
   try {
-    const res = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
-    const tokenEl = document.getElementById('qbo-cfg-token');
-    if (tokenEl) tokenEl.textContent = res.expiresAt ? new Date(res.expiresAt).toLocaleTimeString() : 'Active';
-    qboLog('info', 'Token status refreshed');
-    showToast('✓ Token status updated');
-  } catch(e) {
-    showToast('Could not reach server');
+    await fetch(`${QBO_SERVER}/qbo/disconnect`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId: qboActiveRealmId })
+    });
+  } catch(e) { /* proceed anyway */ }
+
+  delete qboAllCompanies[qboActiveRealmId];
+  qboActiveRealmId = null;
+  qboCurrentCompany = null;
+  qboLiveAccounts = []; qboLiveVendors = []; qboLiveClasses = []; qboLiveDepts = [];
+
+  const remaining = Object.keys(qboAllCompanies).filter(rid => qboAllCompanies[rid].connected !== false);
+  if (remaining.length > 0) {
+    qboActiveRealmId = remaining[0];
+    qboConnected = true;
+    const info = qboAllCompanies[qboActiveRealmId];
+    qboCurrentCompany = { id: qboActiveRealmId, name: info.companyName || 'QBO Company' };
+    qboPopulateCompanySelector(qboAllCompanies);
+    qboUpdateBannerConnected({ realmId: qboActiveRealmId });
+    await qboLoadAccountsAndVendors();
+    qboLog('info', `Disconnected "${name}" — switched to ${qboCurrentCompany.name}`);
+    showToast(`Disconnected. Switched to ${qboCurrentCompany.name}`);
+  } else {
+    qboConnected = false;
+    const banner = document.getElementById('qbo-conn-banner');
+    if (banner) { banner.style.borderColor = 'var(--border)'; banner.style.background = ''; }
+    const dot = document.getElementById('qbo-conn-dot');
+    if (dot) { dot.style.background = 'var(--text-d)'; dot.style.boxShadow = ''; }
+    const title = document.getElementById('qbo-conn-title');
+    if (title) title.textContent = 'Not Connected';
+    const detail = document.getElementById('qbo-conn-detail');
+    if (detail) detail.textContent = 'Connect a QuickBooks Online company to get started';
+    const actions = document.getElementById('qbo-conn-actions');
+    if (actions) actions.innerHTML = `<button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:#2ca01c;border-color:#2ca01c;display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;background:rgba(255,255,255,.2);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">QB</span>Connect to QuickBooks</button>`;
+    const bar = document.getElementById('qbo-company-bar'); if (bar) bar.style.display = 'none';
+    const stats = document.getElementById('qbo-stats-row'); if (stats) stats.style.display = 'none';
+    const oauthEl = document.getElementById('qbo-cfg-oauth');
+    if (oauthEl) { oauthEl.textContent = 'Disconnected'; oauthEl.style.background = 'rgba(255,107,107,.12)'; oauthEl.style.color = 'var(--red)'; }
+    const gjeBtn = document.getElementById('qbo-gje-push-btn');
+    const expBtn = document.getElementById('qbo-exp-push-btn');
+    if (gjeBtn) gjeBtn.disabled = true;
+    if (expBtn) expBtn.disabled = true;
+    qboLog('error', `Disconnected "${name}" — no companies remaining`);
+    showToast('Disconnected from QBO');
   }
 }
 
-function qboSwitchCompany() {
-  qboLog('info', 'Company switch — reconnect to load a different company');
-  showToast('To switch companies, disconnect and reconnect with a different QBO account');
+async function qboRefreshToken() {
+  if (!qboActiveRealmId) { showToast('No company selected'); return; }
+  try {
+    await qboCall('getCompanyInfo');
+    const tokenEl = document.getElementById('qbo-cfg-token');
+    if (tokenEl) tokenEl.textContent = 'Active — ' + new Date().toLocaleTimeString();
+    qboLog('info', 'Token refreshed for ' + (qboCurrentCompany?.name || qboActiveRealmId));
+    showToast('✓ Token status updated');
+  } catch(e) {
+    showToast('Token refresh failed: ' + e.message);
+    qboLog('error', 'Token refresh failed: ' + e.message);
+  }
+}
+
+async function qboSwitchCompany() {
+  const sel = document.getElementById('qbo-company-select');
+  const newRealmId = sel?.value;
+  if (!newRealmId || newRealmId === qboActiveRealmId) return;
+
+  qboActiveRealmId = newRealmId;
+  const info = qboAllCompanies[newRealmId] || {};
+  qboCurrentCompany = { id: newRealmId, name: info.companyName || 'QBO Company' };
+  qboLiveAccounts = []; qboLiveVendors = []; qboLiveClasses = []; qboLiveDepts = [];
+
+  qboLog('info', `Switching to ${qboCurrentCompany.name}…`);
+  showToast(`Loading ${qboCurrentCompany.name}…`);
+
+  qboUpdateBannerConnected({ realmId: newRealmId });
+  await qboLoadAccountsAndVendors();
+  if (!info.companyName) await qboFetchCompanyName();
+  qboLog('success', `Switched to <strong>${qboCurrentCompany.name}</strong>`);
 }
 
 function qboUpdateCompanyMeta() {

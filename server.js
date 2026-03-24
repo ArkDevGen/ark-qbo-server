@@ -215,7 +215,7 @@ const oauthClient = new OAuthClient({
 // ─────────────────────────────────────────────────────────────────
 const TOKEN_FILE = path.join(DATA_DIR, 'tokens.json');
 
-// tokenStore: { [realmId]: tokenData }
+// tokenStore: { [realmId]: { tokenData, companyName, linkedClients[], connectedAt, lastUsed } }
 let tokenStore = {};
 // activeRealmId tracks the "current" company for backward compat
 let activeRealmId = process.env.QBO_REALM_ID || null;
@@ -223,31 +223,48 @@ let activeRealmId = process.env.QBO_REALM_ID || null;
 if (fs.existsSync(TOKEN_FILE)) {
   try {
     const raw = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
-    // Migrate from old single-token format to multi-company map
+    // Migrate from old single-token format
     if (raw.access_token) {
-      // Old format — wrap it under the active realm
       const rid = activeRealmId || 'unknown';
-      tokenStore = { [rid]: raw };
+      tokenStore = { [rid]: { tokenData: raw, companyName: '', linkedClients: [], connectedAt: new Date().toISOString(), lastUsed: new Date().toISOString() } };
       console.log('✓ Migrated single-token format to multi-company store');
     } else {
-      tokenStore = raw;
-      console.log(`✓ Token store loaded — ${Object.keys(tokenStore).length} company(ies)`);
+      // Check if it's the old simple { realmId: tokenData } or new enriched format
+      const firstVal = Object.values(raw)[0];
+      if (firstVal && firstVal.access_token) {
+        // Old simple format — wrap each entry
+        for (const [rid, td] of Object.entries(raw)) {
+          tokenStore[rid] = { tokenData: td, companyName: '', linkedClients: [], connectedAt: new Date().toISOString(), lastUsed: new Date().toISOString() };
+        }
+        console.log(`✓ Migrated ${Object.keys(tokenStore).length} company tokens to enriched format`);
+      } else {
+        tokenStore = raw;
+        console.log(`✓ Token store loaded — ${Object.keys(tokenStore).length} company(ies)`);
+      }
     }
+    saveTokenStore();
   } catch(e) {
     console.log('Could not load saved tokens, will need to re-authorize');
   }
 }
 
 function saveTokenStore() {
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore, null, 2));
+  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore, null, 2)); }
+  catch(e) { console.error('Failed to save token store:', e.message); }
 }
 
-// Backward-compat helpers
+// Helpers for enriched token entries
 function getTokenData(rid) {
-  return tokenStore[rid || activeRealmId] || null;
+  const entry = tokenStore[rid || activeRealmId];
+  return entry?.tokenData || null;
 }
 function setTokenData(rid, data) {
-  tokenStore[rid] = data;
+  if (!tokenStore[rid]) {
+    tokenStore[rid] = { tokenData: data, companyName: '', linkedClients: [], connectedAt: new Date().toISOString(), lastUsed: new Date().toISOString() };
+  } else {
+    tokenStore[rid].tokenData = data;
+    tokenStore[rid].lastUsed = new Date().toISOString();
+  }
   saveTokenStore();
 }
 
@@ -308,11 +325,12 @@ async function getGCalClient() {
 // the Intuit authorization URL and redirects the user there.
 // ─────────────────────────────────────────────────────────────────
 app.get('/qbo/auth', (req, res) => {
+  const stateData = { ts: Date.now(), clientId: req.query.clientId || '' };
   const authUri = oauthClient.authorizeUri({
     scope: [OAuthClient.scopes.Accounting],
-    state: 'ark-qbo-' + Date.now(), // random state prevents CSRF attacks
+    state: JSON.stringify(stateData),
   });
-  console.log('Redirecting to Intuit auth:', authUri);
+  console.log('Redirecting to Intuit auth (clientId:', stateData.clientId || 'none', ')');
   res.redirect(authUri);
 });
 
@@ -333,13 +351,20 @@ app.get('/qbo/callback', async (req, res) => {
     activeRealmId = rid;
     setTokenData(rid, newTokens);
 
+    // Parse clientId from OAuth state parameter
+    let clientId = '';
+    try { const sd = JSON.parse(req.query.state || '{}'); clientId = sd.clientId || ''; } catch(_) {}
+    if (clientId && tokenStore[rid] && !tokenStore[rid].linkedClients.includes(clientId)) {
+      tokenStore[rid].linkedClients.push(clientId);
+      saveTokenStore();
+    }
+
     console.log('✓ Tokens received successfully');
     console.log('  Realm ID (Company ID):', rid);
+    console.log('  Client ID:', clientId || '(none — QBO Center connect)');
     console.log('  Access token expires in:', newTokens.expires_in, 'seconds');
-    console.log('  Refresh token expires in:', newTokens.x_refresh_token_expires_in, 'seconds');
+    console.log('  Total connected companies:', Object.keys(tokenStore).length);
 
-    // Send a success page back to the browser
-    // The postMessage call notifies the ARK dashboard window if it opened this as a popup
     res.send(`<!DOCTYPE html>
 <html>
 <head><title>QBO Connected</title></head>
@@ -351,9 +376,8 @@ app.get('/qbo/callback', async (req, res) => {
     <p style="color:#4a6f8a;font-size:12px;margin-top:16px;">Realm ID: ${rid}</p>
   </div>
   <script>
-    // Tell the ARK dashboard the connection succeeded
     if (window.opener) {
-      window.opener.postMessage({ type: 'qbo-connected', realmId: '${rid}' }, '*');
+      window.opener.postMessage({ type: 'qbo-connected', realmId: '${rid}', clientId: '${clientId}' }, '*');
     }
     setTimeout(() => window.close(), 3000);
   </script>
@@ -375,14 +399,25 @@ app.get('/qbo/callback', async (req, res) => {
 // ARK dashboard calls this to know if the server is connected
 // ─────────────────────────────────────────────────────────────────
 app.get('/qbo/status', (req, res) => {
-  // Support ?realmId= query param for multi-company status check
+  const companies = {};
+  for (const [rid, entry] of Object.entries(tokenStore)) {
+    companies[rid] = {
+      connected:     !!entry.tokenData,
+      companyName:   entry.companyName || '',
+      linkedClients: entry.linkedClients || [],
+      connectedAt:   entry.connectedAt || null,
+      lastUsed:      entry.lastUsed || null,
+    };
+  }
+  // Also include legacy fields for backward compat
   const rid = req.query.realmId || activeRealmId;
   const td = getTokenData(rid);
-  const allRealms = Object.keys(tokenStore);
   res.json({
+    companies,
+    // Legacy fields (still used by some dashboard functions)
     connected:   !!td,
     realmId:     rid,
-    allRealms:   allRealms,
+    allRealms:   Object.keys(tokenStore),
     expiresAt:   td ? new Date(Date.now() + (td.expires_in * 1000)).toISOString() : null,
     environment: process.env.QBO_ENVIRONMENT || 'production',
   });
@@ -400,6 +435,48 @@ app.post('/qbo/disconnect', (req, res) => {
   }
   if (rid === activeRealmId) activeRealmId = Object.keys(tokenStore)[0] || null;
   res.json({ disconnected: true, realmId: rid });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ROUTE 3c: Link a CRM client to an existing QBO company
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/link-client', (req, res) => {
+  const { realmId, clientId } = req.body;
+  if (!realmId || !clientId) return res.status(400).json({ error: 'realmId and clientId required' });
+  if (!tokenStore[realmId]) return res.status(404).json({ error: 'Realm not found — connect to QBO first' });
+  if (!tokenStore[realmId].linkedClients) tokenStore[realmId].linkedClients = [];
+  if (!tokenStore[realmId].linkedClients.includes(clientId)) {
+    tokenStore[realmId].linkedClients.push(clientId);
+    saveTokenStore();
+  }
+  console.log(`Client ${clientId} linked to realm ${realmId}`);
+  res.json({ success: true, linkedClients: tokenStore[realmId].linkedClients });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ROUTE 3d: Unlink a CRM client from a QBO company
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/unlink-client', (req, res) => {
+  const { realmId, clientId } = req.body;
+  if (!realmId || !clientId) return res.status(400).json({ error: 'realmId and clientId required' });
+  if (!tokenStore[realmId]) return res.status(404).json({ error: 'Realm not found' });
+  tokenStore[realmId].linkedClients = (tokenStore[realmId].linkedClients || []).filter(id => id !== clientId);
+  saveTokenStore();
+  console.log(`Client ${clientId} unlinked from realm ${realmId}`);
+  res.json({ success: true, linkedClients: tokenStore[realmId].linkedClients });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ROUTE 3e: Store/update company name for a realmId
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/update-company-name', (req, res) => {
+  const { realmId, companyName } = req.body;
+  if (!realmId) return res.status(400).json({ error: 'realmId required' });
+  if (tokenStore[realmId]) {
+    tokenStore[realmId].companyName = companyName || '';
+    saveTokenStore();
+  }
+  res.json({ success: true });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -424,9 +501,10 @@ async function getQBOClient(rid) {
       console.log('✓ Token refreshed successfully');
       return buildQBOClient(targetRealm, newTokens);
     } catch (e) {
-      delete tokenStore[targetRealm];
+      // Clear token but preserve metadata (companyName, linkedClients)
+      if (tokenStore[targetRealm]) tokenStore[targetRealm].tokenData = null;
       saveTokenStore();
-      throw new Error('Token refresh failed — please reconnect to QBO');
+      throw new Error(`Token refresh failed for realm ${targetRealm} — please reconnect`);
     }
   }
 
