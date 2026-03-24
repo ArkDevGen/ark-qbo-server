@@ -948,7 +948,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card-title">📅 Jacob's Schedule</div>
           <div class="card-subtitle" id="cal-date-label"></div>
         </div>
-        <a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a>
+        <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
       </div>
       <div id="cal-widget" style="padding:0 4px 16px;"></div>
     </div>
@@ -6311,7 +6311,9 @@ function renderDashboard(){
   document.getElementById('s-unfiled-sub').textContent = unfiled === 1 ? 'needs to be filed' : 'need to be filed';
   const dot = document.getElementById('s-unfiled-dot');
   if(dot){ dot.style.display = overdue > 0 ? 'inline-block' : 'none'; dot.title = overdue > 0 ? `${overdue} hire${overdue>1?'s':''} unfiled for 15+ days` : ''; }
+  // Render calendar immediately (empty/cached), then fetch live data from Google Calendar
   renderCalWidget();
+  fetchCalendarEvents().then(() => { renderCalWidget(); renderCalHeaderActions(); });
 
   // Onboarding KPI
   const incompleteOb = (DB.clients||[]).filter(c => {
@@ -10081,56 +10083,92 @@ function renderBankingHoliday(){
 
 
 // ── 4-DAY CALENDAR DATA ─────────────────────────────
-// Fetched Sat Mar 14, 2026 — Mon Mar 16 – Thu Mar 19, 2026  (jacobomalousek@gmail.com)
-// Types: 'allday' | 'timed'  |  isClient:true → gold CLIENT badge
+// Live-synced from Google Calendar via /gcal/events
 // cat: 'client' | 'internal' | 'personal'
-const CAL_DAYS = [
-  {
-    date: '2026-03-16', label: 'Mon', dayNum: 16,
-    allDay: [
-      { summary: "Scooters' Grow Conference", note: 'All week', cat: 'personal' }
-    ],
-    events: [
-      { summary: 'BruVault Event', start: '16:00', end: '22:00', cat: 'client', note: 'Hotel Indigo Omaha Downtown', loc: 'Hotel Indigo Omaha, 1804 Dodge St', locIcon: '📍' }
-    ]
-  },
-  {
-    date: '2026-03-17', label: 'Tue', dayNum: 17,
-    allDay: [
-      { summary: "Scooters' Grow Conference", note: 'All week', cat: 'personal' },
-      { summary: "St. Patrick's Day", note: '', cat: 'personal' }
-    ],
-    events: [
-      { summary: 'Drive Time',        start: '08:00', end: '10:00', cat: 'personal', note: '' },
-      { summary: 'NEF QB Review',     start: '11:00', end: '11:15', cat: 'internal', note: 'Teams meeting', loc: 'Microsoft Teams', locIcon: '💻' },
-      { summary: 'Normal Roasting',   start: '13:00', end: '14:00', cat: 'client',   note: 'Zoom', loc: 'Zoom', locIcon: '💻' },
-      { summary: 'tbd - Rockwall HTO',start: '14:00', end: '15:30', cat: 'client',   note: '' }
-    ]
-  },
-  {
-    date: '2026-03-18', label: 'Wed', dayNum: 18,
-    allDay: [
-      { summary: "Scooters' Grow Conference", note: 'All week', cat: 'personal' }
-    ],
-    events: [
-      { summary: 'Blue Egg', start: '16:00', end: '17:00', cat: 'client', note: 'Zoom', loc: 'Zoom', locIcon: '💻' }
-    ]
-  },
-  {
-    date: '2026-03-19', label: 'Thu', dayNum: 19,
-    allDay: [],
-    events: [
-      { summary: 'Dr. Appt',                        start: '07:30', end: '09:00', cat: 'personal', note: '' },
-      { summary: 'Hazard',                           start: '09:00', end: '10:00', cat: 'internal', note: '' },
-      { summary: 'Jeff Powers: Client Meeting',      start: '10:00', end: '11:00', cat: 'client',   note: 'In-Person or Zoom', loc: '133 N 14th St, Ashland NE', locIcon: '📍' },
-      { summary: 'Jess Lankford — Client Monthly',   start: '12:00', end: '12:45', cat: 'client',   note: 'Zoom', loc: 'Zoom', locIcon: '💻' },
-      { summary: 'Complete Hearing Appt.',           start: '15:00', end: '16:30', cat: 'personal', note: 'Complete Hearing, Lincoln NE', loc: '4200 Pioneer Woods Dr, Lincoln', locIcon: '📍' }
-    ]
-  }
-];
+let CAL_DAYS = [];
+let _gcalConnected = false;
 
-// Legacy alias so nothing breaks
-const CAL_EVENTS = CAL_DAYS[0].events.map(e=>({...e, type:'timed', color: e.cat==='client'?'#b8922a':e.cat==='internal'?'#1a2440':'#888', isClient: e.cat==='client'}));
+// Fetch events from Google Calendar API
+async function fetchCalendarEvents() {
+  try {
+    const res = await fetch(`${QBO_SERVER}/gcal/events?days=4`);
+    if (!res.ok) {
+      if (res.status === 401) { _gcalConnected = false; return false; }
+      throw new Error('Calendar fetch failed');
+    }
+    const data = await res.json();
+    CAL_DAYS = data.days || [];
+
+    // Client-name matching: tag events that match a client business name
+    const clientNames = (DB.clients||[]).map(c => (c.biz||'').toLowerCase()).filter(Boolean);
+    const internalKeywords = ['standup','huddle','internal','sync','team','review','hazard','nef'];
+    CAL_DAYS.forEach(day => {
+      day.events.forEach(ev => {
+        const lower = (ev.summary||'').toLowerCase();
+        if (clientNames.some(cn => lower.includes(cn))) {
+          ev.cat = 'client';
+        } else if (internalKeywords.some(kw => lower.includes(kw))) {
+          ev.cat = 'internal';
+        }
+      });
+    });
+
+    _gcalConnected = true;
+    return true;
+  } catch(e) {
+    console.log('Calendar fetch error:', e.message);
+    return false;
+  }
+}
+
+// Check connection status
+async function gcalCheckStatus() {
+  try {
+    const res = await fetch(`${QBO_SERVER}/gcal/status`);
+    const data = await res.json();
+    _gcalConnected = data.connected;
+    return data.connected;
+  } catch(e) { return false; }
+}
+
+// Connect via OAuth popup
+function gcalConnect() {
+  const popup = window.open(`${QBO_SERVER}/gcal/auth`, 'gcal-auth', 'width=600,height=700');
+  window.addEventListener('message', async function handler(e) {
+    if (e.data && e.data.type === 'gcal-connected') {
+      window.removeEventListener('message', handler);
+      await fetchCalendarEvents();
+      renderCalWidget();
+      renderCalHeaderActions();
+      if(typeof showToast==='function') showToast('Google Calendar connected!','success');
+    }
+  });
+}
+
+// Disconnect
+async function gcalDisconnect() {
+  try {
+    await fetch(`${QBO_SERVER}/gcal/disconnect`, { method: 'POST' });
+    CAL_DAYS = [];
+    _gcalConnected = false;
+    renderCalWidget();
+    renderCalHeaderActions();
+    if(typeof showToast==='function') showToast('Google Calendar disconnected','info');
+  } catch(e) { console.error(e); }
+}
+
+// Update the header actions area
+function renderCalHeaderActions() {
+  const el = document.getElementById('cal-header-actions');
+  if (!el) return;
+  if (_gcalConnected) {
+    el.innerHTML = `<span style="font-size:10px;color:var(--green);font-weight:600;margin-right:8px;">● Synced</span>
+      <a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a>
+      <button class="btn btn-ghost btn-sm" onclick="gcalDisconnect()" style="font-size:10px;color:var(--text-d);">Disconnect</button>`;
+  } else {
+    el.innerHTML = `<button class="btn btn-primary btn-sm" onclick="gcalConnect()">Connect Google Calendar</button>`;
+  }
+}
 
 function fmt12(t){
   const [h,m]=t.split(':').map(Number);
@@ -10145,6 +10183,18 @@ function renderCalWidget(){
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const nowMins = today.getHours()*60 + today.getMinutes();
+
+  // Empty state — not connected or no events
+  if (!CAL_DAYS.length) {
+    document.getElementById('cal-date-label').textContent =
+      `${days[today.getDay()]}, ${months[today.getMonth()]} ${today.getDate()}`;
+    document.getElementById('cal-widget').innerHTML = `<div style="text-align:center;padding:32px 16px;">
+      <div style="font-size:32px;margin-bottom:8px;">📅</div>
+      <div style="font-size:13px;color:var(--text-d);margin-bottom:12px;">${_gcalConnected ? 'No upcoming events' : 'Connect Google Calendar to see your schedule'}</div>
+      ${!_gcalConnected ? `<button class="btn btn-primary btn-sm" onclick="gcalConnect()">Connect Google Calendar</button>` : ''}
+    </div>`;
+    return;
+  }
 
   const totalMeetings = CAL_DAYS.reduce((s,d)=>s+d.events.filter(e=>e.cat==='client'||e.cat==='internal').length,0);
   document.getElementById('cal-date-label').textContent =

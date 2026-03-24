@@ -15,6 +15,7 @@ const { S3Client, ListObjectsV2Command, PutObjectCommand,
         GetObjectCommand, DeleteObjectCommand, CopyObjectCommand,
         HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { google }       = require('googleapis');
 
 const app = express();
 
@@ -248,6 +249,57 @@ function getTokenData(rid) {
 function setTokenData(rid, data) {
   tokenStore[rid] = data;
   saveTokenStore();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Google Calendar — OAuth2 Token Storage
+// ─────────────────────────────────────────────────────────────────
+const GCAL_TOKEN_FILE = path.join(DATA_DIR, 'gcal-tokens.json');
+let gcalTokens = {};
+
+if (fs.existsSync(GCAL_TOKEN_FILE)) {
+  try {
+    gcalTokens = JSON.parse(fs.readFileSync(GCAL_TOKEN_FILE, 'utf8'));
+    console.log('✓ Google Calendar tokens loaded');
+  } catch(e) {
+    console.log('Could not load Google Calendar tokens');
+  }
+}
+
+function saveGcalTokens() {
+  fs.writeFileSync(GCAL_TOKEN_FILE, JSON.stringify(gcalTokens, null, 2));
+}
+
+function getGCalOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+}
+
+async function getGCalClient() {
+  const td = gcalTokens.primary;
+  if (!td) throw new Error('Google Calendar not connected');
+
+  const oauth2 = getGCalOAuth2Client();
+  oauth2.setCredentials(td);
+
+  // Auto-refresh if expired
+  if (td.expiry_date && td.expiry_date < Date.now()) {
+    try {
+      const { credentials } = await oauth2.refreshAccessToken();
+      gcalTokens.primary = credentials;
+      saveGcalTokens();
+      oauth2.setCredentials(credentials);
+    } catch(e) {
+      delete gcalTokens.primary;
+      saveGcalTokens();
+      throw new Error('Google Calendar token expired — please reconnect');
+    }
+  }
+
+  return google.calendar({ version: 'v3', auth: oauth2 });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1760,6 +1812,176 @@ app.get('/pl/health', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// Google Calendar Routes
+// ─────────────────────────────────────────────────────────────────
+
+// Start Google OAuth flow
+app.get('/gcal/auth', (req, res) => {
+  const oauth2 = getGCalOAuth2Client();
+  const url = oauth2.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/calendar.readonly'],
+  });
+  res.redirect(url);
+});
+
+// OAuth callback
+app.get('/gcal/callback', async (req, res) => {
+  try {
+    const oauth2 = getGCalOAuth2Client();
+    const { tokens } = await oauth2.getToken(req.query.code);
+    gcalTokens.primary = tokens;
+    saveGcalTokens();
+    console.log('✓ Google Calendar connected');
+
+    res.send(`<!DOCTYPE html><html><body style="background:#0d1b2a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui;">
+      <div style="text-align:center;color:#fff;">
+        <div style="font-size:48px;margin-bottom:16px;">✅</div>
+        <div style="font-size:20px;font-weight:600;">Connected to Google Calendar!</div>
+        <div style="font-size:14px;color:#8899aa;margin-top:8px;">This window will close automatically…</div>
+      </div>
+      <script>
+        if(window.opener){ window.opener.postMessage({type:'gcal-connected'},'*'); }
+        setTimeout(()=>window.close(), 2000);
+      </script>
+    </body></html>`);
+  } catch(e) {
+    console.error('Google Calendar callback error:', e.message);
+    res.status(500).send('Authorization failed: ' + e.message);
+  }
+});
+
+// Status check
+app.get('/gcal/status', (req, res) => {
+  const connected = !!gcalTokens.primary;
+  res.json({ connected });
+});
+
+// Disconnect
+app.post('/gcal/disconnect', (req, res) => {
+  delete gcalTokens.primary;
+  saveGcalTokens();
+  res.json({ disconnected: true });
+});
+
+// Fetch calendar events
+app.get('/gcal/events', async (req, res) => {
+  try {
+    const calendar = await getGCalClient();
+    const days = parseInt(req.query.days) || 4;
+    const tz = 'America/Chicago';
+
+    // Build time range: start of today → end of (today + days)
+    const now = new Date();
+    const startOfToday = new Date(now.toLocaleDateString('en-US', { timeZone: tz }));
+    const endDate = new Date(startOfToday);
+    endDate.setDate(endDate.getDate() + days);
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: startOfToday.toISOString(),
+      timeMax: endDate.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      timeZone: tz,
+      maxResults: 100,
+    });
+
+    const events = response.data.items || [];
+    const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+    // Group events by date
+    const dayMap = {};
+    for (let i = 0; i < days; i++) {
+      const d = new Date(startOfToday);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      dayMap[dateStr] = {
+        date: dateStr,
+        label: dayLabels[d.getDay()],
+        dayNum: d.getDate(),
+        allDay: [],
+        events: [],
+      };
+    }
+
+    for (const ev of events) {
+      const isAllDay = !!ev.start.date;
+      const dateKey = isAllDay
+        ? ev.start.date
+        : ev.start.dateTime.slice(0, 10);
+
+      // For multi-day all-day events, add to each day in range
+      if (isAllDay && ev.end.date) {
+        const s = new Date(ev.start.date + 'T00:00:00');
+        const e = new Date(ev.end.date + 'T00:00:00');
+        for (let d = new Date(s); d < e; d.setDate(d.getDate() + 1)) {
+          const dk = d.toISOString().slice(0, 10);
+          if (dayMap[dk]) {
+            dayMap[dk].allDay.push({
+              summary: ev.summary || '(No title)',
+              note: ev.description ? ev.description.slice(0, 80) : '',
+              cat: 'personal',
+            });
+          }
+        }
+        continue;
+      }
+
+      const day = dayMap[dateKey];
+      if (!day) continue;
+
+      if (isAllDay) {
+        day.allDay.push({
+          summary: ev.summary || '(No title)',
+          note: '',
+          cat: 'personal',
+        });
+      } else {
+        // Extract HH:MM from dateTime (already in tz thanks to timeZone param)
+        const startDT = new Date(ev.start.dateTime);
+        const endDT = new Date(ev.end.dateTime);
+        const fmtTime = (dt) => {
+          const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(dt);
+          const h = (parts.find(p=>p.type==='hour')||{}).value||'00';
+          const m = (parts.find(p=>p.type==='minute')||{}).value||'00';
+          return `${h.padStart(2,'0')}:${m.padStart(2,'0')}`;
+        };
+
+        // Location handling
+        const loc = ev.location || '';
+        const isZoom = /zoom\.us|zoom meeting/i.test(loc) || /zoom/i.test(ev.summary || '');
+        const isTeams = /teams\.microsoft|teams meeting/i.test(loc);
+        const isVirtual = isZoom || isTeams;
+
+        day.events.push({
+          summary: ev.summary || '(No title)',
+          start: fmtTime(startDT),
+          end: fmtTime(endDT),
+          cat: 'personal',
+          note: isVirtual ? (isZoom ? 'Zoom' : 'Teams meeting') : (loc ? loc.slice(0, 60) : ''),
+          loc: loc ? loc.slice(0, 80) : '',
+          locIcon: isVirtual ? '💻' : (loc ? '📍' : ''),
+          zoom: isZoom && ev.hangoutLink ? ev.hangoutLink : (isZoom && loc.match(/https:\/\/[^\s]+/) ? loc.match(/https:\/\/[^\s]+/)[0] : ''),
+        });
+      }
+    }
+
+    res.json({
+      days: Object.values(dayMap),
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch(e) {
+    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
+      return res.status(401).json({ error: 'not_connected' });
+    }
+    console.error('Google Calendar fetch error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
@@ -1769,5 +1991,6 @@ app.listen(PORT, '0.0.0.0', () => {
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
   const b2Ok  = b2Ready() ? '✓' : '✗';
   const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
-  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}  |  AI: ${aiOk}`);
+  const gcalOk = gcalTokens.primary ? '✓' : '✗';
+  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
 });

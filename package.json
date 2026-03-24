@@ -16,6 +16,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
+    "googleapis": "^171.4.0",
     "intuit-oauth": "^4.2.2",
     "multer": "^2.1.1",
     "node-quickbooks": "^2.0.48"
