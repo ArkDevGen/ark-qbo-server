@@ -3185,10 +3185,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;padding-top:8px;">Memo</label>
                 <textarea id="qbo-gje-memo" class="field-input" rows="2" placeholder="Description for this journal entry…" style="resize:vertical;font-family:inherit;font-size:12px;"></textarea>
               </div>
-              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;margin-bottom:14px;">
-                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;">Location</label>
-                <select id="qbo-gje-location" class="field-input" style="font-size:12px;"><option value="">None</option><option disabled>— Connect QBO to load —</option></select>
-              </div>
 
               <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">Line Items</div>
               <div style="overflow-x:auto;">
@@ -3200,6 +3196,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                       <th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:90px;">Debit</th>
                       <th style="padding:6px 8px;text-align:right;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:90px;">Credit</th>
                       <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:120px;">Class</th>
+                      <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:120px;">Location</th>
                       <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);">Description</th>
                       <th style="background:var(--surface2);width:24px;"></th>
                     </tr>
@@ -20139,12 +20136,7 @@ async function qboLoadAccountsAndVendors() {
     try {
       const deptData = await qboCall('getDepartments');
       qboLiveDepts = deptData.departments || [];
-      // Populate GJE location dropdown
-      const gjeLocation = document.getElementById('qbo-gje-location');
-      if (gjeLocation) {
-        gjeLocation.innerHTML = '<option value="">None</option>' +
-          qboLiveDepts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      }
+      qboRebuildLocationSelects();
       // Populate expense location dropdown
       const expLocation = document.getElementById('qbo-exp-location');
       if (expLocation) {
@@ -20173,7 +20165,7 @@ function qboRebuildAccountSelects() {
   if (!qboLiveAccounts.length) return;
   const options = '<option value="">Account…</option>' +
     qboLiveAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-  document.querySelectorAll('#qbo-gje-body select:not(.gje-class-sel)').forEach(sel => {
+  document.querySelectorAll('#qbo-gje-body select:not(.gje-class-sel):not(.gje-loc-sel)').forEach(sel => {
     const current = sel.value;
     sel.innerHTML = options;
     sel.value = current; // restore selection
@@ -20186,6 +20178,16 @@ function qboRebuildClassSelects() {
   document.querySelectorAll('#qbo-gje-body .gje-class-sel').forEach(sel => {
     const current = sel.value;
     sel.innerHTML = classOpts;
+    sel.value = current;
+  });
+}
+
+function qboRebuildLocationSelects() {
+  const locOpts = '<option value="">None</option>' +
+    qboLiveDepts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  document.querySelectorAll('#qbo-gje-body .gje-loc-sel').forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = locOpts;
     sel.value = current;
   });
 }
@@ -20311,6 +20313,12 @@ function qboAddGJELine() {
         ${qboLiveClasses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
       </select>
     </td>
+    <td style="padding:4px 6px;">
+      <select class="gje-loc-sel" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 6px;border-radius:var(--radius-sm);font-family:'DM Mono',monospace;">
+        <option value="">None</option>
+        ${qboLiveDepts.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}
+      </select>
+    </td>
     <td style="padding:4px 6px;"><input type="text" placeholder="Line description…" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:var(--radius-sm);font-family:inherit;"></td>
     <td style="padding:4px 6px;text-align:center;"><button onclick="qboRemoveGJELine(${n})" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;transition:all .15s;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-d)'">✕</button></td>
   `;
@@ -20344,7 +20352,7 @@ function qboRecalc() {
 function qboClearGJE() {
   const tbody = document.getElementById('qbo-gje-body');
   if (tbody) tbody.innerHTML = '';
-  ['qbo-gje-date','qbo-gje-ref','qbo-gje-memo','qbo-gje-location'].forEach(id => {
+  ['qbo-gje-date','qbo-gje-ref','qbo-gje-memo'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const today = new Date().toISOString().slice(0, 10);
@@ -20358,13 +20366,16 @@ function qboClearGJE() {
 function qboPreviewGJE() {
   const lines = [];
   document.querySelectorAll('#qbo-gje-body tr').forEach(tr => {
-    const acctSel  = tr.querySelector('select:not(.gje-class-sel)');
+    const acctSel  = tr.querySelector('select:not(.gje-class-sel):not(.gje-loc-sel)');
     const classSel = tr.querySelector('.gje-class-sel');
+    const locSel   = tr.querySelector('.gje-loc-sel');
     const inputs   = tr.querySelectorAll('input');
     const acctId   = acctSel?.value || '';
     const acctName = acctSel?.options[acctSel?.selectedIndex]?.text || '';
     const classId  = classSel?.value || '';
     const className= classSel?.options[classSel?.selectedIndex]?.text || '';
+    const locId    = locSel?.value || '';
+    const locName  = locSel?.options[locSel?.selectedIndex]?.text || '';
     const debit    = parseFloat(inputs[0]?.value || 0) || 0;
     const credit   = parseFloat(inputs[1]?.value || 0) || 0;
     const desc     = inputs[2]?.value || '';
@@ -20374,6 +20385,7 @@ function qboPreviewGJE() {
         AccountRef: { value: acctId, name: acctName }
       };
       if (classId) lineDetail.ClassRef = { value: classId, name: className };
+      if (locId) lineDetail.DepartmentRef = { value: locId, name: locName };
       lines.push({
         DetailType: 'JournalEntryLineDetail',
         Amount: debit || credit,
@@ -20383,16 +20395,12 @@ function qboPreviewGJE() {
     }
   });
   const ref = document.getElementById('qbo-gje-ref')?.value || '';
-  const locationSel = document.getElementById('qbo-gje-location');
-  const locationId = locationSel?.value || '';
-  const locationName = locationSel?.options[locationSel?.selectedIndex]?.text || '';
   const payload = {
     TxnDate: document.getElementById('qbo-gje-date')?.value,
     DocNumber: ref,
     PrivateNote: document.getElementById('qbo-gje-memo')?.value,
     Line: lines
   };
-  if (locationId) payload.DepartmentRef = { value: locationId, name: locationName };
   qboLog('info', `Preview: <strong>${lines.length} line item${lines.length!==1?'s':''}</strong> · ${ref||'no ref'}`);
   console.log('QBO JournalEntry Payload:', JSON.stringify(payload, null, 2));
   showToast('JSON payload logged to console (F12)');
@@ -20406,13 +20414,16 @@ async function qboPushGJE() {
 
   const lines = [];
   document.querySelectorAll('#qbo-gje-body tr').forEach(tr => {
-    const acctSel  = tr.querySelector('select:not(.gje-class-sel)');
+    const acctSel  = tr.querySelector('select:not(.gje-class-sel):not(.gje-loc-sel)');
     const classSel = tr.querySelector('.gje-class-sel');
+    const locSel   = tr.querySelector('.gje-loc-sel');
     const inputs   = tr.querySelectorAll('input');
     const acctId   = acctSel?.value || '';
     const acctName = acctSel?.options[acctSel?.selectedIndex]?.text || '';
     const classId  = classSel?.value || '';
     const className= classSel?.options[classSel?.selectedIndex]?.text || '';
+    const locId    = locSel?.value || '';
+    const locName  = locSel?.options[locSel?.selectedIndex]?.text || '';
     const debit    = parseFloat(inputs[0]?.value || 0) || 0;
     const credit   = parseFloat(inputs[1]?.value || 0) || 0;
     const desc     = inputs[2]?.value || '';
@@ -20422,6 +20433,7 @@ async function qboPushGJE() {
         AccountRef: { value: acctId, name: acctName }
       };
       if (classId) lineDetail.ClassRef = { value: classId, name: className };
+      if (locId) lineDetail.DepartmentRef = { value: locId, name: locName };
       lines.push({
         DetailType: 'JournalEntryLineDetail',
         Amount: debit || credit,
@@ -20434,16 +20446,12 @@ async function qboPushGJE() {
   if (!lines.length) { showToast('Add at least one line item with an account selected'); return; }
 
   const ref = document.getElementById('qbo-gje-ref')?.value || ('ARK-' + Date.now().toString().slice(-6));
-  const locationSel = document.getElementById('qbo-gje-location');
-  const locationId = locationSel?.value || '';
-  const locationName = locationSel?.options[locationSel?.selectedIndex]?.text || '';
   const payload = {
     TxnDate:     document.getElementById('qbo-gje-date')?.value || new Date().toISOString().slice(0,10),
     DocNumber:   ref,
     PrivateNote: document.getElementById('qbo-gje-memo')?.value || '',
     Line:        lines,
   };
-  if (locationId) payload.DepartmentRef = { value: locationId, name: locationName };
 
   const btn = document.getElementById('qbo-gje-push-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Pushing...'; }
