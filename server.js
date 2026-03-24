@@ -424,6 +424,30 @@ app.post('/qbo/api', async (req, res) => {
       res.json({ success: true, id: data.Id, txnDate: data.TxnDate });
     });
 
+  // ── Action: Get Classes ──────────────────────────────────────
+  } else if (action === 'getClasses') {
+    qbo.findClasses({ Active: true }, (err, data) => {
+      if (err) return res.status(500).json({ error: err.message || 'Failed to fetch classes' });
+      const classes = (data.QueryResponse?.Class || []).map(c => ({
+        id:   c.Id,
+        name: c.FullyQualifiedName || c.Name,
+      }));
+      console.log(`  Returned ${classes.length} classes`);
+      res.json({ success: true, classes });
+    });
+
+  // ── Action: Get Departments (Locations) ─────────────────────
+  } else if (action === 'getDepartments') {
+    qbo.findDepartments({ Active: true }, (err, data) => {
+      if (err) return res.status(500).json({ error: err.message || 'Failed to fetch departments' });
+      const departments = (data.QueryResponse?.Department || []).map(d => ({
+        id:   d.Id,
+        name: d.FullyQualifiedName || d.Name,
+      }));
+      console.log(`  Returned ${departments.length} departments`);
+      res.json({ success: true, departments });
+    });
+
   // ── Action: Get Vendors ───────────────────────────────────────
   } else if (action === 'getVendors') {
     qbo.findVendors({ Active: true }, (err, data) => {
