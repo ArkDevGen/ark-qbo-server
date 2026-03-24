@@ -188,8 +188,9 @@ const ALLOWED_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'tif', 'tiff', 'bmp', 'webp',
   // Archives
   'zip',
-  // Accounting
-  'qbx', 'qbb', 'iif', 'ofx', 'qfx', 'ach',
+  // Accounting / QuickBooks Desktop
+  'qbw', 'qbb', 'qbm', 'qbo', 'qbx', 'qba', 'qby', 'qbj',
+  'iif', 'ofx', 'qfx', 'ach', 'qwc', 'tlg', 'nd',
 ]);
 
 function isAllowedFile(filename) {
