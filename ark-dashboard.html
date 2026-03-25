@@ -21114,6 +21114,57 @@ function qboClearActivity() {
 let _batchSelectedIds = new Set();
 let _batchSearchQuery = '';
 
+// Auto-fill blank client fields from QBO CompanyInfo (fill blanks only, never overwrite)
+function batchEnrichClient(client, ci) {
+  if (!ci || !client) return;
+  const fill = (field, val) => { if (!client[field] && val) client[field] = val.trim(); };
+
+  // Company name
+  fill('biz', ci.CompanyName);
+  fill('nameQb', ci.CompanyName);
+
+  // Address
+  const addr = ci.CompanyAddr || {};
+  fill('addrStreet', addr.Line1);
+  fill('addrCity', addr.City);
+  fill('addrState', addr.CountrySubDivisionCode);
+  fill('addrZip', addr.PostalCode);
+
+  // Contact
+  const phone = ci.PrimaryPhone?.FreeFormNumber;
+  fill('phone', phone);
+  const email = ci.Email?.Address || ci.CompanyEmailAddr;
+  fill('email', email);
+
+  // Fiscal year end — QBO stores as month name (e.g. "December") or number
+  if (!client.fye && ci.FiscalYearStartMonth) {
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const startIdx = parseInt(ci.FiscalYearStartMonth) || 0;
+    if (startIdx >= 1 && startIdx <= 12) {
+      // FYE is the month before the start month (or December if start is January)
+      const fyeIdx = startIdx === 1 ? 11 : startIdx - 2;
+      client.fye = months[fyeIdx];
+    }
+  }
+
+  // State (from address if not set)
+  fill('state', addr.CountrySubDivisionCode);
+
+  // EIN — QBO stores as CompanyInfo.EIN (if available)
+  // Note: only fill if blank, and QBO may not always expose this
+  if (ci.EIN) fill('ein', ci.EIN);
+
+  let enriched = [];
+  if (ci.CompanyName && !client.biz) enriched.push('name');
+  if (addr.Line1) enriched.push('address');
+  if (phone) enriched.push('phone');
+  if (email) enriched.push('email');
+  if (ci.FiscalYearStartMonth) enriched.push('FYE');
+  if (enriched.length) {
+    qboLog('info', `Auto-filled ${enriched.join(', ')} for <strong>${client.biz || client.nameQb || 'client'}</strong>`);
+  }
+}
+
 function renderBatchConnect() {
   const allQbo = (DB.clients || []).filter(c => c.qbType === 'QBO');
   const linked = allQbo.filter(c => c.qboRealmId);
@@ -21282,20 +21333,23 @@ function batchConnectClient(clientId) {
       });
     } catch(e) { console.warn('Link call failed:', e); }
 
-    // Fetch company name and store
+    // Fetch company info and auto-fill blank client fields
     try {
       const info = await qboCall('getCompanyInfo', {}, realmId);
-      const companyName = info?.CompanyInfo?.CompanyName || info?.companyInfo?.CompanyName || '';
+      const ci = info?.CompanyInfo || info?.companyInfo || {};
+      const companyName = ci.CompanyName || '';
       if (companyName) {
         await fetch(`${QBO_SERVER}/qbo/update-company-name`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ realmId, companyName })
         });
-        // Update local cache
         if (!qboAllCompanies[realmId]) qboAllCompanies[realmId] = {};
         qboAllCompanies[realmId].companyName = companyName;
       }
-    } catch(e) { console.warn('Company name fetch failed:', e); }
+      // Auto-fill blank fields only (don't overwrite existing data)
+      batchEnrichClient(client, ci);
+      DB.save();
+    } catch(e) { console.warn('Company info fetch failed:', e); }
 
     // Refresh status to update qboAllCompanies
     try {
@@ -21319,6 +21373,14 @@ async function batchLinkToExisting(clientId, realmId) {
       body: JSON.stringify({ realmId, clientId })
     });
     client.qboRealmId = realmId;
+
+    // Auto-enrich blank fields from QBO company info
+    try {
+      const info = await qboCall('getCompanyInfo', {}, realmId);
+      const ci = info?.CompanyInfo || info?.companyInfo || {};
+      batchEnrichClient(client, ci);
+    } catch(e) { console.warn('Enrich failed:', e); }
+
     DB.save();
     showToast(`✓ ${client.biz || 'Client'} linked to ${qboAllCompanies[realmId]?.companyName || realmId}`);
     qboLog('success', `Quick-linked <strong>${client.biz || clientId}</strong> → ${qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…'}`);
