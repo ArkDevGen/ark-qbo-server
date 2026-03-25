@@ -4476,7 +4476,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
 
           <hr class="section-divider">
-          <div class="section-label">Alternate Names</div>
+          <div class="section-label">Names</div>
+          <div class="fg">
+            <label>Business Legal Name <span style="font-size:11px;font-weight:400;color:var(--text-d);">— legal entity name for tax filings</span></label>
+            <input id="mc-name-legal" class="field-input" placeholder="e.g. 6 Java Boys - Wahoo, LLC">
+          </div>
           <div class="fg">
             <label>Billing Name <span style="font-size:11px;font-weight:400;color:var(--text-d);">— name used on invoices &amp; billing</span></label>
             <input id="mc-name-billing" class="field-input" placeholder="Leave blank if same as business name">
@@ -9089,6 +9093,7 @@ function openEditClient(id){
   document.getElementById('mc-bank-pass').value=c.bankPass||'';
   // ensure password field is masked on load
   const bpf=document.getElementById('mc-bank-pass'); if(bpf) bpf.type='password';
+  const nlEl=document.getElementById('mc-name-legal'); if(nlEl) nlEl.value=c.nameLegal||'';
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
   document.getElementById('mc-st-nextdue').value=c.stNextdue||'';
@@ -9199,8 +9204,7 @@ function saveClient(){
     franchiseBrand: document.getElementById('mc-franchise-brand')?.value || '',
     qbdUser:   (document.getElementById('mc-qbd-user')?.value||'').trim(),
     qbdPass:   document.getElementById('mc-qbd-pass')?.value||'',
-    nameBilling: document.getElementById('mc-name-billing')?.value.trim()||'',
-    nameQb:      document.getElementById('mc-name-qb')?.value.trim()||'',
+    nameLegal:    document.getElementById('mc-name-legal')?.value.trim()||'',
     nameBilling:  document.getElementById('mc-name-billing')?.value.trim()||'',
     nameQb:       document.getElementById('mc-name-qb')?.value.trim()||'',
     biennialId:   document.getElementById('mc-biennial-id')?.value.trim()||'',
@@ -22734,8 +22738,9 @@ function w9ovApplyOtherText(val) {
 // ── ARK field definitions — what we can map to ────────────────────
 const IMPORT_ARK_FIELDS = [
   // Core identity
-  { key:'biz',            label:'Client / Business Name',   required:true,  tier:'A' },
-  { key:'nameBilling',    label:'Business Legal Name',      required:false, tier:'A' },
+  { key:'biz',            label:'Client Name',              required:true,  tier:'A' },
+  { key:'nameLegal',      label:'Business Legal Name',      required:false, tier:'A' },
+  { key:'nameBilling',    label:'Billing Name',             required:false, tier:'A' },
   { key:'nameQb',         label:'QuickBooks Name',          required:false, tier:'A' },
   { key:'entity',         label:'Entity Type',              required:false, tier:'A', enum:['LLC','S-Corp','C-Corp','Partnership','Non-Profit','Sole Proprietor'] },
   { key:'status',         label:'Client Status',            required:false, tier:'A', enum:['Active','Lead','Prospect','Inactive'], default:'Active' },
@@ -23017,8 +23022,9 @@ Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank ac
 // ── Fallback heuristic mapping ─────────────────────────────────────
 function importHeuristicMapping() {
   const heuristics = {
-    'business name':   'biz',   'company':    'biz',    'client name': 'biz',
-    'business legal name': 'nameBilling', 'legal name': 'nameBilling', 'billing name': 'nameBilling',
+    'client name':     'biz',   'business name':'biz',  'company':     'biz',
+    'business legal name': 'nameLegal',  'legal name':  'nameLegal',
+    'billing name':    'nameBilling',
     'qb name':    'nameQb',   'realm id': 'qboRealmId', 'qbo realm': 'qboRealmId',
     'brand': 'franchiseBrand', 'franchise brand': 'franchiseBrand',
     'entity':          'entity', 'entity type':  'entity',
@@ -23472,6 +23478,7 @@ function importCommit() {
     const client = {
       id:          uid(),
       biz:         r.biz || '',
+      nameLegal:   r.nameLegal || '',
       nameBilling: r.nameBilling || '',
       nameQb:      r.nameQb || '',
       entity:      r.entity || '',
