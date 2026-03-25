@@ -23644,19 +23644,22 @@ let _mcfClientId = null;
 let _mcfPrefix = '';
 let _mcfFiles = [];
 
+// Client modal file browser — uses ShareFile via same /files/* routes
+// For now, client files tab navigates ShareFile directly (no client-scoped path mapping)
+let _mcfFolderId = 'home';
+let _mcfBreadcrumb = [{ id: 'home', name: 'Files' }];
+
 function mcfInit(clientId) {
   _mcfClientId = clientId;
-  _mcfPrefix = clientId ? `clients/${clientId}/` : '';
+  _mcfFolderId = 'home'; // Will be mapped to client-specific folder later
+  _mcfBreadcrumb = [{ id: 'home', name: 'Files' }];
 
-  // Hide Files tab entirely if no permission
   const tab = document.getElementById('mc-tab-files');
   if (tab) {
     const p = getPerms(currentUser);
-    const show = p._isAdmin || p.canViewFiles !== false;
-    tab.style.display = show ? '' : 'none';
+    tab.style.display = (p._isAdmin || p.canViewFiles !== false) ? '' : 'none';
   }
 
-  // Hide upload/folder buttons based on perms
   const p = getPerms(currentUser);
   const isAdmin = p._isAdmin;
   const btnUp = document.getElementById('mcf-btn-upload');
@@ -23672,23 +23675,16 @@ async function mcfLoadFiles() {
   list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>';
 
   try {
-    const resp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_mcfPrefix) + '&delimiter=/');
+    const resp = await authFetch(fcServerUrl() + '/files/list?folderId=' + encodeURIComponent(_mcfFolderId));
     const data = await resp.json();
     if (!data.success) throw new Error(data.error);
 
     _mcfFiles = [];
-
     (data.folders || []).forEach(f => {
-      _mcfFiles.push({ type: 'folder', key: f.prefix, name: f.name, size: 0, modified: null });
+      _mcfFiles.push({ type: 'folder', id: f.id, name: f.name, size: 0, modified: null });
     });
-
     (data.files || []).forEach(f => {
-      if (f.size === 0 && f.key.endsWith('/')) return;
-      if (f.key === _mcfPrefix) return;
-      _mcfFiles.push({
-        type: 'file', key: f.key, name: f.key.split('/').pop(),
-        size: f.size, modified: f.modified,
-      });
+      _mcfFiles.push({ type: 'file', id: f.id, name: f.name, size: f.size, modified: f.modified });
     });
 
     mcfRender();
@@ -23702,19 +23698,15 @@ function mcfRender() {
   const search = (document.getElementById('mcf-search').value || '').toLowerCase();
   let items = search ? _mcfFiles.filter(f => f.name.toLowerCase().includes(search)) : [..._mcfFiles];
 
-  // Update breadcrumb
+  // Breadcrumb
   const bc = document.getElementById('mcf-breadcrumb');
-  const basePrefix = _mcfClientId ? `clients/${_mcfClientId}/` : '';
-  const relPath = _mcfPrefix.replace(basePrefix, '');
-  const parts = relPath.split('/').filter(Boolean);
-  let bcHtml = `<span style="cursor:pointer;color:var(--accent);" onclick="mcfNav('${basePrefix}')">📁 Files</span>`;
-  let path = basePrefix;
-  parts.forEach((p, i) => {
-    path += p + '/';
-    bcHtml += ` <span style="color:var(--text-d);">›</span> `;
-    bcHtml += i === parts.length - 1
-      ? `<span style="font-weight:600;">${p}</span>`
-      : `<span style="cursor:pointer;color:var(--accent);" onclick="mcfNav('${path}')">${p}</span>`;
+  let bcHtml = '';
+  _mcfBreadcrumb.forEach((crumb, i) => {
+    const isLast = i === _mcfBreadcrumb.length - 1;
+    if (i > 0) bcHtml += ` <span style="color:var(--text-d);">›</span> `;
+    bcHtml += isLast
+      ? `<span style="font-weight:600;">${i === 0 ? '📁 ' : ''}${crumb.name}</span>`
+      : `<span style="cursor:pointer;color:var(--accent);" onclick="mcfNavTo(${i})">${i === 0 ? '📁 ' : ''}${crumb.name}</span>`;
   });
   bc.innerHTML = bcHtml;
 
@@ -23733,15 +23725,16 @@ function mcfRender() {
     const isFolder = f.type === 'folder';
     const canDl = isAdmin || p.canDownloadFiles !== false;
     const canDel = isAdmin || p.canDeleteFiles === true;
+    const eid = (f.id || '').replace(/'/g, "\\'");
 
     const actions = isFolder
-      ? (canDel ? `<span style="cursor:pointer;font-size:12px;" onclick="event.stopPropagation();mcfDeleteFolder('${f.key}')" title="Delete">🗑</span>` : '')
-      : `${canDl ? `<span style="cursor:pointer;font-size:12px;" onclick="event.stopPropagation();fcDownload('${f.key}')" title="Download">⬇</span>` : ''}
-         ${canDel ? `<span style="cursor:pointer;font-size:12px;margin-left:4px;" onclick="event.stopPropagation();mcfDelete('${f.key}','${f.name}')" title="Delete">🗑</span>` : ''}`;
+      ? (canDel ? `<span style="cursor:pointer;font-size:12px;" onclick="event.stopPropagation();mcfDeleteFolder('${eid}','${f.name.replace(/'/g, "\\'")}')" title="Delete">🗑</span>` : '')
+      : `${canDl ? `<span style="cursor:pointer;font-size:12px;" onclick="event.stopPropagation();fcDownload('${eid}')" title="Download">⬇</span>` : ''}
+         ${canDel ? `<span style="cursor:pointer;font-size:12px;margin-left:4px;" onclick="event.stopPropagation();mcfDelete('${eid}','${f.name.replace(/'/g, "\\'")}')" title="Delete">🗑</span>` : ''}`;
 
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);cursor:${isFolder?'pointer':'default'};font-size:12px;"
       onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background=''"
-      ${isFolder ? `onclick="mcfNav('${f.key}')"` : ''}>
+      ${isFolder ? `onclick="mcfNav('${eid}','${f.name.replace(/'/g, "\\'")}')"` : ''}>
       <span style="font-size:16px;">${isFolder ? '📁' : fcFileIcon(f.name)}</span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isFolder?'600':'400'};">${f.name}</span>
       <span style="color:var(--text-d);font-size:11px;min-width:55px;text-align:right;">${isFolder ? '' : fcFormatSize(f.size)}</span>
@@ -23751,8 +23744,16 @@ function mcfRender() {
   }).join('');
 }
 
-function mcfNav(prefix) {
-  _mcfPrefix = prefix;
+function mcfNav(folderId, folderName) {
+  _mcfFolderId = folderId;
+  _mcfBreadcrumb.push({ id: folderId, name: folderName || folderId });
+  document.getElementById('mcf-search').value = '';
+  mcfLoadFiles();
+}
+
+function mcfNavTo(index) {
+  _mcfBreadcrumb = _mcfBreadcrumb.slice(0, index + 1);
+  _mcfFolderId = _mcfBreadcrumb[index].id;
   document.getElementById('mcf-search').value = '';
   mcfLoadFiles();
 }
@@ -23771,7 +23772,7 @@ async function mcfHandleFiles(fileList) {
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('folder', _mcfPrefix);
+      form.append('folderId', _mcfFolderId);
       form.append('uploadedBy', userName);
       const resp = await authFetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
       const data = await resp.json();
@@ -23780,7 +23781,7 @@ async function mcfHandleFiles(fileList) {
     } catch (e) { showToast('❌ ' + e.message, 'error'); }
   }
   document.getElementById('mcf-file-input').value = '';
-  if (uploaded) { showToast(`✓ ${uploaded} file(s) uploaded`); _fcAllFiles = []; mcfLoadFiles(); }
+  if (uploaded) { showToast(`✓ ${uploaded} file(s) uploaded`); mcfLoadFiles(); }
 }
 
 async function mcfNewFolder() {
@@ -23792,28 +23793,24 @@ async function mcfNewFolder() {
     btnLabel: 'Create Folder',
   });
   if (!name) return;
-  const safeName = name.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
 
-  // Check for duplicate folder name
-  const duplicate = _mcfFiles.find(f => f.type === 'folder' && f.name.toLowerCase() === safeName.toLowerCase());
-  if (duplicate) {
-    showToast(`❌ A folder named "${safeName}" already exists`, 'error');
-    return;
-  }
-  authFetch(fcServerUrl() + '/files/folder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prefix: _mcfPrefix + safeName + '/' }),
-  }).then(r => r.json()).then(d => {
-    if (d.success) { showToast(`✓ Folder "${safeName}" created`); mcfLoadFiles(); }
-    else showToast('❌ ' + d.error, 'error');
-  }).catch(e => showToast('❌ ' + e.message, 'error'));
+  const duplicate = _mcfFiles.find(f => f.type === 'folder' && f.name.toLowerCase() === name.toLowerCase());
+  if (duplicate) { showToast(`❌ A folder named "${name}" already exists`, 'error'); return; }
+
+  try {
+    const resp = await authFetch(fcServerUrl() + '/files/folder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentId: _mcfFolderId, name }),
+    });
+    const data = await resp.json();
+    if (data.success) { showToast(`✓ Folder "${name}" created`); mcfLoadFiles(); }
+    else showToast('❌ ' + data.error, 'error');
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
 }
 
-async function mcfDelete(key, name) {
+async function mcfDelete(id, name) {
   const ok = await fcdShow({
-    title: 'Delete File',
-    mode: 'danger',
+    title: 'Delete File', mode: 'danger',
     confirmText: `"${name}" will be permanently deleted.`,
     btnLabel: 'Delete File',
   });
@@ -23821,47 +23818,44 @@ async function mcfDelete(key, name) {
   try {
     const resp = await authFetch(fcServerUrl() + '/files/delete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ id }),
     });
     const data = await resp.json();
-    if (data.success) { showToast(`✓ Deleted ${name}`); _fcAllFiles = []; mcfLoadFiles(); }
+    if (data.success) { showToast(`✓ Deleted ${name}`); mcfLoadFiles(); }
     else showToast('❌ ' + data.error, 'error');
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
 }
 
-async function mcfDeleteFolder(prefix) {
-  const name = prefix.split('/').filter(Boolean).pop();
+async function mcfDeleteFolder(id, name) {
   const ok = await fcdShow({
-    title: 'Delete Folder',
-    mode: 'danger',
+    title: 'Delete Folder', mode: 'danger',
     confirmText: `Folder "${name}" and all its contents will be permanently deleted.`,
     btnLabel: 'Delete Folder',
   });
   if (!ok) return;
   try {
-    const lr = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
-    const ld = await lr.json();
-    const allKeys = [...(ld.files || []).map(f => f.key), prefix];
-    for (const k of allKeys) {
-      await authFetch(fcServerUrl() + '/files/delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: k }),
-      });
-    }
-    showToast(`✓ Deleted folder ${name}`); _fcAllFiles = []; mcfLoadFiles();
+    const resp = await authFetch(fcServerUrl() + '/files/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    const data = await resp.json();
+    if (data.success) { showToast(`✓ Deleted folder ${name}`); mcfLoadFiles(); }
+    else showToast('❌ ' + data.error, 'error');
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// FILE CENTER — Cloud file management backed by Backblaze B2
+// FILE CENTER — Cloud file management backed by ShareFile
 // ═══════════════════════════════════════════════════════════════════
 
 let _fcFiles = [];          // All files from server
-let _fcCurrentPrefix = '';  // Current folder path
+let _fcCurrentFolderId = 'home';  // Current ShareFile folder ID
+let _fcBreadcrumb = [{ id: 'home', name: 'All Files' }]; // Breadcrumb trail
 let _fcViewMode = 'list';   // 'list' or 'grid'
 let _fcSortKey = 'name';    // Current sort column
 let _fcSortAsc = true;      // Sort direction
 let _fcAllFiles = [];       // Unfiltered master list
+let _sfConnected = false;   // ShareFile connection status
 
 // ── Helpers ──
 function fcFormatSize(bytes) {
@@ -23919,52 +23913,69 @@ async function fcInit() {
   document.getElementById('fc-btn-upload').style.display    = (isAdmin || p.canUploadFiles !== false) ? '' : 'none';
   document.getElementById('fc-btn-newfolder').style.display = (isAdmin || p.canUploadFiles !== false) ? '' : 'none';
 
-  _fcCurrentPrefix = '';
+  // Check ShareFile connection
+  try {
+    const sfResp = await authFetch(fcServerUrl() + '/sharefile/status');
+    const sfData = await sfResp.json();
+    _sfConnected = sfData.connected;
+  } catch(e) { _sfConnected = false; }
+
+  if (!_sfConnected) {
+    const list = document.getElementById('fc-file-list');
+    list.innerHTML = `<div style="padding:60px 20px;text-align:center;">
+      <div style="font-size:42px;margin-bottom:12px;">🔗</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;">Connect to ShareFile</div>
+      <div style="font-size:12px;color:var(--text-d);margin-bottom:16px;">Link your ShareFile account to browse and manage files.</div>
+      <button onclick="fcConnectShareFile()" class="btn btn-primary" style="font-size:13px;padding:10px 24px;">Connect ShareFile</button>
+    </div>`;
+    return;
+  }
+
+  _fcCurrentFolderId = 'home';
+  _fcBreadcrumb = [{ id: 'home', name: 'All Files' }];
   await fcLoadFiles();
   fcSetupDragDrop();
 }
 
-// ── Load all files from server ──
+// ── Connect ShareFile via OAuth popup ──
+function fcConnectShareFile() {
+  const popup = window.open(fcServerUrl() + '/sharefile/auth', 'ShareFileAuth', 'width=600,height=700');
+  window.addEventListener('message', async function handler(e) {
+    if (e.data?.type === 'sharefile-connected') {
+      window.removeEventListener('message', handler);
+      showToast('✓ ShareFile connected!');
+      _sfConnected = true;
+      await fcInit();
+    }
+  });
+}
+
+// ── Load files from ShareFile folder ──
 async function fcLoadFiles() {
   const list = document.getElementById('fc-file-list');
   list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-size:13px;">Loading files…</div>';
 
   try {
-    const resp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(_fcCurrentPrefix) + '&delimiter=/');
+    const resp = await authFetch(fcServerUrl() + '/files/list?folderId=' + encodeURIComponent(_fcCurrentFolderId));
     const data = await resp.json();
 
     if (!data.success) throw new Error(data.error || 'Failed to load files');
-
-    // Also load all files for search/stats (cached)
-    if (_fcAllFiles.length === 0) {
-      try {
-        const allResp = await authFetch(fcServerUrl() + '/files/all');
-        const allData = await allResp.json();
-        if (allData.success) _fcAllFiles = allData.files;
-      } catch (e) { /* non-critical */ }
-    }
 
     _fcFiles = [];
 
     // Add folders first
     (data.folders || []).forEach(f => {
-      _fcFiles.push({ type: 'folder', key: f.prefix, name: f.name, size: 0, modified: null });
+      _fcFiles.push({ type: 'folder', id: f.id, name: f.name, size: 0, modified: null });
     });
 
-    // Add files (skip 0-byte directory placeholders)
+    // Add files
     (data.files || []).forEach(f => {
-      if (f.size === 0 && f.key.endsWith('/')) return;
-      // Also skip if key === current prefix (the folder placeholder itself)
-      if (f.key === _fcCurrentPrefix) return;
-      const parts = f.key.split('/');
       _fcFiles.push({
         type: 'file',
-        key: f.key,
-        name: parts[parts.length - 1],
+        id: f.id,
+        name: f.name,
         size: f.size,
         modified: f.modified,
-        clientId: parts[0] === 'clients' ? parts[1] : null,
-        category: parts[0] === 'clients' ? (parts[2] || '') : '',
       });
     });
 
@@ -23985,19 +23996,15 @@ async function fcLoadFiles() {
 // ── Render breadcrumb ──
 function fcRenderBreadcrumb() {
   const bc = document.getElementById('fc-breadcrumb');
-  const parts = _fcCurrentPrefix.split('/').filter(Boolean);
 
-  let html = '<span style="cursor:pointer;color:var(--accent);font-weight:600;" onclick="fcNavigate(\'\')">📁 All Files</span>';
-
-  let path = '';
-  parts.forEach((p, i) => {
-    path += p + '/';
-    const isLast = i === parts.length - 1;
-    html += ' <span style="color:var(--text-d);margin:0 2px;">›</span> ';
+  let html = '';
+  _fcBreadcrumb.forEach((crumb, i) => {
+    const isLast = i === _fcBreadcrumb.length - 1;
+    if (i > 0) html += ' <span style="color:var(--text-d);margin:0 2px;">›</span> ';
     if (isLast) {
-      html += `<span style="font-weight:600;color:var(--text);">${p}</span>`;
+      html += `<span style="font-weight:600;color:var(--text);">${i === 0 ? '📁 ' : ''}${crumb.name}</span>`;
     } else {
-      html += `<span style="cursor:pointer;color:var(--accent);" onclick="fcNavigate('${path}')">${p}</span>`;
+      html += `<span style="cursor:pointer;color:var(--accent);${i === 0 ? 'font-weight:600;' : ''}" onclick="fcNavigateTo(${i})">${i === 0 ? '📁 ' : ''}${crumb.name}</span>`;
     }
   });
 
@@ -24062,21 +24069,22 @@ function fcRenderListRow(f) {
   const canDl = isAdmin || p.canDownloadFiles !== false;
   const canDel = isAdmin || p.canDeleteFiles === true;
   const canRen = isAdmin || p.canRenameFiles === true;
+  const eid = (f.id || '').replace(/'/g, "\\'");
 
   const actions = isFolder
-    ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDeleteFolder('${f.key}')" title="Delete folder">${canDel ? '🗑' : ''}</span>`
+    ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDeleteFolder('${eid}','${f.name.replace(/'/g, "\\'")}')" title="Delete folder">${canDel ? '🗑' : ''}</span>`
     : `<div style="display:flex;gap:6px;justify-content:center;">
-        ${canDl  ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDownload('${f.key}')" title="Download">⬇</span>` : ''}
-        ${canRen ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcRename('${f.key}','${f.name}')" title="Rename">✏️</span>` : ''}
-        ${canDel ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDelete('${f.key}','${f.name}')" title="Delete">🗑</span>` : ''}
+        ${canDl  ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDownload('${eid}')" title="Download">⬇</span>` : ''}
+        ${canRen ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcRename('${eid}','${f.name.replace(/'/g, "\\'")}')" title="Rename">✏️</span>` : ''}
+        ${canDel ? `<span style="cursor:pointer;font-size:14px;" onclick="event.stopPropagation();fcDelete('${eid}','${f.name.replace(/'/g, "\\'")}')" title="Delete">🗑</span>` : ''}
       </div>`;
 
   return `<div style="display:grid;grid-template-columns:40px 1fr 120px 100px 140px 80px;padding:10px 20px;border-bottom:1px solid var(--border);align-items:center;cursor:${isFolder ? 'pointer' : 'default'};transition:background .1s;"
     onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background=''"
-    ${isFolder ? `onclick="fcNavigate('${f.key}')"` : ''}>
+    ${isFolder ? `onclick="fcNavigate('${eid}','${f.name.replace(/'/g, "\\'")}')"` : ''}>
     <div style="font-size:20px;text-align:center;">${isFolder ? '📁' : fcFileIcon(f.name)}</div>
     <div style="font-size:13px;font-weight:${isFolder ? '600' : '400'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.name}">${f.name}</div>
-    <div style="font-size:12px;color:var(--text-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${isFolder ? '' : fcClientName(f.clientId)}</div>
+    <div style="font-size:12px;color:var(--text-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</div>
     <div style="font-size:12px;color:var(--text-d);text-align:right;">${isFolder ? '—' : fcFormatSize(f.size)}</div>
     <div style="font-size:12px;color:var(--text-d);">${fcFormatDate(f.modified)}</div>
     <div style="text-align:center;">${actions}</div>
@@ -24085,10 +24093,11 @@ function fcRenderListRow(f) {
 
 function fcRenderGridItem(f) {
   const isFolder = f.type === 'folder';
+  const eid = (f.id || '').replace(/'/g, "\\'");
   return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;cursor:${isFolder ? 'pointer' : 'default'};transition:all .15s;background:var(--bg-card);"
     onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-1px)'"
     onmouseout="this.style.borderColor='var(--border)';this.style.transform=''"
-    ${isFolder ? `onclick="fcNavigate('${f.key}')"` : ''}>
+    ${isFolder ? `onclick="fcNavigate('${eid}','${f.name.replace(/'/g, "\\'")}')"` : ''}>
     <div style="font-size:32px;margin-bottom:8px;">${isFolder ? '📁' : fcFileIcon(f.name)}</div>
     <div style="font-size:12px;font-weight:${isFolder ? '600' : '400'};color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.name}">${f.name}</div>
     <div style="font-size:11px;color:var(--text-d);margin-top:4px;">${isFolder ? 'Folder' : fcFormatSize(f.size)}</div>
@@ -24096,8 +24105,16 @@ function fcRenderGridItem(f) {
 }
 
 // ── Navigation ──
-function fcNavigate(prefix) {
-  _fcCurrentPrefix = prefix;
+function fcNavigate(folderId, folderName) {
+  _fcCurrentFolderId = folderId;
+  _fcBreadcrumb.push({ id: folderId, name: folderName || folderId });
+  document.getElementById('fc-search').value = '';
+  fcLoadFiles();
+}
+
+function fcNavigateTo(breadcrumbIndex) {
+  _fcBreadcrumb = _fcBreadcrumb.slice(0, breadcrumbIndex + 1);
+  _fcCurrentFolderId = _fcBreadcrumb[breadcrumbIndex].id;
   document.getElementById('fc-search').value = '';
   fcLoadFiles();
 }
@@ -24135,7 +24152,7 @@ function fcUploadPrompt() {
 async function fcHandleFiles(fileList) {
   if (!fileList || fileList.length === 0) return;
 
-  const folder = _fcCurrentPrefix;
+  const folderId = _fcCurrentFolderId;
   const userName = currentUser ? (currentUser.fname + ' ' + currentUser.lname) : 'Unknown';
   let uploaded = 0;
 
@@ -24145,7 +24162,7 @@ async function fcHandleFiles(fileList) {
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('folder', folder);
+      form.append('folderId', folderId);
       form.append('uploadedBy', userName);
 
       const resp = await authFetch(fcServerUrl() + '/files/upload', { method: 'POST', body: form });
@@ -24153,7 +24170,7 @@ async function fcHandleFiles(fileList) {
 
       if (data.success) {
         uploaded++;
-        logAct(`Uploaded file: ${file.name} to ${folder || 'root'}`, null, currentUser?.id);
+        logAct(`Uploaded file: ${file.name}`, null, currentUser?.id);
       } else {
         showToast(`❌ Failed to upload ${file.name}: ${data.error}`, 'error');
       }
@@ -24167,7 +24184,6 @@ async function fcHandleFiles(fileList) {
 
   if (uploaded > 0) {
     showToast(`✓ ${uploaded} file(s) uploaded`);
-    _fcAllFiles = []; // reset cache
     await fcLoadFiles();
   }
 }
@@ -24182,7 +24198,8 @@ function fcSetupDragDrop() {
     e.preventDefault();
     dragCounter++;
     dz.style.display = 'flex';
-    document.getElementById('fc-drop-path').textContent = _fcCurrentPrefix ? `to ${_fcCurrentPrefix}` : 'to root folder';
+    const currentName = _fcBreadcrumb.length > 0 ? _fcBreadcrumb[_fcBreadcrumb.length - 1].name : 'root';
+    document.getElementById('fc-drop-path').textContent = `to ${currentName}`;
   });
 
   view.addEventListener('dragleave', (e) => {
@@ -24204,9 +24221,9 @@ function fcSetupDragDrop() {
 }
 
 // ── Download ──
-async function fcDownload(key) {
+async function fcDownload(id) {
   try {
-    const resp = await authFetch(fcServerUrl() + '/files/download?key=' + encodeURIComponent(key));
+    const resp = await authFetch(fcServerUrl() + '/files/download?id=' + encodeURIComponent(id));
     const data = await resp.json();
     if (data.success && data.url) {
       window.open(data.url, '_blank');
@@ -24282,7 +24299,7 @@ function fcdCancel() {
 }
 
 // ── Delete file ──
-async function fcDelete(key, name) {
+async function fcDelete(id, name) {
   const ok = await fcdShow({
     title: 'Delete File',
     mode: 'danger',
@@ -24295,13 +24312,12 @@ async function fcDelete(key, name) {
     const resp = await authFetch(fcServerUrl() + '/files/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ id }),
     });
     const data = await resp.json();
     if (data.success) {
       showToast(`✓ Deleted ${name}`);
       logAct(`Deleted file: ${name}`, null, currentUser?.id);
-      _fcAllFiles = [];
       await fcLoadFiles();
     } else {
       showToast('❌ Delete failed: ' + data.error, 'error');
@@ -24312,8 +24328,7 @@ async function fcDelete(key, name) {
 }
 
 // ── Delete folder ──
-async function fcDeleteFolder(prefix) {
-  const name = prefix.split('/').filter(Boolean).pop();
+async function fcDeleteFolder(id, name) {
   const ok = await fcdShow({
     title: 'Delete Folder',
     mode: 'danger',
@@ -24323,27 +24338,26 @@ async function fcDeleteFolder(prefix) {
   if (!ok) return;
 
   try {
-    const listResp = await authFetch(fcServerUrl() + '/files/list?prefix=' + encodeURIComponent(prefix));
-    const listData = await listResp.json();
-    const allKeys = [...(listData.files || []).map(f => f.key), prefix];
-    for (const k of allKeys) {
-      await authFetch(fcServerUrl() + '/files/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: k }),
-      });
+    const resp = await authFetch(fcServerUrl() + '/files/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showToast(`✓ Deleted folder ${name}`);
+      logAct(`Deleted folder: ${name}`, null, currentUser?.id);
+      await fcLoadFiles();
+    } else {
+      showToast('❌ Delete failed: ' + data.error, 'error');
     }
-    showToast(`✓ Deleted folder ${name}`);
-    logAct(`Deleted folder: ${prefix}`, null, currentUser?.id);
-    _fcAllFiles = [];
-    await fcLoadFiles();
   } catch (e) {
     showToast('❌ ' + e.message, 'error');
   }
 }
 
 // ── Rename ──
-async function fcRename(oldKey, oldName) {
+async function fcRename(id, oldName) {
   const newName = await fcdShow({
     title: 'Rename File',
     label: 'New file name',
@@ -24353,21 +24367,16 @@ async function fcRename(oldKey, oldName) {
   });
   if (!newName || newName === oldName) return;
 
-  const parts = oldKey.split('/');
-  parts[parts.length - 1] = newName.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
-  const newKey = parts.join('/');
-
   try {
     const resp = await authFetch(fcServerUrl() + '/files/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldKey, newKey }),
+      body: JSON.stringify({ id, newName }),
     });
     const data = await resp.json();
     if (data.success) {
       showToast(`✓ Renamed to ${newName}`);
       logAct(`Renamed file: ${oldName} → ${newName}`, null, currentUser?.id);
-      _fcAllFiles = [];
       await fcLoadFiles();
     } else {
       showToast('❌ Rename failed: ' + data.error, 'error');
@@ -24388,27 +24397,23 @@ async function fcNewFolder() {
   });
   if (!name) return;
 
-  const safeName = name.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
-
   // Check for duplicate folder name
-  const duplicate = _fcFiles.find(f => f.type === 'folder' && f.name.toLowerCase() === safeName.toLowerCase());
+  const duplicate = _fcFiles.find(f => f.type === 'folder' && f.name.toLowerCase() === name.toLowerCase());
   if (duplicate) {
-    showToast(`❌ A folder named "${safeName}" already exists`, 'error');
+    showToast(`❌ A folder named "${name}" already exists`, 'error');
     return;
   }
-
-  const prefix = _fcCurrentPrefix + safeName + '/';
 
   try {
     const resp = await authFetch(fcServerUrl() + '/files/folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix }),
+      body: JSON.stringify({ parentId: _fcCurrentFolderId, name }),
     });
     const data = await resp.json();
     if (data.success) {
-      showToast(`✓ Folder "${safeName}" created`);
-      logAct(`Created folder: ${prefix}`, null, currentUser?.id);
+      showToast(`✓ Folder "${name}" created`);
+      logAct(`Created folder: ${name}`, null, currentUser?.id);
       await fcLoadFiles();
     } else {
       showToast('❌ ' + data.error, 'error');
@@ -24421,8 +24426,9 @@ async function fcNewFolder() {
 // ── Stats badge ──
 function fcUpdateStats() {
   const badge = document.getElementById('fc-storage-badge');
-  const total = _fcAllFiles.reduce((sum, f) => sum + (f.size || 0), 0);
-  badge.textContent = `${_fcAllFiles.length} files · ${fcFormatSize(total)} used`;
+  const fileCount = _fcFiles.filter(f => f.type === 'file').length;
+  const folderCount = _fcFiles.filter(f => f.type === 'folder').length;
+  badge.textContent = `${fileCount} files · ${folderCount} folders`;
 }
 
 </script>

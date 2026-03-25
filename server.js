@@ -11,10 +11,7 @@ const path        = require('path');
 const crypto      = require('crypto');
 const fs          = require('fs');
 const multer      = require('multer');
-const { S3Client, ListObjectsV2Command, PutObjectCommand,
-        GetObjectCommand, DeleteObjectCommand, CopyObjectCommand,
-        HeadObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+// S3/B2 imports removed — now using ShareFile API
 const { google }       = require('googleapis');
 
 const app = express();
@@ -940,73 +937,254 @@ app.get('/sms/inbox', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// BACKBLAZE B2 — S3-Compatible File Storage
-// All file operations go through the server so B2 credentials
-// never leave the backend. Dashboard sends/receives files via
-// these /files/* endpoints.
+// SHAREFILE — File Storage via ShareFile REST API
+// Replaces Backblaze B2. Uses OAuth2 for auth, folder IDs for nav.
+// Dashboard sends/receives files via /files/* endpoints.
 // ─────────────────────────────────────────────────────────────────
-const s3 = new S3Client({
-  endpoint:    process.env.B2_ENDPOINT,
-  region:      process.env.B2_REGION || 'us-east-005',
-  credentials: {
-    accessKeyId:     process.env.B2_KEY_ID,
-    secretAccessKey: process.env.B2_APP_KEY,
-  },
-  forcePathStyle: true, // B2 requires path-style URLs
-});
-const B2_BUCKET = process.env.B2_BUCKET || 'ark-files';
+const SF_SUBDOMAIN   = process.env.SHAREFILE_SUBDOMAIN || '';
+const SF_CLIENT_ID   = process.env.SHAREFILE_CLIENT_ID || '';
+const SF_CLIENT_SECRET = process.env.SHAREFILE_CLIENT_SECRET || '';
+const SF_API_BASE    = SF_SUBDOMAIN ? `https://${SF_SUBDOMAIN}.sf-api.com/sf/v3` : '';
+const SF_TOKEN_FILE  = path.join(DATA_DIR, 'sharefile-tokens.json');
 
-// Multer — stores uploads in memory (streamed straight to B2)
+// Load saved ShareFile tokens
+let sfTokens = null;
+if (fs.existsSync(SF_TOKEN_FILE)) {
+  try {
+    sfTokens = JSON.parse(fs.readFileSync(SF_TOKEN_FILE, 'utf8'));
+    console.log('✓ ShareFile tokens loaded from file');
+  } catch(e) {
+    console.log('Could not load ShareFile tokens, will need to re-authorize');
+  }
+}
+
+function sfReady() {
+  return !!(SF_CLIENT_ID && SF_CLIENT_SECRET && SF_SUBDOMAIN && sfTokens);
+}
+
+function saveSfTokens() {
+  fs.writeFileSync(SF_TOKEN_FILE, JSON.stringify(sfTokens, null, 2));
+}
+
+// Auto-refresh ShareFile access token if expired
+async function sfGetHeaders() {
+  if (!sfTokens) throw new Error('ShareFile not connected — run the auth flow first');
+
+  // Check if token is expired (with 5 min buffer)
+  if (sfTokens.expires_at && Date.now() > sfTokens.expires_at - 300000) {
+    console.log('ShareFile token expired, refreshing...');
+    try {
+      const params = new URLSearchParams({
+        grant_type:    'refresh_token',
+        refresh_token: sfTokens.refresh_token,
+        client_id:     SF_CLIENT_ID,
+        client_secret: SF_CLIENT_SECRET,
+      });
+      const resp = await fetch(`https://${SF_SUBDOMAIN}.sharefile.com/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        sfTokens = null;
+        saveSfTokens();
+        throw new Error('Token refresh failed: ' + errText);
+      }
+      const data = await resp.json();
+      sfTokens = {
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token || sfTokens.refresh_token,
+        expires_at:    Date.now() + (data.expires_in * 1000),
+        subdomain:     data.subdomain || SF_SUBDOMAIN,
+      };
+      saveSfTokens();
+      console.log('✓ ShareFile token refreshed');
+    } catch(e) {
+      throw new Error('ShareFile token refresh failed — please reconnect');
+    }
+  }
+
+  return {
+    'Authorization': `Bearer ${sfTokens.access_token}`,
+    'Content-Type':  'application/json',
+  };
+}
+
+// Generic ShareFile API call helper
+async function sfApi(endpoint, options = {}) {
+  const headers = await sfGetHeaders();
+  const apiBase = `https://${sfTokens.subdomain || SF_SUBDOMAIN}.sf-api.com/sf/v3`;
+  const url = endpoint.startsWith('http') ? endpoint : `${apiBase}${endpoint}`;
+  const resp = await fetch(url, {
+    method: options.method || 'GET',
+    headers: { ...headers, ...(options.headers || {}) },
+    body: options.body || undefined,
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`ShareFile API ${resp.status}: ${errText}`);
+  }
+  if (resp.status === 204) return null; // No content (delete)
+  const contentType = resp.headers.get('content-type') || '';
+  if (contentType.includes('json')) return resp.json();
+  return resp.text();
+}
+
+// Folder ID cache: path → { id, expires }
+const sfFolderCache = new Map();
+const SF_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Resolve a folderId — supports special aliases and cached IDs
+async function sfResolveFolder(folderId) {
+  if (!folderId || folderId === 'home') return 'home';
+  if (folderId === 'top') return 'top';
+  if (folderId === 'allshared') return 'allshared';
+  if (folderId === 'favorites') return 'favorites';
+  if (folderId === 'connectors') return 'connectors';
+  return folderId;
+}
+
+// Multer — stores uploads in memory (streamed to ShareFile)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB per file
 });
 
-// ── Helper: check if B2 is configured ──
-function b2Ready() {
-  return !!(process.env.B2_KEY_ID && process.env.B2_APP_KEY && process.env.B2_ENDPOINT);
-}
+// ─────────────────────────────────────────────────────────────────
+// SHAREFILE: OAuth2 Flow
+// ─────────────────────────────────────────────────────────────────
+app.get('/sharefile/auth', (req, res) => {
+  const authUrl = `https://secure.sharefile.com/oauth/authorize?` +
+    `response_type=code` +
+    `&client_id=${SF_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(process.env.SHAREFILE_REDIRECT_URI || `https://ark-qbo-server.onrender.com/sharefile/callback`)}` +
+    `&state=ark-sf-${Date.now()}`;
+  console.log('Redirecting to ShareFile auth:', authUrl);
+  res.redirect(authUrl);
+});
+
+app.get('/sharefile/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) throw new Error('No authorization code received');
+
+    const params = new URLSearchParams({
+      grant_type:    'authorization_code',
+      code,
+      client_id:     SF_CLIENT_ID,
+      client_secret: SF_CLIENT_SECRET,
+      redirect_uri:  process.env.SHAREFILE_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/sharefile/callback',
+    });
+
+    const resp = await fetch(`https://${SF_SUBDOMAIN}.sharefile.com/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error('Token exchange failed: ' + errText);
+    }
+
+    const data = await resp.json();
+    sfTokens = {
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + (data.expires_in * 1000),
+      subdomain:     data.subdomain || SF_SUBDOMAIN,
+    };
+    saveSfTokens();
+
+    console.log('✓ ShareFile connected successfully');
+    console.log('  Subdomain:', sfTokens.subdomain);
+
+    res.send(`<!DOCTYPE html>
+<html>
+<head><title>ShareFile Connected</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0d1b2a;color:#e8f0f8;">
+  <div style="text-align:center;">
+    <div style="font-size:48px;margin-bottom:16px;">✓</div>
+    <h2 style="color:#4dffa0;margin-bottom:8px;">Connected to ShareFile!</h2>
+    <p style="color:#8bafc8;">This window will close automatically.</p>
+  </div>
+  <script>
+    if (window.opener) {
+      window.opener.postMessage({ type: 'sharefile-connected' }, '*');
+    }
+    setTimeout(() => window.close(), 3000);
+  </script>
+</body>
+</html>`);
+  } catch(e) {
+    console.error('ShareFile auth error:', e.message);
+    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">ShareFile Connection Failed</h2><p>${e.message}</p>`);
+  }
+});
+
+app.get('/sharefile/status', (req, res) => {
+  res.json({
+    connected: sfReady(),
+    subdomain: SF_SUBDOMAIN,
+    expiresAt: sfTokens?.expires_at ? new Date(sfTokens.expires_at).toISOString() : null,
+  });
+});
+
+app.post('/sharefile/disconnect', (req, res) => {
+  sfTokens = null;
+  try { fs.unlinkSync(SF_TOKEN_FILE); } catch(_) {}
+  sfFolderCache.clear();
+  console.log('ShareFile disconnected');
+  res.json({ disconnected: true });
+});
 
 // ─────────────────────────────────────────────────────────────────
 // FILES: Status — Dashboard checks if file storage is available
 // ─────────────────────────────────────────────────────────────────
 app.get('/files/status', requireAuth, (req, res) => {
-  res.json({ available: b2Ready(), bucket: B2_BUCKET });
+  res.json({ available: sfReady(), provider: 'sharefile', subdomain: SF_SUBDOMAIN });
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: List — Returns all files (optionally filtered by prefix)
-// Query params: ?prefix=clients/abc123/tax/  &delimiter=/
+// FILES: List — Returns children of a ShareFile folder
+// Query params: ?folderId=xxx  OR  ?folderId=home (default root)
 // ─────────────────────────────────────────────────────────────────
 app.get('/files/list', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
   try {
-    const prefix    = req.query.prefix || '';
-    const delimiter = req.query.delimiter || undefined;
+    const folderId = await sfResolveFolder(req.query.folderId || 'home');
+    const data = await sfApi(`/Items(${folderId})?$expand=Children&$select=Id,Name,FileName,CreationDate,FileCount,Children/Id,Children/Name,Children/FileName,Children/CreationDate,Children/FileSizeBytes,Children/ProgenyEditDate,Children/odata.type`);
 
-    const command = new ListObjectsV2Command({
-      Bucket:    B2_BUCKET,
-      Prefix:    prefix,
-      Delimiter: delimiter,
-      MaxKeys:   1000,
+    const children = data.Children || [];
+    const files = [];
+    const folders = [];
+
+    children.forEach(item => {
+      const isFolder = (item['odata.type'] || '').includes('Folder');
+      if (isFolder) {
+        folders.push({
+          id:   item.Id,
+          name: item.Name || item.FileName,
+        });
+      } else {
+        files.push({
+          id:       item.Id,
+          name:     item.FileName || item.Name,
+          size:     item.FileSizeBytes || 0,
+          modified: item.ProgenyEditDate || item.CreationDate,
+        });
+      }
     });
 
-    const data = await s3.send(command);
-
-    const files = (data.Contents || []).map(obj => ({
-      key:      obj.Key,
-      name:     obj.Key.split('/').filter(Boolean).pop(),
-      size:     obj.Size,
-      modified: obj.LastModified,
-    }));
-
-    const folders = (data.CommonPrefixes || []).map(p => ({
-      prefix: p.Prefix,
-      name:   p.Prefix.replace(prefix, '').replace(/\/$/, ''),
-    }));
-
-    res.json({ success: true, files, folders, prefix });
+    res.json({
+      success: true,
+      files,
+      folders,
+      folderId,
+      folderName: data.Name || '',
+    });
   } catch (e) {
     console.error('Files list error:', e);
     res.status(500).json({ error: e.message });
@@ -1014,39 +1192,58 @@ app.get('/files/list', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Upload — Multipart upload, streams to B2
-// Auth + file type whitelist + SSE encryption + audit log
+// FILES: Upload — Two-step ShareFile upload
+// Auth + file type whitelist + audit log
 // ─────────────────────────────────────────────────────────────────
 app.post('/files/upload', requireAuth, upload.single('file'), async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
   if (!req.file)  return res.status(400).json({ error: 'No file provided' });
 
   // File type whitelist check
   if (!isAllowedFile(req.file.originalname)) {
     const ext = req.file.originalname.split('.').pop();
-    return res.status(400).json({ error: `File type ".${ext}" is not allowed. Only documents, images, and accounting files are permitted.` });
+    return res.status(400).json({ error: `File type ".${ext}" is not allowed.` });
   }
 
   try {
-    const folder     = (req.body.folder || '').replace(/\/+$/, '');
+    const parentId   = req.body.folderId || 'home';
     const safeName   = req.file.originalname.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
-    const key        = folder ? `${folder}/${safeName}` : safeName;
     const uploadedBy = req.body.uploadedBy || 'Unknown';
 
-    const command = new PutObjectCommand({
-      Bucket:               B2_BUCKET,
-      Key:                  key,
-      Body:                 req.file.buffer,
-      ContentType:          req.file.mimetype || 'application/octet-stream',
-      ServerSideEncryption: 'AES256',
-      Metadata:             { uploadedby: uploadedBy, uploadedat: new Date().toISOString() },
+    // Step 1: Get upload specification
+    const uploadSpec = await sfApi(`/Items(${parentId})/Upload2`, {
+      method: 'POST',
+      body: JSON.stringify({
+        Method:   'standard',
+        Raw:      true,
+        FileName: safeName,
+        FileSize: req.file.size,
+      }),
     });
 
-    await s3.send(command);
-    auditLog('upload', key, req.arkUser, req.ip);
-    console.log(`File uploaded: ${key} (${(req.file.size / 1024).toFixed(1)} KB) by ${uploadedBy}`);
+    const chunkUri = uploadSpec.ChunkUri;
+    if (!chunkUri) throw new Error('No ChunkUri returned from ShareFile');
 
-    res.json({ success: true, key, name: safeName, size: req.file.size });
+    // Step 2: Upload file content
+    const headers = await sfGetHeaders();
+    const formData = new FormData();
+    const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
+    formData.append('File1', blob, safeName);
+
+    const uploadResp = await fetch(chunkUri, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      throw new Error('Upload failed: ' + errText);
+    }
+
+    auditLog('upload', safeName, req.arkUser, req.ip);
+    console.log(`File uploaded to ShareFile: ${safeName} (${(req.file.size / 1024).toFixed(1)} KB) by ${uploadedBy}`);
+
+    res.json({ success: true, name: safeName, size: req.file.size, parentId });
   } catch (e) {
     console.error('File upload error:', e);
     res.status(500).json({ error: e.message });
@@ -1054,41 +1251,59 @@ app.post('/files/upload', requireAuth, upload.single('file'), async (req, res) =
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Download — Returns a pre-signed URL (valid 15 min)
+// FILES: Download — Returns ShareFile download URL
 // Auth + audit log
 // ─────────────────────────────────────────────────────────────────
 app.get('/files/download', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
-  const key = req.query.key;
-  if (!key) return res.status(400).json({ error: 'File key is required' });
+  const id = req.query.id;
+  if (!id) return res.status(400).json({ error: 'File id is required' });
 
   try {
-    const command = new GetObjectCommand({ Bucket: B2_BUCKET, Key: key });
-    const url = await getSignedUrl(s3, command, { expiresIn: 900 }); // 15 min
-    auditLog('download', key, req.arkUser, req.ip);
-    res.json({ success: true, url, key });
+    const data = await sfApi(`/Items(${id})/Download`, { method: 'GET' });
+    // ShareFile returns a redirect URL or the download link
+    const url = typeof data === 'string' ? data : (data.DownloadUrl || data.Uri || '');
+    auditLog('download', id, req.arkUser, req.ip);
+    res.json({ success: true, url, id });
   } catch (e) {
+    // ShareFile may redirect directly — handle 302
+    if (e.message && e.message.includes('302')) {
+      // For redirects, construct the download URL directly
+      const headers = await sfGetHeaders();
+      const apiBase = `https://${sfTokens.subdomain || SF_SUBDOMAIN}.sf-api.com/sf/v3`;
+      const resp = await fetch(`${apiBase}/Items(${id})/Download`, {
+        method: 'GET',
+        headers,
+        redirect: 'manual',
+      });
+      if (resp.status === 302) {
+        const url = resp.headers.get('location');
+        auditLog('download', id, req.arkUser, req.ip);
+        return res.json({ success: true, url, id });
+      }
+    }
     console.error('File download error:', e);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Delete — Remove a file from B2
+// FILES: Delete — Remove a file/folder from ShareFile
 // Auth + audit log
 // ─────────────────────────────────────────────────────────────────
 app.post('/files/delete', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
-  const { key } = req.body;
-  if (!key) return res.status(400).json({ error: 'File key is required' });
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Item id is required' });
 
   try {
-    await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: key }));
-    auditLog('delete', key, req.arkUser, req.ip);
-    console.log(`File deleted: ${key}`);
-    res.json({ success: true, key });
+    await sfApi(`/Items(${id})`, { method: 'DELETE' });
+    sfFolderCache.clear(); // Invalidate cache
+    auditLog('delete', id, req.arkUser, req.ip);
+    console.log(`ShareFile item deleted: ${id}`);
+    res.json({ success: true, id });
   } catch (e) {
     console.error('File delete error:', e);
     res.status(500).json({ error: e.message });
@@ -1096,25 +1311,24 @@ app.post('/files/delete', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Rename / Move — Copy to new key, delete old key
+// FILES: Rename — Update item name in ShareFile
 // Auth + audit log
 // ─────────────────────────────────────────────────────────────────
 app.post('/files/rename', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
-  const { oldKey, newKey } = req.body;
-  if (!oldKey || !newKey) return res.status(400).json({ error: 'oldKey and newKey are required' });
+  const { id, newName } = req.body;
+  if (!id || !newName) return res.status(400).json({ error: 'id and newName are required' });
 
   try {
-    await s3.send(new CopyObjectCommand({
-      Bucket:     B2_BUCKET,
-      CopySource: `${B2_BUCKET}/${oldKey}`,
-      Key:        newKey,
-    }));
-    await s3.send(new DeleteObjectCommand({ Bucket: B2_BUCKET, Key: oldKey }));
-    auditLog('rename', `${oldKey} → ${newKey}`, req.arkUser, req.ip);
-    console.log(`File renamed: ${oldKey} → ${newKey}`);
-    res.json({ success: true, oldKey, newKey });
+    await sfApi(`/Items(${id})`, {
+      method: 'PATCH',
+      body: JSON.stringify({ Name: newName, FileName: newName }),
+    });
+    sfFolderCache.clear(); // Invalidate cache
+    auditLog('rename', `${id} → ${newName}`, req.arkUser, req.ip);
+    console.log(`ShareFile item renamed: ${id} → ${newName}`);
+    res.json({ success: true, id, newName });
   } catch (e) {
     console.error('File rename error:', e);
     res.status(500).json({ error: e.message });
@@ -1122,35 +1336,25 @@ app.post('/files/rename', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Create folder — Puts an empty placeholder object
-// Auth + SSE encryption + audit log
+// FILES: Create folder in ShareFile
+// Auth + audit log
 // ─────────────────────────────────────────────────────────────────
 app.post('/files/folder', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
-  let { prefix } = req.body;
-  if (!prefix) return res.status(400).json({ error: 'Folder prefix is required' });
-  if (!prefix.endsWith('/')) prefix += '/';
+  const { parentId, name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Folder name is required' });
+  const parent = parentId || 'home';
 
   try {
-    // Check if folder already exists
-    try {
-      await s3.send(new HeadObjectCommand({ Bucket: B2_BUCKET, Key: prefix }));
-      return res.status(409).json({ error: 'A folder with that name already exists' });
-    } catch (headErr) {
-      if (headErr.name !== 'NotFound' && headErr.$metadata?.httpStatusCode !== 404) throw headErr;
-    }
-
-    await s3.send(new PutObjectCommand({
-      Bucket:               B2_BUCKET,
-      Key:                  prefix,
-      Body:                 Buffer.alloc(0),
-      ContentType:          'application/x-directory',
-      ServerSideEncryption: 'AES256',
-    }));
-    auditLog('folder', prefix, req.arkUser, req.ip);
-    console.log(`Folder created: ${prefix}`);
-    res.json({ success: true, prefix });
+    const folder = await sfApi(`/Items(${parent})/Folder`, {
+      method: 'POST',
+      body: JSON.stringify({ Name: name, Description: '' }),
+    });
+    sfFolderCache.clear(); // Invalidate cache
+    auditLog('folder', `${parent}/${name}`, req.arkUser, req.ip);
+    console.log(`ShareFile folder created: ${name} in ${parent}`);
+    res.json({ success: true, id: folder.Id, name: folder.Name });
   } catch (e) {
     console.error('Folder create error:', e);
     res.status(500).json({ error: e.message });
@@ -1158,48 +1362,39 @@ app.post('/files/folder', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// FILES: Bulk list — All files across all clients (for File Center)
-// Auth required
+// FILES: Get root folders — Returns ShareFile top-level navigation
+// Returns Personal Folders, Shared Folders, Favorites, etc.
 // ─────────────────────────────────────────────────────────────────
-app.get('/files/all', requireAuth, async (req, res) => {
-  if (!b2Ready()) return res.status(500).json({ error: 'File storage not configured' });
+app.get('/files/roots', requireAuth, async (req, res) => {
+  if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
   try {
-    let allFiles = [];
-    let continuationToken = undefined;
+    const roots = [];
+    // Fetch the standard ShareFile root folders
+    const specialFolders = [
+      { alias: 'home',      label: 'Personal Folders' },
+      { alias: 'allshared', label: 'Shared Folders' },
+      { alias: 'favorites', label: 'Favorites' },
+      { alias: 'connectors', label: 'Connectors' },
+    ];
 
-    // Paginate through all objects
-    do {
-      const command = new ListObjectsV2Command({
-        Bucket:            B2_BUCKET,
-        MaxKeys:           1000,
-        ContinuationToken: continuationToken,
-      });
-      const data = await s3.send(command);
-
-      (data.Contents || []).forEach(obj => {
-        // Skip folder placeholders (0-byte objects ending in /)
-        if (obj.Size === 0 && obj.Key.endsWith('/')) return;
-
-        const parts = obj.Key.split('/');
-        allFiles.push({
-          key:      obj.Key,
-          name:     parts[parts.length - 1],
-          size:     obj.Size,
-          modified: obj.LastModified,
-          // Parse path structure: clients/{clientId}/{category}/...
-          clientId: parts[0] === 'clients' ? parts[1] : null,
-          category: parts[0] === 'clients' ? (parts[2] || 'general') : (parts[0] || 'general'),
-          path:     parts.slice(0, -1).join('/'),
+    for (const sf of specialFolders) {
+      try {
+        const data = await sfApi(`/Items(${sf.alias})?$select=Id,Name,FileCount,Children&$expand=Children/Id,Children/Name`);
+        roots.push({
+          id:    sf.alias,
+          name:  data.Name || sf.label,
+          label: sf.label,
+          childCount: (data.Children || []).length,
         });
-      });
+      } catch(e) {
+        // Some folders may not be accessible — skip silently
+      }
+    }
 
-      continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
-    } while (continuationToken);
-
-    res.json({ success: true, files: allFiles, count: allFiles.length });
+    res.json({ success: true, roots });
   } catch (e) {
-    console.error('Files all error:', e);
+    console.error('Files roots error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -2071,8 +2266,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  Data dir: ${DATA_DIR}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
   const smsOk = SINCH.sms.apiToken ? '✓' : '✗';
-  const b2Ok  = b2Ready() ? '✓' : '✗';
+  const sfOk  = sfReady() ? '✓' : (SF_CLIENT_ID ? '○' : '✗');
   const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
   const gcalOk = gcalTokens.primary ? '✓' : '✗';
-  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  B2 Files: ${b2Ok}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
+  console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  ShareFile: ${sfOk}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
 });
