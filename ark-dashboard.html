@@ -22734,7 +22734,7 @@ function w9ovApplyOtherText(val) {
 // ── ARK field definitions — what we can map to ────────────────────
 const IMPORT_ARK_FIELDS = [
   // Core identity
-  { key:'biz',            label:'Business Legal Name',      required:true,  tier:'A' },
+  { key:'biz',            label:'Client / Business Name',   required:true,  tier:'A' },
   { key:'nameBilling',    label:'Billing Name',             required:false, tier:'A' },
   { key:'nameQb',         label:'QuickBooks Name',          required:false, tier:'A' },
   { key:'entity',         label:'Entity Type',              required:false, tier:'A', enum:['LLC','S-Corp','C-Corp','Partnership','Non-Profit','Sole Proprietor'] },
@@ -23075,8 +23075,15 @@ function importRenderMappingTable() {
     `<option value="${f.key}">${f.label}</option>`
   ).join('');
 
+  // Count auto-detected entity columns
+  const entityCols = _importCSVHeaders.filter((h, i) => (_importMapping[i] || '').startsWith('_entity_'));
+
   tbody.innerHTML = _importCSVHeaders.map((h, i) => {
     const mapped  = _importMapping[i] || '_skip';
+
+    // Hide entity columns — they're auto-parsed into franchises
+    if (mapped.startsWith('_entity_')) return '';
+
     const sample  = _importCSVRows.slice(0,3).map(r => r[i]||'').filter(Boolean).join(', ');
     const isSkip  = mapped === '_skip';
     const conf    = isSkip ? '' : importMappingConfidence(h, mapped);
@@ -23095,7 +23102,9 @@ function importRenderMappingTable() {
       </td>
       <td style="padding:7px 12px;text-align:center;font-size:16px;" title="${conf}">${confDot}</td>
     </tr>`;
-  }).join('');
+  }).join('') + (entityCols.length ? `<tr style="border-bottom:1px solid var(--border);background:rgba(26,32,64,.04);">
+    <td colspan="4" style="padding:8px 12px;font-size:11px;color:var(--navy);font-weight:500;">✓ ${entityCols.length} entity column${entityCols.length!==1?'s':''} auto-detected — will be parsed into franchise/entity entries on each client</td>
+  </tr>` : '');
 
   importUpdateUnmapped();
 }
