@@ -4528,14 +4528,23 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div id="mc-qbo-link-info" style="font-size:11px;color:var(--text-d);margin-top:6px;min-height:16px;"></div>
           </div>
 
-          <!-- Franchises — shown when QBO selected, for multi-QBO clients -->
+          <!-- Franchises / Entities — shown when QBO selected, for multi-QBO clients -->
           <div class="fg full" id="mc-franchises-wrap" style="display:none;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <label style="font-size:13px;font-weight:600;color:var(--text);">Franchises</label>
-              <button class="btn btn-ghost btn-sm" onclick="addFranchise()" style="font-size:11px;display:flex;align-items:center;gap:4px;">+ Add Franchise</button>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <label id="mc-franchise-label" style="font-size:13px;font-weight:600;color:var(--text);">Entities</label>
+                <select id="mc-franchise-brand" class="field-input" onchange="updateFranchiseLabels()" style="font-size:11px;padding:3px 8px;width:auto;min-width:120px;">
+                  <option value="">— No Brand —</option>
+                  <option value="Scooter's">Scooter's</option>
+                  <option value="HTeaO">HTeaO</option>
+                  <option value="Little Caesar's">Little Caesar's</option>
+                  <option value="Deviled Egg Co">Deviled Egg Co</option>
+                </select>
+              </div>
+              <button id="mc-franchise-add-btn" class="btn btn-ghost btn-sm" onclick="addFranchise()" style="font-size:11px;display:flex;align-items:center;gap:4px;">+ Add Entity</button>
             </div>
             <div id="mc-franchise-list"></div>
-            <div id="mc-franchise-empty" style="font-size:12px;color:var(--text-d);text-align:center;padding:14px 0;">No franchises — this client has a single QBO company linked above.</div>
+            <div id="mc-franchise-empty" style="font-size:12px;color:var(--text-d);text-align:center;padding:14px 0;">No entities — this client has a single QBO company linked above.</div>
           </div>
 
           <!-- QBO options — shown when QBO selected -->
@@ -8524,6 +8533,21 @@ function unlinkFranchise(idx) {
   showToast('Franchise unlinked');
 }
 
+function updateFranchiseLabels() {
+  const brand = document.getElementById('mc-franchise-brand')?.value || '';
+  const isFranchise = !!brand;
+  const label = document.getElementById('mc-franchise-label');
+  const btn = document.getElementById('mc-franchise-add-btn');
+  const empty = document.getElementById('mc-franchise-empty');
+  if (label) label.textContent = isFranchise ? 'Franchises' : 'Entities';
+  if (btn) btn.innerHTML = isFranchise ? '+ Add Franchise' : '+ Add Entity';
+  if (empty && !document.querySelectorAll('#mc-franchise-list .franchise-row').length) {
+    empty.textContent = isFranchise
+      ? 'No franchises — this client has a single QBO company linked above.'
+      : 'No entities — this client has a single QBO company linked above.';
+  }
+}
+
 // ── ACH helpers ──
 function openBankUrl(){
   const url = document.getElementById('mc-bank-url')?.value.trim();
@@ -9085,6 +9109,8 @@ function openEditClient(id){
   setPrPlatform(c.prPlatform||'');
   document.getElementById('mc-pr-script').value=c.prScript||'';
   setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'', c.franchises||[]);
+  const brandEl = document.getElementById('mc-franchise-brand'); if(brandEl) brandEl.value = c.franchiseBrand||'';
+  updateFranchiseLabels();
   const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
@@ -9170,6 +9196,7 @@ function saveClient(){
     qboBilling:document.querySelector('input[name="mc-qbo-billing"]:checked')?.value||'',
     qboRealmId:document.getElementById('mc-qbo-realm-id')?.value.trim()||'',
     franchises: getFranchisesFromModal(),
+    franchiseBrand: document.getElementById('mc-franchise-brand')?.value || '',
     qbdUser:   (document.getElementById('mc-qbd-user')?.value||'').trim(),
     qbdPass:   document.getElementById('mc-qbd-pass')?.value||'',
     nameBilling: document.getElementById('mc-name-billing')?.value.trim()||'',
@@ -9845,7 +9872,7 @@ function openDetail(id){
         ${c.qbType==='QBO'&&c.qboBilling?`<div class="drow"><span class="dk">Billing</span><span class="dv">${c.qboBilling} Billed</span></div>`:''}
         ${c.qbType==='QBO'&&c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
         ${c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
-        ${c.franchises&&c.franchises.length?`<div class="drow"><span class="dk">Franchises</span><span class="dv">${c.franchises.map(f=>`<div style="margin-bottom:3px;">${f.name||'Unnamed'}${f.qboRealmId?' <span style="color:var(--green);font-size:10px;">✓ linked</span>':' <span style="color:var(--text-d);font-size:10px;">not linked</span>'}</div>`).join('')}</span></div>`:''}
+        ${c.franchises&&c.franchises.length?`<div class="drow"><span class="dk">${c.franchiseBrand?'Franchises':'Entities'}${c.franchiseBrand?' <span style="font-weight:400;color:var(--text-d);font-size:11px;">('+c.franchiseBrand+')</span>':''}</span><span class="dv">${c.franchises.map(f=>`<div style="margin-bottom:3px;">${f.name||'Unnamed'}${f.storeNumber?' <span style="color:var(--text-d);font-size:10px;">#'+f.storeNumber+'</span>':''}${f.qboRealmId?' <span style="color:var(--green);font-size:10px;">✓ linked</span>':' <span style="color:var(--text-d);font-size:10px;">not linked</span>'}</div>`).join('')}</span></div>`:''}
         ${c.franchises&&c.franchises.some(f=>f.qboRealmId)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
         ${c.qbType==='QBD'&&c.qbdUser?`<div class="drow"><span class="dk">Username</span><span class="dv" style="font-family:monospace;">${c.qbdUser}</span></div>`:''}
       </div>`:''}
@@ -21426,9 +21453,10 @@ function getBatchItems() {
         items.push({
           clientId: c.id,
           franchiseId: f.id,
-          displayName: c.biz + ' → ' + (f.name || 'Unnamed'),
+          displayName: c.biz + ' → ' + (f.name || 'Unnamed') + (f.storeNumber ? ' #' + f.storeNumber : ''),
           biz: c.biz,
           franchiseName: f.name,
+          franchiseBrand: c.franchiseBrand || '',
           entity: c.entity,
           status: c.status,
           qboRealmId: f.qboRealmId || '',
@@ -21526,7 +21554,7 @@ function batchRefreshTable() {
     const rowKey = item.franchiseId ? item.clientId + ':' + item.franchiseId : item.clientId;
     const checked = _batchSelectedIds.has(rowKey) ? 'checked' : '';
     const rowBg = isLinked ? 'rgba(44,160,28,.04)' : '';
-    const fTag = item.isFranchise ? `<span style="font-size:9px;background:var(--navy);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;">FRANCHISE</span>` : '';
+    const brandTag = item.franchiseBrand ? `<span style="font-size:9px;background:var(--navy);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;">${item.franchiseBrand.toUpperCase()}</span>` : (item.isFranchise ? `<span style="font-size:9px;background:var(--text-d);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;">ENTITY</span>` : '');
 
     // Build connect/link params
     const connectArgs = item.franchiseId ? `'${item.clientId}','${item.franchiseId}'` : `'${item.clientId}'`;
@@ -21552,7 +21580,7 @@ function batchRefreshTable() {
 
     return `<tr style="border-bottom:1px solid var(--border);background:${rowBg};" data-row-key="${rowKey}">
       <td style="padding:5px 8px;text-align:center;"><input type="checkbox" class="batch-cb" value="${rowKey}" ${checked} onchange="batchToggleOne('${rowKey}', this.checked)" ${isLinked ? 'disabled' : ''}></td>
-      <td style="padding:5px 8px;font-size:12px;font-weight:500;color:var(--text);">${item.displayName}${fTag}</td>
+      <td style="padding:5px 8px;font-size:12px;font-weight:500;color:var(--text);">${item.displayName}${brandTag}</td>
       <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${item.entity || '—'}</td>
       <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${item.status || '—'}</td>
       <td style="padding:5px 8px;font-size:11px;color:${isLinked ? 'var(--green)' : 'var(--text-d)'};font-family:'DM Mono',monospace;">${companyName || '—'}</td>
@@ -22754,6 +22782,7 @@ const IMPORT_ARK_FIELDS = [
   { key:'qbType',         label:'QuickBooks Type',          required:false, tier:'A', enum:['QBO','QBD'] },
   { key:'qboBilling',     label:'QBO Billing',              required:false, tier:'A', enum:['Client','Firm'] },
   { key:'qboRealmId',     label:'QBO Realm ID',             required:false, tier:'A' },
+  { key:'franchiseBrand', label:'Franchise Brand',          required:false, tier:'A' },
   // Admin
   { key:'sharefileUrl',   label:'ShareFile URL',            required:false, tier:'A' },
   { key:'folderPath',     label:'Folder Path',              required:false, tier:'A' },
@@ -22988,8 +23017,9 @@ Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank ac
 // ── Fallback heuristic mapping ─────────────────────────────────────
 function importHeuristicMapping() {
   const heuristics = {
-    'business name':   'biz',   'legal name':   'biz',    'company':    'biz',
+    'business name':   'biz',   'legal name':   'biz',    'company':    'biz',    'client name': 'biz',
     'billing name':    'nameBilling',            'qb name':    'nameQb',   'realm id': 'qboRealmId', 'qbo realm': 'qboRealmId',
+    'brand': 'franchiseBrand', 'franchise brand': 'franchiseBrand',
     'entity':          'entity', 'entity type':  'entity',
     'status':          'status',
     'since':           'since',  'client since': 'since',  'start date': 'since',
@@ -23021,10 +23051,16 @@ function importHeuristicMapping() {
   };
   _importMapping = {};
   _importCSVHeaders.forEach((h, i) => {
-    const lower = h.toLowerCase();
+    const lower = h.toLowerCase().trim();
     let mapped = '_skip';
-    for (const [pattern, field] of Object.entries(heuristics)) {
-      if (lower.includes(pattern)) { mapped = field; break; }
+    // Check for entity columns first (Entity 1, Entity 2, etc.)
+    const entityMatch = lower.match(/^entity\s*(\d+)$/);
+    if (entityMatch) {
+      mapped = '_entity_' + entityMatch[1];
+    } else {
+      for (const [pattern, field] of Object.entries(heuristics)) {
+        if (lower.includes(pattern)) { mapped = field; break; }
+      }
     }
     _importMapping[i] = mapped;
   });
@@ -23129,6 +23165,9 @@ function importGoToReview() {
       if (arkKey.startsWith('owner_')) {
         if (!record._owner) record._owner = {};
         record._owner[arkKey.replace('owner_', '')] = val;
+      } else if (arkKey.startsWith('_entity_')) {
+        // Store entity columns temporarily for franchise parsing
+        record[arkKey] = val;
       } else if (arkKey === 'services') {
         record.services = val.split(',').map(s => s.trim()).filter(Boolean);
       } else {
@@ -23145,6 +23184,24 @@ function importGoToReview() {
     if (record.entity && !validEntities.includes(record.entity)) {
       record._flags = (record._flags||[]).concat([`Unknown entity: "${record.entity}"`]);
     }
+
+    // Parse entity columns into franchises array
+    const franchises = [];
+    for (let i = 1; i <= 8; i++) {
+      const eVal = record['_entity_' + i];
+      if (!eVal) continue;
+      const storeMatch = eVal.match(/^(\d+)\s*[-–—]\s*(.+)$/);
+      if (storeMatch) {
+        franchises.push({ id: uid(), name: storeMatch[2].trim(), legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: storeMatch[1], notes: '' });
+      } else {
+        franchises.push({ id: uid(), name: eVal.trim(), legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '' });
+      }
+      delete record['_entity_' + i]; // clean up temp field
+    }
+    if (franchises.length) record._franchises = franchises;
+
+    // Default qbType to QBO if entities/brand present but no type set
+    if (!record.qbType && (record._franchises || record.franchiseBrand)) record.qbType = 'QBO';
 
     return record;
   }).filter(r => {
@@ -23453,7 +23510,8 @@ function importCommit() {
       // QB
       qbType:    r.qbType || '', qboBilling: r.qboBilling || '',
       qboRealmId: r.qboRealmId || '',
-      franchises: [],
+      franchises: r._franchises || [],
+      franchiseBrand: r.franchiseBrand || '',
       qbdUser:   '', qbdPass: '',
       // Banking — always blank
       achBank: '', achAccttype: '', achRouting: '', achAccount: '',
@@ -23496,7 +23554,11 @@ function importCommit() {
   showToast(`✓ ${imported} clients imported into ARK`);
 
   // Check for QBO clients that need linking — show batch connect prompt
-  const qboUnlinked = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  const qboUnlinked = (DB.clients || []).filter(c => {
+    if (c.qbType !== 'QBO') return false;
+    if (c.franchises && c.franchises.length) return c.franchises.some(f => !f.qboRealmId);
+    return !c.qboRealmId;
+  });
   if (qboUnlinked.length > 0) {
     const promptEl = document.getElementById('import-log');
     if (promptEl) {
@@ -23525,7 +23587,8 @@ function importDownloadTemplate() {
     'Accounting Method','Outside CPA Name','CPA Email','Tax Notes',
     'Payroll Platform','Payroll Company ID','SUTA Rate','Deposit Frequency','Pay Schedule',
     'Sales Tax Frequency','State Tax ID','Sales Tax Portal URL','Sales Tax Username','Sales Tax Next Due Date','Nexus State',
-    'QuickBooks Type','QBO Billing',
+    'QuickBooks Type','QBO Billing','Franchise Brand',
+    'Entity 1','Entity 2','Entity 3','Entity 4','Entity 5','Entity 6','Entity 7','Entity 8',
     'ShareFile URL','Folder Path','Biennial Report ID','Biennial Cycle',
     'Notes'
   ];
@@ -23542,7 +23605,8 @@ function importDownloadTemplate() {
     'Cash','John Smith CPA','jsmith@cpa.com','',
     'Patriot','12345','2.7','Monthly','Bi-Weekly (26x/year)',
     'Quarterly','','https://ne.tax.gov','tom_ashland','2026-04-15','Nebraska',
-    'QBO','Client',
+    'QBO','Client','',
+    '','','','','','','','',
     '','J:\\Clients\\Ashland Hardware','','Even',
     'Long-standing client. Monthly bookkeeping.'
   ];
@@ -23556,6 +23620,8 @@ function importDownloadTemplate() {
     'Deposit Frequency options: Monthly, Semi-Weekly, Next Day, Quarterly',
     'Sales Tax Frequency options: Monthly, Quarterly, Annually',
     'QB Type options: QBO, QBD   |   QBO Billing options: Client, Firm',
+    'Franchise Brand options: Scooter\'s, HTeaO, Little Caesar\'s, Deviled Egg Co (or blank)',
+    'Entity columns: "1083 - Arlington" format (store# - location) for franchises, or plain name for entities',
     'Accounting Method options: Cash, Accrual',
     'Biennial Cycle options: Even, Odd',
   ];
