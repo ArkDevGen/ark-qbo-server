@@ -8075,15 +8075,19 @@ function setQBType(type, billing, qbdUser, qbdPass, qboRealmId, franchises){
   onQBTypeChange();
   if(type==='QBO'&&billing){ const r=document.querySelector(`input[name="mc-qbo-billing"][value="${billing}"]`); if(r){ r.checked=true; onQBOBillingChange(); } }
   if(type==='QBD'){ document.getElementById('mc-qbd-user').value=qbdUser||''; document.getElementById('mc-qbd-pass').value=qbdPass||''; }
-  // Populate QBO realm ID and link status
-  const realmEl = document.getElementById('mc-qbo-realm-id');
-  if(realmEl) realmEl.value = qboRealmId || '';
-  const unlinkBtn = document.getElementById('mc-qbo-unlink-btn');
-  if(unlinkBtn) unlinkBtn.style.display = qboRealmId ? '' : 'none';
-  const linkInfo = document.getElementById('mc-qbo-link-info');
-  if(linkInfo) linkInfo.textContent = qboRealmId ? `Linked to QBO company ${qboRealmId}` : '';
   // Render franchises
   renderFranchiseList(franchises || []);
+  // Hide parent QBO link section when franchises exist (linking happens at franchise level)
+  const hasFranchises = franchises && franchises.length > 0;
+  const linkWrap = document.getElementById('mc-qbo-link-wrap');
+  if(linkWrap && type==='QBO') linkWrap.style.display = hasFranchises ? 'none' : '';
+  // Populate QBO realm ID and link status (only for non-franchise clients)
+  const realmEl = document.getElementById('mc-qbo-realm-id');
+  if(realmEl) realmEl.value = hasFranchises ? '' : (qboRealmId || '');
+  const unlinkBtn = document.getElementById('mc-qbo-unlink-btn');
+  if(unlinkBtn) unlinkBtn.style.display = (!hasFranchises && qboRealmId) ? '' : 'none';
+  const linkInfo = document.getElementById('mc-qbo-link-info');
+  if(linkInfo) linkInfo.textContent = (!hasFranchises && qboRealmId) ? `Linked to QBO company ${qboRealmId}` : '';
 }
 
 // ── QBO Link — opens picker modal to link client to a QBO company ──
@@ -8287,10 +8291,12 @@ function addFranchise() {
   const empty = document.getElementById('mc-franchise-empty');
   if (!list) return;
   if (empty) empty.style.display = 'none';
-  // Read current franchises from DOM, add a new empty one
   const current = getFranchisesFromModal();
   current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '' });
   renderFranchiseList(current);
+  // Hide parent QBO link when franchises exist
+  const linkWrap = document.getElementById('mc-qbo-link-wrap');
+  if(linkWrap) linkWrap.style.display = 'none';
 }
 
 function removeFranchise(idx) {
@@ -8298,6 +8304,9 @@ function removeFranchise(idx) {
   if (current[idx]?.qboRealmId && !confirm('This franchise is linked to QBO. Remove it?')) return;
   current.splice(idx, 1);
   renderFranchiseList(current);
+  // Show parent QBO link when no franchises remain
+  const linkWrap = document.getElementById('mc-qbo-link-wrap');
+  if(linkWrap && current.length === 0) linkWrap.style.display = '';
 }
 
 function getFranchisesFromModal() {
