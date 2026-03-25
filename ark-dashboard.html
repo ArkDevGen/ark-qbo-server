@@ -4845,7 +4845,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div class="modal-title" id="det-name"></div>
         <div id="det-sub" style="font-size:12px;color:var(--text-d);margin-top:2px;"></div>
       </div>
-      <button class="modal-close" onclick="closeModal('modal-detail')">×</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-sm" id="det-edit-btn" onclick="closeModal('modal-detail');openClient(DB._detailId)" style="font-size:11px;background:var(--navy);border-color:var(--navy);color:#fff;padding:4px 12px;">✏ Edit</button>
+        <button class="modal-close" onclick="closeModal('modal-detail')">×</button>
+      </div>
     </div>
     <div class="tabs" id="det-tabs" style="margin-top:14px;">
       <div class="tab active" onclick="showTab('overview')">Overview</div>
