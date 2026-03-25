@@ -3131,11 +3131,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,18,0,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🧾</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Invoice Builder</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Create and send invoices to franchise groups directly through QBO.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;">Planned</div>
+      <div onclick="qboOpenTool('batch')" id="qbo-tool-batch" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,32,64,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🔗</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Batch Connect</div>
+        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Link CRM clients to QBO companies in bulk — assembly-line OAuth or quick-link to existing.</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
@@ -3415,6 +3415,69 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <span id="pl-history-count" style="font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;">0 periods</span>
               </div>
               <div id="pl-history-body" style="max-height:200px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch Connect Workspace -->
+        <div id="qbo-batch-workspace" style="display:none;">
+          <div class="card" style="overflow:visible;position:relative;z-index:10;">
+            <div class="card-header" style="padding:12px 18px;">
+              <div class="card-title" style="font-size:12px;">Batch QBO Connect</div>
+              <div style="font-size:10px;color:var(--text-d);">Link CRM clients to QBO companies</div>
+            </div>
+            <div style="padding:16px 18px;">
+
+              <!-- Progress bar -->
+              <div style="margin-bottom:18px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <span id="batch-progress-text" style="font-size:12px;font-weight:600;color:var(--text);">0 of 0 QBO clients linked</span>
+                  <span id="batch-progress-pct" style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);">0%</span>
+                </div>
+                <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+                  <div id="batch-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--navy),var(--accent));border-radius:3px;width:0%;transition:width .3s;"></div>
+                </div>
+              </div>
+
+              <!-- Connect Next hero -->
+              <div id="batch-connect-next-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:18px;text-align:center;">
+                <div style="font-size:11px;color:var(--text-d);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Next Unlinked Client</div>
+                <div id="batch-next-name" style="font-size:18px;font-weight:700;font-family:var(--font-heading);color:var(--text);margin-bottom:12px;">—</div>
+                <button id="batch-connect-next-btn" onclick="batchConnectNext()" class="btn" style="background:var(--navy);border-color:var(--navy);color:#fff;font-size:13px;padding:10px 28px;">Connect Next →</button>
+              </div>
+
+              <!-- Bulk actions bar -->
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                <input type="text" id="batch-search" placeholder="Search clients…" oninput="batchFilterClients()" class="field-input" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px;">
+                <select id="batch-filter-status" onchange="batchRefreshTable()" class="field-input" style="width:auto;font-size:12px;padding:6px 10px;">
+                  <option value="all">All QBO Clients</option>
+                  <option value="unlinked" selected>Unlinked Only</option>
+                  <option value="linked">Linked Only</option>
+                </select>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <button id="batch-bulk-link-btn" onclick="batchBulkLinkModal()" class="btn btn-sm btn-ghost" style="font-size:11px;display:none;">Link Selected to…</button>
+                </div>
+              </div>
+
+              <!-- Client table -->
+              <div style="overflow-x:auto;max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;" id="batch-table">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;">
+                      <th style="padding:6px 8px;text-align:center;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;background:var(--surface2);width:30px;"><input type="checkbox" id="batch-select-all" onchange="batchToggleAll(this.checked)"></th>
+                      <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);">Business Name</th>
+                      <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:80px;">Entity</th>
+                      <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:80px;">Status</th>
+                      <th style="padding:6px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:160px;">QBO Company</th>
+                      <th style="padding:6px 8px;text-align:center;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:140px;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="batch-table-body"></tbody>
+                </table>
+              </div>
+
+              <div id="batch-empty-msg" style="display:none;text-align:center;padding:32px 0;color:var(--text-d);font-size:13px;">No QBO clients found. Import clients or set QB Type to "QBO" in client records.</div>
+
             </div>
           </div>
         </div>
@@ -20696,8 +20759,12 @@ function qboOpenTool(tool) {
   document.getElementById('qbo-gje-workspace').style.display     = 'none';
   document.getElementById('qbo-expense-workspace').style.display = 'none';
   document.getElementById('qbo-pl-workspace').style.display      = 'none';
+  document.getElementById('qbo-batch-workspace').style.display   = 'none';
   document.getElementById('qbo-default-workspace').style.display = 'none';
-  if (tool === 'gje') {
+  if (tool === 'batch') {
+    document.getElementById('qbo-batch-workspace').style.display = '';
+    renderBatchConnect();
+  } else if (tool === 'gje') {
     document.getElementById('qbo-gje-workspace').style.display = '';
     if (qboLineCount === 0) { qboAddGJELine(); qboAddGJELine(); }
   } else if (tool === 'pldigest') {
@@ -21038,6 +21105,299 @@ function qboClearActivity() {
 }
 
 
+
+
+// ══════════════════════════════════════════════════════════════════
+//  BATCH QBO CONNECT
+// ══════════════════════════════════════════════════════════════════
+
+let _batchSelectedIds = new Set();
+let _batchSearchQuery = '';
+
+function renderBatchConnect() {
+  const allQbo = (DB.clients || []).filter(c => c.qbType === 'QBO');
+  const linked = allQbo.filter(c => c.qboRealmId);
+  const unlinked = allQbo.filter(c => !c.qboRealmId);
+  const total = allQbo.length;
+  const pct = total > 0 ? Math.round((linked.length / total) * 100) : 0;
+
+  // Update progress
+  const progText = document.getElementById('batch-progress-text');
+  const progPct = document.getElementById('batch-progress-pct');
+  const progBar = document.getElementById('batch-progress-bar');
+  if (progText) progText.textContent = `${linked.length} of ${total} QBO clients linked`;
+  if (progPct) progPct.textContent = pct + '%';
+  if (progBar) progBar.style.width = pct + '%';
+
+  // Update Connect Next hero
+  const nextName = document.getElementById('batch-next-name');
+  const nextBtn = document.getElementById('batch-connect-next-btn');
+  const nextWrap = document.getElementById('batch-connect-next-wrap');
+  if (unlinked.length > 0) {
+    const first = unlinked[0];
+    if (nextName) nextName.textContent = first.biz || first.nameQb || 'Unnamed Client';
+    if (nextBtn) { nextBtn.disabled = false; nextBtn.textContent = 'Connect Next →'; }
+    if (nextWrap) nextWrap.style.borderColor = 'var(--navy)';
+  } else {
+    if (nextName) nextName.textContent = total > 0 ? '✓ All clients linked!' : 'No QBO clients found';
+    if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = total > 0 ? 'All Done' : 'No Clients'; }
+    if (nextWrap) nextWrap.style.borderColor = 'var(--border)';
+  }
+
+  batchRefreshTable();
+}
+
+function batchRefreshTable() {
+  const filter = document.getElementById('batch-filter-status')?.value || 'all';
+  const query = (document.getElementById('batch-search')?.value || '').toLowerCase().trim();
+  _batchSearchQuery = query;
+
+  let clients = (DB.clients || []).filter(c => c.qbType === 'QBO');
+  if (filter === 'unlinked') clients = clients.filter(c => !c.qboRealmId);
+  else if (filter === 'linked') clients = clients.filter(c => c.qboRealmId);
+  if (query) clients = clients.filter(c => (c.biz || '').toLowerCase().includes(query) || (c.nameQb || '').toLowerCase().includes(query));
+
+  // Sort: unlinked first, then alphabetical
+  clients.sort((a, b) => {
+    if (!a.qboRealmId && b.qboRealmId) return -1;
+    if (a.qboRealmId && !b.qboRealmId) return 1;
+    return (a.biz || '').localeCompare(b.biz || '');
+  });
+
+  const tbody = document.getElementById('batch-table-body');
+  const emptyMsg = document.getElementById('batch-empty-msg');
+  const table = document.getElementById('batch-table');
+  if (!tbody) return;
+
+  if (clients.length === 0) {
+    tbody.innerHTML = '';
+    if (table) table.style.display = 'none';
+    if (emptyMsg) emptyMsg.style.display = '';
+    return;
+  }
+  if (table) table.style.display = '';
+  if (emptyMsg) emptyMsg.style.display = 'none';
+
+  // Build realm options for quick-link dropdown
+  const realmOpts = Object.entries(qboAllCompanies || {})
+    .map(([rid, info]) => `<option value="${rid}">${info.companyName || rid.slice(0,10) + '…'}</option>`)
+    .join('');
+
+  tbody.innerHTML = clients.map(c => {
+    const isLinked = !!c.qboRealmId;
+    const companyName = isLinked ? (qboAllCompanies[c.qboRealmId]?.companyName || c.qboRealmId.slice(0,12) + '…') : '';
+    const checked = _batchSelectedIds.has(c.id) ? 'checked' : '';
+    const rowBg = isLinked ? 'rgba(44,160,28,.04)' : '';
+
+    let actionHtml;
+    if (isLinked) {
+      actionHtml = `<span style="font-size:11px;color:var(--green);font-weight:600;">✓ Linked</span>`;
+    } else if (realmOpts) {
+      actionHtml = `
+        <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+          <button onclick="batchConnectClient('${c.id}')" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>
+          <select onchange="if(this.value) batchLinkToExisting('${c.id}', this.value); this.value='';" class="field-input" style="font-size:10px;padding:2px 4px;width:auto;min-width:60px;">
+            <option value="">Link to…</option>
+            ${realmOpts}
+          </select>
+        </div>`;
+    } else {
+      actionHtml = `<button onclick="batchConnectClient('${c.id}')" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>`;
+    }
+
+    return `<tr style="border-bottom:1px solid var(--border);background:${rowBg};" data-client-id="${c.id}">
+      <td style="padding:5px 8px;text-align:center;"><input type="checkbox" class="batch-cb" value="${c.id}" ${checked} onchange="batchToggleOne('${c.id}', this.checked)" ${isLinked ? 'disabled' : ''}></td>
+      <td style="padding:5px 8px;font-size:12px;font-weight:500;color:var(--text);">${c.biz || c.nameQb || '—'}</td>
+      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${c.entity || '—'}</td>
+      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${c.status || '—'}</td>
+      <td style="padding:5px 8px;font-size:11px;color:${isLinked ? 'var(--green)' : 'var(--text-d)'};font-family:'DM Mono',monospace;">${companyName || '—'}</td>
+      <td style="padding:5px 8px;text-align:center;">${actionHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // Update bulk link button visibility
+  const bulkBtn = document.getElementById('batch-bulk-link-btn');
+  if (bulkBtn) bulkBtn.style.display = _batchSelectedIds.size > 0 ? '' : 'none';
+}
+
+function batchFilterClients() {
+  batchRefreshTable();
+}
+
+function batchToggleAll(checked) {
+  const filter = document.getElementById('batch-filter-status')?.value || 'all';
+  let clients = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  if (_batchSearchQuery) clients = clients.filter(c => (c.biz || '').toLowerCase().includes(_batchSearchQuery));
+  if (checked) {
+    clients.forEach(c => _batchSelectedIds.add(c.id));
+  } else {
+    _batchSelectedIds.clear();
+  }
+  batchRefreshTable();
+}
+
+function batchToggleOne(clientId, checked) {
+  if (checked) _batchSelectedIds.add(clientId);
+  else _batchSelectedIds.delete(clientId);
+  const bulkBtn = document.getElementById('batch-bulk-link-btn');
+  if (bulkBtn) bulkBtn.style.display = _batchSelectedIds.size > 0 ? '' : 'none';
+}
+
+function batchConnectNext() {
+  const unlinked = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  if (!unlinked.length) { showToast('All QBO clients are linked!'); return; }
+  batchConnectClient(unlinked[0].id);
+}
+
+function batchConnectClient(clientId) {
+  const client = DB.clients.find(c => c.id === clientId);
+  if (!client) { showToast('Client not found'); return; }
+
+  // Show which client we're connecting in the hero section
+  const nextName = document.getElementById('batch-next-name');
+  if (nextName) nextName.textContent = '🔄 Connecting: ' + (client.biz || client.nameQb || 'Unknown');
+
+  const popup = window.open(
+    `${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId)}`,
+    'qbo-auth', 'width=600,height=700,left=200,top=100'
+  );
+
+  window.addEventListener('message', async function handler(e) {
+    if (e.data?.type !== 'qbo-connected') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+
+    const realmId = e.data.realmId;
+    if (!realmId) return;
+
+    // Update client record
+    client.qboRealmId = realmId;
+    DB.save();
+
+    // Link on server
+    try {
+      await fetch(`${QBO_SERVER}/qbo/link-client`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId, clientId })
+      });
+    } catch(e) { console.warn('Link call failed:', e); }
+
+    // Fetch company name and store
+    try {
+      const info = await qboCall('getCompanyInfo', {}, realmId);
+      const companyName = info?.CompanyInfo?.CompanyName || info?.companyInfo?.CompanyName || '';
+      if (companyName) {
+        await fetch(`${QBO_SERVER}/qbo/update-company-name`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realmId, companyName })
+        });
+        // Update local cache
+        if (!qboAllCompanies[realmId]) qboAllCompanies[realmId] = {};
+        qboAllCompanies[realmId].companyName = companyName;
+      }
+    } catch(e) { console.warn('Company name fetch failed:', e); }
+
+    // Refresh status to update qboAllCompanies
+    try {
+      const statusRes = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
+      if (statusRes.companies) qboAllCompanies = statusRes.companies;
+    } catch(e) {}
+
+    showToast(`✓ ${client.biz || 'Client'} linked to QBO`);
+    qboLog('success', `Batch linked <strong>${client.biz || clientId}</strong> → realm ${realmId.slice(0,10)}…`);
+    renderBatchConnect();
+  });
+}
+
+async function batchLinkToExisting(clientId, realmId) {
+  const client = DB.clients.find(c => c.id === clientId);
+  if (!client || !realmId) return;
+
+  try {
+    await fetch(`${QBO_SERVER}/qbo/link-client`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, clientId })
+    });
+    client.qboRealmId = realmId;
+    DB.save();
+    showToast(`✓ ${client.biz || 'Client'} linked to ${qboAllCompanies[realmId]?.companyName || realmId}`);
+    qboLog('success', `Quick-linked <strong>${client.biz || clientId}</strong> → ${qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…'}`);
+    renderBatchConnect();
+  } catch(e) {
+    showToast('Failed to link: ' + e.message);
+  }
+}
+
+function batchBulkLinkModal() {
+  if (_batchSelectedIds.size === 0) { showToast('Select clients first'); return; }
+
+  const realmEntries = Object.entries(qboAllCompanies || {});
+  if (realmEntries.length === 0) { showToast('No QBO companies connected yet — connect one first'); return; }
+
+  const count = _batchSelectedIds.size;
+  const listHtml = realmEntries.map(([rid, info]) => {
+    const name = info.companyName || 'Unnamed Company';
+    const linkedCount = (info.linkedClients || []).length;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:8px;">
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;color:var(--text);">${name}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-d);margin-top:2px;">Realm: ${rid.slice(0,16)}…</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${linkedCount} client${linkedCount !== 1 ? 's' : ''} currently linked</div>
+      </div>
+      <button class="btn btn-sm" onclick="batchBulkLink('${rid}')" style="background:var(--navy);border-color:var(--navy);color:#fff;white-space:nowrap;">Link ${count} Client${count !== 1 ? 's' : ''}</button>
+    </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'batch-bulk-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Bulk Link ${count} Client${count !== 1 ? 's' : ''}</h3>
+          <p style="margin:4px 0 0;font-size:12px;color:var(--text-d);">Select the QBO company to link all selected clients to</p>
+        </div>
+        <button onclick="document.getElementById('batch-bulk-overlay')?.remove()" style="background:none;border:none;color:var(--text-d);font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+      <div style="padding:16px 24px;">${listHtml}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function batchBulkLink(realmId) {
+  document.getElementById('batch-bulk-overlay')?.remove();
+  const ids = [..._batchSelectedIds];
+  let successCount = 0;
+
+  for (const clientId of ids) {
+    const client = DB.clients.find(c => c.id === clientId);
+    if (!client || client.qboRealmId) continue;
+    try {
+      await fetch(`${QBO_SERVER}/qbo/link-client`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId, clientId })
+      });
+      client.qboRealmId = realmId;
+      successCount++;
+    } catch(e) { console.warn(`Failed to link ${clientId}:`, e); }
+  }
+
+  DB.save();
+  _batchSelectedIds.clear();
+  const companyName = qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…';
+  showToast(`✓ ${successCount} client${successCount !== 1 ? 's' : ''} linked to ${companyName}`);
+  qboLog('success', `Bulk linked <strong>${successCount} clients</strong> → ${companyName}`);
+
+  // Refresh server status
+  try {
+    const statusRes = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
+    if (statusRes.companies) qboAllCompanies = statusRes.companies;
+  } catch(e) {}
+
+  renderBatchConnect();
+}
 
 
 // ══════════════════════════════════════════════════════════════════
@@ -22707,6 +23067,7 @@ function importCommit() {
       stNexus:   r.stNexus || '', stMulti: false, stStates: [],
       // QB
       qbType:    r.qbType || '', qboBilling: r.qboBilling || '',
+      qboRealmId: r.qboRealmId || '',
       qbdUser:   '', qbdPass: '',
       // Banking — always blank
       achBank: '', achAccttype: '', achRouting: '', achAccount: '',
@@ -22747,6 +23108,19 @@ function importCommit() {
   if (logEl)    logEl.innerHTML = log.map(l => `<div>${l}</div>`).join('');
 
   showToast(`✓ ${imported} clients imported into ARK`);
+
+  // Check for QBO clients that need linking — show batch connect prompt
+  const qboUnlinked = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  if (qboUnlinked.length > 0) {
+    const promptEl = document.getElementById('import-log');
+    if (promptEl) {
+      promptEl.innerHTML += `<div style="margin-top:16px;padding:14px 18px;background:rgba(26,32,64,.08);border:1px solid var(--navy);border-radius:var(--radius-sm);text-align:center;">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px;">${qboUnlinked.length} QBO client${qboUnlinked.length !== 1 ? 's' : ''} need QBO linking</div>
+        <div style="font-size:12px;color:var(--text-d);margin-bottom:10px;">Link them to their QBO companies using the Batch Connect tool.</div>
+        <button class="btn btn-sm" onclick="nav('qbo');setTimeout(()=>qboOpenTool('batch'),100);" style="background:var(--navy);border-color:var(--navy);color:#fff;font-size:12px;">Open Batch Connect →</button>
+      </div>`;
+    }
+  }
 
   // Refresh client list in background
   if (typeof renderClients === 'function') renderClients();
