@@ -4528,6 +4528,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div id="mc-qbo-link-info" style="font-size:11px;color:var(--text-d);margin-top:6px;min-height:16px;"></div>
           </div>
 
+          <!-- Franchises — shown when QBO selected, for multi-QBO clients -->
+          <div class="fg full" id="mc-franchises-wrap" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <label style="font-size:13px;font-weight:600;color:var(--text);">Franchises</label>
+              <button class="btn btn-ghost btn-sm" onclick="addFranchise()" style="font-size:11px;display:flex;align-items:center;gap:4px;">+ Add Franchise</button>
+            </div>
+            <div id="mc-franchise-list"></div>
+            <div id="mc-franchise-empty" style="font-size:12px;color:var(--text-d);text-align:center;padding:14px 0;">No franchises — this client has a single QBO company linked above.</div>
+          </div>
+
           <!-- QBO options — shown when QBO selected -->
           <div class="fg full" id="mc-qbo-billing-wrap" style="display:none;">
             <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:8px;">QBO Subscription Billed To</label>
@@ -8141,6 +8151,7 @@ function onQBTypeChange(){
   const val = document.querySelector('input[name="mc-qb-type"]:checked')?.value||'';
   document.getElementById('mc-qbo-billing-wrap').style.display = val==='QBO' ? '' : 'none';
   document.getElementById('mc-qbo-link-wrap').style.display    = val==='QBO' ? '' : 'none';
+  document.getElementById('mc-franchises-wrap').style.display  = val==='QBO' ? '' : 'none';
   document.getElementById('mc-qbd-user-wrap').style.display    = val==='QBD' ? '' : 'none';
   document.getElementById('mc-qbd-pass-wrap').style.display    = val==='QBD' ? '' : 'none';
   if(val!=='QBO'){ document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false); document.getElementById('mc-qbo-billing-hint').textContent=''; }
@@ -8164,7 +8175,7 @@ function onQBOBillingChange(){
     lbl.style.background=r.checked?'#eef1f8':'var(--surface2)';
   });
 }
-function setQBType(type, billing, qbdUser, qbdPass, qboRealmId){
+function setQBType(type, billing, qbdUser, qbdPass, qboRealmId, franchises){
   document.querySelectorAll('input[name="mc-qb-type"]').forEach(r=>r.checked=false);
   document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false);
   if(type){ const r=document.querySelector(`input[name="mc-qb-type"][value="${type}"]`); if(r) r.checked=true; }
@@ -8178,6 +8189,8 @@ function setQBType(type, billing, qbdUser, qbdPass, qboRealmId){
   if(unlinkBtn) unlinkBtn.style.display = qboRealmId ? '' : 'none';
   const linkInfo = document.getElementById('mc-qbo-link-info');
   if(linkInfo) linkInfo.textContent = qboRealmId ? `Linked to QBO company ${qboRealmId}` : '';
+  // Render franchises
+  renderFranchiseList(franchises || []);
 }
 
 // ── QBO Link — opens picker modal to link client to a QBO company ──
@@ -8269,16 +8282,58 @@ function qboLinkClientNewOAuth() {
   });
 }
 
-function qboOpenFromClient(clientId) {
+function qboOpenFromClient(clientId, realmIdOverride) {
   const client = DB.clients.find(c => c.id === clientId);
-  if (!client?.qboRealmId) { showToast('This client is not linked to a QBO company'); return; }
+  if (!client) { showToast('Client not found'); return; }
+
+  // If realmId provided directly, use it
+  if (realmIdOverride) {
+    nav('qbo');
+    setTimeout(async () => {
+      const sel = document.getElementById('qbo-company-select');
+      if (sel && [...sel.options].some(o => o.value === realmIdOverride)) {
+        sel.value = realmIdOverride;
+        await qboSwitchCompany();
+      } else { showToast('QBO company not connected on server'); }
+    }, 100);
+    return;
+  }
+
+  // If client has franchises with linked QBOs, show picker
+  const linkedFranchises = (client.franchises || []).filter(f => f.qboRealmId);
+  if (linkedFranchises.length > 1) {
+    // Multiple franchises — show picker
+    const listHtml = linkedFranchises.map(f => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:6px;cursor:pointer;" onclick="document.getElementById('fc-qbo-picker-overlay')?.remove(); qboOpenFromClient('${clientId}','${f.qboRealmId}');" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div>
+          <div style="font-weight:600;font-size:12px;color:var(--text);">${f.name || 'Unnamed'}</div>
+          <div style="font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;">${f.qboName || f.qboRealmId}</div>
+        </div>
+        <span style="color:var(--accent);font-size:12px;">→</span>
+      </div>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'fc-qbo-picker-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:400px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><h3 style="margin:0;font-size:14px;font-family:var(--font-heading);color:var(--text);">Which franchise?</h3></div>
+      <div style="padding:12px 20px;">${listHtml}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    return;
+  }
+
+  // Single franchise or simple client
+  const realmId = linkedFranchises[0]?.qboRealmId || client.qboRealmId;
+  if (!realmId) { showToast('This client is not linked to a QBO company'); return; }
   nav('qbo');
   setTimeout(async () => {
     const sel = document.getElementById('qbo-company-select');
-    if (sel && [...sel.options].some(o => o.value === client.qboRealmId)) {
-      sel.value = client.qboRealmId;
+    if (sel && [...sel.options].some(o => o.value === realmId)) {
+      sel.value = realmId;
       await qboSwitchCompany();
-    } else { showToast(`QBO company ${client.qboRealmId} is not connected on the server`); }
+    } else { showToast(`QBO company ${realmId} is not connected on the server`); }
   }, 100);
 }
 
@@ -8297,6 +8352,176 @@ async function qboUnlinkClient() {
   document.getElementById('mc-qbo-unlink-btn').style.display = 'none';
   document.getElementById('mc-qbo-link-info').textContent = '';
   showToast('Client unlinked from QBO');
+}
+
+// ── Franchise helpers ──────────────────────────────────────────────
+function renderFranchiseList(franchises) {
+  const list = document.getElementById('mc-franchise-list');
+  const empty = document.getElementById('mc-franchise-empty');
+  if (!list) return;
+  if (!franchises || !franchises.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.innerHTML = franchises.map((f, idx) => {
+    const linked = !!f.qboRealmId;
+    return `<div class="franchise-row" data-idx="${idx}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+        <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Franchise name" style="font-size:12px;font-weight:600;">
+        <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Legal entity name" style="font-size:12px;">
+        <button onclick="removeFranchise(${idx})" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-d)'" title="Remove franchise">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:80px 80px 1fr;gap:8px;align-items:center;margin-bottom:8px;">
+        <input type="text" class="field-input fc-state" value="${f.state||''}" placeholder="State" style="font-size:11px;text-transform:uppercase;" maxlength="2">
+        <input type="text" class="field-input fc-store" value="${f.storeNumber||''}" placeholder="Store #" style="font-size:11px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="text" class="field-input fc-realm" value="${f.qboRealmId||''}" placeholder="Not linked" readonly style="font-family:'DM Mono',monospace;font-size:11px;background:var(--surface);flex:1;">
+          ${linked
+            ? `<button class="btn btn-ghost btn-sm" onclick="unlinkFranchise(${idx})" style="font-size:10px;color:var(--red);border-color:var(--red);padding:2px 8px;">Unlink</button>`
+            : `<button class="btn btn-sm" onclick="linkFranchiseToQBO(${idx})" style="font-size:10px;background:var(--navy);border-color:var(--navy);color:#fff;padding:2px 8px;white-space:nowrap;">Link QBO</button>`
+          }
+        </div>
+      </div>
+      ${f.qboName ? `<div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;">QBO: ${f.qboName}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function addFranchise() {
+  const list = document.getElementById('mc-franchise-list');
+  const empty = document.getElementById('mc-franchise-empty');
+  if (!list) return;
+  if (empty) empty.style.display = 'none';
+  // Read current franchises from DOM, add a new empty one
+  const current = getFranchisesFromModal();
+  current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '' });
+  renderFranchiseList(current);
+}
+
+function removeFranchise(idx) {
+  const current = getFranchisesFromModal();
+  if (current[idx]?.qboRealmId && !confirm('This franchise is linked to QBO. Remove it?')) return;
+  current.splice(idx, 1);
+  renderFranchiseList(current);
+}
+
+function getFranchisesFromModal() {
+  const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
+  return [...rows].map(row => ({
+    id: row.dataset.id || uid(),
+    name: row.querySelector('.fc-name')?.value?.trim() || '',
+    legalName: row.querySelector('.fc-legal')?.value?.trim() || '',
+    qboRealmId: row.querySelector('.fc-realm')?.value?.trim() || '',
+    qboName: row.querySelector('.fc-qboname')?.value?.trim() || '',
+    state: row.querySelector('.fc-state')?.value?.trim().toUpperCase() || '',
+    storeNumber: row.querySelector('.fc-store')?.value?.trim() || '',
+    notes: '',
+  }));
+}
+
+async function linkFranchiseToQBO(idx) {
+  const clientId = DB._editClient;
+  if (!clientId) { showToast('Save the client first'); return; }
+
+  // Fetch all connected companies
+  let companies = {};
+  try {
+    const res = await fetch(`${QBO_SERVER}/qbo/status`);
+    const data = await res.json();
+    companies = data.companies || {};
+  } catch(e) {}
+
+  const realmIds = Object.keys(companies);
+  let listHtml = '';
+  if (realmIds.length > 0) {
+    listHtml = realmIds.map(rid => {
+      const info = companies[rid];
+      const name = info.companyName || 'Unnamed Company';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);margin-bottom:6px;">
+        <div>
+          <div style="font-weight:600;font-size:12px;color:var(--text);">${name}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-d);margin-top:2px;">${rid}</div>
+        </div>
+        <button class="btn btn-sm" onclick="linkFranchiseToRealm(${idx},'${rid}','${name.replace(/'/g,"\\'")}')" style="background:var(--navy);border-color:var(--navy);color:#fff;font-size:10px;">Select</button>
+      </div>`;
+    }).join('');
+  } else {
+    listHtml = '<p style="color:var(--text-d);font-size:12px;text-align:center;padding:16px 0;">No QBO companies connected. Connect one via the button below.</p>';
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'fc-link-picker-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-height:70vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 style="margin:0;font-size:14px;font-family:var(--font-heading);color:var(--text);">Link Franchise to QBO</h3>
+          <p style="margin:2px 0 0;font-size:11px;color:var(--text-d);">Select a connected QBO company</p>
+        </div>
+        <button onclick="document.getElementById('fc-link-picker-overlay')?.remove()" style="background:none;border:none;color:var(--text-d);font-size:18px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:12px 20px;">${listHtml}</div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:center;">
+        <button class="btn btn-sm" onclick="linkFranchiseNewOAuth(${idx})" style="background:var(--green);border-color:var(--green);color:#fff;">+ Connect New QBO Company</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function linkFranchiseToRealm(idx, realmId, companyName) {
+  document.getElementById('fc-link-picker-overlay')?.remove();
+  const current = getFranchisesFromModal();
+  if (!current[idx]) return;
+  current[idx].qboRealmId = realmId;
+  current[idx].qboName = companyName;
+  renderFranchiseList(current);
+  showToast('✓ Franchise linked to ' + companyName);
+}
+
+function linkFranchiseNewOAuth(idx) {
+  document.getElementById('fc-link-picker-overlay')?.remove();
+  const clientId = DB._editClient || '';
+  const popup = window.open(`${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId)}`, 'qbo-auth', 'width=600,height=700,left=200,top=100');
+  window.addEventListener('message', async function handler(e) {
+    if (e.data?.type !== 'qbo-connected') return;
+    window.removeEventListener('message', handler);
+    if (popup && !popup.closed) popup.close();
+    const realmId = e.data.realmId;
+    if (!realmId) return;
+    // Fetch company name
+    let companyName = '';
+    try {
+      const info = await qboCall('getCompanyInfo', {}, realmId);
+      companyName = info?.CompanyInfo?.CompanyName || info?.companyInfo?.CompanyName || '';
+      if (companyName) {
+        await fetch(`${QBO_SERVER}/qbo/update-company-name`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realmId, companyName })
+        });
+      }
+    } catch(e) {}
+    const current = getFranchisesFromModal();
+    if (current[idx]) {
+      current[idx].qboRealmId = realmId;
+      current[idx].qboName = companyName || realmId;
+      renderFranchiseList(current);
+      showToast('✓ Connected and linked franchise to QBO');
+    }
+  });
+}
+
+function unlinkFranchise(idx) {
+  if (!confirm('Unlink this franchise from QBO?')) return;
+  const current = getFranchisesFromModal();
+  if (!current[idx]) return;
+  current[idx].qboRealmId = '';
+  current[idx].qboName = '';
+  renderFranchiseList(current);
+  showToast('Franchise unlinked');
 }
 
 // ── ACH helpers ──
@@ -8859,7 +9084,7 @@ function openEditClient(id){
   initWorkLocations(c.locations||[]);
   setPrPlatform(c.prPlatform||'');
   document.getElementById('mc-pr-script').value=c.prScript||'';
-  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'');
+  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'', c.franchises||[]);
   const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
@@ -8944,6 +9169,7 @@ function saveClient(){
     qbType:    document.querySelector('input[name="mc-qb-type"]:checked')?.value||'',
     qboBilling:document.querySelector('input[name="mc-qbo-billing"]:checked')?.value||'',
     qboRealmId:document.getElementById('mc-qbo-realm-id')?.value.trim()||'',
+    franchises: getFranchisesFromModal(),
     qbdUser:   (document.getElementById('mc-qbd-user')?.value||'').trim(),
     qbdPass:   document.getElementById('mc-qbd-pass')?.value||'',
     nameBilling: document.getElementById('mc-name-billing')?.value.trim()||'',
@@ -9617,8 +9843,10 @@ function openDetail(id){
       <div class="detail-box"><h4>QuickBooks</h4>
         <div class="drow"><span class="dk">Platform</span><span class="dv">${c.qbType}</span></div>
         ${c.qbType==='QBO'&&c.qboBilling?`<div class="drow"><span class="dk">Billing</span><span class="dv">${c.qboBilling} Billed</span></div>`:''}
-        ${c.qbType==='QBO'&&c.qboRealmId?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
-        ${c.qboRealmId?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
+        ${c.qbType==='QBO'&&c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
+        ${c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
+        ${c.franchises&&c.franchises.length?`<div class="drow"><span class="dk">Franchises</span><span class="dv">${c.franchises.map(f=>`<div style="margin-bottom:3px;">${f.name||'Unnamed'}${f.qboRealmId?' <span style="color:var(--green);font-size:10px;">✓ linked</span>':' <span style="color:var(--text-d);font-size:10px;">not linked</span>'}</div>`).join('')}</span></div>`:''}
+        ${c.franchises&&c.franchises.some(f=>f.qboRealmId)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
         ${c.qbType==='QBD'&&c.qbdUser?`<div class="drow"><span class="dk">Username</span><span class="dv" style="font-family:monospace;">${c.qbdUser}</span></div>`:''}
       </div>`:''}
       ${c.ein||c.prSwid||c.prSuta||c.prPayschedule||c.prPlatform?`
@@ -21187,32 +21415,70 @@ async function batchEnrichClient(client, ci, realmId) {
   }
 }
 
-function renderBatchConnect() {
+// Build flat list of linkable items (simple clients + franchise entries)
+function getBatchItems() {
+  const items = [];
   const allQbo = (DB.clients || []).filter(c => c.qbType === 'QBO');
-  const linked = allQbo.filter(c => c.qboRealmId);
-  const unlinked = allQbo.filter(c => !c.qboRealmId);
-  const total = allQbo.length;
+  for (const c of allQbo) {
+    if (c.franchises && c.franchises.length > 0) {
+      // One row per franchise
+      for (const f of c.franchises) {
+        items.push({
+          clientId: c.id,
+          franchiseId: f.id,
+          displayName: c.biz + ' → ' + (f.name || 'Unnamed'),
+          biz: c.biz,
+          franchiseName: f.name,
+          entity: c.entity,
+          status: c.status,
+          qboRealmId: f.qboRealmId || '',
+          qboName: f.qboName || '',
+          isFranchise: true,
+        });
+      }
+    } else {
+      // Simple client — one row
+      items.push({
+        clientId: c.id,
+        franchiseId: null,
+        displayName: c.biz || c.nameQb || 'Unnamed',
+        biz: c.biz,
+        franchiseName: '',
+        entity: c.entity,
+        status: c.status,
+        qboRealmId: c.qboRealmId || '',
+        qboName: '',
+        isFranchise: false,
+      });
+    }
+  }
+  return items;
+}
+
+function renderBatchConnect() {
+  const items = getBatchItems();
+  const linked = items.filter(i => i.qboRealmId);
+  const unlinked = items.filter(i => !i.qboRealmId);
+  const total = items.length;
   const pct = total > 0 ? Math.round((linked.length / total) * 100) : 0;
 
-  // Update progress
   const progText = document.getElementById('batch-progress-text');
   const progPct = document.getElementById('batch-progress-pct');
   const progBar = document.getElementById('batch-progress-bar');
-  if (progText) progText.textContent = `${linked.length} of ${total} QBO clients linked`;
+  if (progText) progText.textContent = `${linked.length} of ${total} QBO links connected`;
   if (progPct) progPct.textContent = pct + '%';
   if (progBar) progBar.style.width = pct + '%';
 
-  // Update Connect Next hero
   const nextName = document.getElementById('batch-next-name');
   const nextBtn = document.getElementById('batch-connect-next-btn');
   const nextWrap = document.getElementById('batch-connect-next-wrap');
   if (unlinked.length > 0) {
     const first = unlinked[0];
-    if (nextName) nextName.textContent = first.biz || first.nameQb || 'Unnamed Client';
+    if (nextName) nextName.textContent = first.displayName;
     if (nextBtn) { nextBtn.disabled = false; nextBtn.textContent = 'Connect Next →'; }
     if (nextWrap) nextWrap.style.borderColor = 'var(--navy)';
   } else {
-    if (nextName) nextName.textContent = total > 0 ? '✓ All clients linked!' : 'No QBO clients found';
+    if (nextName) nextName.textContent = total > 0 ? '✓ All linked!' : 'No QBO clients found';
     if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = total > 0 ? 'All Done' : 'No Clients'; }
     if (nextWrap) nextWrap.style.borderColor = 'var(--border)';
   }
@@ -21225,16 +21491,15 @@ function batchRefreshTable() {
   const query = (document.getElementById('batch-search')?.value || '').toLowerCase().trim();
   _batchSearchQuery = query;
 
-  let clients = (DB.clients || []).filter(c => c.qbType === 'QBO');
-  if (filter === 'unlinked') clients = clients.filter(c => !c.qboRealmId);
-  else if (filter === 'linked') clients = clients.filter(c => c.qboRealmId);
-  if (query) clients = clients.filter(c => (c.biz || '').toLowerCase().includes(query) || (c.nameQb || '').toLowerCase().includes(query));
+  let items = getBatchItems();
+  if (filter === 'unlinked') items = items.filter(i => !i.qboRealmId);
+  else if (filter === 'linked') items = items.filter(i => i.qboRealmId);
+  if (query) items = items.filter(i => i.displayName.toLowerCase().includes(query) || (i.biz || '').toLowerCase().includes(query));
 
-  // Sort: unlinked first, then alphabetical
-  clients.sort((a, b) => {
+  items.sort((a, b) => {
     if (!a.qboRealmId && b.qboRealmId) return -1;
     if (a.qboRealmId && !b.qboRealmId) return 1;
-    return (a.biz || '').localeCompare(b.biz || '');
+    return (a.displayName || '').localeCompare(b.displayName || '');
   });
 
   const tbody = document.getElementById('batch-table-body');
@@ -21242,7 +21507,7 @@ function batchRefreshTable() {
   const table = document.getElementById('batch-table');
   if (!tbody) return;
 
-  if (clients.length === 0) {
+  if (items.length === 0) {
     tbody.innerHTML = '';
     if (table) table.style.display = 'none';
     if (emptyMsg) emptyMsg.style.display = '';
@@ -21251,16 +21516,23 @@ function batchRefreshTable() {
   if (table) table.style.display = '';
   if (emptyMsg) emptyMsg.style.display = 'none';
 
-  // Build realm options for quick-link dropdown
   const realmOpts = Object.entries(qboAllCompanies || {})
     .map(([rid, info]) => `<option value="${rid}">${info.companyName || rid.slice(0,10) + '…'}</option>`)
     .join('');
 
-  tbody.innerHTML = clients.map(c => {
-    const isLinked = !!c.qboRealmId;
-    const companyName = isLinked ? (qboAllCompanies[c.qboRealmId]?.companyName || c.qboRealmId.slice(0,12) + '…') : '';
-    const checked = _batchSelectedIds.has(c.id) ? 'checked' : '';
+  tbody.innerHTML = items.map(item => {
+    const isLinked = !!item.qboRealmId;
+    const companyName = isLinked ? (qboAllCompanies[item.qboRealmId]?.companyName || item.qboName || item.qboRealmId.slice(0,12) + '…') : '';
+    const rowKey = item.franchiseId ? item.clientId + ':' + item.franchiseId : item.clientId;
+    const checked = _batchSelectedIds.has(rowKey) ? 'checked' : '';
     const rowBg = isLinked ? 'rgba(44,160,28,.04)' : '';
+    const fTag = item.isFranchise ? `<span style="font-size:9px;background:var(--navy);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;vertical-align:middle;">FRANCHISE</span>` : '';
+
+    // Build connect/link params
+    const connectArgs = item.franchiseId ? `'${item.clientId}','${item.franchiseId}'` : `'${item.clientId}'`;
+    const linkArgs = item.franchiseId
+      ? `batchLinkToExisting('${item.clientId}', this.value, '${item.franchiseId}')`
+      : `batchLinkToExisting('${item.clientId}', this.value)`;
 
     let actionHtml;
     if (isLinked) {
@@ -21268,27 +21540,26 @@ function batchRefreshTable() {
     } else if (realmOpts) {
       actionHtml = `
         <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
-          <button onclick="batchConnectClient('${c.id}')" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>
-          <select onchange="if(this.value) batchLinkToExisting('${c.id}', this.value); this.value='';" class="field-input" style="font-size:10px;padding:2px 4px;width:auto;min-width:60px;">
+          <button onclick="batchConnectClient(${connectArgs})" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>
+          <select onchange="if(this.value) ${linkArgs}; this.value='';" class="field-input" style="font-size:10px;padding:2px 4px;width:auto;min-width:60px;">
             <option value="">Link to…</option>
             ${realmOpts}
           </select>
         </div>`;
     } else {
-      actionHtml = `<button onclick="batchConnectClient('${c.id}')" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>`;
+      actionHtml = `<button onclick="batchConnectClient(${connectArgs})" class="btn btn-sm" style="font-size:10px;padding:3px 8px;background:var(--navy);border-color:var(--navy);color:#fff;">Connect</button>`;
     }
 
-    return `<tr style="border-bottom:1px solid var(--border);background:${rowBg};" data-client-id="${c.id}">
-      <td style="padding:5px 8px;text-align:center;"><input type="checkbox" class="batch-cb" value="${c.id}" ${checked} onchange="batchToggleOne('${c.id}', this.checked)" ${isLinked ? 'disabled' : ''}></td>
-      <td style="padding:5px 8px;font-size:12px;font-weight:500;color:var(--text);">${c.biz || c.nameQb || '—'}</td>
-      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${c.entity || '—'}</td>
-      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${c.status || '—'}</td>
+    return `<tr style="border-bottom:1px solid var(--border);background:${rowBg};" data-row-key="${rowKey}">
+      <td style="padding:5px 8px;text-align:center;"><input type="checkbox" class="batch-cb" value="${rowKey}" ${checked} onchange="batchToggleOne('${rowKey}', this.checked)" ${isLinked ? 'disabled' : ''}></td>
+      <td style="padding:5px 8px;font-size:12px;font-weight:500;color:var(--text);">${item.displayName}${fTag}</td>
+      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${item.entity || '—'}</td>
+      <td style="padding:5px 8px;font-size:11px;color:var(--text-d);">${item.status || '—'}</td>
       <td style="padding:5px 8px;font-size:11px;color:${isLinked ? 'var(--green)' : 'var(--text-d)'};font-family:'DM Mono',monospace;">${companyName || '—'}</td>
       <td style="padding:5px 8px;text-align:center;">${actionHtml}</td>
     </tr>`;
   }).join('');
 
-  // Update bulk link button visibility
   const bulkBtn = document.getElementById('batch-bulk-link-btn');
   if (bulkBtn) bulkBtn.style.display = _batchSelectedIds.size > 0 ? '' : 'none';
 }
@@ -21298,37 +21569,38 @@ function batchFilterClients() {
 }
 
 function batchToggleAll(checked) {
-  const filter = document.getElementById('batch-filter-status')?.value || 'all';
-  let clients = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
-  if (_batchSearchQuery) clients = clients.filter(c => (c.biz || '').toLowerCase().includes(_batchSearchQuery));
+  const items = getBatchItems().filter(i => !i.qboRealmId);
   if (checked) {
-    clients.forEach(c => _batchSelectedIds.add(c.id));
+    items.forEach(i => _batchSelectedIds.add(i.franchiseId ? i.clientId + ':' + i.franchiseId : i.clientId));
   } else {
     _batchSelectedIds.clear();
   }
   batchRefreshTable();
 }
 
-function batchToggleOne(clientId, checked) {
-  if (checked) _batchSelectedIds.add(clientId);
-  else _batchSelectedIds.delete(clientId);
+function batchToggleOne(rowKey, checked) {
+  if (checked) _batchSelectedIds.add(rowKey);
+  else _batchSelectedIds.delete(rowKey);
   const bulkBtn = document.getElementById('batch-bulk-link-btn');
   if (bulkBtn) bulkBtn.style.display = _batchSelectedIds.size > 0 ? '' : 'none';
 }
 
 function batchConnectNext() {
-  const unlinked = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
-  if (!unlinked.length) { showToast('All QBO clients are linked!'); return; }
-  batchConnectClient(unlinked[0].id);
+  const items = getBatchItems().filter(i => !i.qboRealmId);
+  if (!items.length) { showToast('All linked!'); return; }
+  const first = items[0];
+  batchConnectClient(first.clientId, first.franchiseId || undefined);
 }
 
-function batchConnectClient(clientId) {
+function batchConnectClient(clientId, franchiseId) {
   const client = DB.clients.find(c => c.id === clientId);
   if (!client) { showToast('Client not found'); return; }
 
-  // Show which client we're connecting in the hero section
+  const franchise = franchiseId ? (client.franchises || []).find(f => f.id === franchiseId) : null;
+  const displayName = franchise ? (client.biz + ' → ' + (franchise.name || 'Franchise')) : (client.biz || client.nameQb || 'Unknown');
+
   const nextName = document.getElementById('batch-next-name');
-  if (nextName) nextName.textContent = '🔄 Connecting: ' + (client.biz || client.nameQb || 'Unknown');
+  if (nextName) nextName.textContent = '🔄 Connecting: ' + displayName;
 
   const popup = window.open(
     `${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId)}`,
@@ -21343,19 +21615,23 @@ function batchConnectClient(clientId) {
     const realmId = e.data.realmId;
     if (!realmId) return;
 
-    // Update client record
-    client.qboRealmId = realmId;
+    // Store realm on franchise or client
+    if (franchise) {
+      franchise.qboRealmId = realmId;
+    } else {
+      client.qboRealmId = realmId;
+    }
     DB.save();
 
     // Link on server
     try {
       await fetch(`${QBO_SERVER}/qbo/link-client`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realmId, clientId })
+        body: JSON.stringify({ realmId, clientId, franchiseId: franchiseId || undefined })
       });
     } catch(e) { console.warn('Link call failed:', e); }
 
-    // Fetch company info and auto-fill blank client fields
+    // Fetch company info
     try {
       const info = await qboCall('getCompanyInfo', {}, realmId);
       const ci = info?.CompanyInfo || info?.companyInfo || {};
@@ -21367,45 +21643,52 @@ function batchConnectClient(clientId) {
         });
         if (!qboAllCompanies[realmId]) qboAllCompanies[realmId] = {};
         qboAllCompanies[realmId].companyName = companyName;
+        if (franchise) franchise.qboName = companyName;
       }
-      // Auto-fill blank fields only (don't overwrite existing data)
       await batchEnrichClient(client, ci, realmId);
       DB.save();
     } catch(e) { console.warn('Company info fetch failed:', e); }
 
-    // Refresh status to update qboAllCompanies
     try {
       const statusRes = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
       if (statusRes.companies) qboAllCompanies = statusRes.companies;
     } catch(e) {}
 
-    showToast(`✓ ${client.biz || 'Client'} linked to QBO`);
-    qboLog('success', `Batch linked <strong>${client.biz || clientId}</strong> → realm ${realmId.slice(0,10)}…`);
+    showToast(`✓ ${displayName} linked to QBO`);
+    qboLog('success', `Batch linked <strong>${displayName}</strong> → realm ${realmId.slice(0,10)}…`);
     renderBatchConnect();
   });
 }
 
-async function batchLinkToExisting(clientId, realmId) {
+async function batchLinkToExisting(clientId, realmId, franchiseId) {
   const client = DB.clients.find(c => c.id === clientId);
   if (!client || !realmId) return;
+
+  const franchise = franchiseId ? (client.franchises || []).find(f => f.id === franchiseId) : null;
+  const displayName = franchise ? (client.biz + ' → ' + franchise.name) : client.biz;
 
   try {
     await fetch(`${QBO_SERVER}/qbo/link-client`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ realmId, clientId })
+      body: JSON.stringify({ realmId, clientId, franchiseId: franchiseId || undefined })
     });
-    client.qboRealmId = realmId;
 
-    // Auto-enrich blank fields from QBO company info
+    if (franchise) {
+      franchise.qboRealmId = realmId;
+      franchise.qboName = qboAllCompanies[realmId]?.companyName || '';
+    } else {
+      client.qboRealmId = realmId;
+    }
+
     try {
       const info = await qboCall('getCompanyInfo', {}, realmId);
       const ci = info?.CompanyInfo || info?.companyInfo || {};
       await batchEnrichClient(client, ci, realmId);
-    } catch(e) { console.warn('Enrich failed:', e); }
+    } catch(e) {}
 
     DB.save();
-    showToast(`✓ ${client.biz || 'Client'} linked to ${qboAllCompanies[realmId]?.companyName || realmId}`);
-    qboLog('success', `Quick-linked <strong>${client.biz || clientId}</strong> → ${qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…'}`);
+    showToast(`✓ ${displayName} linked to ${qboAllCompanies[realmId]?.companyName || realmId}`);
+    qboLog('success', `Quick-linked <strong>${displayName}</strong> → ${qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…'}`);
     renderBatchConnect();
   } catch(e) {
     showToast('Failed to link: ' + e.message);
@@ -21452,20 +21735,38 @@ function batchBulkLinkModal() {
 
 async function batchBulkLink(realmId) {
   document.getElementById('batch-bulk-overlay')?.remove();
-  const ids = [..._batchSelectedIds];
+  const keys = [..._batchSelectedIds];
   let successCount = 0;
 
-  for (const clientId of ids) {
+  for (const key of keys) {
+    // Key format: "clientId" or "clientId:franchiseId"
+    const [clientId, franchiseId] = key.split(':');
     const client = DB.clients.find(c => c.id === clientId);
-    if (!client || client.qboRealmId) continue;
-    try {
-      await fetch(`${QBO_SERVER}/qbo/link-client`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realmId, clientId })
-      });
-      client.qboRealmId = realmId;
-      successCount++;
-    } catch(e) { console.warn(`Failed to link ${clientId}:`, e); }
+    if (!client) continue;
+
+    if (franchiseId) {
+      const franchise = (client.franchises || []).find(f => f.id === franchiseId);
+      if (!franchise || franchise.qboRealmId) continue;
+      try {
+        await fetch(`${QBO_SERVER}/qbo/link-client`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realmId, clientId, franchiseId })
+        });
+        franchise.qboRealmId = realmId;
+        franchise.qboName = qboAllCompanies[realmId]?.companyName || '';
+        successCount++;
+      } catch(e) { console.warn(`Failed to link franchise ${franchiseId}:`, e); }
+    } else {
+      if (client.qboRealmId) continue;
+      try {
+        await fetch(`${QBO_SERVER}/qbo/link-client`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ realmId, clientId })
+        });
+        client.qboRealmId = realmId;
+        successCount++;
+      } catch(e) { console.warn(`Failed to link ${clientId}:`, e); }
+    }
   }
 
   DB.save();
@@ -23152,6 +23453,7 @@ function importCommit() {
       // QB
       qbType:    r.qbType || '', qboBilling: r.qboBilling || '',
       qboRealmId: r.qboRealmId || '',
+      franchises: [],
       qbdUser:   '', qbdPass: '',
       // Banking — always blank
       achBank: '', achAccttype: '', achRouting: '', achAccount: '',

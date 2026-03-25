@@ -442,15 +442,17 @@ app.post('/qbo/disconnect', (req, res) => {
 // ROUTE 3c: Link a CRM client to an existing QBO company
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/link-client', (req, res) => {
-  const { realmId, clientId } = req.body;
+  const { realmId, clientId, franchiseId } = req.body;
   if (!realmId || !clientId) return res.status(400).json({ error: 'realmId and clientId required' });
   if (!tokenStore[realmId]) return res.status(404).json({ error: 'Realm not found — connect to QBO first' });
   if (!tokenStore[realmId].linkedClients) tokenStore[realmId].linkedClients = [];
-  if (!tokenStore[realmId].linkedClients.includes(clientId)) {
-    tokenStore[realmId].linkedClients.push(clientId);
+  // Store as "clientId" or "clientId:franchiseId" for franchise-level linking
+  const linkKey = franchiseId ? `${clientId}:${franchiseId}` : clientId;
+  if (!tokenStore[realmId].linkedClients.includes(linkKey)) {
+    tokenStore[realmId].linkedClients.push(linkKey);
     saveTokenStore();
   }
-  console.log(`Client ${clientId} linked to realm ${realmId}`);
+  console.log(`${franchiseId ? 'Franchise ' + franchiseId + ' of client' : 'Client'} ${clientId} linked to realm ${realmId}`);
   res.json({ success: true, linkedClients: tokenStore[realmId].linkedClients });
 });
 
@@ -458,12 +460,13 @@ app.post('/qbo/link-client', (req, res) => {
 // ROUTE 3d: Unlink a CRM client from a QBO company
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/unlink-client', (req, res) => {
-  const { realmId, clientId } = req.body;
+  const { realmId, clientId, franchiseId } = req.body;
   if (!realmId || !clientId) return res.status(400).json({ error: 'realmId and clientId required' });
   if (!tokenStore[realmId]) return res.status(404).json({ error: 'Realm not found' });
-  tokenStore[realmId].linkedClients = (tokenStore[realmId].linkedClients || []).filter(id => id !== clientId);
+  const linkKey = franchiseId ? `${clientId}:${franchiseId}` : clientId;
+  tokenStore[realmId].linkedClients = (tokenStore[realmId].linkedClients || []).filter(id => id !== linkKey);
   saveTokenStore();
-  console.log(`Client ${clientId} unlinked from realm ${realmId}`);
+  console.log(`${franchiseId ? 'Franchise ' + franchiseId + ' of client' : 'Client'} ${clientId} unlinked from realm ${realmId}`);
   res.json({ success: true, linkedClients: tokenStore[realmId].linkedClients });
 });
 
