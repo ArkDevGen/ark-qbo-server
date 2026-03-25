@@ -21114,10 +21114,10 @@ function qboClearActivity() {
 let _batchSelectedIds = new Set();
 let _batchSearchQuery = '';
 
-// Auto-fill blank client fields from QBO CompanyInfo (fill blanks only, never overwrite)
-function batchEnrichClient(client, ci) {
+// Auto-fill blank client fields from QBO CompanyInfo + classes/locations (fill blanks only, never overwrite)
+async function batchEnrichClient(client, ci, realmId) {
   if (!ci || !client) return;
-  const fill = (field, val) => { if (!client[field] && val) client[field] = val.trim(); };
+  const fill = (field, val) => { if (!client[field] && val) client[field] = String(val).trim(); };
 
   // Company name
   fill('biz', ci.CompanyName);
@@ -21136,12 +21136,11 @@ function batchEnrichClient(client, ci) {
   const email = ci.Email?.Address || ci.CompanyEmailAddr;
   fill('email', email);
 
-  // Fiscal year end — QBO stores as month name (e.g. "December") or number
+  // Fiscal year end — QBO stores as month number
   if (!client.fye && ci.FiscalYearStartMonth) {
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const startIdx = parseInt(ci.FiscalYearStartMonth) || 0;
     if (startIdx >= 1 && startIdx <= 12) {
-      // FYE is the month before the start month (or December if start is January)
       const fyeIdx = startIdx === 1 ? 11 : startIdx - 2;
       client.fye = months[fyeIdx];
     }
@@ -21150,9 +21149,30 @@ function batchEnrichClient(client, ci) {
   // State (from address if not set)
   fill('state', addr.CountrySubDivisionCode);
 
-  // EIN — QBO stores as CompanyInfo.EIN (if available)
-  // Note: only fill if blank, and QBO may not always expose this
+  // EIN
   if (ci.EIN) fill('ein', ci.EIN);
+
+  // Classes — pull from QBO (optional, not all companies use them)
+  if (!client.qboClasses || !client.qboClasses.length) {
+    try {
+      const classData = await qboCall('getClasses', {}, realmId);
+      const classes = classData.classes || [];
+      if (classes.length) {
+        client.qboClasses = classes.map(c => ({ id: c.id, name: c.name }));
+      }
+    } catch(e) { /* classes not enabled — that's fine */ }
+  }
+
+  // Locations / Departments — pull from QBO (optional)
+  if (!client.qboLocations || !client.qboLocations.length) {
+    try {
+      const deptData = await qboCall('getDepartments', {}, realmId);
+      const depts = deptData.departments || [];
+      if (depts.length) {
+        client.qboLocations = depts.map(d => ({ id: d.id, name: d.name }));
+      }
+    } catch(e) { /* departments not enabled — that's fine */ }
+  }
 
   let enriched = [];
   if (ci.CompanyName && !client.biz) enriched.push('name');
@@ -21160,6 +21180,8 @@ function batchEnrichClient(client, ci) {
   if (phone) enriched.push('phone');
   if (email) enriched.push('email');
   if (ci.FiscalYearStartMonth) enriched.push('FYE');
+  if (client.qboClasses?.length) enriched.push(`${client.qboClasses.length} classes`);
+  if (client.qboLocations?.length) enriched.push(`${client.qboLocations.length} locations`);
   if (enriched.length) {
     qboLog('info', `Auto-filled ${enriched.join(', ')} for <strong>${client.biz || client.nameQb || 'client'}</strong>`);
   }
@@ -21347,7 +21369,7 @@ function batchConnectClient(clientId) {
         qboAllCompanies[realmId].companyName = companyName;
       }
       // Auto-fill blank fields only (don't overwrite existing data)
-      batchEnrichClient(client, ci);
+      await batchEnrichClient(client, ci, realmId);
       DB.save();
     } catch(e) { console.warn('Company info fetch failed:', e); }
 
@@ -21378,7 +21400,7 @@ async function batchLinkToExisting(clientId, realmId) {
     try {
       const info = await qboCall('getCompanyInfo', {}, realmId);
       const ci = info?.CompanyInfo || info?.companyInfo || {};
-      batchEnrichClient(client, ci);
+      await batchEnrichClient(client, ci, realmId);
     } catch(e) { console.warn('Enrich failed:', e); }
 
     DB.save();
