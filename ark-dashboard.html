@@ -23108,8 +23108,8 @@ function importGoToReview() {
     }
     if (franchises.length) record._franchises = franchises;
 
-    // Default qbType to QBO if entities/brand present but no type set
-    if (!record.qbType && (record._franchises || record.franchiseBrand)) record.qbType = 'QBO';
+    // Default qbType to QBO if not explicitly set (most clients use QBO)
+    if (!record.qbType) record.qbType = 'QBO';
 
     return record;
   }).filter(r => {
