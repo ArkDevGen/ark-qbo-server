@@ -21380,6 +21380,7 @@ async function batchEnrichClient(client, ci, realmId) {
 
   // Company name
   fill('biz', ci.CompanyName);
+  fill('nameLegal', ci.LegalName);
   fill('nameQb', ci.CompanyName);
 
   // Address
@@ -21435,9 +21436,11 @@ async function batchEnrichClient(client, ci, realmId) {
 
   let enriched = [];
   if (ci.CompanyName && !client.biz) enriched.push('name');
+  if (ci.LegalName && !client.nameLegal) enriched.push('legal name');
   if (addr.Line1) enriched.push('address');
   if (phone) enriched.push('phone');
   if (email) enriched.push('email');
+  if (ci.EIN) enriched.push('EIN');
   if (ci.FiscalYearStartMonth) enriched.push('FYE');
   if (client.qboClasses?.length) enriched.push(`${client.qboClasses.length} classes`);
   if (client.qboLocations?.length) enriched.push(`${client.qboLocations.length} locations`);
