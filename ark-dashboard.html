@@ -22735,7 +22735,7 @@ function w9ovApplyOtherText(val) {
 const IMPORT_ARK_FIELDS = [
   // Core identity
   { key:'biz',            label:'Client / Business Name',   required:true,  tier:'A' },
-  { key:'nameBilling',    label:'Billing Name',             required:false, tier:'A' },
+  { key:'nameBilling',    label:'Business Legal Name',      required:false, tier:'A' },
   { key:'nameQb',         label:'QuickBooks Name',          required:false, tier:'A' },
   { key:'entity',         label:'Entity Type',              required:false, tier:'A', enum:['LLC','S-Corp','C-Corp','Partnership','Non-Profit','Sole Proprietor'] },
   { key:'status',         label:'Client Status',            required:false, tier:'A', enum:['Active','Lead','Prospect','Inactive'], default:'Active' },
@@ -23017,8 +23017,9 @@ Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank ac
 // ── Fallback heuristic mapping ─────────────────────────────────────
 function importHeuristicMapping() {
   const heuristics = {
-    'business name':   'biz',   'legal name':   'biz',    'company':    'biz',    'client name': 'biz',
-    'billing name':    'nameBilling',            'qb name':    'nameQb',   'realm id': 'qboRealmId', 'qbo realm': 'qboRealmId',
+    'business name':   'biz',   'company':    'biz',    'client name': 'biz',
+    'business legal name': 'nameBilling', 'legal name': 'nameBilling', 'billing name': 'nameBilling',
+    'qb name':    'nameQb',   'realm id': 'qboRealmId', 'qbo realm': 'qboRealmId',
     'brand': 'franchiseBrand', 'franchise brand': 'franchiseBrand',
     'entity':          'entity', 'entity type':  'entity',
     'status':          'status',
