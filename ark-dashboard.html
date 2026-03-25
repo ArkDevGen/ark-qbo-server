@@ -21545,7 +21545,7 @@ function batchConnectClient(clientId, franchiseId) {
     } else {
       client.qboRealmId = realmId;
     }
-    DB.save();
+    saveDB();
 
     // Link on server
     try {
@@ -21570,7 +21570,7 @@ function batchConnectClient(clientId, franchiseId) {
         if (franchise) franchise.qboName = companyName;
       }
       await batchEnrichClient(client, ci, realmId);
-      DB.save();
+      saveDB();
     } catch(e) { console.warn('Company info fetch failed:', e); }
 
     try {
@@ -21610,7 +21610,7 @@ async function batchLinkToExisting(clientId, realmId, franchiseId) {
       await batchEnrichClient(client, ci, realmId);
     } catch(e) {}
 
-    DB.save();
+    saveDB();
     showToast(`✓ ${displayName} linked to ${qboAllCompanies[realmId]?.companyName || realmId}`);
     qboLog('success', `Quick-linked <strong>${displayName}</strong> → ${qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…'}`);
     renderBatchConnect();
@@ -21693,7 +21693,7 @@ async function batchBulkLink(realmId) {
     }
   }
 
-  DB.save();
+  saveDB();
   _batchSelectedIds.clear();
   const companyName = qboAllCompanies[realmId]?.companyName || realmId.slice(0,10) + '…';
   showToast(`✓ ${successCount} client${successCount !== 1 ? 's' : ''} linked to ${companyName}`);
