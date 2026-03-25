@@ -4846,7 +4846,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div id="det-sub" style="font-size:12px;color:var(--text-d);margin-top:2px;"></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button class="btn btn-sm" id="det-edit-btn" onclick="closeModal('modal-detail');openClient(DB._detailId)" style="font-size:11px;background:var(--navy);border-color:var(--navy);color:#fff;padding:4px 12px;">✏ Edit</button>
+        <button class="btn btn-sm" id="det-edit-btn" onclick="closeModal('modal-detail');openEditClient(DB._detailId)" style="font-size:11px;background:var(--navy);border-color:var(--navy);color:#fff;padding:4px 12px;">✏ Edit</button>
         <button class="modal-close" onclick="closeModal('modal-detail')">×</button>
       </div>
     </div>
@@ -9004,7 +9004,7 @@ function openEditClient(id){
   const sfUrlEl = document.getElementById('mc-sharefile-url'); if(sfUrlEl) sfUrlEl.value = c.sharefileUrl||'';
   const sfPathEl = document.getElementById('mc-folder-path');
   if(sfPathEl) sfPathEl.value = c.folderPath || sfBuildPath(c.biz||'');
-  sfRenderFolderChecklist(c.foldersCreated||[]);
+  sfRenderFolderChecklist(Array.isArray(c.foldersCreated) ? c.foldersCreated : Object.keys(c.foldersCreated||{}));
   // EFTPS fields
   const ssnRaw = c.eftpsSsn||'';
   const ssnFmt = ssnRaw.length===9 ? ssnRaw.slice(0,3)+'-'+ssnRaw.slice(3,5)+'-'+ssnRaw.slice(5) : ssnRaw;
