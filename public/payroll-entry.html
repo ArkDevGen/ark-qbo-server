@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ark Financial — Payroll Entry</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #0d1b2a; --surface: #13243a; --card: #182d45;
@@ -172,6 +173,8 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('homebase-csv-input').click()" style="border-color:var(--orange);color:var(--orange);">📊 Import Homebase</button>
           <input type="file" id="homebase-csv-input" accept=".csv" style="display:none;" onchange="importHomebaseCSV(this.files[0])">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('tips-xlsx-input').click()" style="border-color:var(--green);color:var(--green);">💰 Import Tips</button>
+          <input type="file" id="tips-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importTipsReport(this.files[0])">
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
         </div>
       </div>
@@ -641,6 +644,114 @@ function parseCSVLine(line) {
   }
   result.push(current);
   return result;
+}
+
+// ─── Power BI Tips Import ────────────────────────────────────────
+function importTipsReport(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('homebase-import-status');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+
+      if (!rows.length) throw new Error('No data found in the tips file');
+
+      // Get current store number
+      const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+      const storeNum = storeText.replace(/[^0-9]/g, '');
+
+      if (!storeNum) throw new Error('Please select a store first');
+
+      // Find the row matching this store
+      // Store column format: "​​​737 - 11506 Shelbyville Rd., Louisville, KY"
+      // Contains invisible unicode chars, so extract digits from start
+      let storeTips = null;
+      for (const row of rows) {
+        const storeVal = String(row['Store'] || '');
+        // Extract store number — get first sequence of digits
+        const match = storeVal.replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
+        if (match && match[1] === storeNum) {
+          storeTips = parseFloat(row['Tip']) || 0;
+          break;
+        }
+      }
+
+      if (storeTips === null) {
+        throw new Error(`Store ${storeNum} not found in tips report. Available stores: ${rows.filter(r => r.Store && r.Store !== 'Total').map(r => {
+          const m = String(r.Store).replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
+          return m ? m[1] : '?';
+        }).join(', ')}`);
+      }
+
+      if (storeTips <= 0) {
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(255,169,77,.1)';
+        statusEl.style.border = '1px solid var(--orange)';
+        statusEl.style.color = 'var(--orange)';
+        statusEl.innerHTML = `⚠ Store ${storeNum} has $0.00 in tips — nothing to distribute`;
+        document.getElementById('tips-xlsx-input').value = '';
+        return;
+      }
+
+      // Calculate total hours across all employees in the grid
+      let totalHours = 0;
+      const empHours = [];
+      _employees.forEach((emp, i) => {
+        const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
+        const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
+        const reg = parseFloat(regInput?.value) || 0;
+        const ot = parseFloat(otInput?.value) || 0;
+        const hours = reg + ot;
+        empHours.push(hours);
+        totalHours += hours;
+      });
+
+      if (totalHours <= 0) {
+        throw new Error('No hours found in the grid. Import Homebase hours first, then import tips.');
+      }
+
+      // Distribute tips proportionally by hours
+      let distributed = 0;
+      _employees.forEach((emp, i) => {
+        if (empHours[i] > 0) {
+          const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
+          setInputVal(i, 'tips', share);
+          distributed++;
+        }
+      });
+
+      // Verify total matches (handle rounding)
+      const assignedTotal = _employees.reduce((sum, emp, i) => {
+        const tipInput = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
+        return sum + (parseFloat(tipInput?.value) || 0);
+      }, 0);
+      const diff = Math.abs(storeTips - assignedTotal);
+
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(77,255,160,.1)';
+      statusEl.style.border = '1px solid var(--green)';
+      statusEl.style.color = 'var(--green)';
+      statusEl.innerHTML = `💰 Store ${storeNum} tips: <strong>$${storeTips.toFixed(2)}</strong> distributed to ${distributed} employees by hours worked` +
+        (diff > 0.02 ? `<br><span style="color:var(--orange);">⚠ Rounding difference: $${diff.toFixed(2)}</span>` : '') +
+        `<br><span style="color:var(--muted);font-size:11px;">Total hours: ${totalHours.toFixed(2)} · Per hour: $${(storeTips / totalHours).toFixed(4)}</span>`;
+
+      document.getElementById('tips-xlsx-input').value = '';
+
+    } catch (err) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(255,92,92,.1)';
+      statusEl.style.border = '1px solid var(--red)';
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ ' + err.message;
+      document.getElementById('tips-xlsx-input').value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ─── Inline pay rate editing ─────────────────────────────────────
