@@ -169,8 +169,13 @@
     <div id="employee-section" class="card hidden">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="margin-bottom:0;">Employee Hours</h2>
-        <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('homebase-csv-input').click()" style="border-color:var(--orange);color:var(--orange);">📊 Import Homebase</button>
+          <input type="file" id="homebase-csv-input" accept=".csv" style="display:none;" onchange="importHomebaseCSV(this.files[0])">
+          <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
+        </div>
       </div>
+      <div id="homebase-import-status" style="display:none;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;"></div>
       <div style="overflow-x:auto;">
         <table class="data-table" id="emp-table">
           <thead>
@@ -466,6 +471,176 @@ function renderEmployeeTable() {
   if (_employees.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">No employees found for this store. Click "+ Add Employee" to get started.</td></tr>';
   }
+}
+
+// ─── Homebase CSV Import ─────────────────────────────────────────
+function importHomebaseCSV(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('homebase-import-status');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split('\n');
+
+      // First line is "Payroll Period,..." — skip it
+      // Second line is the header row
+      let headerIdx = 0;
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        if (lines[i].toLowerCase().includes('first name')) { headerIdx = i; break; }
+      }
+
+      const headers = parseCSVLine(lines[headerIdx]);
+      const colIdx = {};
+      headers.forEach((h, i) => { colIdx[h.trim().toLowerCase()] = i; });
+
+      // Get current store number from the dropdown
+      const storeId = document.getElementById('entry-store')?.value || '';
+      const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+      // Extract store number (e.g. "Store 737" → "737")
+      const storeNum = storeText.replace(/[^0-9]/g, '');
+
+      // Parse all data rows
+      const csvRows = [];
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = parseCSVLine(line);
+        if (!cols.length) continue;
+
+        const firstName = (cols[colIdx['first name']] || '').trim();
+        const lastName = (cols[colIdx['last name']] || '').trim();
+        const location = (cols[colIdx['location']] || '').trim();
+
+        // Skip TOTALS rows
+        if (location === 'TOTALS') continue;
+
+        // Check if this row matches the current store
+        // Location format: "# 737 Scooters-iHeart" or "#738 Scooters -iHeart"
+        const locNum = location.replace(/[^0-9]/g, '').trim();
+        if (storeNum && locNum !== storeNum) continue;
+
+        const num = (idx) => {
+          const raw = (cols[idx] || '').replace(/[$,]/g, '').trim();
+          const n = parseFloat(raw);
+          return isNaN(n) ? 0 : n;
+        };
+
+        csvRows.push({
+          firstName,
+          lastName,
+          regular: num(colIdx['regular']),
+          overtime: num(colIdx['overtime']),
+          pto: num(colIdx['pto']),
+          holidayPay: num(colIdx['holiday pay']),
+          cashTips: num(colIdx['cash tips']),
+          creditTips: num(colIdx['credit tips']),
+          totalTips: num(colIdx['total tips']),
+        });
+      }
+
+      // Match CSV rows to grid employees and fill in
+      let matched = 0, unmatched = [];
+      const unmatchedCSV = [];
+
+      csvRows.forEach(row => {
+        // Find matching employee by first name + last name (case-insensitive)
+        const empIdx = _employees.findIndex(emp =>
+          emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
+          emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+        );
+
+        if (empIdx >= 0) {
+          // Fill in the inputs
+          setInputVal(empIdx, 'regHours', row.regular);
+          setInputVal(empIdx, 'otHours', row.overtime);
+          setInputVal(empIdx, 'ptoHours', row.pto);
+          setInputVal(empIdx, 'holidayHours', row.holidayPay);
+          setInputVal(empIdx, 'tips', row.cashTips + row.creditTips);
+          matched++;
+        } else {
+          unmatchedCSV.push(`${row.firstName} ${row.lastName}`);
+        }
+      });
+
+      // Check for employees in grid that weren't in CSV
+      _employees.forEach(emp => {
+        const found = csvRows.some(r =>
+          r.firstName.toLowerCase() === emp.firstName.toLowerCase() &&
+          r.lastName.toLowerCase() === emp.lastName.toLowerCase()
+        );
+        if (!found) unmatched.push(`${emp.firstName} ${emp.lastName}`);
+      });
+
+      // Show status
+      let msg = `✓ Imported ${matched} of ${csvRows.length} employees from Homebase`;
+      let color = 'var(--green)';
+      let bgColor = 'rgba(77,255,160,.1)';
+      let borderColor = 'var(--green)';
+
+      if (unmatchedCSV.length > 0) {
+        msg += `<br><span style="color:var(--orange);">⚠ Not in grid (${unmatchedCSV.length}): ${unmatchedCSV.join(', ')}</span>`;
+        color = 'var(--orange)';
+        bgColor = 'rgba(255,169,77,.1)';
+        borderColor = 'var(--orange)';
+      }
+      if (unmatched.length > 0) {
+        msg += `<br><span style="color:var(--muted);">ℹ No Homebase data for: ${unmatched.join(', ')}</span>`;
+      }
+
+      statusEl.style.display = 'block';
+      statusEl.style.background = bgColor;
+      statusEl.style.border = '1px solid ' + borderColor;
+      statusEl.style.color = color;
+      statusEl.innerHTML = msg;
+
+      // Reset file input
+      document.getElementById('homebase-csv-input').value = '';
+
+    } catch (err) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'rgba(255,92,92,.1)';
+      statusEl.style.border = '1px solid var(--red)';
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ Error parsing CSV: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function setInputVal(empIdx, field, value) {
+  const input = document.querySelector(`input[data-idx="${empIdx}"][data-field="${field}"]`);
+  if (input && value > 0) {
+    input.value = value;
+    input.style.borderColor = 'var(--green)';
+    setTimeout(() => { input.style.borderColor = ''; }, 2000);
+  }
+}
+
+// CSV parser that handles quoted fields with commas
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
 }
 
 // ─── Inline pay rate editing ─────────────────────────────────────
