@@ -4488,6 +4488,31 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
 
           <hr class="section-divider">
+          <div class="section-label">Payroll Entry Portal</div>
+          <div class="fg full" id="mc-pr-portal-wrap">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div style="font-size:13px;font-weight:600;color:var(--text);">Payroll Data Entry Portal</div>
+                <a id="mc-pr-portal-link" href="#" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none;" onclick="event.stopPropagation()">Open Portal ↗</a>
+              </div>
+              <div style="display:flex;gap:10px;margin-bottom:8px;">
+                <div style="flex:1;">
+                  <label style="font-size:10px;color:var(--text-d);margin-bottom:3px;">Company Code (Slug)</label>
+                  <input id="mc-pr-slug" class="field-input" placeholder="e.g. iheartcoffee" style="font-family:'DM Mono',monospace;font-size:12px;">
+                </div>
+                <div style="flex:1;">
+                  <label style="font-size:10px;color:var(--text-d);margin-bottom:3px;">Password</label>
+                  <div style="position:relative;">
+                    <input id="mc-pr-portal-pass" type="password" class="field-input" placeholder="Portal password" style="font-family:'DM Mono',monospace;font-size:12px;padding-right:36px;">
+                    <span onclick="const i=document.getElementById('mc-pr-portal-pass');i.type=i.type==='password'?'text':'password'" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:14px;color:var(--text-d);">👁</span>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size:10px;color:var(--text-d);">These credentials are used by the client or AM to log into the payroll data entry portal.</div>
+            </div>
+          </div>
+
+          <hr class="section-divider">
           <div class="section-label">Payroll Export Script</div>
           <div class="fg full">
             <label>Script Name</label>
@@ -9226,6 +9251,9 @@ function openEditClient(id){
   document.getElementById('mc-notes').value=c.notes||'';
   document.getElementById('mc-ein').value=c.ein||'';
   setPrPlatform(c.prPlatform||'');
+  document.getElementById('mc-pr-slug').value=c.prSlug||'';
+  document.getElementById('mc-pr-portal-pass').value=c.prPortalPass||'';
+  document.getElementById('mc-pr-portal-link').href=ARK_SERVER+'/payroll-entry';
   document.getElementById('mc-pr-script').value=c.prScript||'';
   document.getElementById('mc-pr-swid').value=c.prSwid||'';
   document.getElementById('mc-pr-suta').value=c.prSuta||'';
@@ -9266,6 +9294,9 @@ function openEditClient(id){
   (c.owners||[]).forEach(o=>addOwnerRow(o));
   initWorkLocations(c.locations||[]);
   setPrPlatform(c.prPlatform||'');
+  document.getElementById('mc-pr-slug').value=c.prSlug||'';
+  document.getElementById('mc-pr-portal-pass').value=c.prPortalPass||'';
+  document.getElementById('mc-pr-portal-link').href=ARK_SERVER+'/payroll-entry';
   document.getElementById('mc-pr-script').value=c.prScript||'';
   setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'', c.franchises||[]);
   const brandEl = document.getElementById('mc-franchise-brand'); if(brandEl) brandEl.value = c.franchiseBrand||'';
@@ -9318,6 +9349,8 @@ function saveClient(){
     owners:getOwners(),
     ein:document.getElementById('mc-ein').value.trim(),
     prPlatform:getPrPlatform(),
+    prSlug:document.getElementById('mc-pr-slug').value.trim(),
+    prPortalPass:document.getElementById('mc-pr-portal-pass').value.trim(),
     prScript:document.getElementById('mc-pr-script').value,
     prSwid:document.getElementById('mc-pr-swid').value.trim(),
     prSuta:document.getElementById('mc-pr-suta').value.trim(),
@@ -9349,6 +9382,8 @@ function saveClient(){
     taxCpaEmail:document.getElementById('mc-tax-cpa-email').value.trim(),
     taxNotes:document.getElementById('mc-tax-notes').value.trim(),
     prPlatform: getPrPlatform(),
+    prSlug: document.getElementById('mc-pr-slug').value.trim(),
+    prPortalPass: document.getElementById('mc-pr-portal-pass').value.trim(),
     prScript: document.getElementById('mc-pr-script').value,
     locations: getWorkLocations(),
     qbType:    document.querySelector('input[name="mc-qb-type"]:checked')?.value||'',
