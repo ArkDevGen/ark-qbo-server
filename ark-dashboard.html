@@ -6810,7 +6810,8 @@ async function renderUsers(q){
   try {
     const resp = await authFetch(ARK_SERVER + '/users');
     if(!resp.ok) throw new Error('Failed to fetch users');
-    const users = await resp.json();
+    const data = await resp.json();
+    const users = data.users || data;
     const search = (q || '').toLowerCase();
     const filtered = search ? users.filter(u => {
       const name = ((u.fname||'') + ' ' + (u.lname||'')).toLowerCase();
@@ -6822,11 +6823,7 @@ async function renderUsers(q){
     }
     tbody.innerHTML = filtered.map(u => {
       const fullName = u.lname ? `${u.fname} ${u.lname}` : (u.fname||'Unknown');
-      const roleBadge = u.role === 'admin'
-        ? '<span style="background:var(--navy);color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Admin</span>'
-        : u.role === 'viewer'
-          ? '<span style="background:#e8e8e8;color:#666;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Viewer</span>'
-          : '<span style="background:rgba(184,146,42,.15);color:#9a7b2a;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">AM</span>';
+      const roleBadge = typeof getRoleBadge === 'function' ? getRoleBadge(u.role) : u.role;
       const statusDot = (u.status||'active') === 'active'
         ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;"><span style="width:7px;height:7px;border-radius:50%;background:#27ae60;display:inline-block;"></span> Active</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-d);"><span style="width:7px;height:7px;border-radius:50%;background:#ccc;display:inline-block;"></span> Inactive</span>';
