@@ -224,10 +224,6 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="margin-bottom:0;">Employee Hours</h2>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('homebase-csv-input').click()" style="border-color:var(--orange);color:var(--orange);">📊 Import Homebase</button>
-          <input type="file" id="homebase-csv-input" accept=".csv" style="display:none;" onchange="importHomebaseCSV(this.files[0])">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('tips-xlsx-input').click()" style="border-color:var(--green);color:var(--green);">💰 Import Tips</button>
-          <input type="file" id="tips-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importTipsReport(this.files[0])">
           <button class="btn btn-outline btn-sm" onclick="showFindEmployee()" style="border-color:var(--accent);color:var(--accent);">🔍 Find Employee</button>
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
         </div>
