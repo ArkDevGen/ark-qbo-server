@@ -296,6 +296,12 @@ app.get('/users', requireAuth, requireRole('admin'), (req, res) => {
   res.json({ users: _users.map(safeUser) });
 });
 
+app.get('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
+  const user = _users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json(safeUser(user));
+});
+
 app.post('/users', requireAuth, requireRole('admin'), async (req, res) => {
   const { username, password, fname, lname, email, phone, role, title, color, assignedClients, permissions } = req.body;
 
