@@ -1154,7 +1154,7 @@ app.get('/files/list', requireAuth, async (req, res) => {
   if (!sfReady()) return res.status(500).json({ error: 'ShareFile not connected' });
 
   try {
-    const folderId = await sfResolveFolder(req.query.folderId || 'home');
+    const folderId = await sfResolveFolder(req.query.folderId || 'top');
     const data = await sfApi(`/Items(${folderId})?$expand=Children&$select=Id,Name,FileName,CreationDate,FileCount,Children/Id,Children/Name,Children/FileName,Children/CreationDate,Children/FileSizeBytes,Children/ProgenyEditDate,Children/odata.type`);
 
     const children = data.Children || [];

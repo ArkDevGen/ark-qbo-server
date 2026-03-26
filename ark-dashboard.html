@@ -23646,13 +23646,13 @@ let _mcfFiles = [];
 
 // Client modal file browser — uses ShareFile via same /files/* routes
 // For now, client files tab navigates ShareFile directly (no client-scoped path mapping)
-let _mcfFolderId = 'home';
-let _mcfBreadcrumb = [{ id: 'home', name: 'Files' }];
+let _mcfFolderId = 'top';
+let _mcfBreadcrumb = [{ id: 'top', name: 'Files' }];
 
 function mcfInit(clientId) {
   _mcfClientId = clientId;
-  _mcfFolderId = 'home'; // Will be mapped to client-specific folder later
-  _mcfBreadcrumb = [{ id: 'home', name: 'Files' }];
+  _mcfFolderId = 'top'; // Will be mapped to client-specific folder later
+  _mcfBreadcrumb = [{ id: 'top', name: 'Files' }];
 
   const tab = document.getElementById('mc-tab-files');
   if (tab) {
@@ -23849,8 +23849,8 @@ async function mcfDeleteFolder(id, name) {
 // ═══════════════════════════════════════════════════════════════════
 
 let _fcFiles = [];          // All files from server
-let _fcCurrentFolderId = 'home';  // Current ShareFile folder ID
-let _fcBreadcrumb = [{ id: 'home', name: 'All Files' }]; // Breadcrumb trail
+let _fcCurrentFolderId = 'top';  // Current ShareFile folder ID — 'top' = root (Favorites, Personal, Shared)
+let _fcBreadcrumb = [{ id: 'top', name: 'All Files' }]; // Breadcrumb trail
 let _fcViewMode = 'list';   // 'list' or 'grid'
 let _fcSortKey = 'name';    // Current sort column
 let _fcSortAsc = true;      // Sort direction
@@ -23931,8 +23931,8 @@ async function fcInit() {
     return;
   }
 
-  _fcCurrentFolderId = 'home';
-  _fcBreadcrumb = [{ id: 'home', name: 'All Files' }];
+  _fcCurrentFolderId = 'top';
+  _fcBreadcrumb = [{ id: 'top', name: 'All Files' }];
   await fcLoadFiles();
   fcSetupDragDrop();
 }
