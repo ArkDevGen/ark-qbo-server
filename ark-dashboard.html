@@ -3078,6 +3078,39 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   </div>
 
+  <!-- ════ USERS VIEW ════ -->
+  <div class="view content" id="view-users">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">User Management</h2>
+        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Manage dashboard user accounts, roles, and access</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input type="text" id="users-search" placeholder="Search users..." oninput="renderUsers(this.value)"
+          style="padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:220px;outline:none;"
+          onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='var(--border)'">
+        <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
+      </div>
+    </div>
+    <div class="card" style="overflow:visible;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);text-align:left;">
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Name</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Username</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Role</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Clients</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Status</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Last Login</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ════ QBO INTEGRATION CENTER ════ -->
   <div class="view content" id="view-qbo" style="padding:28px 32px;">
 
@@ -3620,8 +3653,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
       </div>
-    </div>
-
     </div><!-- /qbo-tab-general -->
 
     <!-- ═══ SCOOTER'S TAB ═══ -->
@@ -3757,7 +3788,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
-  </div>
+  </div><!-- /view-qbo -->
 
   <!-- ════ W-9 GENERATOR ════ -->
   <div class="view content" id="view-w9gen" style="padding:28px 32px;">
@@ -4322,39 +4353,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
-  </div>
-
-  <!-- ════ USERS VIEW ════ -->
-  <div class="view content" id="view-users">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-      <div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">User Management</h2>
-        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Manage dashboard user accounts, roles, and access</div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <input type="text" id="users-search" placeholder="Search users..." oninput="renderUsers(this.value)"
-          style="padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:220px;outline:none;"
-          onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='var(--border)'">
-        <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
-      </div>
-    </div>
-    <div class="card" style="overflow:visible;">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="border-bottom:2px solid var(--border);text-align:left;">
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Name</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Username</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Role</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Clients</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Status</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Last Login</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="users-tbody"></tbody>
-      </table>
-    </div>
   </div>
 
   <!-- /main -->
