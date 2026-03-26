@@ -4374,8 +4374,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <input type="text" id="ue-username" class="form-control" placeholder="e.g. jmalousek" style="width:100%;box-sizing:border-box;">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Temporary Password</label>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;" id="ue-password-label">Temporary Password</label>
           <input type="text" id="ue-password" class="form-control" placeholder="For new users" style="width:100%;box-sizing:border-box;">
+          <div id="ue-reset-pw-wrap" style="display:none;margin-top:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ue-password').style.display='';document.getElementById('ue-password').placeholder='Enter new password';document.getElementById('ue-reset-pw-wrap').style.display='none';" style="font-size:11px;color:var(--accent);">🔑 Reset Password</button>
+          </div>
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">First Name</label>
@@ -6863,6 +6866,16 @@ function openUserModal(userId){
   document.getElementById('ue-title').value = '';
   document.getElementById('ue-status').value = 'active';
   document.getElementById('user-edit-title').textContent = userId ? 'Edit User' : 'Add User';
+  // Show password field for new users, reset button for existing
+  if(userId){
+    document.getElementById('ue-password').style.display = 'none';
+    document.getElementById('ue-password-label').textContent = 'Password';
+    document.getElementById('ue-reset-pw-wrap').style.display = '';
+  } else {
+    document.getElementById('ue-password').style.display = '';
+    document.getElementById('ue-password-label').textContent = 'Temporary Password';
+    document.getElementById('ue-reset-pw-wrap').style.display = 'none';
+  }
   // Populate client checkboxes
   const clients = DB.clients || [];
   const cList = document.getElementById('ue-clients-list');
