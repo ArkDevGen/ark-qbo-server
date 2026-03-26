@@ -23983,6 +23983,13 @@ async function fcLoadFiles() {
     fcRenderFiles();
     fcUpdateStats();
 
+    // Hide New Folder and Upload buttons at virtual root (can't create at 'top')
+    const isRoot = _fcCurrentFolderId === 'top';
+    const nfBtn = document.getElementById('fc-btn-newfolder');
+    const ulBtn = document.getElementById('fc-btn-upload');
+    if (nfBtn) nfBtn.style.display = isRoot ? 'none' : '';
+    if (ulBtn) ulBtn.style.display = isRoot ? 'none' : '';
+
   } catch (e) {
     console.error('File Center load error:', e);
     list.innerHTML = `<div style="padding:40px;text-align:center;">
