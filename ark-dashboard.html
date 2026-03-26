@@ -6782,6 +6782,9 @@ async function renderUsers(q){
 }
 
 function openUserModal(userId){
+  // Ensure modal is at body root (fixes QBO view nesting issue)
+  const modal = document.getElementById('modal-user-edit');
+  if(modal && modal.parentElement !== document.body) document.body.appendChild(modal);
   document.getElementById('ue-id').value = userId || '';
   document.getElementById('ue-username').value = '';
   document.getElementById('ue-password').value = '';
