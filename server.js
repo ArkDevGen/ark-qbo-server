@@ -436,6 +436,22 @@ app.post('/qbo/disconnect', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// ROUTE 3c-pre: Clear all stale linkedClients (keeps QBO connections)
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/clear-links', (req, res) => {
+  let cleared = 0;
+  for (const rid of Object.keys(tokenStore)) {
+    if (tokenStore[rid].linkedClients?.length) {
+      cleared += tokenStore[rid].linkedClients.length;
+      tokenStore[rid].linkedClients = [];
+    }
+  }
+  saveTokenStore();
+  console.log(`Cleared ${cleared} stale client links across ${Object.keys(tokenStore).length} companies`);
+  res.json({ success: true, cleared });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ROUTE 3c: Link a CRM client to an existing QBO company
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/link-client', (req, res) => {
