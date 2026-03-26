@@ -92,7 +92,7 @@ function saveUsers() {
 }
 
 function findUser(username) {
-  return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.status === 'Active');
+  return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && (u.status||'').toLowerCase() === 'active');
 }
 
 function safeUser(u) {
