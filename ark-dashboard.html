@@ -5594,41 +5594,78 @@ function saveDB(){
   }
 }
 
-// Load saved data — tries server first, falls back to localStorage
+// Load saved data — uses the richest source (server vs localStorage)
 async function loadDB(){
-  // Try server first
+  let serverData = null, localData = null;
+
+  // Try server
   try {
     const resp = await authFetch(ARK_SERVER + '/db/load');
     if(resp.ok){
       const saved = await resp.json();
-      if(saved && saved.clients){
-        _applyDBPayload(saved);
-        // Update localStorage cache
-        localStorage.setItem(ARK_DB_KEY, JSON.stringify(saved));
-        console.log('ARK: loaded from server, saved at', saved._savedAt, 'by', saved._savedBy||'unknown');
-        return true;
-      }
+      if(saved && saved.clients) serverData = saved;
     }
   } catch(e){
-    console.warn('ARK: server load failed, trying localStorage', e);
+    console.warn('ARK: server load failed', e);
   }
 
-  // Fallback to localStorage
+  // Try localStorage
   try {
     const raw = localStorage.getItem(ARK_DB_KEY);
-    if(!raw) return false;
-    const saved = JSON.parse(raw);
-    if(!saved || !saved.clients) return false;
-    _applyDBPayload(saved);
-    console.log('ARK: loaded from localStorage, saved at', saved._savedAt);
-    // Migrate to server if server had no data
+    if(raw){
+      const saved = JSON.parse(raw);
+      if(saved && saved.clients) localData = saved;
+    }
+  } catch(e){}
+
+  // Pick the richest source — prefer the one with more clients and more data
+  let best = null;
+  if(serverData && localData){
+    const serverScore = (serverData.clients||[]).length +
+      (serverData.clients||[]).filter(c => c.qboRealmId || (c.franchises||[]).some(f=>f.qboRealmId)).length * 10;
+    const localScore = (localData.clients||[]).length +
+      (localData.clients||[]).filter(c => c.qboRealmId || (c.franchises||[]).some(f=>f.qboRealmId)).length * 10;
+    if(localScore > serverScore){
+      console.log(`ARK: localStorage has richer data (score ${localScore} vs server ${serverScore}) — using local and syncing to server`);
+      best = localData;
+      // Push richer local data to server
+      setTimeout(() => saveDB(), 500);
+    } else {
+      console.log(`ARK: server has richer data (score ${serverScore} vs local ${localScore}) — using server`);
+      best = serverData;
+    }
+  } else if(serverData){
+    console.log('ARK: loaded from server, saved at', serverData._savedAt, 'by', serverData._savedBy||'unknown');
+    best = serverData;
+  } else if(localData){
+    console.log('ARK: loaded from localStorage, saved at', localData._savedAt);
+    best = localData;
     setTimeout(() => saveDB(), 500);
-    return true;
-  } catch(e) {
-    console.warn('ARK: localStorage load failed', e);
-    return false;
   }
+
+  if(!best) return false;
+
+  _applyDBPayload(best);
+  localStorage.setItem(ARK_DB_KEY, JSON.stringify(best));
+  return true;
 }
+
+// Flush pending DB save to server on page close/refresh
+window.addEventListener('beforeunload', () => {
+  if(_dbSaveTimer){
+    clearTimeout(_dbSaveTimer);
+    _dbSaveTimer = null;
+    // Use sendBeacon for reliable delivery during page unload
+    const payload = _buildDBPayload();
+    payload._savedAt = new Date().toISOString();
+    payload._savedBy = currentUser ? (currentUser.fname + ' ' + (currentUser.lname||'')).trim() : 'unknown';
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    if(_serverToken){
+      navigator.sendBeacon(ARK_SERVER + '/db/save?token=' + _serverToken, blob);
+      console.log('ARK: flushed DB to server via sendBeacon');
+    }
+  }
+});
 
 // Export DB as a downloadable JSON backup file
 function exportDBBackup(){

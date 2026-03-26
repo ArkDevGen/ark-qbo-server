@@ -119,7 +119,7 @@ app.post('/auth/logout', (req, res) => {
 
 // Auth middleware — validates Bearer token on protected routes
 function requireAuth(req, res, next) {
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const token = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token || '';
   if (!token) return res.status(401).json({ error: 'Authentication required' });
 
   const session = _sessions.get(token);
