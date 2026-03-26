@@ -175,6 +175,7 @@
           <input type="file" id="homebase-csv-input" accept=".csv" style="display:none;" onchange="importHomebaseCSV(this.files[0])">
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('tips-xlsx-input').click()" style="border-color:var(--green);color:var(--green);">💰 Import Tips</button>
           <input type="file" id="tips-xlsx-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importTipsReport(this.files[0])">
+          <button class="btn btn-outline btn-sm" onclick="showFindEmployee()" style="border-color:var(--accent);color:var(--accent);">🔍 Find Employee</button>
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
         </div>
       </div>
@@ -324,6 +325,22 @@
       <button class="btn btn-primary" onclick="addEmployee()">Add Employee</button>
     </div>
     <div id="add-emp-status" class="status"></div>
+  </div>
+</div>
+
+<!-- ═══ FIND EMPLOYEE MODAL ═══ -->
+<div id="modal-find-emp" class="modal-overlay hidden" onclick="if(event.target===this)closeFindEmployee()">
+  <div class="modal" style="width:480px;">
+    <h3>Find Employee from Other Stores</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Select an employee already in another store to add them here.</p>
+    <input type="text" id="find-emp-search" placeholder="Search by name..." oninput="filterFindEmployees()" style="margin-bottom:12px;">
+    <div id="find-emp-list" style="max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;">
+      <div style="padding:20px;text-align:center;color:var(--muted);">Loading...</div>
+    </div>
+    <div id="find-emp-status" class="status"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-outline" onclick="closeFindEmployee()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -752,6 +769,109 @@ function importTipsReport(file) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ─── Find Employee (from other stores) ───────────────────────────
+let _allEmployees = [];
+
+async function showFindEmployee() {
+  const storeId = document.getElementById('entry-store')?.value;
+  if (!storeId) { alert('Please select a store first'); return; }
+
+  document.getElementById('modal-find-emp').classList.remove('hidden');
+  document.getElementById('find-emp-search').value = '';
+  document.getElementById('find-emp-status').className = 'status';
+  document.getElementById('find-emp-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">Loading employees...</div>';
+
+  try {
+    const resp = await fetch(`${API}/payroll/employees-all/${_clientSlug}`, {
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    const data = await resp.json();
+    _allEmployees = data.employees || [];
+
+    // Filter out employees already in the current store
+    const currentIds = new Set(_employees.map(e => e.id));
+    _allEmployees = _allEmployees.filter(e => !currentIds.has(e.id));
+
+    renderFindEmployees();
+    document.getElementById('find-emp-search').focus();
+  } catch (e) {
+    document.getElementById('find-emp-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--red);">Failed to load employees</div>';
+  }
+}
+
+function closeFindEmployee() {
+  document.getElementById('modal-find-emp').classList.add('hidden');
+}
+
+function filterFindEmployees() {
+  renderFindEmployees();
+}
+
+function renderFindEmployees() {
+  const q = (document.getElementById('find-emp-search')?.value || '').toLowerCase();
+  const listEl = document.getElementById('find-emp-list');
+
+  const filtered = q
+    ? _allEmployees.filter(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(q))
+    : _allEmployees;
+
+  if (!filtered.length) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">' +
+      (_allEmployees.length ? 'No matches found' : 'No employees available from other stores') + '</div>';
+    return;
+  }
+
+  // Get store names for display
+  const storeText = (stores) => stores.filter(s => s !== 'admin').map(s => 'Store ' + s).join(', ') || 'Admin';
+
+  listEl.innerHTML = filtered.map(emp => `
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background .15s;"
+      onmouseover="this.style.background='rgba(77,166,255,.08)'" onmouseout="this.style.background=''">
+      <div>
+        <div style="font-weight:500;font-size:14px;">${emp.firstName} ${emp.lastName}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${emp.position || 'No position'} · ${storeText(emp.stores)} · ${emp.payRate ? '$' + parseFloat(emp.payRate).toFixed(2) + (emp.payType === 'salary' ? '/yr' : '/hr') : 'No rate'}</div>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="linkEmployee('${emp.id}')" style="flex-shrink:0;">Add →</button>
+    </div>
+  `).join('');
+}
+
+async function linkEmployee(empId) {
+  const storeId = document.getElementById('entry-store')?.value;
+  const statusEl = document.getElementById('find-emp-status');
+
+  try {
+    statusEl.className = 'status info';
+    statusEl.textContent = 'Adding employee to this store...';
+
+    const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}/link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${_token}`,
+      },
+      body: JSON.stringify({ employeeId: empId }),
+    });
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    statusEl.className = 'status success';
+    statusEl.textContent = `✓ ${data.employee.firstName} ${data.employee.lastName} added to this store`;
+
+    // Remove from the find list
+    _allEmployees = _allEmployees.filter(e => e.id !== empId);
+    renderFindEmployees();
+
+    // Reload the employee grid
+    await onStoreChange();
+
+  } catch (e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = '✗ ' + e.message;
+  }
 }
 
 // ─── Inline pay rate editing ─────────────────────────────────────

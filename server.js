@@ -1585,6 +1585,81 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   });
 });
 
+// ── Get all employees across all stores (for Find Employee) ──────
+app.get('/payroll/employees-all/:clientSlug', (req, res) => {
+  const { clientSlug } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const allEmps = [];
+  const seen = new Set();
+  for (const [storeId, store] of Object.entries(client.stores || {})) {
+    for (const emp of (store.employees || [])) {
+      // Deduplicate by employee ID
+      if (seen.has(emp.id)) {
+        // Add this store to existing entry
+        const existing = allEmps.find(e => e.id === emp.id);
+        if (existing && !existing.stores.includes(storeId)) existing.stores.push(storeId);
+        continue;
+      }
+      seen.add(emp.id);
+      allEmps.push({
+        id: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        position: emp.position || '',
+        payRate: emp.payRate || '',
+        payType: emp.payType || 'hourly',
+        stores: [storeId],
+      });
+    }
+  }
+
+  res.json({ employees: allEmps });
+});
+
+// ── Link existing employee to another store ──────────────────────
+app.post('/payroll/employees/:clientSlug/:storeId/link', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const { employeeId } = req.body;
+  if (!employeeId) return res.status(400).json({ error: 'employeeId required' });
+
+  // Find the employee in any store
+  let sourceEmp = null;
+  for (const [sid, s] of Object.entries(client.stores || {})) {
+    const found = (s.employees || []).find(e => e.id === employeeId);
+    if (found) { sourceEmp = found; break; }
+  }
+  if (!sourceEmp) return res.status(404).json({ error: 'Employee not found' });
+
+  // Check if already in this store
+  if ((store.employees || []).some(e => e.id === employeeId)) {
+    return res.status(409).json({ error: 'Employee already in this store' });
+  }
+
+  // Add a copy to this store
+  if (!store.employees) store.employees = [];
+  store.employees.push({ ...sourceEmp });
+  savePayrollData();
+
+  console.log(`Linked employee ${sourceEmp.firstName} ${sourceEmp.lastName} to store ${storeId} (${clientSlug})`);
+  res.json({ success: true, employee: { id: sourceEmp.id, firstName: sourceEmp.firstName, lastName: sourceEmp.lastName, position: sourceEmp.position } });
+});
+
 // ── Client adds a new employee on the fly ────────────────────────
 app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const { clientSlug, storeId } = req.params;
