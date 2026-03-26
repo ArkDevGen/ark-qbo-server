@@ -4339,6 +4339,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <select id="ue-role" class="form-control" style="width:100%;box-sizing:border-box;">
             <option value="admin">Admin</option>
             <option value="am" selected>Account Manager</option>
+            <option value="pm">Payroll Manager</option>
             <option value="viewer">Viewer</option>
           </select>
         </div>
@@ -6193,14 +6194,29 @@ function applyRoleRestrictions(u){
   // AM: hide Users nav and Export Backup
   if(role === 'am'){
     setNavVisible('nav-users', false);
-    // Hide export backup button if it exists
     document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
+  }
+  // PM (Payroll Manager): can run payroll, view files, but can't edit clients or manage users
+  if(role === 'pm'){
+    setNavVisible('nav-users', false);
+    document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
+    // Disable client edit buttons but allow payroll operations
+    setTimeout(() => {
+      document.querySelectorAll('.btn-primary,.btn').forEach(btn => {
+        const txt = btn.textContent || '';
+        if(txt.includes('Save Client') || txt.includes('Delete Client') || txt.includes('+ Add Client')){
+          btn.disabled = true;
+          btn.style.opacity = '0.4';
+          btn.style.cursor = 'not-allowed';
+          btn.title = 'Payroll Managers cannot edit client records — request admin approval';
+        }
+      });
+    }, 100);
   }
   // Viewer: hide Users, hide Export Backup, disable edit buttons
   if(role === 'viewer'){
     setNavVisible('nav-users', false);
     document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
-    // Disable add/edit buttons throughout the app
     setTimeout(() => {
       document.querySelectorAll('.btn-primary').forEach(btn => {
         if(btn.textContent.includes('Add') || btn.textContent.includes('Edit') || btn.textContent.includes('Save') || btn.textContent.includes('Delete')){
@@ -6212,6 +6228,17 @@ function applyRoleRestrictions(u){
       });
     }, 100);
   }
+}
+
+function getRoleBadge(role) {
+  const map = {
+    admin: { label: 'Admin', bg: 'rgba(77,255,160,.15)', color: 'var(--green)' },
+    am:    { label: 'Account Manager', bg: 'rgba(77,166,255,.15)', color: '#4da6ff' },
+    pm:    { label: 'Payroll Manager', bg: 'rgba(255,169,77,.15)', color: '#ffa94d' },
+    viewer:{ label: 'Viewer', bg: 'rgba(107,138,170,.15)', color: 'var(--text-d)' },
+  };
+  const r = map[role] || map.viewer;
+  return `<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:${r.bg};color:${r.color};">${r.label}</span>`;
 }
 
 function renderLoginScreen(){

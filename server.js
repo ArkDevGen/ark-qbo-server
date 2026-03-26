@@ -104,6 +104,7 @@ function safeUser(u) {
 const DEFAULT_PERMISSIONS = {
   admin: { canEditClients:true, canDeleteClients:true, canViewFiles:true, canUploadFiles:true, canDeleteFiles:true, canRunPayroll:true, canPushQBO:true, canManageUsers:true },
   am:    { canEditClients:true, canDeleteClients:false, canViewFiles:true, canUploadFiles:true, canDeleteFiles:false, canRunPayroll:true, canPushQBO:true, canManageUsers:false },
+  pm:    { canEditClients:false, canDeleteClients:false, canViewFiles:true, canUploadFiles:true, canDeleteFiles:false, canRunPayroll:true, canPushQBO:false, canManageUsers:false },
   viewer:{ canEditClients:false, canDeleteClients:false, canViewFiles:true, canUploadFiles:false, canDeleteFiles:false, canRunPayroll:false, canPushQBO:false, canManageUsers:false },
 };
 
@@ -306,7 +307,7 @@ app.post('/users', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(409).json({ error: 'Username already exists' });
   }
 
-  const validRoles = ['admin', 'am', 'viewer'];
+  const validRoles = ['admin', 'am', 'pm', 'viewer'];
   const userRole = validRoles.includes(role) ? role : 'am';
 
   const newUser = {

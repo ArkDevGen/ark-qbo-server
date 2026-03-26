@@ -200,6 +200,7 @@ async function doLogin() {
     // Check role — only admin and AM can access
     const role = data.user?.role || 'viewer';
     if (role === 'viewer') throw new Error('Insufficient permissions — viewers cannot access payroll admin');
+    // PM can access but read-only for employee edits (future: add edit approval flow)
     _currentUser = data.user;
     _token = data.token;
 
