@@ -982,7 +982,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
         </div>
       </div>
-      <div id="cal-widget" style="padding:0 4px 16px;"></div>
+      <div id="cal-widget" style="padding:0 4px 16px;overflow:hidden;"></div>
     </div>
 
 
@@ -11345,7 +11345,8 @@ async function calNavWeek(delta) {
 // Fetch events from Google Calendar API
 async function fetchCalendarEvents() {
   try {
-    const res = await fetch(`${QBO_SERVER}/gcal/events?days=7&offset=${_calDayOffset}`);
+    const _gcalServer = (typeof ARK_SERVER !== 'undefined' ? ARK_SERVER : (typeof QBO_SERVER !== 'undefined' ? QBO_SERVER : 'https://ark-qbo-server.onrender.com'));
+    const res = await fetch(`${_gcalServer}/gcal/events?days=7&offset=${_calDayOffset}`);
     if (!res.ok) {
       if (res.status === 401) { _gcalConnected = false; return false; }
       throw new Error('Calendar fetch failed');
@@ -11378,7 +11379,8 @@ async function fetchCalendarEvents() {
 // Check connection status
 async function gcalCheckStatus() {
   try {
-    const res = await fetch(`${QBO_SERVER}/gcal/status`);
+    const _gcalSrv = (typeof ARK_SERVER !== 'undefined' ? ARK_SERVER : (typeof QBO_SERVER !== 'undefined' ? QBO_SERVER : 'https://ark-qbo-server.onrender.com'));
+    const res = await fetch(`${_gcalSrv}/gcal/status`);
     const data = await res.json();
     _gcalConnected = data.connected;
     return data.connected;
@@ -11387,7 +11389,8 @@ async function gcalCheckStatus() {
 
 // Connect via OAuth popup
 function gcalConnect() {
-  const popup = window.open(`${QBO_SERVER}/gcal/auth`, 'gcal-auth', 'width=600,height=700');
+  const _gcalSrv2 = (typeof ARK_SERVER !== 'undefined' ? ARK_SERVER : (typeof QBO_SERVER !== 'undefined' ? QBO_SERVER : 'https://ark-qbo-server.onrender.com'));
+  const popup = window.open(`${_gcalSrv2}/gcal/auth`, 'gcal-auth', 'width=600,height=700');
   window.addEventListener('message', async function handler(e) {
     if (e.data && e.data.type === 'gcal-connected') {
       window.removeEventListener('message', handler);
@@ -11402,7 +11405,8 @@ function gcalConnect() {
 // Disconnect
 async function gcalDisconnect() {
   try {
-    await fetch(`${QBO_SERVER}/gcal/disconnect`, { method: 'POST' });
+    const _gcalSrv3 = (typeof ARK_SERVER !== 'undefined' ? ARK_SERVER : (typeof QBO_SERVER !== 'undefined' ? QBO_SERVER : 'https://ark-qbo-server.onrender.com'));
+    await fetch(`${_gcalSrv3}/gcal/disconnect`, { method: 'POST' });
     CAL_DAYS = [];
     _gcalConnected = false;
     gcalStopPolling();
@@ -11494,7 +11498,7 @@ function renderCalWidget(){
   const catLabel   = { client:'CLIENT', internal:'INTERNAL', personal:'PERSONAL' };
 
   const colCount = CAL_DAYS.length || 7;
-  let html = `<div style="display:grid;grid-template-columns:repeat(${colCount},1fr);gap:0;border-top:1px solid var(--border);">`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(${colCount},minmax(0,1fr));gap:0;border-top:1px solid var(--border);overflow:hidden;">`;
 
   CAL_DAYS.forEach((day, di) => {
     const isToday = day.date === todayStr;
