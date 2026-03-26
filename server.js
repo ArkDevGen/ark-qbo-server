@@ -2259,6 +2259,59 @@ app.get('/gcal/events', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// DATABASE: Server-side persistent storage for dashboard data
+// Both users share the same ark-db.json on disk
+// ─────────────────────────────────────────────────────────────────
+const ARK_DB_FILE = path.join(DATA_DIR, 'ark-db.json');
+
+app.get('/db/load', requireAuth, (req, res) => {
+  try {
+    if (fs.existsSync(ARK_DB_FILE)) {
+      const raw = fs.readFileSync(ARK_DB_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      console.log(`DB loaded by ${req.arkUser.userName} (${(raw.length / 1024).toFixed(1)} KB)`);
+      res.json(data);
+    } else {
+      console.log(`DB load: no ark-db.json yet (${req.arkUser.userName})`);
+      res.json(null);
+    }
+  } catch (e) {
+    console.error('DB load error:', e.message);
+    res.status(500).json({ error: 'Failed to load database' });
+  }
+});
+
+app.post('/db/save', requireAuth, (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'Invalid DB payload' });
+    }
+
+    // Conflict detection (informational — last write wins)
+    if (fs.existsSync(ARK_DB_FILE)) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+        if (existing._savedAt && payload._savedAt &&
+            new Date(existing._savedAt) > new Date(payload._savedAt)) {
+          console.warn(`DB conflict: ${req.arkUser.userName} overwrote newer data ` +
+            `(server: ${existing._savedAt}, client: ${payload._savedAt})`);
+        }
+      } catch (_) { /* ignore parse errors on existing file */ }
+    }
+
+    payload._savedAt = new Date().toISOString();
+    payload._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(payload));
+    console.log(`DB saved by ${req.arkUser.userName} at ${payload._savedAt} (${(JSON.stringify(payload).length / 1024).toFixed(1)} KB)`);
+    res.json({ success: true, savedAt: payload._savedAt });
+  } catch (e) {
+    console.error('DB save error:', e.message);
+    res.status(500).json({ error: 'Failed to save database' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {

@@ -5323,88 +5323,156 @@ function logAct(desc, clientId=null, amId=null){
 //  Sample/seed data loads ONLY if no saved data exists.
 // ══════════════════════════════════════════════════════════════════
 const ARK_DB_KEY = 'ark_db_v1';
+const ARK_SERVER = 'https://ark-qbo-server.onrender.com';
 
 const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
 
-// Save all DB fields that should persist (exclude transient UI state)
+// ── Server-synced DB persistence ───────────────────────────────────
+// saveDB() writes to localStorage (instant) then debounces a server sync.
+// loadDB() fetches from server first, falls back to localStorage.
+// Both users share the same ark-db.json on Render's persistent disk.
+let _dbSaveTimer = null;
+const DB_SAVE_DEBOUNCE = 1000; // 1 second
+
+function _buildDBPayload() {
+  return {
+    clients:        DB.clients,
+    accountManagers:DB.accountManagers,
+    employees:      DB.employees,
+    postage:        DB.postage,
+    notes:          DB.notes,
+    activity:       DB.activity,
+    notifications:  DB.notifications||[],
+    users:          DB.users||[],
+    vendors:        DB.vendors||[],
+    form1099s:      DB.form1099s||[],
+    w2s:            DB.w2s||[],
+    w2cs:           DB.w2cs||[],
+    efw2Log:        DB.efw2Log||[],
+    calls:          DB.calls||{},
+    timePunches:    DB.timePunches||{},
+    faxOutbox:      DB.faxOutbox||[],
+    faxInbox:       DB.faxInbox||[],
+    smsLog:         DB.smsLog||[],
+    smsMessages:    DB.smsMessages||[],
+    commConfig:     DB.commConfig||{},
+    timePTO:        DB.timePTO||{},
+    nachaCfg:       DB.nachaCfg||{},
+    nachaLog:       DB.nachaLog||[],
+    proposals:      DB.proposals||[],
+    leads:          DB.leads||[],
+    tasks:          DB.tasks||[],
+    _savedAt:       new Date().toISOString()
+  };
+}
+
+function _applyDBPayload(saved) {
+  Object.assign(DB, {
+    clients:        saved.clients        || [],
+    accountManagers:saved.accountManagers|| [],
+    employees:      saved.employees      || [],
+    postage:        saved.postage        || [],
+    notes:          saved.notes          || {},
+    activity:       saved.activity       || [],
+    notifications:  saved.notifications  || [],
+    users:          saved.users          || [],
+    vendors:        saved.vendors        || [],
+    form1099s:      saved.form1099s      || [],
+    w2s:            saved.w2s            || [],
+    w2cs:           saved.w2cs           || [],
+    efw2Log:        saved.efw2Log        || [],
+    calls:          saved.calls          || {},
+    timePunches:    saved.timePunches    || {},
+    faxOutbox:      saved.faxOutbox      || [],
+    faxInbox:       saved.faxInbox       || [],
+    smsLog:         saved.smsLog         || [],
+    smsMessages:    saved.smsMessages    || [],
+    commConfig:     saved.commConfig     || {},
+    timePTO:        saved.timePTO        || {},
+    nachaCfg:       saved.nachaCfg       || {},
+    nachaLog:       saved.nachaLog       || [],
+    proposals:      saved.proposals      || [],
+    leads:          saved.leads          || [],
+    tasks:          saved.tasks          || [],
+  });
+}
+
 function saveDB(){
   try {
-    const payload = {
-      clients:        DB.clients,
-      accountManagers:DB.accountManagers,
-      employees:      DB.employees,
-      postage:        DB.postage,
-      notes:          DB.notes,
-      activity:       DB.activity,
-      users:          DB.users||[],
-      vendors:        DB.vendors||[],
-      form1099s:      DB.form1099s||[],
-      w2s:            DB.w2s||[],
-      w2cs:           DB.w2cs||[],
-      efw2Log:        DB.efw2Log||[],
-      calls:          DB.calls||{},
-      timePunches:    DB.timePunches||{},
-      faxOutbox:      DB.faxOutbox||[],
-      faxInbox:       DB.faxInbox||[],
-      smsLog:         DB.smsLog||[],
-      smsMessages:    DB.smsMessages||[],
-      commConfig:     DB.commConfig||{},
-      timePTO:        DB.timePTO||{},
-      nachaCfg:       DB.nachaCfg||{},
-      nachaLog:       DB.nachaLog||[],
-      proposals:      DB.proposals||[],
-      leads:          DB.leads||[],
-      tasks:          DB.tasks||[],
-      _savedAt:       new Date().toISOString()
-    };
+    const payload = _buildDBPayload();
+
+    // 1. Write to localStorage immediately (cache + offline fallback)
     localStorage.setItem(ARK_DB_KEY, JSON.stringify(payload));
-    // Update sidebar status
+
+    // 2. Update sidebar status
     const el = document.getElementById('sidebar-save-status');
     if(el){
       const t = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-      el.textContent = `Auto-saved · ${t}`;
+      el.textContent = `Saving… · ${t}`;
     }
+
+    // 3. Debounced server save
+    if(_dbSaveTimer) clearTimeout(_dbSaveTimer);
+    _dbSaveTimer = setTimeout(async () => {
+      try {
+        const resp = await authFetch(ARK_SERVER + '/db/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if(data.success){
+          const el2 = document.getElementById('sidebar-save-status');
+          if(el2){
+            const t2 = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+            el2.textContent = `Synced · ${t2}`;
+          }
+        } else {
+          throw new Error(data.error || 'Save failed');
+        }
+      } catch(e) {
+        console.warn('ARK: server save failed, data safe in localStorage', e);
+        const el2 = document.getElementById('sidebar-save-status');
+        if(el2) el2.textContent = '⚠ Local only — sync failed';
+      }
+    }, DB_SAVE_DEBOUNCE);
+
   } catch(e) {
-    console.warn('ARK: localStorage save failed', e);
+    console.warn('ARK: save failed', e);
     const el = document.getElementById('sidebar-save-status');
     if(el) el.textContent = '⚠ Save failed';
   }
 }
 
-// Load saved data back into DB — returns true if data was found
-function loadDB(){
+// Load saved data — tries server first, falls back to localStorage
+async function loadDB(){
+  // Try server first
+  try {
+    const resp = await authFetch(ARK_SERVER + '/db/load');
+    if(resp.ok){
+      const saved = await resp.json();
+      if(saved && saved.clients){
+        _applyDBPayload(saved);
+        // Update localStorage cache
+        localStorage.setItem(ARK_DB_KEY, JSON.stringify(saved));
+        console.log('ARK: loaded from server, saved at', saved._savedAt, 'by', saved._savedBy||'unknown');
+        return true;
+      }
+    }
+  } catch(e){
+    console.warn('ARK: server load failed, trying localStorage', e);
+  }
+
+  // Fallback to localStorage
   try {
     const raw = localStorage.getItem(ARK_DB_KEY);
     if(!raw) return false;
     const saved = JSON.parse(raw);
     if(!saved || !saved.clients) return false;
-    Object.assign(DB, {
-      clients:        saved.clients        || [],
-      accountManagers:saved.accountManagers|| [],
-      employees:      saved.employees      || [],
-      postage:        saved.postage        || [],
-      notes:          saved.notes          || {},
-      activity:       saved.activity       || [],
-      users:          saved.users          || [],
-      vendors:        saved.vendors        || [],
-      form1099s:      saved.form1099s      || [],
-      w2s:            saved.w2s            || [],
-      w2cs:           saved.w2cs           || [],
-      efw2Log:        saved.efw2Log        || [],
-      calls:          saved.calls          || {},
-      timePunches:    saved.timePunches    || {},
-      faxOutbox:      saved.faxOutbox      || [],
-      faxInbox:       saved.faxInbox       || [],
-      smsLog:         saved.smsLog         || [],
-      commConfig:     saved.commConfig     || {},
-      timePTO:        saved.timePTO        || {},
-      nachaCfg:       saved.nachaCfg       || {},
-      nachaLog:       saved.nachaLog       || [],
-      proposals:      saved.proposals      || [],
-      leads:          saved.leads          || [],
-      tasks:          saved.tasks          || [],
-    });
+    _applyDBPayload(saved);
     console.log('ARK: loaded from localStorage, saved at', saved._savedAt);
+    // Migrate to server if server had no data
+    setTimeout(() => saveDB(), 500);
     return true;
   } catch(e) {
     console.warn('ARK: localStorage load failed', e);
@@ -5498,6 +5566,12 @@ function resetToSampleData(){
   if(!confirm('Reset ALL data back to sample data? This cannot be undone.')) return;
   if(!confirm('Are you absolutely sure? All real data will be lost.')) return;
   localStorage.removeItem(ARK_DB_KEY);
+  // Also clear the server copy
+  authFetch(ARK_SERVER + '/db/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clients: [], accountManagers: [], _savedAt: new Date().toISOString(), _reset: true })
+  }).catch(e => console.warn('Server reset failed:', e));
   showToast('Resetting to sample data…');
   setTimeout(()=>location.reload(), 800);
 }
@@ -5880,6 +5954,22 @@ async function loginAs(userId){
     token: _serverToken,
     view: 'dashboard',
   }));
+
+  // Load shared DB from server (or localStorage fallback)
+  const hadData = await loadDB();
+  if(!hadData){
+    // Seed default account managers if no data exists anywhere
+    if(!DB.accountManagers.length){
+      const ams = [
+        {id:'am-jacob',  fname:'Jacob', lname:'Malousek',title:'Owner / Admin',           email:'jacob@arkfinancial.com', phone:'(402) 555-1100',status:'Active',notes:'Owner and administrator.'},
+        {id:'am-rachel', fname:'Rachel',lname:'Donovan', title:'Senior Account Manager',  email:'rdonovan@arkfinancial.com',phone:'(402) 555-1101',status:'Active',notes:'Specializes in small business advisory.'},
+        {id:'am-marcus', fname:'Marcus',lname:'Holt',    title:'Account Manager',         email:'mholt@arkfinancial.com',   phone:'(402) 555-1102',status:'Active',notes:'Payroll and bookkeeping focus.'},
+        {id:'am-tina',   fname:'Tina',  lname:'Sorensen',title:'Junior Account Manager',  email:'tsorensen@arkfinancial.com',phone:'(402) 555-1103',status:'Active',notes:''},
+      ];
+      ams.forEach(a=>DB.accountManagers.push(a));
+      saveDB();
+    }
+  }
 }
 
 function signOut(){
@@ -6170,19 +6260,7 @@ function removeUser(id){
 }
 
 
-// SEED — only runs if localStorage has no saved data
-const _hasStoredData = loadDB();
-(function seed(){
-  if(_hasStoredData) return; // skip seeding — using saved data
-  const ams = [
-    {id:'am-jacob',  fname:'Jacob', lname:'Malousek',title:'Owner / Admin',           email:'jacob@arkfinancial.com', phone:'(402) 555-1100',status:'Active',notes:'Owner and administrator.'},
-    {id:'am-rachel', fname:'Rachel',lname:'Donovan', title:'Senior Account Manager',  email:'rdonovan@arkfinancial.com',phone:'(402) 555-1101',status:'Active',notes:'Specializes in small business advisory.'},
-    {id:'am-marcus', fname:'Marcus',lname:'Holt',    title:'Account Manager',         email:'mholt@arkfinancial.com',   phone:'(402) 555-1102',status:'Active',notes:'Payroll and bookkeeping focus.'},
-    {id:'am-tina',   fname:'Tina',  lname:'Sorensen',title:'Junior Account Manager',  email:'tsorensen@arkfinancial.com',phone:'(402) 555-1103',status:'Active',notes:''},
-  ];
-  ams.forEach(a=>DB.accountManagers.push(a));
-  saveDB(); // persist seed data immediately
-})();
+// SEED logic moved into loginAs() — DB loads after auth token is available
 
 // ── Demo task seeding removed — real data imported via CSV ──
 
@@ -10667,9 +10745,7 @@ renderLoginScreen();
   try {
     const saved = JSON.parse(sessionStorage.getItem('ark_session') || 'null');
     if (saved && saved.userId) {
-      await loginAs(saved.userId);
-      // Restore server token from session (avoids re-auth if still valid)
-      if (saved.token) _serverToken = saved.token;
+      await loginAs(saved.userId);  // loginAs now loads DB from server
       // Navigate to the view they were on
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
     }
