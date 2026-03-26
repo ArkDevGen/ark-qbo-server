@@ -381,6 +381,22 @@
   </div>
 </div>
 
+<!-- ═══ RECONCILE EMPLOYEES MODAL ═══ -->
+<div id="modal-reconcile" class="modal-overlay hidden" onclick="if(event.target===this)return">
+  <div class="modal" style="width:600px;max-height:85vh;overflow-y:auto;">
+    <h3 id="reconcile-title">Unrecognized Employees</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:6px;" id="reconcile-subtitle">These employees from the Homebase report are not in this store's roster.</p>
+    <div id="reconcile-progress" style="font-size:11px;color:var(--accent);margin-bottom:14px;"></div>
+    <div id="reconcile-list" style="max-height:400px;overflow-y:auto;"></div>
+    <div id="reconcile-status" class="status"></div>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;">
+      <button class="btn btn-outline btn-sm" id="reconcile-skip-btn" onclick="reconcileSkipStore()">Skip This Store</button>
+      <span id="reconcile-done-msg" style="display:none;color:var(--green);font-size:13px;font-weight:600;align-self:center;">✓ All employees resolved</span>
+      <button class="btn btn-primary" id="reconcile-next-btn" onclick="reconcileNext()" style="display:none;">Continue →</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── State ───────────────────────────────────────────────────────
 let _token = '';
@@ -656,7 +672,13 @@ function bulkCheckReady() {
   btn.style.display = _bulkHomebase ? '' : 'none';
 }
 
-function bulkPopulateAll() {
+// ─── Reconciliation state ────────────────────────────────────────
+let _reconcileQueue = [];      // [{storeId, storeNum, storeName, unmatched: [{firstName, lastName}]}]
+let _reconcileIdx = 0;         // Current store in the queue
+let _reconcileStoreUnmatched = []; // Current store's unmatched list
+let _reconcileCallback = null; // Called when all reconciliation done
+
+async function bulkPopulateAll() {
   if (!_bulkHomebase) return;
 
   _bulkMode = true;
@@ -672,19 +694,220 @@ function bulkPopulateAll() {
     _bulkStoreStatus[opt.value] = hasData ? 'populated' : 'empty';
   }
 
+  // Start reconciliation — check each store for unmatched employees
+  document.getElementById('bulk-populate-btn').disabled = true;
+  document.getElementById('bulk-populate-btn').textContent = 'Checking employees...';
+
+  _reconcileQueue = [];
+  _reconcileIdx = 0;
+
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    const storeNum = opt.text.replace(/[^0-9]/g, '');
+    const homebaseRows = _bulkHomebase[storeNum] || [];
+    if (!homebaseRows.length) continue;
+
+    // Fetch current employees for this store
+    try {
+      const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${opt.value}`, {
+        headers: { 'Authorization': `Bearer ${_token}` },
+      });
+      const data = await resp.json();
+      const storeEmps = data.employees || [];
+
+      // Find unmatched Homebase names
+      const unmatched = [];
+      const seen = new Set();
+      homebaseRows.forEach(row => {
+        const key = `${row.firstName.toLowerCase()}|${row.lastName.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const found = storeEmps.some(emp =>
+          emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
+          emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+        );
+        if (!found) unmatched.push({ firstName: row.firstName, lastName: row.lastName });
+      });
+
+      if (unmatched.length > 0) {
+        _reconcileQueue.push({
+          storeId: opt.value,
+          storeNum,
+          storeName: opt.text,
+          unmatched,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to check store', opt.value, e);
+    }
+  }
+
+  if (_reconcileQueue.length > 0) {
+    // Show reconciliation modal
+    _reconcileCallback = finishBulkPopulate;
+    reconcileShowStore(0);
+  } else {
+    // No mismatches — go straight to populate
+    finishBulkPopulate();
+  }
+}
+
+function finishBulkPopulate() {
   // Update UI
   document.getElementById('store-tracker').style.display = '';
   document.getElementById('store-action-btn').textContent = '✓ Confirm Store';
+  document.getElementById('bulk-populate-btn').disabled = false;
+  document.getElementById('bulk-populate-btn').textContent = 'Populate All Stores →';
 
   bulkRenderTracker();
 
   // Auto-select first populated store
+  const storeSel = document.getElementById('entry-store');
   const firstPopulated = Object.entries(_bulkStoreStatus).find(([id, s]) => s === 'populated');
   if (firstPopulated) {
     storeSel.value = firstPopulated[0];
     onStoreChange();
   }
 }
+
+function reconcileShowStore(idx) {
+  if (idx >= _reconcileQueue.length) {
+    // All stores reconciled
+    document.getElementById('modal-reconcile').classList.add('hidden');
+    if (_reconcileCallback) _reconcileCallback();
+    return;
+  }
+
+  _reconcileIdx = idx;
+  const store = _reconcileQueue[idx];
+  _reconcileStoreUnmatched = [...store.unmatched];
+
+  document.getElementById('modal-reconcile').classList.remove('hidden');
+  document.getElementById('reconcile-title').textContent = `Unrecognized Employees — ${store.storeName}`;
+  document.getElementById('reconcile-subtitle').textContent = `${store.unmatched.length} employee${store.unmatched.length !== 1 ? 's' : ''} from Homebase not found in this store's roster.`;
+  document.getElementById('reconcile-progress').textContent = `Store ${idx + 1} of ${_reconcileQueue.length} with mismatches`;
+  document.getElementById('reconcile-status').className = 'status';
+  document.getElementById('reconcile-next-btn').style.display = 'none';
+  document.getElementById('reconcile-done-msg').style.display = 'none';
+
+  reconcileRenderList();
+}
+
+function reconcileRenderList() {
+  const listEl = document.getElementById('reconcile-list');
+  const store = _reconcileQueue[_reconcileIdx];
+
+  if (_reconcileStoreUnmatched.length === 0) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--green);font-weight:600;">✓ All employees resolved for this store</div>';
+    document.getElementById('reconcile-next-btn').style.display = '';
+    document.getElementById('reconcile-next-btn').textContent = _reconcileIdx < _reconcileQueue.length - 1 ? 'Next Store →' : 'Finish & Populate →';
+    document.getElementById('reconcile-done-msg').style.display = '';
+    return;
+  }
+
+  listEl.innerHTML = _reconcileStoreUnmatched.map((emp, i) => `
+    <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${emp.firstName} ${emp.lastName}</div>
+        <div style="font-size:11px;color:var(--muted);">Not found in ${store.storeName}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-outline" onclick="reconcileFindEmp(${i})" style="border-color:var(--accent);color:var(--accent);font-size:12px;">🔍 Find</button>
+        <button class="btn btn-sm btn-outline" onclick="reconcileAddNew(${i})" style="border-color:var(--orange);color:var(--orange);font-size:12px;">+ New</button>
+        <button class="btn btn-sm btn-outline" onclick="reconcileSkipEmp(${i})" style="font-size:12px;">Skip</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function reconcileFindEmp(unmatchedIdx) {
+  const store = _reconcileQueue[_reconcileIdx];
+  const emp = _reconcileStoreUnmatched[unmatchedIdx];
+  const statusEl = document.getElementById('reconcile-status');
+
+  // Fetch all employees to find a match
+  try {
+    statusEl.className = 'status info';
+    statusEl.textContent = `Searching for ${emp.firstName} ${emp.lastName}...`;
+
+    const resp = await fetch(`${API}/payroll/employees-all/${_clientSlug}`, {
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    const data = await resp.json();
+    const allEmps = data.employees || [];
+
+    // Try exact match first
+    const match = allEmps.find(e =>
+      e.firstName.toLowerCase() === emp.firstName.toLowerCase() &&
+      e.lastName.toLowerCase() === emp.lastName.toLowerCase()
+    );
+
+    if (match) {
+      // Link this employee to the store
+      const linkResp = await fetch(`${API}/payroll/employees/${_clientSlug}/${store.storeId}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ employeeId: match.id }),
+      });
+      const linkData = await linkResp.json();
+
+      if (linkData.error && linkData.error.includes('already')) {
+        statusEl.className = 'status info';
+        statusEl.textContent = `${emp.firstName} ${emp.lastName} is already in this store`;
+      } else if (linkData.error) {
+        throw new Error(linkData.error);
+      } else {
+        statusEl.className = 'status success';
+        statusEl.textContent = `✓ ${emp.firstName} ${emp.lastName} added from ${match.stores.join(', ')}`;
+      }
+
+      // Remove from unmatched
+      _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
+      reconcileRenderList();
+    } else {
+      // No match found — offer to add new
+      statusEl.className = 'status error';
+      statusEl.textContent = `${emp.firstName} ${emp.lastName} not found in any store. Use "New" to add them.`;
+    }
+  } catch (e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = '✗ ' + e.message;
+  }
+}
+
+function reconcileAddNew(unmatchedIdx) {
+  const store = _reconcileQueue[_reconcileIdx];
+  const emp = _reconcileStoreUnmatched[unmatchedIdx];
+
+  // Pre-fill the Add Employee modal with name and store
+  // We need to temporarily switch to this store
+  const storeSel = document.getElementById('entry-store');
+  storeSel.value = store.storeId;
+
+  // Open Add Employee modal with pre-filled name
+  showAddEmployee();
+  document.getElementById('new-emp-first').value = emp.firstName;
+  document.getElementById('new-emp-last').value = emp.lastName;
+
+  // Set a flag so when the employee is added, we come back to reconcile
+  window._reconcileReturnAfterAdd = { unmatchedIdx, storeId: store.storeId };
+}
+
+function reconcileSkipEmp(unmatchedIdx) {
+  _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
+  reconcileRenderList();
+}
+
+function reconcileSkipStore() {
+  reconcileShowStore(_reconcileIdx + 1);
+}
+
+function reconcileNext() {
+  reconcileShowStore(_reconcileIdx + 1);
+}
+
+// Patch closeAddEmployee to return to reconcile if needed
+const _origCloseAddEmployee = typeof closeAddEmployee === 'function' ? closeAddEmployee : null;
 
 function bulkRenderTracker() {
   const chipsEl = document.getElementById('store-tracker-chips');
@@ -1561,6 +1784,20 @@ async function addEmployee() {
     _employees.push(data.employee);
     renderEmployeeTable();
     closeAddEmployee();
+
+    // If we came from reconciliation, remove this employee from unmatched and return
+    if (window._reconcileReturnAfterAdd) {
+      const { unmatchedIdx } = window._reconcileReturnAfterAdd;
+      window._reconcileReturnAfterAdd = null;
+      if (_reconcileStoreUnmatched && unmatchedIdx < _reconcileStoreUnmatched.length) {
+        _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
+      }
+      // Small delay to let modal close animation finish
+      setTimeout(() => {
+        document.getElementById('modal-reconcile').classList.remove('hidden');
+        reconcileRenderList();
+      }, 300);
+    }
   } catch(e) {
     statusEl.className = 'status error';
     statusEl.textContent = 'Connection error. Please try again.';
