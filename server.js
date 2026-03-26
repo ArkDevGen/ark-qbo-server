@@ -880,6 +880,21 @@ app.post('/qbo/api', async (req, res) => {
       res.json({ success: true, vendors });
     });
 
+  // ── Action: Get Customers ────────────────────────────────────
+  } else if (action === 'getCustomers') {
+    qbo.findCustomers({ Active: true }, (err, data) => {
+      if (err) return res.status(500).json({ error: err.message || 'Failed to fetch customers' });
+      const customers = (data.QueryResponse?.Customer || []).map(c => ({
+        id:      c.Id,
+        name:    c.DisplayName,
+        email:   c.PrimaryEmailAddr?.Address || '',
+        phone:   c.PrimaryPhone?.FreeFormNumber || '',
+        balance: c.Balance || 0,
+      }));
+      console.log(`  Returned ${customers.length} customers`);
+      res.json({ success: true, customers });
+    });
+
   // ── Action: Get Company Info ──────────────────────────────────
   } else if (action === 'getCompanyInfo') {
     qbo.getCompanyInfo(targetRealm, (err, data) => {
@@ -2575,11 +2590,13 @@ app.get('/gcal/events', async (req, res) => {
   try {
     const calendar = await getGCalClient();
     const days = parseInt(req.query.days) || 4;
+    const offset = parseInt(req.query.offset) || 0; // days to shift from today (negative = past, positive = future)
     const tz = 'America/Chicago';
 
-    // Build time range: start of today → end of (today + days)
+    // Build time range: start of (today + offset) → end of (today + offset + days)
     const now = new Date();
     const startOfToday = new Date(now.toLocaleDateString('en-US', { timeZone: tz }));
+    startOfToday.setDate(startOfToday.getDate() + offset);
     const endDate = new Date(startOfToday);
     endDate.setDate(endDate.getDate() + days);
 

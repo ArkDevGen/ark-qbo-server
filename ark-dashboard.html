@@ -973,7 +973,14 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card-title">📅 Jacob's Schedule</div>
           <div class="card-subtitle" id="cal-date-label"></div>
         </div>
-        <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:2px;">
+            <button onclick="calNavWeek(-7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Previous week">◀</button>
+            <button onclick="calNavWeek(0)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:0 10px;height:28px;cursor:pointer;font-size:10px;font-weight:600;color:var(--text-d);letter-spacing:.03em;" title="Back to today">Today</button>
+            <button onclick="calNavWeek(7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Next week">▶</button>
+          </div>
+          <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
+        </div>
       </div>
       <div id="cal-widget" style="padding:0 4px 16px;"></div>
     </div>
@@ -3149,7 +3156,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- Tool grid -->
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-d);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <span>Integration Tools</span>
-      <span style="font-size:10px;font-weight:400;font-family:'DM Mono',monospace;color:var(--text-d);">3 active · 3 planned</span>
+      <span style="font-size:10px;font-weight:400;font-family:'DM Mono',monospace;color:var(--text-d);">5 active · 1 planned</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;">
 
@@ -3174,11 +3181,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
+      <div onclick="qboOpenTool('coasync')" id="qbo-tool-coasync" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
         <div style="width:38px;height:38px;border-radius:8px;background:rgba(10,26,16,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📋</div>
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">COA Sync</div>
         <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Pull and sync Chart of Accounts from QBO for real-time account mapping.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;">Planned</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
       <div onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -3188,11 +3195,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;opacity:.45;cursor:not-allowed;">
+      <div onclick="qboOpenTool('entitysync')" id="qbo-tool-entitysync" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
         <div style="width:38px;height:38px;border-radius:8px;background:rgba(14,26,48,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🔄</div>
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Entity Sync</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Two-way sync of customers, vendors, and classes between the CRM and QBO.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--text-d);letter-spacing:.06em;text-transform:uppercase;">Planned</div>
+        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Sync customers, vendors, and classes between the CRM and QBO.</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
       </div>
 
     </div>
@@ -3514,6 +3521,58 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
               <div id="batch-empty-msg" style="display:none;text-align:center;padding:32px 0;color:var(--text-d);font-size:13px;">No QBO clients found. Import clients or set QB Type to "QBO" in client records.</div>
 
+        <!-- COA Sync workspace -->
+        <div id="qbo-ws-coasync" style="display:none;">
+          <div class="card" style="overflow:visible;">
+            <div class="card-header" style="padding:12px 18px;">
+              <div>
+                <div class="card-title" style="font-size:15px;">📋 Chart of Accounts</div>
+                <div class="card-subtitle" id="coa-sync-status" style="font-size:11px;color:var(--text-d);">Not synced yet</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="coa-search" placeholder="Search accounts…" class="field-input" style="width:180px;margin:0;font-size:11px;" oninput="qboRenderCOA()">
+                <button class="btn btn-primary btn-sm" onclick="qboSyncCOA()">Sync Now</button>
+              </div>
+            </div>
+            <div id="coa-summary" style="display:none;padding:10px 18px;border-bottom:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;"></div>
+            <div id="coa-table" style="max-height:480px;overflow-y:auto;">
+              <div style="padding:40px;text-align:center;color:var(--text-d);font-size:12px;">Click "Sync Now" to pull Chart of Accounts from QBO</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Entity Sync workspace -->
+        <div id="qbo-ws-entitysync" style="display:none;">
+          <div class="card" style="overflow:visible;">
+            <div class="card-header" style="padding:12px 18px;">
+              <div>
+                <div class="card-title" style="font-size:15px;">🔄 Entity Sync</div>
+                <div class="card-subtitle" id="entity-sync-status" style="font-size:11px;color:var(--text-d);">Not synced yet</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="entity-search" placeholder="Search…" class="field-input" style="width:160px;margin:0;font-size:11px;" oninput="qboRenderEntityTab()">
+                <button class="btn btn-primary btn-sm" onclick="qboSyncEntities()">Sync &amp; Match</button>
+              </div>
+            </div>
+            <!-- Tab bar -->
+            <div style="display:flex;border-bottom:1px solid var(--border);padding:0 18px;" id="entity-tab-bar">
+              <div class="entity-tab active" onclick="qboEntityTab('customers')" data-tab="customers" style="padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--navy);color:var(--navy);">Customers <span id="entity-ct-customers" style="font-size:10px;color:var(--text-d);"></span></div>
+              <div class="entity-tab" onclick="qboEntityTab('vendors')" data-tab="vendors" style="padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-d);">Vendors <span id="entity-ct-vendors" style="font-size:10px;"></span></div>
+              <div class="entity-tab" onclick="qboEntityTab('classes')" data-tab="classes" style="padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-d);">Classes <span id="entity-ct-classes" style="font-size:10px;"></span></div>
+              <div class="entity-tab" onclick="qboEntityTab('locations')" data-tab="locations" style="padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-d);">Locations <span id="entity-ct-locations" style="font-size:10px;"></span></div>
+            </div>
+            <!-- Match summary (customers tab only) -->
+            <div id="entity-match-summary" style="padding:10px 18px;border-bottom:1px solid var(--border);display:none;">
+              <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+                <span id="entity-linked-ct" style="font-size:11px;font-weight:600;color:var(--green);">0 linked</span>
+                <span id="entity-suggested-ct" style="font-size:11px;font-weight:600;color:#c5930a;">0 suggested</span>
+                <span id="entity-unmatched-ct" style="font-size:11px;font-weight:600;color:var(--text-d);">0 unmatched</span>
+                <button class="btn btn-sm" id="entity-accept-all-btn" onclick="qboAcceptAllSuggestions()" style="font-size:10px;display:none;">Accept All Suggestions</button>
+              </div>
+            </div>
+            <!-- Entity table -->
+            <div id="entity-table" style="max-height:480px;overflow-y:auto;">
+              <div style="padding:40px;text-align:center;color:var(--text-d);font-size:12px;">Click "Sync & Match" to pull entities from QBO</div>
             </div>
           </div>
         </div>
@@ -4824,6 +4883,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </button>
             </div>
             <div id="mc-qbo-link-info" style="font-size:11px;color:var(--text-d);margin-top:6px;min-height:16px;"></div>
+            <div id="mc-qbo-customer-link" style="margin-top:10px;display:none;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-d);margin-bottom:4px;">QBO Customer ID (via Entity Sync)</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="mc-qbo-customer-id" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);"></span>
+                <span id="mc-qbo-customer-name" style="font-size:11px;color:var(--text-d);"></span>
+              </div>
+            </div>
           </div>
 
           <!-- Franchises / Entities — shown when QBO selected, for multi-QBO clients -->
@@ -9775,6 +9841,19 @@ function openEditClient(id){
   const brandEl = document.getElementById('mc-franchise-brand'); if(brandEl) brandEl.value = c.franchiseBrand||'';
   updateFranchiseLabels();
   const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
+  // Show QBO Customer ID if linked via Entity Sync
+  const custLinkEl = document.getElementById('mc-qbo-customer-link');
+  if (custLinkEl) {
+    if (c.qboCustomerId) {
+      custLinkEl.style.display = '';
+      document.getElementById('mc-qbo-customer-id').textContent = c.qboCustomerId;
+      // Try to find the customer name from cached data
+      const custName = (_entityCustomers||[]).find(x => x.id === c.qboCustomerId)?.name || '';
+      document.getElementById('mc-qbo-customer-name').textContent = custName ? `(${custName})` : '';
+    } else {
+      custLinkEl.style.display = 'none';
+    }
+  }
   document.getElementById('mc-name-billing').value=c.nameBilling||'';
   document.getElementById('mc-name-qb').value=c.nameQb||'';
   setBiennial(c.biennialId||'', c.biennialCycle||'');
@@ -9883,6 +9962,8 @@ function saveClient(){
   };
   if(DB._editClient){
     const i=DB.clients.findIndex(x=>x.id===DB._editClient);
+    // Preserve fields set by external tools (Entity Sync, etc.)
+    if(DB.clients[i]?.qboCustomerId) obj.qboCustomerId = DB.clients[i].qboCustomerId;
     DB.clients[i]=obj;
     logAct(`Client updated: ${biz}`,obj.id);
   } else {
@@ -10537,6 +10618,7 @@ function openDetail(id){
         <div class="drow"><span class="dk">Platform</span><span class="dv">${c.qbType}</span></div>
         ${c.qbType==='QBO'&&c.qboBilling?`<div class="drow"><span class="dk">Billing</span><span class="dv">${c.qboBilling} Billed</span></div>`:''}
         ${c.qbType==='QBO'&&c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">Realm ID</span><span class="dv" style="font-family:monospace;">${c.qboRealmId}</span></div>`:''}
+        ${c.qboCustomerId?`<div class="drow"><span class="dk">QBO Customer ID</span><span class="dv" style="font-family:monospace;">${c.qboCustomerId}</span></div>`:''}
         ${c.qboRealmId&&!(c.franchises&&c.franchises.length)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
         ${c.franchises&&c.franchises.length?`<div class="drow"><span class="dk">${c.franchiseBrand?'Franchises':'Entities'}${c.franchiseBrand?' <span style="font-weight:400;color:var(--text-d);font-size:11px;">('+c.franchiseBrand+')</span>':''}</span><span class="dv">${c.franchises.map(f=>`<div style="margin-bottom:3px;">${f.name||'Unnamed'}${f.storeNumber?' <span style="color:var(--text-d);font-size:10px;">#'+f.storeNumber+'</span>':''}${f.qboRealmId?' <span style="color:var(--green);font-size:10px;">✓ linked</span>':' <span style="color:var(--text-d);font-size:10px;">not linked</span>'}</div>`).join('')}</span></div>`:''}
         ${c.franchises&&c.franchises.some(f=>f.qboRealmId)?`<div class="drow"><span class="dk">QBO Tools</span><span class="dv"><a href="#" onclick="qboOpenFromClient('${c.id}');return false;" style="color:var(--accent);text-decoration:none;">Open QBO Center →</a></span></div>`:''}
@@ -11242,11 +11324,18 @@ function renderBankingHoliday(){
 // cat: 'client' | 'internal' | 'personal'
 let CAL_DAYS = [];
 let _gcalConnected = false;
+let _calDayOffset = 0; // days offset from today (negative = past weeks)
+
+async function calNavWeek(delta) {
+  if (delta === 0) { _calDayOffset = 0; } else { _calDayOffset += delta; }
+  await fetchCalendarEvents();
+  renderCalWidget();
+}
 
 // Fetch events from Google Calendar API
 async function fetchCalendarEvents() {
   try {
-    const res = await fetch(`${QBO_SERVER}/gcal/events?days=4`);
+    const res = await fetch(`${QBO_SERVER}/gcal/events?days=7&offset=${_calDayOffset}`);
     if (!res.ok) {
       if (res.status === 401) { _gcalConnected = false; return false; }
       throw new Error('Calendar fetch failed');
@@ -11380,8 +11469,13 @@ function renderCalWidget(){
   }
 
   const totalMeetings = CAL_DAYS.reduce((s,d)=>s+d.events.filter(e=>e.cat==='client'||e.cat==='internal').length,0);
-  document.getElementById('cal-date-label').textContent =
-    `${days[today.getDay()]}, ${months[today.getMonth()]} ${today.getDate()} · ${totalMeetings} meetings over next 4 days`;
+  // Build header: show the week range
+  const firstDay = CAL_DAYS[0] ? new Date(CAL_DAYS[0].date + 'T12:00:00') : today;
+  const lastDay = CAL_DAYS.length > 1 ? new Date(CAL_DAYS[CAL_DAYS.length-1].date + 'T12:00:00') : firstDay;
+  const rangeLabel = _calDayOffset === 0
+    ? `${days[today.getDay()]}, ${months[today.getMonth()]} ${today.getDate()} · ${totalMeetings} meetings this week`
+    : `${months[firstDay.getMonth()]} ${firstDay.getDate()} – ${months[lastDay.getMonth()]} ${lastDay.getDate()} · ${totalMeetings} meetings`;
+  document.getElementById('cal-date-label').textContent = rangeLabel;
 
   // Category colors
   const catColor   = { client:'#b8922a', internal:'#1a2440', personal:'#6b7a99' };
@@ -11389,7 +11483,8 @@ function renderCalWidget(){
   const catBorder  = { client:'#dbbf6a', internal:'#c0c9df', personal:'#d4d6e0' };
   const catLabel   = { client:'CLIENT', internal:'INTERNAL', personal:'PERSONAL' };
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--border);">`;
+  const colCount = CAL_DAYS.length || 7;
+  let html = `<div style="display:grid;grid-template-columns:repeat(${colCount},1fr);gap:0;border-top:1px solid var(--border);">`;
 
   CAL_DAYS.forEach((day, di) => {
     const isToday = day.date === todayStr;
@@ -21722,6 +21817,8 @@ function qboOpenTool(tool) {
   document.getElementById('qbo-expense-workspace').style.display = 'none';
   document.getElementById('qbo-pl-workspace').style.display      = 'none';
   document.getElementById('qbo-batch-workspace').style.display   = 'none';
+  document.getElementById('qbo-ws-coasync').style.display        = 'none';
+  document.getElementById('qbo-ws-entitysync').style.display     = 'none';
   document.getElementById('qbo-default-workspace').style.display = 'none';
   if (tool === 'batch') {
     document.getElementById('qbo-batch-workspace').style.display = '';
@@ -21759,8 +21856,354 @@ function qboOpenTool(tool) {
           qboLiveVendors.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
       }
     }
+  } else if (tool === 'coasync') {
+    document.getElementById('qbo-ws-coasync').style.display = '';
+    if (!qboLiveAccounts.length) qboSyncCOA();
+    else qboRenderCOA();
+  } else if (tool === 'entitysync') {
+    document.getElementById('qbo-ws-entitysync').style.display = '';
+    if (!_entityCustomers.length) qboSyncEntities();
+    else qboRenderEntityTab();
   }
   qboActiveTool = tool;
+}
+
+// ── COA Sync ──────────────────────────────────────────────────────
+
+async function qboSyncCOA() {
+  const statusEl = document.getElementById('coa-sync-status');
+  if (statusEl) statusEl.textContent = 'Syncing…';
+  try {
+    const data = await qboCall('getAccounts');
+    qboLiveAccounts = data.accounts || [];
+    qboRebuildAccountSelects();
+    if (statusEl) statusEl.textContent = `Last synced: ${new Date().toLocaleTimeString()} · ${qboLiveAccounts.length} accounts`;
+    qboLog('success', `COA synced — <strong>${qboLiveAccounts.length} accounts</strong>`);
+    qboRenderCOA();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Sync failed: ' + e.message;
+    qboLog('error', 'COA sync failed: ' + e.message);
+  }
+}
+
+function qboRenderCOA() {
+  const el = document.getElementById('coa-table');
+  const search = (document.getElementById('coa-search')?.value || '').toLowerCase();
+  const filtered = search
+    ? qboLiveAccounts.filter(a => a.name.toLowerCase().includes(search) || (a.type||'').toLowerCase().includes(search) || (a.subType||'').toLowerCase().includes(search))
+    : [...qboLiveAccounts];
+
+  // Summary
+  const sumEl = document.getElementById('coa-summary');
+  if (sumEl && qboLiveAccounts.length) {
+    const types = {};
+    qboLiveAccounts.forEach(a => { types[a.type] = (types[a.type]||0) + 1; });
+    sumEl.style.display = 'flex';
+    sumEl.innerHTML = Object.entries(types).sort((a,b)=>b[1]-a[1]).map(([t,c]) =>
+      `<span style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:2px 8px;"><strong>${c}</strong> ${t}</span>`
+    ).join('');
+  }
+
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:12px;">${search ? 'No matches' : 'No accounts loaded'}</div>`;
+    return;
+  }
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr style="background:var(--surface2);position:sticky;top:0;">
+      <th style="text-align:left;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">Account Name</th>
+      <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">Type</th>
+      <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">Sub-Type</th>
+      <th style="text-align:center;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">ID</th>
+    </tr></thead><tbody>`;
+
+  filtered.forEach(a => {
+    const typeColor = a.type === 'Income' ? 'var(--green)' : a.type === 'Expense' ? '#c55' : a.type === 'Bank' ? '#2c7be5' : 'var(--text-d)';
+    html += `<tr style="border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background=''">
+      <td style="padding:7px 14px;font-weight:500;">${a.name}</td>
+      <td style="padding:7px 10px;color:${typeColor};font-weight:600;font-size:11px;">${a.type}</td>
+      <td style="padding:7px 10px;color:var(--text-d);font-size:11px;">${a.subType || '—'}</td>
+      <td style="padding:7px 10px;text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-d);">${a.id}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── Entity Sync ───────────────────────────────────────────────────
+
+let _entityCustomers = [];
+let _entityMatchResults = []; // { qboId, qboName, status: 'linked'|'suggested'|'unmatched', arkClientId, confidence }
+let _entityActiveTab = 'customers';
+
+function _normalizeForMatch(name) {
+  return (name || '').toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/\b(llc|inc|corp|ltd|co|company|llp|pllc|pc|pa|dba)\b/gi, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function qboSyncEntities() {
+  const statusEl = document.getElementById('entity-sync-status');
+  if (statusEl) statusEl.textContent = 'Syncing…';
+
+  try {
+    // Fetch all entity types in parallel
+    const [custData, vendData, classData, deptData] = await Promise.all([
+      qboCall('getCustomers'),
+      qboCall('getVendors').catch(() => ({ vendors: [] })),
+      qboCall('getClasses').catch(() => ({ classes: [] })),
+      qboCall('getDepartments').catch(() => ({ departments: [] })),
+    ]);
+
+    _entityCustomers = custData.customers || [];
+    qboLiveVendors = vendData.vendors || [];
+    qboLiveClasses = classData.classes || [];
+    qboLiveDepts = deptData.departments || [];
+
+    // Update tab counts
+    const ct = id => document.getElementById(id);
+    if (ct('entity-ct-customers')) ct('entity-ct-customers').textContent = `(${_entityCustomers.length})`;
+    if (ct('entity-ct-vendors'))   ct('entity-ct-vendors').textContent   = `(${qboLiveVendors.length})`;
+    if (ct('entity-ct-classes'))   ct('entity-ct-classes').textContent   = `(${qboLiveClasses.length})`;
+    if (ct('entity-ct-locations')) ct('entity-ct-locations').textContent = `(${qboLiveDepts.length})`;
+
+    // Run smart matching for customers
+    qboAutoMatch();
+
+    if (statusEl) statusEl.textContent = `Synced: ${new Date().toLocaleTimeString()} · ${_entityCustomers.length} customers, ${qboLiveVendors.length} vendors`;
+    qboLog('success', `Entity sync — <strong>${_entityCustomers.length}</strong> customers, <strong>${qboLiveVendors.length}</strong> vendors, <strong>${qboLiveClasses.length}</strong> classes, <strong>${qboLiveDepts.length}</strong> locations`);
+
+    qboRenderEntityTab();
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Sync failed: ' + e.message;
+    qboLog('error', 'Entity sync failed: ' + e.message);
+  }
+}
+
+function qboAutoMatch() {
+  const clients = DB.clients || [];
+  _entityMatchResults = [];
+
+  _entityCustomers.forEach(cust => {
+    // Check if already linked
+    const linked = clients.find(c => c.qboCustomerId === cust.id);
+    if (linked) {
+      _entityMatchResults.push({ qboId: cust.id, qboName: cust.name, status: 'linked', arkClientId: linked.id, confidence: 1 });
+      return;
+    }
+
+    // Fuzzy match by name
+    const normQbo = _normalizeForMatch(cust.name);
+    let bestMatch = null;
+    let bestConf = 0;
+
+    clients.forEach(c => {
+      if (c.qboCustomerId) return; // already linked to another
+      const normArk = _normalizeForMatch(c.biz);
+      if (!normArk || !normQbo) return;
+
+      if (normQbo === normArk) {
+        if (bestConf < 1) { bestMatch = c; bestConf = 1; }
+      } else if (normQbo.includes(normArk) || normArk.includes(normQbo)) {
+        if (bestConf < 0.7) { bestMatch = c; bestConf = 0.7; }
+      } else {
+        // Check if first significant word matches
+        const qWords = normQbo.split(' ').filter(w => w.length > 2);
+        const aWords = normArk.split(' ').filter(w => w.length > 2);
+        if (qWords[0] && aWords[0] && qWords[0] === aWords[0] && bestConf < 0.4) {
+          bestMatch = c; bestConf = 0.4;
+        }
+      }
+    });
+
+    if (bestMatch && bestConf >= 0.4) {
+      _entityMatchResults.push({ qboId: cust.id, qboName: cust.name, status: 'suggested', arkClientId: bestMatch.id, confidence: bestConf });
+    } else {
+      _entityMatchResults.push({ qboId: cust.id, qboName: cust.name, status: 'unmatched', arkClientId: null, confidence: 0 });
+    }
+  });
+}
+
+function qboEntityTab(tab) {
+  _entityActiveTab = tab;
+  document.querySelectorAll('#entity-tab-bar .entity-tab').forEach(t => {
+    const isActive = t.dataset.tab === tab;
+    t.style.borderBottomColor = isActive ? 'var(--navy)' : 'transparent';
+    t.style.color = isActive ? 'var(--navy)' : 'var(--text-d)';
+  });
+  document.getElementById('entity-match-summary').style.display = tab === 'customers' ? '' : 'none';
+  document.getElementById('entity-search').value = '';
+  qboRenderEntityTab();
+}
+
+function qboRenderEntityTab() {
+  const el = document.getElementById('entity-table');
+  const search = (document.getElementById('entity-search')?.value || '').toLowerCase();
+
+  if (_entityActiveTab === 'customers') {
+    _renderCustomerMatchTable(el, search);
+  } else if (_entityActiveTab === 'vendors') {
+    _renderSimpleEntityTable(el, qboLiveVendors, ['Name','Email','Phone','Balance'], v => [v.name, v.email||'—', v.phone||'—', v.balance ? '$'+Number(v.balance).toLocaleString('en-US',{minimumFractionDigits:2}) : '—'], search);
+  } else if (_entityActiveTab === 'classes') {
+    _renderSimpleEntityTable(el, qboLiveClasses, ['Name','ID'], c => [c.name, c.id], search);
+  } else if (_entityActiveTab === 'locations') {
+    _renderSimpleEntityTable(el, qboLiveDepts, ['Name','ID'], d => [d.name, d.id], search);
+  }
+}
+
+function _renderCustomerMatchTable(el, search) {
+  const results = search
+    ? _entityMatchResults.filter(r => r.qboName.toLowerCase().includes(search))
+    : [..._entityMatchResults];
+
+  // Sort: suggested first, then unmatched, then linked
+  results.sort((a,b) => {
+    const order = { suggested: 0, unmatched: 1, linked: 2 };
+    return (order[a.status]||9) - (order[b.status]||9);
+  });
+
+  // Update summary
+  const linked = _entityMatchResults.filter(r => r.status === 'linked').length;
+  const suggested = _entityMatchResults.filter(r => r.status === 'suggested').length;
+  const unmatched = _entityMatchResults.filter(r => r.status === 'unmatched').length;
+
+  const sumEl = document.getElementById('entity-match-summary');
+  if (sumEl && _entityMatchResults.length) sumEl.style.display = '';
+  document.getElementById('entity-linked-ct').textContent = `${linked} linked`;
+  document.getElementById('entity-suggested-ct').textContent = `${suggested} suggested`;
+  document.getElementById('entity-unmatched-ct').textContent = `${unmatched} unmatched`;
+  const acceptBtn = document.getElementById('entity-accept-all-btn');
+  if (acceptBtn) acceptBtn.style.display = suggested > 0 ? '' : 'none';
+
+  if (!results.length) {
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:12px;">${search ? 'No matches' : 'No customers loaded'}</div>`;
+    return;
+  }
+
+  const clients = DB.clients || [];
+  const clientOpts = clients.filter(c => !c.qboCustomerId).map(c => `<option value="${c.id}">${c.biz || c.id}</option>`).join('');
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr style="background:var(--surface2);position:sticky;top:0;">
+      <th style="text-align:left;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">QBO Customer</th>
+      <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">Status</th>
+      <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">ARK Client</th>
+      <th style="text-align:center;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">Action</th>
+    </tr></thead><tbody>`;
+
+  results.forEach(r => {
+    const cust = _entityCustomers.find(c => c.id === r.qboId);
+    const arkClient = r.arkClientId ? clients.find(c => c.id === r.arkClientId) : null;
+
+    let badge, arkCol, actionCol;
+    if (r.status === 'linked') {
+      badge = `<span style="font-size:10px;font-weight:600;color:var(--green);background:rgba(44,160,28,.1);border-radius:8px;padding:2px 7px;">Linked</span>`;
+      arkCol = `<span style="font-weight:500;">${arkClient?.biz || r.arkClientId}</span>`;
+      actionCol = `<button onclick="qboUnlinkCustomer('${r.arkClientId}','${r.qboId}')" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;color:var(--text-d);">Unlink</button>`;
+    } else if (r.status === 'suggested') {
+      badge = `<span style="font-size:10px;font-weight:600;color:#c5930a;background:rgba(197,147,10,.1);border-radius:8px;padding:2px 7px;">Suggested</span>`;
+      arkCol = `<span style="font-weight:500;color:#c5930a;">${arkClient?.biz || '?'}</span>
+        <select id="entity-pick-${r.qboId}" style="font-size:10px;margin-left:6px;padding:1px 4px;border:1px solid var(--border);border-radius:4px;display:none;">
+          <option value="${r.arkClientId}">${arkClient?.biz || r.arkClientId}</option>${clientOpts}</select>
+        <span onclick="document.getElementById('entity-pick-${r.qboId}').style.display='';this.style.display='none';" style="font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;">change</span>`;
+      actionCol = `<button onclick="qboConfirmLink('${r.qboId}','${r.arkClientId}',this)" class="btn btn-sm" style="font-size:10px;background:var(--gold);color:var(--navy);border:none;padding:3px 10px;">Confirm</button>
+        <button onclick="qboSkipMatch('${r.qboId}')" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer;color:var(--text-d);margin-left:4px;">Skip</button>`;
+    } else {
+      badge = `<span style="font-size:10px;font-weight:600;color:var(--text-d);background:var(--surface2);border-radius:8px;padding:2px 7px;">Unmatched</span>`;
+      arkCol = `<select id="entity-pick-${r.qboId}" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;max-width:180px;">
+          <option value="">— Select client —</option>${clientOpts}</select>`;
+      actionCol = `<button onclick="qboManualLink('${r.qboId}')" class="btn btn-sm" style="font-size:10px;padding:3px 10px;">Link</button>`;
+    }
+
+    html += `<tr id="entity-row-${r.qboId}" style="border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background=''">
+      <td style="padding:7px 14px;"><div style="font-weight:500;">${r.qboName}</div><div style="font-size:10px;color:var(--text-d);">${cust?.email||''} ${cust?.phone?'· '+cust.phone:''}</div></td>
+      <td style="padding:7px 10px;">${badge}</td>
+      <td style="padding:7px 10px;">${arkCol}</td>
+      <td style="padding:7px 10px;text-align:center;white-space:nowrap;">${actionCol}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function _renderSimpleEntityTable(el, items, headers, rowFn, search) {
+  const filtered = search ? items.filter(i => (i.name||'').toLowerCase().includes(search)) : [...items];
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:12px;">${search ? 'No matches' : 'No data loaded'}</div>`;
+    return;
+  }
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr style="background:var(--surface2);position:sticky;top:0;">
+      ${headers.map(h => `<th style="text-align:left;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-d);">${h}</th>`).join('')}
+    </tr></thead><tbody>`;
+  filtered.forEach(item => {
+    const vals = rowFn(item);
+    html += `<tr style="border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background=''">
+      ${vals.map((v,i) => `<td style="padding:7px 14px;${i===0?'font-weight:500;':''}">${v}</td>`).join('')}
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function qboConfirmLink(qboId, suggestedArkId, btnEl) {
+  // Check if user changed the selection
+  const sel = document.getElementById('entity-pick-' + qboId);
+  const arkId = (sel && sel.style.display !== 'none' && sel.value) ? sel.value : suggestedArkId;
+  if (!arkId) { showToast('Select an ARK client first'); return; }
+
+  const client = (DB.clients||[]).find(c => c.id === arkId);
+  if (!client) return;
+  client.qboCustomerId = qboId;
+  save();
+
+  // Update match result
+  const mr = _entityMatchResults.find(r => r.qboId === qboId);
+  if (mr) { mr.status = 'linked'; mr.arkClientId = arkId; }
+  qboRenderEntityTab();
+  qboLog('success', `Linked <strong>${client.biz}</strong> → QBO Customer ${qboId}`);
+}
+
+function qboManualLink(qboId) {
+  const sel = document.getElementById('entity-pick-' + qboId);
+  if (!sel || !sel.value) { showToast('Select an ARK client first'); return; }
+  qboConfirmLink(qboId, sel.value);
+}
+
+function qboUnlinkCustomer(arkId, qboId) {
+  const client = (DB.clients||[]).find(c => c.id === arkId);
+  if (!client) return;
+  delete client.qboCustomerId;
+  save();
+
+  const mr = _entityMatchResults.find(r => r.qboId === qboId);
+  if (mr) { mr.status = 'unmatched'; mr.arkClientId = null; mr.confidence = 0; }
+  qboRenderEntityTab();
+  qboLog('info', `Unlinked ${client.biz} from QBO Customer ${qboId}`);
+}
+
+function qboSkipMatch(qboId) {
+  const mr = _entityMatchResults.find(r => r.qboId === qboId);
+  if (mr) { mr.status = 'unmatched'; mr.arkClientId = null; mr.confidence = 0; }
+  qboRenderEntityTab();
+}
+
+function qboAcceptAllSuggestions() {
+  const suggested = _entityMatchResults.filter(r => r.status === 'suggested');
+  suggested.forEach(r => {
+    const client = (DB.clients||[]).find(c => c.id === r.arkClientId);
+    if (client) {
+      client.qboCustomerId = r.qboId;
+      r.status = 'linked';
+    }
+  });
+  save();
+  qboRenderEntityTab();
+  qboLog('success', `Bulk-linked <strong>${suggested.length}</strong> customers`);
+  showToast(`Linked ${suggested.length} customers`);
 }
 
 // ── GJE Builder ───────────────────────────────────────────────────
