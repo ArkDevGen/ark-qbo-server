@@ -90,8 +90,12 @@
     <div class="card" style="max-width:400px;margin:40px auto;">
       <h2>Admin Login</h2>
       <div style="margin-bottom:12px;">
-        <label>API Key</label>
-        <input type="password" id="login-key" placeholder="Enter ARK API key">
+        <label>Username</label>
+        <input type="text" id="login-username" placeholder="Enter username" autocomplete="username">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" autocomplete="current-password">
       </div>
       <button class="btn btn-primary" onclick="doLogin()" style="width:100%;">Sign In</button>
       <div id="login-status" class="status"></div>
@@ -171,6 +175,7 @@
 <script>
 const API = window.location.origin;
 let _token = '';
+let _currentUser = null;
 let _payrollData = null;
 let _activeClient = null;
 let _activeStore = null;
@@ -178,18 +183,24 @@ let _editingEmp = null; // { clientSlug, storeId, empIdx }
 
 // ─── Login ───────────────────────────────────────────────────────
 async function doLogin() {
-  const key = document.getElementById('login-key').value.trim();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value.trim();
   const statusEl = document.getElementById('login-status');
-  if (!key) { statusEl.className = 'status error'; statusEl.textContent = 'Enter API key'; return; }
+  if (!username || !password) { statusEl.className = 'status error'; statusEl.textContent = 'Enter username and password'; return; }
 
   try {
     const resp = await fetch(`${API}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: key, userId: 'payroll-admin', userName: 'Payroll Admin', role: 'admin' }),
+      body: JSON.stringify({ username, password }),
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
+
+    // Check role — only admin and AM can access
+    const role = data.user?.role || 'viewer';
+    if (role === 'viewer') throw new Error('Insufficient permissions — viewers cannot access payroll admin');
+    _currentUser = data.user;
     _token = data.token;
 
     // Load payroll data
@@ -207,7 +218,7 @@ async function doLogin() {
   }
 }
 
-document.getElementById('login-key').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 function doLogout() {
   _token = '';
@@ -225,8 +236,17 @@ function renderClientList() {
   const listEl = document.getElementById('client-list');
   if (!_payrollData?.clients) { listEl.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">No payroll clients found</div>'; return; }
 
-  const clients = Object.entries(_payrollData.clients)
-    .map(([slug, data]) => ({ slug, ...data }))
+  let clients = Object.entries(_payrollData.clients)
+    .map(([slug, data]) => ({ slug, ...data }));
+
+  // AM role: only show assigned clients
+  if (_currentUser?.role === 'am' && _currentUser.assignedClients?.length) {
+    // Match by slug or client ID
+    const assigned = new Set(_currentUser.assignedClients.map(c => c.toLowerCase()));
+    clients = clients.filter(c => assigned.has(c.slug.toLowerCase()) || assigned.has(c.name?.toLowerCase()));
+  }
+
+  clients = clients
     .filter(c => !q || c.name?.toLowerCase().includes(q) || c.slug?.toLowerCase().includes(q))
     .sort((a, b) => (a.name || a.slug).localeCompare(b.name || b.slug));
 
