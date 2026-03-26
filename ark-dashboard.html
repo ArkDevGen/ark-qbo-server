@@ -6586,7 +6586,7 @@ function renderClients(q=''){
   if(!body) return;
   body.innerHTML=list.map(c=>`
     <tr>
-      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600">${c.biz}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}</div></div></div></td>
+      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:#2ca01c;border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}</div></div></div></td>
       <td>${badgeEntity(c.entity)}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-m)">${c.ein||'—'}</td>
       <td><div class="chip-row">${svcChips(c.services)}</div></td>
