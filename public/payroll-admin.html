@@ -133,17 +133,32 @@
     </div>
     <div class="edit-row">
       <div><label>Position / Role</label><input id="edit-emp-position"></div>
-      <div><label>Pay Rate</label><input type="number" step="0.01" id="edit-emp-rate"></div>
+      <div><label>Email</label><input type="email" id="edit-emp-email"></div>
     </div>
     <div class="edit-row">
       <div>
         <label>Pay Type</label>
-        <select id="edit-emp-paytype">
+        <select id="edit-emp-paytype" onchange="onEditPayTypeChange()">
           <option value="hourly">Hourly</option>
           <option value="salary">Salary</option>
         </select>
       </div>
-      <div><label>Email</label><input type="email" id="edit-emp-email"></div>
+      <div id="edit-hourly-wrap">
+        <label>Hourly Rate</label>
+        <input type="number" step="0.01" id="edit-emp-rate" placeholder="0.00">
+      </div>
+    </div>
+    <div id="edit-salary-wrap" style="display:none;">
+      <div class="edit-row">
+        <div>
+          <label>Annual Salary</label>
+          <input type="number" step="0.01" id="edit-emp-annual" placeholder="0.00" oninput="calcPayPeriodRate()">
+        </div>
+        <div>
+          <label>Pay Period Rate <span style="font-size:10px;color:var(--muted);">(auto-calculated)</span></label>
+          <input type="number" step="0.01" id="edit-emp-period-rate" placeholder="0.00" readonly style="color:var(--green);background:rgba(77,255,160,.05);">
+        </div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
       <button class="btn btn-outline" onclick="closeEditEmp()">Cancel</button>
@@ -278,12 +293,13 @@ function renderClientDetail() {
       ${adminEmps.length ? `
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Admin / Company-Wide (${adminEmps.length})</div>
         <table class="emp-table" style="margin-bottom:16px;">
-          <thead><tr><th>Name</th><th>Position</th><th>Rate</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Position</th><th>Pay Type</th><th>Rate</th><th>Actions</th></tr></thead>
           <tbody>
             ${adminEmps.map((emp, i) => `<tr>
               <td style="font-weight:500;">${emp.firstName} ${emp.lastName}</td>
               <td style="color:var(--muted);">${emp.position || '—'}</td>
-              <td style="font-family:monospace;">${emp.payRate ? '$' + parseFloat(emp.payRate).toFixed(2) + (emp.payType === 'salary' ? '/yr' : '/hr') : '—'}</td>
+              <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
+              <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
               <td>
                 <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','admin',${i})">Edit</button>
                 <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','admin',${i},'${emp.firstName} ${emp.lastName}')">✕</button>
@@ -298,15 +314,17 @@ function renderClientDetail() {
           <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">
             ${currentStore.name || 'Store ' + _activeStore} Employees (${storeEmps.length})
           </div>
+          <button class="btn btn-outline btn-sm" onclick="showAddEmp('${c.slug}','${_activeStore}')" style="border-color:var(--green);color:var(--green);">+ Add Employee</button>
         </div>
         ${storeEmps.length ? `
           <table class="emp-table">
-            <thead><tr><th>Name</th><th>Position</th><th>Rate</th><th>Email</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Position</th><th>Pay Type</th><th>Rate</th><th>Email</th><th>Actions</th></tr></thead>
             <tbody>
               ${storeEmps.map((emp, i) => `<tr>
                 <td style="font-weight:500;">${emp.firstName} ${emp.lastName}</td>
                 <td style="color:var(--muted);">${emp.position || '—'}</td>
-                <td style="font-family:monospace;">${emp.payRate ? '$' + parseFloat(emp.payRate).toFixed(2) + (emp.payType === 'salary' ? '/yr' : '/hr') : '—'}</td>
+                <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
+                <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
                 <td style="color:var(--muted);font-size:12px;">${emp.email || '—'}</td>
                 <td>
                   <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','${_activeStore}',${i})">Edit</button>
@@ -326,6 +344,40 @@ function selectStore(storeId) {
   renderClientDetail();
 }
 
+// ─── Pay rate formatting ─────────────────────────────────────────
+function fmtPayRate(emp) {
+  if (emp.payType === 'salary') {
+    const annual = emp.annualRate ? '$' + parseFloat(emp.annualRate).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '/yr' : '';
+    const period = emp.periodRate ? '$' + parseFloat(emp.periodRate).toFixed(2) + '/pp' : '';
+    if (annual && period) return `${annual}<br><span style="font-size:11px;color:var(--green);">${period}</span>`;
+    if (annual) return annual;
+    if (emp.payRate) return '$' + parseFloat(emp.payRate).toFixed(2) + '/yr';
+    return '—';
+  }
+  return emp.payRate ? '$' + parseFloat(emp.payRate).toFixed(2) + '/hr' : '—';
+}
+
+function onEditPayTypeChange() {
+  const payType = document.getElementById('edit-emp-paytype').value;
+  document.getElementById('edit-hourly-wrap').style.display = payType === 'hourly' ? '' : 'none';
+  document.getElementById('edit-salary-wrap').style.display = payType === 'salary' ? '' : 'none';
+}
+
+function calcPayPeriodRate() {
+  const annual = parseFloat(document.getElementById('edit-emp-annual').value) || 0;
+  // Determine pay periods from client's pay frequency
+  const client = _activeClient;
+  let periods = 26; // default biweekly
+  const freq = (client?.payFrequency || '').toLowerCase();
+  if (freq.includes('weekly') && !freq.includes('bi')) periods = 52;
+  else if (freq.includes('bi-weekly') || freq.includes('biweekly') || freq.includes('bi weekly')) periods = 26;
+  else if (freq.includes('semi-monthly') || freq.includes('semimonthly')) periods = 24;
+  else if (freq.includes('monthly') && !freq.includes('semi')) periods = 12;
+
+  const periodRate = annual > 0 ? (annual / periods) : 0;
+  document.getElementById('edit-emp-period-rate').value = periodRate > 0 ? periodRate.toFixed(2) : '';
+}
+
 // ─── Edit Employee ───────────────────────────────────────────────
 function editEmp(clientSlug, storeId, empIdx) {
   const emp = _payrollData.clients[clientSlug]?.stores?.[storeId]?.employees?.[empIdx];
@@ -336,10 +388,13 @@ function editEmp(clientSlug, storeId, empIdx) {
   document.getElementById('edit-emp-first').value = emp.firstName || '';
   document.getElementById('edit-emp-last').value = emp.lastName || '';
   document.getElementById('edit-emp-position').value = emp.position || '';
-  document.getElementById('edit-emp-rate').value = emp.payRate || '';
   document.getElementById('edit-emp-paytype').value = emp.payType || 'hourly';
+  document.getElementById('edit-emp-rate').value = emp.payRate || '';
+  document.getElementById('edit-emp-annual').value = emp.annualRate || '';
+  document.getElementById('edit-emp-period-rate').value = emp.periodRate || '';
   document.getElementById('edit-emp-email').value = emp.email || '';
   document.getElementById('edit-emp-status').className = 'status';
+  onEditPayTypeChange();
   document.getElementById('modal-edit-emp').classList.remove('hidden');
 }
 
@@ -348,17 +403,38 @@ function closeEditEmp() {
   _editingEmp = null;
 }
 
+// ─── Add Employee (from admin) ────────────────────────────────────
+function showAddEmp(clientSlug, storeId) {
+  _editingEmp = { clientSlug, storeId, empIdx: -1 }; // -1 = new
+  document.getElementById('edit-emp-title').textContent = 'Add New Employee';
+  document.getElementById('edit-emp-first').value = '';
+  document.getElementById('edit-emp-last').value = '';
+  document.getElementById('edit-emp-position').value = '';
+  document.getElementById('edit-emp-paytype').value = 'hourly';
+  document.getElementById('edit-emp-rate').value = '';
+  document.getElementById('edit-emp-annual').value = '';
+  document.getElementById('edit-emp-period-rate').value = '';
+  document.getElementById('edit-emp-email').value = '';
+  document.getElementById('edit-emp-status').className = 'status';
+  onEditPayTypeChange();
+  document.getElementById('modal-edit-emp').classList.remove('hidden');
+}
+
 async function saveEditEmp() {
   if (!_editingEmp) return;
   const { clientSlug, storeId, empIdx } = _editingEmp;
   const statusEl = document.getElementById('edit-emp-status');
+  const isNew = empIdx === -1;
 
+  const payType = document.getElementById('edit-emp-paytype').value;
   const updates = {
     firstName: document.getElementById('edit-emp-first').value.trim(),
     lastName: document.getElementById('edit-emp-last').value.trim(),
     position: document.getElementById('edit-emp-position').value.trim(),
-    payRate: document.getElementById('edit-emp-rate').value.trim(),
-    payType: document.getElementById('edit-emp-paytype').value,
+    payType,
+    payRate: payType === 'hourly' ? document.getElementById('edit-emp-rate').value.trim() : '',
+    annualRate: payType === 'salary' ? document.getElementById('edit-emp-annual').value.trim() : '',
+    periodRate: payType === 'salary' ? document.getElementById('edit-emp-period-rate').value.trim() : '',
     email: document.getElementById('edit-emp-email').value.trim(),
   };
 
@@ -370,22 +446,39 @@ async function saveEditEmp() {
 
   try {
     statusEl.className = 'status info';
-    statusEl.textContent = 'Saving...';
+    statusEl.textContent = isNew ? 'Adding...' : 'Saving...';
 
-    const resp = await fetch(`${API}/payroll/admin/employee`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
-      body: JSON.stringify({ clientSlug, storeId, empIdx, updates }),
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    if (isNew) {
+      const resp = await fetch(`${API}/payroll/admin/employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ clientSlug, storeId, employee: updates }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
 
-    // Update local data
-    const emp = _payrollData.clients[clientSlug].stores[storeId].employees[empIdx];
-    Object.assign(emp, updates);
+      // Update local data
+      if (!_payrollData.clients[clientSlug].stores[storeId].employees) {
+        _payrollData.clients[clientSlug].stores[storeId].employees = [];
+      }
+      _payrollData.clients[clientSlug].stores[storeId].employees.push(data.employee);
+    } else {
+      const resp = await fetch(`${API}/payroll/admin/employee`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ clientSlug, storeId, empIdx, updates }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+
+      // Update local data
+      const emp = _payrollData.clients[clientSlug].stores[storeId].employees[empIdx];
+      Object.assign(emp, updates);
+    }
 
     closeEditEmp();
     renderClientDetail();
+    renderClientList(); // Update employee count
   } catch (e) {
     statusEl.className = 'status error';
     statusEl.textContent = e.message;

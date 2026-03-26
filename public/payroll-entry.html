@@ -520,9 +520,14 @@ async function onStoreChange() {
 
 // ─── Render employee data entry table ────────────────────────────
 function fmtRate(emp) {
+  if (emp.payType === 'salary') {
+    const parts = [];
+    if (emp.periodRate) parts.push(`<span style="color:var(--green);">$${parseFloat(emp.periodRate).toFixed(2)}/pp</span>`);
+    if (emp.annualRate) parts.push(`<span style="color:var(--muted);font-size:10px;">$${parseFloat(emp.annualRate).toLocaleString('en-US', {minimumFractionDigits:2})}/yr</span>`);
+    return parts.length ? parts.join(' · ') : '<span style="color:var(--muted)">Salary — no rate set</span>';
+  }
   if (!emp.payRate) return '<span style="color:var(--muted)">No rate set</span>';
-  const symbol = emp.payType === 'salary' ? '/yr' : '/hr';
-  return `$${parseFloat(emp.payRate).toFixed(2)}${symbol}`;
+  return `<span>$${parseFloat(emp.payRate).toFixed(2)}/hr</span>`;
 }
 
 function renderEmployeeTable() {

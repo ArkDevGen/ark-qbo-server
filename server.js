@@ -1585,6 +1585,8 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     position: e.position || '(Admin)',
     payRate: e.payRate || '',
     payType: e.payType || 'hourly',
+    annualRate: e.annualRate || '',
+    periodRate: e.periodRate || '',
     isAdmin: true,
   }));
 
@@ -1595,6 +1597,8 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     position: e.position || '',
     payRate: e.payRate || '',
     payType: e.payType || 'hourly',
+    annualRate: e.annualRate || '',
+    periodRate: e.periodRate || '',
   }));
 
   res.json({
@@ -1693,6 +1697,40 @@ app.get('/payroll/admin/data', requireAuth, (req, res) => {
   res.json(safe);
 });
 
+// Add employee (admin)
+app.post('/payroll/admin/employee', requireAuth, (req, res) => {
+  const { clientSlug, storeId, employee } = req.body;
+  if (!clientSlug || !storeId || !employee) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const client = payrollData.clients[clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const store = client.stores?.[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  if (!store.employees) store.employees = [];
+
+  const newEmp = {
+    id: crypto.randomUUID(),
+    firstName: employee.firstName || '',
+    lastName: employee.lastName || '',
+    position: employee.position || '',
+    payRate: employee.payRate || '',
+    payType: employee.payType || 'hourly',
+    annualRate: employee.annualRate || '',
+    periodRate: employee.periodRate || '',
+    email: employee.email || '',
+  };
+
+  store.employees.push(newEmp);
+  savePayrollData();
+
+  console.log(`Admin added employee ${newEmp.firstName} ${newEmp.lastName} to ${clientSlug}/${storeId}`);
+  res.json({ success: true, employee: newEmp });
+});
+
 // Update employee (admin)
 app.put('/payroll/admin/employee', requireAuth, (req, res) => {
   const { clientSlug, storeId, empIdx, updates } = req.body;
@@ -1715,6 +1753,8 @@ app.put('/payroll/admin/employee', requireAuth, (req, res) => {
   if (updates.position !== undefined) emp.position = updates.position;
   if (updates.payRate !== undefined) emp.payRate = updates.payRate;
   if (updates.payType) emp.payType = updates.payType;
+  if (updates.annualRate !== undefined) emp.annualRate = updates.annualRate;
+  if (updates.periodRate !== undefined) emp.periodRate = updates.periodRate;
   if (updates.email !== undefined) emp.email = updates.email;
 
   savePayrollData();
