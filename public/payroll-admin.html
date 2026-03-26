@@ -239,12 +239,7 @@ function renderClientList() {
   let clients = Object.entries(_payrollData.clients)
     .map(([slug, data]) => ({ slug, ...data }));
 
-  // AM role: only show assigned clients
-  if (_currentUser?.role === 'am' && _currentUser.assignedClients?.length) {
-    // Match by slug or client ID
-    const assigned = new Set(_currentUser.assignedClients.map(c => c.toLowerCase()));
-    clients = clients.filter(c => assigned.has(c.slug.toLowerCase()) || assigned.has(c.name?.toLowerCase()));
-  }
+  // All roles can see all clients — assigned clients are just for AM relationship tracking
 
   clients = clients
     .filter(c => !q || c.name?.toLowerCase().includes(q) || c.slug?.toLowerCase().includes(q))
