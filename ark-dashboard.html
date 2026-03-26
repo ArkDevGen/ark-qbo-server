@@ -4309,9 +4309,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
           <div class="fg full"><label>Services Provided</label>
             <div class="svc-row" id="mc-services">
-              <label class="svc-chip" onclick="toggleSvc(this)"><input type="checkbox" value="Bookkeeping">📒 Bookkeeping</label>
-              <label class="svc-chip" onclick="toggleSvc(this)"><input type="checkbox" value="Payroll">💵 Payroll</label>
-              <label class="svc-chip" onclick="toggleSvc(this)"><input type="checkbox" value="Advisory">🎯 Advisory</label>
+              <label class="svc-chip" onclick="toggleSvc(this, event)"><input type="checkbox" value="Bookkeeping">📒 Bookkeeping</label>
+              <label class="svc-chip" onclick="toggleSvc(this, event)"><input type="checkbox" value="Payroll">💵 Payroll</label>
+              <label class="svc-chip" onclick="toggleSvc(this, event)"><input type="checkbox" value="Advisory">🎯 Advisory</label>
             </div>
           </div>
           <div class="fg full"><label>Notes</label><textarea id="mc-notes" rows="3" placeholder="General notes about this client…"></textarea></div>
@@ -4504,7 +4504,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                   <label style="font-size:10px;color:var(--text-d);margin-bottom:3px;">Password</label>
                   <div style="position:relative;">
                     <input id="mc-pr-portal-pass" type="password" class="field-input" placeholder="Portal password" style="font-family:'DM Mono',monospace;font-size:12px;padding-right:36px;">
-                    <span onclick="const i=document.getElementById('mc-pr-portal-pass');i.type=i.type==='password'?'text':'password'" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:14px;color:var(--text-d);">👁</span>
+                    <span onclick="revealSensitiveField('mc-pr-portal-pass')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:14px;color:var(--text-d);" title="Requires your CRM password to view">🔒</span>
                   </div>
                 </div>
               </div>
@@ -8311,9 +8311,52 @@ function populateAMSelect(selId=''){
   const sel=document.getElementById('mc-am');
   sel.innerHTML=`<option value="">— Unassigned —</option>`+DB.accountManagers.filter(a=>a.status==='Active').map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
 }
-function toggleSvc(el){
+function toggleSvc(el, evt){
+  if(evt) evt.preventDefault();
   el.classList.toggle('checked');
   el.querySelector('input').checked=el.classList.contains('checked');
+}
+
+// ── Reveal sensitive fields (requires CRM password) ──────────────
+function revealSensitiveField(fieldId) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+
+  // If already revealed, hide it again
+  if (field.type === 'text') {
+    field.type = 'password';
+    const icon = field.parentElement.querySelector('span[onclick]');
+    if (icon) icon.textContent = '🔒';
+    return;
+  }
+
+  // Prompt for CRM password
+  const pwd = prompt('Enter your CRM login password to view this field:');
+  if (!pwd) return;
+
+  // Verify against server
+  fetch(ARK_SERVER + '/auth/verify-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _serverToken },
+    body: JSON.stringify({ password: pwd }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.verified) {
+      field.type = 'text';
+      const icon = field.parentElement.querySelector('span[onclick]');
+      if (icon) icon.textContent = '👁';
+      // Auto-hide after 30 seconds
+      setTimeout(() => {
+        field.type = 'password';
+        const ic = field.parentElement.querySelector('span[onclick]');
+        if (ic) ic.textContent = '🔒';
+      }, 30000);
+    } else {
+      showToast('Incorrect password');
+    }
+  })
+  .catch(() => showToast('Verification failed'));
 }
 function setSvcs(svcs){
   document.querySelectorAll('#mc-services .svc-chip').forEach(el=>{

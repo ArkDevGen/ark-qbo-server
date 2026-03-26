@@ -117,6 +117,23 @@ app.post('/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// Verify CRM password (for revealing sensitive fields)
+app.post('/auth/verify-password', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = _sessions.get(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password required' });
+
+  // Verify against the API key (same credential used for login)
+  const verified = password === process.env.ARK_API_KEY;
+  if (verified) {
+    console.log(`Password verified for ${session.userName} (sensitive field reveal)`);
+  }
+  res.json({ verified });
+});
+
 // Auth middleware — validates Bearer token on protected routes
 function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token || '';
