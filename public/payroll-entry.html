@@ -147,12 +147,28 @@
       </div>
       <div style="display:flex;gap:12px;margin-bottom:12px;">
         <div style="flex:1;">
-          <button class="btn btn-outline" onclick="document.getElementById('bulk-homebase-input').click()" style="width:100%;border-color:var(--orange);color:var(--orange);padding:14px;font-size:14px;">📊 Import Homebase CSV</button>
+          <div id="bulk-homebase-drop" onclick="document.getElementById('bulk-homebase-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--orange)';this.style.background='rgba(255,169,77,.08)'"
+            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';bulkImportHomebase(event.dataTransfer.files[0])"
+            style="border:2px dashed var(--border);border-radius:8px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .2s;">
+            <div style="font-size:22px;margin-bottom:6px;">📊</div>
+            <div style="font-size:13px;font-weight:600;color:var(--orange);">Homebase CSV</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Drop file or click to browse</div>
+          </div>
           <input type="file" id="bulk-homebase-input" accept=".csv" style="display:none;" onchange="bulkImportHomebase(this.files[0])">
           <div id="bulk-homebase-status" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center;min-height:16px;"></div>
         </div>
         <div style="flex:1;">
-          <button class="btn btn-outline" onclick="document.getElementById('bulk-tips-input').click()" style="width:100%;border-color:var(--green);color:var(--green);padding:14px;font-size:14px;">💰 Import Tips Report</button>
+          <div id="bulk-tips-drop" onclick="document.getElementById('bulk-tips-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--green)';this.style.background='rgba(77,255,160,.06)'"
+            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';bulkImportTips(event.dataTransfer.files[0])"
+            style="border:2px dashed var(--border);border-radius:8px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .2s;">
+            <div style="font-size:22px;margin-bottom:6px;">💰</div>
+            <div style="font-size:13px;font-weight:600;color:var(--green);">Tips Report</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Drop file or click to browse</div>
+          </div>
           <input type="file" id="bulk-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="bulkImportTips(this.files[0])">
           <div id="bulk-tips-status" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center;min-height:16px;"></div>
         </div>
