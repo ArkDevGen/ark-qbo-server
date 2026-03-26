@@ -1,0 +1,15 @@
+{
+  "default_rate": 0.06,
+  "ad_fund_rate": 0.02,
+
+  "6 Java Boys 1083": 0.08,
+  "6 Java Boys 1082": 0.08,
+
+  "Mile 40 Corp": {
+    "1425": 0.08
+  },
+
+  "Generational Brews": {
+    "1252": 0.08
+  }
+}

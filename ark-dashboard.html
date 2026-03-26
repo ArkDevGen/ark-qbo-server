@@ -3061,6 +3061,17 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <button class="btn btn-ghost btn-sm" onclick="qboOpenFirmSettings()">⚙ API Settings</button>
     </div>
 
+    <!-- QBO Center Tabs -->
+    <div id="qbo-center-tabs" style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto;white-space:nowrap;">
+      <div class="qbo-ctab active" onclick="qboNavTab('general')" id="qbo-ctab-general" style="padding:10px 22px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--text);transition:all .15s;">General</div>
+      <div class="qbo-ctab" onclick="qboNavTab('scooters')" id="qbo-ctab-scooters" style="padding:10px 22px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-d);transition:all .15s;">☕ Scooter's</div>
+      <div class="qbo-ctab" onclick="qboNavTab('hteao')" id="qbo-ctab-hteao" style="padding:10px 22px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-d);transition:all .15s;">🍵 HTeaO</div>
+      <div class="qbo-ctab" onclick="qboNavTab('deviledegg')" id="qbo-ctab-deviledegg" style="padding:10px 22px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-d);transition:all .15s;">🥚 Deviled Egg Co</div>
+    </div>
+
+    <!-- ═══ GENERAL TAB ═══ -->
+    <div id="qbo-tab-general">
+
     <!-- Connection banner -->
     <div id="qbo-conn-banner" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px;transition:all .3s;">
       <div style="display:flex;align-items:center;gap:14px;">
@@ -3527,7 +3538,140 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
+    </div><!-- /qbo-tab-general -->
 
+    <!-- ═══ SCOOTER'S TAB ═══ -->
+    <div id="qbo-tab-scooters" style="display:none;">
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div style="width:36px;height:36px;border-radius:8px;background:#c8102e;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:700;">☕</div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text);">Scooter's Coffee — Sales Journal Entries</div>
+          <div style="font-size:11px;color:var(--text-d);">Upload Power BI sales data → preview → push to QBO</div>
+        </div>
+      </div>
+
+      <!-- Step indicator -->
+      <div id="sje-steps" style="display:flex;gap:0;margin-bottom:24px;">
+        <div class="sje-step active" id="sje-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);">1 · Upload</div>
+        <div class="sje-step" id="sje-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;">2 · Review</div>
+        <div class="sje-step" id="sje-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;">3 · Confirm</div>
+      </div>
+
+      <!-- Step 1: Upload -->
+      <div id="sje-upload" class="card" style="padding:32px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:12px;">📊</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;">Upload Power BI Sales Export</div>
+        <div style="font-size:12px;color:var(--text-d);margin-bottom:20px;">Drop an Excel file (.xlsx) containing daily sales data from Power BI</div>
+        <div id="sje-dropzone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:40px 20px;margin-bottom:16px;cursor:pointer;transition:all .2s;" onclick="document.getElementById('sje-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(26,36,64,.3)'" ondragleave="this.style.borderColor='var(--border)';this.style.background=''" ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';sjeHandleDrop(event)">
+          <div style="font-size:13px;color:var(--text-d);">📁 Drag & drop Excel file here, or <span style="color:var(--accent);text-decoration:underline;">browse</span></div>
+        </div>
+        <input type="file" id="sje-file-input" accept=".xlsx,.xls" style="display:none;" onchange="sjeHandleFile(this.files[0])">
+        <div id="sje-upload-status" style="font-size:12px;color:var(--text-d);margin-top:8px;"></div>
+      </div>
+
+      <!-- Step 2: Review -->
+      <div id="sje-review" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">Review Franchise Entries</div>
+            <div style="font-size:11px;color:var(--text-d);" id="sje-review-subtitle">Verify each franchise maps to the correct QBO company</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="sjeBackToUpload()">← Back</button>
+            <button class="btn btn-primary" id="sje-push-btn" onclick="sjePushAll()" style="background:#2ca01c;border-color:#2ca01c;">Push All to QBO →</button>
+          </div>
+        </div>
+
+        <!-- Stats bar -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Franchises</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);" id="sje-stat-franchises">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Journal Entries</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--green);" id="sje-stat-entries">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Total Debits</div>
+            <div style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);" id="sje-stat-debits">$0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Total Credits</div>
+            <div style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);" id="sje-stat-credits">$0</div>
+          </div>
+        </div>
+
+        <!-- Warnings -->
+        <div id="sje-warnings" style="display:none;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12px;color:#f5a623;"></div>
+
+        <!-- Franchise table -->
+        <div class="card" style="overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;" id="sje-franchise-table">
+            <thead>
+              <tr style="background:var(--surface2);">
+                <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Franchise</th>
+                <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Store #</th>
+                <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">QBO Company</th>
+                <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Class</th>
+                <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Dates</th>
+                <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">JEs</th>
+                <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Debits</th>
+                <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Credits</th>
+                <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="sje-franchise-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Push progress -->
+        <div id="sje-progress" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:600;color:var(--text);" id="sje-progress-label">Pushing entries...</span>
+            <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text-d);" id="sje-progress-count">0/0</span>
+          </div>
+          <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+            <div id="sje-progress-bar" style="height:100%;background:var(--green);border-radius:3px;width:0%;transition:width .3s;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Confirmation Report -->
+      <div id="sje-confirm" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">✅ Push Complete</div>
+            <div style="font-size:11px;color:var(--text-d);" id="sje-confirm-subtitle">Journal entries have been sent to QuickBooks Online</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="sjeDownloadReport()">📥 Download Report</button>
+            <button class="btn btn-primary btn-sm" onclick="sjeReset()">Upload New File →</button>
+          </div>
+        </div>
+        <div id="sje-confirm-body"></div>
+      </div>
+
+    </div><!-- /qbo-tab-scooters -->
+
+    <!-- ═══ HTEAO TAB (placeholder) ═══ -->
+    <div id="qbo-tab-hteao" style="display:none;">
+      <div style="text-align:center;padding:80px 20px;">
+        <div style="font-size:48px;margin-bottom:16px;">🍵</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">HTeaO Integration</div>
+        <div style="font-size:13px;color:var(--text-d);">Coming Soon — Sales journal entries and reporting for HTeaO franchises</div>
+      </div>
+    </div>
+
+    <!-- ═══ DEVILED EGG CO TAB (placeholder) ═══ -->
+    <div id="qbo-tab-deviledegg" style="display:none;">
+      <div style="text-align:center;padding:80px 20px;">
+        <div style="font-size:48px;margin-bottom:16px;">🥚</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">Deviled Egg Co Integration</div>
+        <div style="font-size:13px;color:var(--text-d);">Coming Soon — Sales journal entries and reporting for Deviled Egg Co franchises</div>
+      </div>
+    </div>
 
   </div>
 
@@ -22427,6 +22571,350 @@ function plExportReport(type) {
   a.download = `pl-digest-${type}-${plSelectedClient?.biz?.replace(/[^a-z0-9]/gi,'-')||'report'}-${new Date().toISOString().slice(0,10)}.txt`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  QBO CENTER — TAB NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+
+function qboNavTab(tabId) {
+  // Hide all tabs
+  ['general','scooters','hteao','deviledegg'].forEach(t => {
+    const el = document.getElementById('qbo-tab-' + t);
+    const tab = document.getElementById('qbo-ctab-' + t);
+    if (el) el.style.display = 'none';
+    if (tab) { tab.style.color = 'var(--text-d)'; tab.style.borderBottomColor = 'transparent'; }
+  });
+  // Show selected
+  const el = document.getElementById('qbo-tab-' + tabId);
+  const tab = document.getElementById('qbo-ctab-' + tabId);
+  if (el) el.style.display = '';
+  if (tab) { tab.style.color = 'var(--text)'; tab.style.borderBottomColor = 'var(--accent)'; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SCOOTER'S SALES JOURNAL ENTRIES
+// ══════════════════════════════════════════════════════════════════
+
+let _sjeData = null;       // Parsed franchise data from server
+let _sjePushResults = [];  // Results after push
+
+function sjeHandleDrop(e) {
+  const file = e.dataTransfer?.files?.[0];
+  if (file) sjeHandleFile(file);
+}
+
+async function sjeHandleFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+    showToast('Please upload an Excel file (.xlsx)');
+    return;
+  }
+
+  const status = document.getElementById('sje-upload-status');
+  status.innerHTML = `<span style="color:var(--accent);">⏳ Uploading and parsing ${file.name}…</span>`;
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+
+    const resp = await authFetch(ARK_SERVER + '/scooters/parse-sales', {
+      method: 'POST',
+      body: form,
+    });
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    _sjeData = data;
+    sjeShowReview();
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--red);">❌ ${e.message}</span>`;
+  }
+}
+
+function sjeShowReview() {
+  if (!_sjeData) return;
+
+  // Update step indicators
+  document.getElementById('sje-step-1').style.background = 'var(--green)';
+  document.getElementById('sje-step-2').style.background = 'var(--accent)';
+  document.getElementById('sje-step-2').style.color = '#fff';
+
+  // Hide upload, show review
+  document.getElementById('sje-upload').style.display = 'none';
+  document.getElementById('sje-review').style.display = '';
+
+  // Stats
+  const s = _sjeData.stats || {};
+  document.getElementById('sje-stat-franchises').textContent = s.totalFranchises || 0;
+  document.getElementById('sje-stat-entries').textContent = s.totalEntries || 0;
+  document.getElementById('sje-stat-debits').textContent = '$' + (s.totalDebits || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  document.getElementById('sje-stat-credits').textContent = '$' + (s.totalCredits || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+  // Warnings
+  const warnEl = document.getElementById('sje-warnings');
+  if (_sjeData.warnings?.length) {
+    warnEl.style.display = '';
+    warnEl.innerHTML = '<strong>⚠ Warnings:</strong><br>' + _sjeData.warnings.map(w => '• ' + w).join('<br>');
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  // Franchise table
+  const tbody = document.getElementById('sje-franchise-body');
+  tbody.innerHTML = '';
+  (_sjeData.franchises || []).forEach((f, i) => {
+    const linked = f.linked;
+    const balanced = f.balanced;
+    const statusHtml = !linked
+      ? '<span style="color:var(--red);font-weight:600;">Not Linked</span>'
+      : balanced
+        ? '<span style="color:var(--green);font-weight:600;">✓ Ready</span>'
+        : '<span style="color:#f5a623;font-weight:600;">⚠ Imbalance</span>';
+
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;';
+    tr.onmouseover = () => tr.style.background = 'rgba(26,36,64,.15)';
+    tr.onmouseout = () => tr.style.background = '';
+    tr.onclick = () => sjeToggleDetail(i);
+    tr.innerHTML = `
+      <td style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text);">${f.label || f.key}</td>
+      <td style="padding:10px 14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-d);">${f.storeId || '—'}</td>
+      <td style="padding:10px 14px;font-size:11px;font-family:'DM Mono',monospace;color:${linked ? 'var(--green)' : 'var(--red)'};">${f.qboCompanyName || (linked ? f.realmId?.slice(0,12)+'…' : 'Not linked')}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--text-d);">${f.className || '—'}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--text-d);text-align:center;">${f.dateRange || '—'}</td>
+      <td style="padding:10px 14px;font-size:12px;font-weight:600;text-align:center;color:var(--accent);">${f.entryCount}</td>
+      <td style="padding:10px 14px;font-size:11px;font-family:'DM Mono',monospace;text-align:right;">$${(f.totalDebits||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+      <td style="padding:10px 14px;font-size:11px;font-family:'DM Mono',monospace;text-align:right;">$${(f.totalCredits||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+      <td style="padding:10px 14px;text-align:center;">${statusHtml}</td>
+    `;
+    tr.dataset.idx = i;
+    tbody.appendChild(tr);
+
+    // Hidden detail row
+    const detailTr = document.createElement('tr');
+    detailTr.id = 'sje-detail-' + i;
+    detailTr.style.display = 'none';
+    detailTr.innerHTML = `<td colspan="9" style="padding:12px 24px;background:var(--surface);font-size:11px;">
+      <div style="max-height:200px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr style="background:var(--surface2);">
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Date</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Journal #</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Debits</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Credits</th>
+            <th style="padding:4px 8px;text-align:center;font-size:9px;color:var(--text-d);">Lines</th>
+          </tr>
+          ${(f.entries||[]).map(e => {
+            const d = e.lines.reduce((s,l) => s + (l.debit||0), 0);
+            const c = e.lines.reduce((s,l) => s + (l.credit||0), 0);
+            return `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.date}</td>
+              <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.journalNo}</td>
+              <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${d.toFixed(2)}</td>
+              <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${c.toFixed(2)}</td>
+              <td style="padding:4px 8px;text-align:center;">${e.lines.length}</td>
+            </tr>`;
+          }).join('')}
+        </table>
+      </div>
+    </td>`;
+    tbody.appendChild(detailTr);
+  });
+
+  // Disable push if nothing linked
+  const linkedCount = (_sjeData.franchises || []).filter(f => f.linked).length;
+  const pushBtn = document.getElementById('sje-push-btn');
+  if (linkedCount === 0) {
+    pushBtn.disabled = true;
+    pushBtn.textContent = 'No linked franchises';
+  } else {
+    pushBtn.disabled = false;
+    pushBtn.textContent = `Push ${linkedCount} franchise${linkedCount!==1?'s':''} to QBO →`;
+  }
+}
+
+function sjeToggleDetail(idx) {
+  const el = document.getElementById('sje-detail-' + idx);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function sjeBackToUpload() {
+  _sjeData = null;
+  document.getElementById('sje-upload').style.display = '';
+  document.getElementById('sje-review').style.display = 'none';
+  document.getElementById('sje-confirm').style.display = 'none';
+  document.getElementById('sje-upload-status').innerHTML = '';
+  document.getElementById('sje-file-input').value = '';
+  // Reset step indicators
+  document.getElementById('sje-step-1').style.background = 'var(--accent)';
+  document.getElementById('sje-step-1').style.color = '#fff';
+  document.getElementById('sje-step-2').style.background = 'var(--surface2)';
+  document.getElementById('sje-step-2').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-3').style.background = 'var(--surface2)';
+  document.getElementById('sje-step-3').style.color = 'var(--text-d)';
+}
+
+async function sjePushAll() {
+  if (!_sjeData?.franchises?.length) return;
+
+  const linked = _sjeData.franchises.filter(f => f.linked);
+  if (!linked.length) { showToast('No linked franchises to push'); return; }
+
+  const totalEntries = linked.reduce((s, f) => s + f.entries.length, 0);
+  if (!confirm(`Push ${totalEntries} journal entries across ${linked.length} franchise${linked.length!==1?'s':''}?`)) return;
+
+  const pushBtn = document.getElementById('sje-push-btn');
+  pushBtn.disabled = true;
+  pushBtn.textContent = 'Pushing...';
+
+  const progressEl = document.getElementById('sje-progress');
+  const progressBar = document.getElementById('sje-progress-bar');
+  const progressLabel = document.getElementById('sje-progress-label');
+  const progressCount = document.getElementById('sje-progress-count');
+  progressEl.style.display = '';
+
+  _sjePushResults = [];
+  let pushed = 0;
+
+  for (const franchise of linked) {
+    for (const entry of franchise.entries) {
+      pushed++;
+      progressCount.textContent = `${pushed}/${totalEntries}`;
+      progressBar.style.width = Math.round((pushed / totalEntries) * 100) + '%';
+      progressLabel.textContent = `Pushing ${franchise.label} — ${entry.date}`;
+
+      try {
+        // Build QBO JE payload
+        const lines = entry.lines.map(l => {
+          const lineDetail = {
+            PostingType: l.debit ? 'Debit' : 'Credit',
+            AccountRef: { name: l.account },
+          };
+          if (l.class) lineDetail.ClassRef = { name: l.class };
+          return {
+            DetailType: 'JournalEntryLineDetail',
+            Amount: l.debit || l.credit || 0,
+            Description: l.description || '',
+            JournalEntryLineDetail: lineDetail,
+          };
+        }).filter(l => l.Amount > 0);
+
+        const payload = {
+          TxnDate: entry.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2'),
+          DocNumber: entry.journalNo,
+          PrivateNote: 'Powered By EchoSync',
+          Line: lines,
+        };
+
+        const result = await qboCall('createJournalEntry', payload, franchise.realmId);
+        _sjePushResults.push({
+          franchise: franchise.label,
+          storeId: franchise.storeId,
+          qboCompany: franchise.qboCompanyName,
+          className: franchise.className,
+          date: entry.date,
+          journalNo: entry.journalNo,
+          status: 'success',
+          qboId: result.id,
+          debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
+          credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
+        });
+      } catch (e) {
+        _sjePushResults.push({
+          franchise: franchise.label,
+          storeId: franchise.storeId,
+          qboCompany: franchise.qboCompanyName,
+          className: franchise.className,
+          date: entry.date,
+          journalNo: entry.journalNo,
+          status: 'failed',
+          error: e.message,
+          debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
+          credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
+        });
+      }
+    }
+  }
+
+  // Show confirmation
+  sjeShowConfirm();
+}
+
+function sjeShowConfirm() {
+  document.getElementById('sje-step-3').style.background = 'var(--green)';
+  document.getElementById('sje-step-3').style.color = '#fff';
+
+  document.getElementById('sje-review').style.display = 'none';
+  document.getElementById('sje-confirm').style.display = '';
+
+  const success = _sjePushResults.filter(r => r.status === 'success');
+  const failed = _sjePushResults.filter(r => r.status === 'failed');
+
+  document.getElementById('sje-confirm-subtitle').textContent =
+    `${success.length} entries pushed successfully${failed.length ? ', ' + failed.length + ' failed' : ''}`;
+
+  // Group by franchise for the report
+  const groups = {};
+  _sjePushResults.forEach(r => {
+    const key = r.franchise + (r.className ? ' → ' + r.className : '');
+    if (!groups[key]) groups[key] = { franchise: r.franchise, qboCompany: r.qboCompany, className: r.className, entries: [], totalDebits: 0, totalCredits: 0 };
+    groups[key].entries.push(r);
+    groups[key].totalDebits += r.debits;
+    groups[key].totalCredits += r.credits;
+  });
+
+  let html = '';
+  Object.values(groups).forEach(g => {
+    const ok = g.entries.filter(e => e.status === 'success').length;
+    const fail = g.entries.filter(e => e.status === 'failed').length;
+    html += `<div class="card" style="padding:16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);">${g.franchise}</div>
+          <div style="font-size:11px;color:var(--text-d);">QBO: ${g.qboCompany || '—'}${g.className ? ' · Class: ' + g.className : ''}</div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:11px;color:var(--green);font-weight:600;">${ok} ✓</span>
+          ${fail ? `<span style="font-size:11px;color:var(--red);font-weight:600;margin-left:8px;">${fail} ✗</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text-d);margin-bottom:8px;">
+        <span>Debits: $${g.totalDebits.toFixed(2)}</span>
+        <span>Credits: $${g.totalCredits.toFixed(2)}</span>
+        <span style="color:${Math.abs(g.totalDebits - g.totalCredits) < 0.01 ? 'var(--green)' : 'var(--red)'};">
+          ${Math.abs(g.totalDebits - g.totalCredits) < 0.01 ? '✓ Balanced' : '⚠ Diff: $' + Math.abs(g.totalDebits - g.totalCredits).toFixed(2)}
+        </span>
+      </div>
+      ${fail ? `<div style="font-size:11px;color:var(--red);margin-top:6px;">Failed entries:<br>${g.entries.filter(e=>e.status==='failed').map(e=>'• '+e.date+': '+e.error).join('<br>')}</div>` : ''}
+    </div>`;
+  });
+
+  document.getElementById('sje-confirm-body').innerHTML = html;
+}
+
+function sjeDownloadReport() {
+  if (!_sjePushResults.length) return;
+  const headers = ['Franchise','Store #','QBO Company','Class','Date','Journal #','Status','QBO ID','Error','Debits','Credits'];
+  const rows = _sjePushResults.map(r => [
+    r.franchise, r.storeId, r.qboCompany, r.className, r.date, r.journalNo,
+    r.status, r.qboId || '', r.error || '', r.debits.toFixed(2), r.credits.toFixed(2),
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `SJE-Push-Report-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function sjeReset() {
+  _sjeData = null;
+  _sjePushResults = [];
+  sjeBackToUpload();
 }
 
 

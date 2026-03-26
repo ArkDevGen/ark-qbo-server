@@ -1,0 +1,607 @@
+{
+  "6 Java Boys 1082": {
+    "label": "6JB (1082 MidTX)",
+    "franchise_names": ["6 Java Boys - Texas, LLC"],
+    "stores": {
+      "1082": ""
+    },
+    "use_classes": false,
+    "account_preset": "6javaboys",
+    "royalty_overrides": {
+      "": 0.08
+    }
+  },
+  "6 Java Boys 1083": {
+    "label": "6JB (1083 ArlTX)",
+    "franchise_names": ["6 Java Boys - Arlington, LLC"],
+    "stores": {
+      "1083": ""
+    },
+    "use_classes": false,
+    "account_preset": "6javaboys",
+    "royalty_overrides": {
+      "": 0.08
+    }
+  },
+  "6 Java Boys 1374": {
+    "label": "6JB (1374 WahNE)",
+    "franchise_names": ["6 Java Boys, LLC"],
+    "stores": {
+      "1374": ""
+    },
+    "use_classes": false,
+    "account_preset": "6javaboys"
+  },
+  "A&M Coffee": {
+    "label": "A&M (1056 DecIA)",
+    "franchise_names": ["A&M Coffee, LLC"],
+    "stores": {
+      "1056": ""
+    },
+    "use_classes": false
+  },
+  "Adventurous Bean 1": {
+    "label": "ABean (530 CGirMO)",
+    "franchise_names": ["The Adventurous Bean, LLC"],
+    "stores": {
+      "530": "(530 CGirMO)"
+    },
+    "use_classes": false
+  },
+  "Adventurous Bean 2": {
+    "label": "ABean (1160 MauAR)",
+    "franchise_names": ["Adventurous Bean 2, LLC"],
+    "stores": {
+      "1160": "(1160 MauAR)"
+    },
+    "use_classes": false
+  },
+  "Adventurous Bean 3": {
+    "label": "ABean (1161 NLRAR)",
+    "franchise_names": ["Adventurous Bean 3, LLC"],
+    "stores": {
+      "1161": "(1161 NLRAR)"
+    },
+    "use_classes": false
+  },
+  "Adventurous Bean 4": {
+    "label": "ABean (531 PadKY)",
+    "franchise_names": ["Adventurous Bean 4, LLC"],
+    "stores": {
+      "531": "(531 PadKY)"
+    },
+    "use_classes": false
+  },
+  "Life's Little Perks": {
+    "label": "ABeanLLP (397 SikMO)",
+    "franchise_names": ["Life's Little Perks, LLC"],
+    "stores": {
+      "397": "(397 SikMO)"
+    },
+    "use_classes": false
+  },
+  "AgEdge Sterling": {
+    "label": "AgEdge (421 SterCO)",
+    "franchise_names": ["AgEdge Development, L.L.C."],
+    "stores": {
+      "421": "(421 SterCO)"
+    },
+    "use_classes": false
+  },
+  "AgEdge Fort Morgan": {
+    "label": "AgEdge (536 FMorCO)",
+    "franchise_names": ["AgEdge Development, L.L.C."],
+    "stores": {
+      "536": "(536 FMorCO)"
+    },
+    "use_classes": false
+  },
+  "AgEdge Sidney": {
+    "label": "AgEdge (537 SidNE)",
+    "franchise_names": ["AgEdge Development, L.L.C."],
+    "stores": {
+      "537": "(537 SidNE)"
+    },
+    "use_classes": false
+  },
+  "B5 Coffee": {
+    "label": "B5 (2077 RivFL)",
+    "franchise_names": ["B5 Coffee Corp."],
+    "stores": {
+      "2077": ""
+    },
+    "use_classes": false
+  },
+  "BAM ILHC": {
+    "label": "BAM",
+    "franchise_names": ["BAM ILHC Enterprise, LLC"],
+    "stores": {
+      "1411": "1411 - Winchester",
+      "1412": "1412 - Georgetown"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1411", "1412"],
+        "label": "BAM (1411 WinKY & 1412 GeoKY)"
+      }
+    ]
+  },
+  "Bean Drip": {
+    "label": "Bean Drip",
+    "franchise_names": ["Bean Drip Services, LLC"],
+    "stores": {
+      "1274": "MT. Vernon",
+      "1583": "Eau Claire"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1274", "1583"],
+        "label": "BDrip (1274 MVerIA & 1583 EauCWI)"
+      }
+    ]
+  },
+  "BigSBA": {
+    "label": "BSBA (1416 NChaSC)",
+    "franchise_names": ["BigSBA Enterprise LLC"],
+    "stores": {
+      "1416": ""
+    },
+    "use_classes": false
+  },
+  "Blue Barn Coffee": {
+    "label": "Blue Barn Coffee",
+    "franchise_names": ["Blue Barn Coffee, LLC"],
+    "stores": {
+      "867": "OC 1",
+      "2422": "Le 2"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["867", "2422"],
+        "label": "BBarn (867 OrCIA & 2422 LeMIA)"
+      }
+    ]
+  },
+  "Bonham Coffee": {
+    "label": "Bonham (2542 BonTX)",
+    "franchise_names": ["Bonham Coffee LLC"],
+    "stores": {
+      "2542": ""
+    },
+    "use_classes": false
+  },
+  "Brewing Opportunities": {
+    "label": "BrOpp (1588 CuMO)",
+    "franchise_names": ["Brewing Opportunities, LLC"],
+    "stores": {
+      "1588": ""
+    },
+    "use_classes": false
+  },
+  "Coastal Perk": {
+    "label": "CoPerk (1107 LadSC)",
+    "franchise_names": ["Coastal Perk LLC"],
+    "stores": {
+      "1107": ""
+    },
+    "use_classes": false
+  },
+  "Coffee Shack Huron": {
+    "label": "CShack (1343 HurSD)",
+    "franchise_names": ["Coffee Shack Huron, LLC"],
+    "stores": {
+      "1343": "(1343 HurSD)"
+    },
+    "use_classes": false
+  },
+  "Shack Coffee Mitchell": {
+    "label": "CShack (255 MitSD)",
+    "franchise_names": ["Shack Coffee Mitchell LLC"],
+    "stores": {
+      "255": "(255 MitSD)"
+    },
+    "use_classes": false
+  },
+  "RCS 253": {
+    "label": "CShackRCS (253 RCSD)",
+    "franchise_names": ["RCS 253 LLC"],
+    "stores": {
+      "253": "(253 RCSD)"
+    },
+    "use_classes": false
+  },
+  "RCS 276": {
+    "label": "CShackRCS (276 RCSD)",
+    "franchise_names": ["RCS 276 LLC"],
+    "stores": {
+      "276": "(276 RCSD)"
+    },
+    "use_classes": false
+  },
+  "RCS 404": {
+    "label": "CShackRCS (404 RCSD)",
+    "franchise_names": ["RCS 404 LLC"],
+    "stores": {
+      "404": "(404 RCSD)"
+    },
+    "use_classes": false
+  },
+  "Dirt Road Coffee": {
+    "label": "Dirt Road Coffee",
+    "franchise_names": ["Dirt Road Coffee Company LLC"],
+    "stores": {
+      "176": "Dirt Road Coffee:Omaha",
+      "2898": "Dirt Road Coffee:Valley"
+    },
+    "use_classes": true,
+    "account_preset": "dirtroad",
+    "grouping": [
+      {
+        "stores": ["176", "2898"],
+        "label": "DRoad (176 OmaNE & 2898 ValNE)"
+      }
+    ]
+  },
+  "Enterprise 555, LLC": {
+    "label": "EP555 (1103 NicKY)",
+    "franchise_names": ["Enterprise 555, LLC"],
+    "stores": {
+      "1103": ""
+    },
+    "use_classes": false
+  },
+  "Faith N Action": {
+    "label": "FNA (2227 FortIN)",
+    "franchise_names": ["Faith N Action, LLC"],
+    "stores": {
+      "2227": ""
+    },
+    "use_classes": false
+  },
+  "Frey Boys Highland": {
+    "label": "FBoys (849 HighIL)",
+    "franchise_names": ["Frey Boys, LLC"],
+    "stores": {
+      "849": "(849 HighIL)"
+    },
+    "use_classes": false,
+    "account_preset": "freyboys"
+  },
+  "Frey Boys Collinsville": {
+    "label": "FBoys (1776 CollIL)",
+    "franchise_names": ["Frey Boys, LLC"],
+    "stores": {
+      "1776": "(1776 CollIL)"
+    },
+    "use_classes": false,
+    "account_preset": "freyboys"
+  },
+  "Generational Brews": {
+    "label": "Generational Brews",
+    "franchise_names": ["Generational Brews LLC"],
+    "stores": {
+      "1251": "1251",
+      "1252": "1252"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1251", "1252"],
+        "label": "GBrews (1251 Tal & 1252 King)"
+      }
+    ],
+    "royalty_overrides": {
+      "": 0.08
+    }
+  },
+  "Good Dog Coffee": {
+    "label": "Good Dog Coffee",
+    "franchise_names": ["Good Dog Coffee Company LLC"],
+    "stores": {
+      "1148": "Overland (1148)",
+      "1149": "Chesterfield (1149)"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1148", "1149"],
+        "label": "GDog (1148 OvMO & 1149 ChMO)"
+      }
+    ]
+  },
+  "Hilltrust Coffee": {
+    "label": "Htrust (2388 NavFL)",
+    "franchise_names": ["Hilltrust Coffee LLC"],
+    "stores": {
+      "2388": ""
+    },
+    "use_classes": false
+  },
+  "iHeartCoffee": {
+    "label": "iHeartCoffee",
+    "franchise_names": [
+      "iHeartCoffee, L.L.C.",
+      "iHeartCoffee 2, LLC"
+    ],
+    "stores": {
+      "1194": "1194",
+      "737": "737",
+      "738": "738",
+      "739": "739",
+      "740": "740",
+      "741": "741",
+      "1192": "1192",
+      "1193": "1193"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["737", "738"],
+        "label": "iHCof (737 She & 738 Dix)"
+      },
+      {
+        "stores": ["739", "740"],
+        "label": "iHCof (739 Dix & 740 Tay)"
+      },
+      {
+        "stores": ["741", "1192"],
+        "label": "iHCof (741 Pop & 1192 Pres)"
+      },
+      {
+        "stores": ["1193", "1194"],
+        "label": "iHCof (1193 WPort & 1194 MPlace)"
+      }
+    ]
+  },
+  "JANC Coffee": {
+    "label": "JANC (2568 CozNE)",
+    "franchise_names": ["JANC Coffee, LLC"],
+    "stores": {
+      "2568": ""
+    },
+    "use_classes": false
+  },
+  "Java Mates": {
+    "label": "JMates (1303 MonMN)",
+    "franchise_names": ["Java Mates, L.L.C."],
+    "stores": {
+      "1303": ""
+    },
+    "use_classes": false
+  },
+  "Jessica and Ty": {
+    "label": "WManJLLP (660 EusFL)",
+    "franchise_names": ["Jessica and Ty O'Toole"],
+    "stores": {
+      "660": ""
+    },
+    "use_classes": false
+  },
+  "Joesaphine's Coffee": {
+    "label": "JoeCof (961 JacFL)",
+    "franchise_names": ["Joesaphine’s Coffee LLC"],
+    "stores": {
+      "961": ""
+    },
+    "use_classes": false
+  },
+  "JJ's Ventures": {
+    "label": "JJ's Ventures",
+    "franchise_names": ["JJ's Ventures LLC"],
+    "stores": {
+      "2023": "Savannah, Missouri",
+      "2024": "St. Joseph MO"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["2023", "2024"],
+        "label": "JJ (2023 SavMO & 2024 SJoMO)"
+      }
+    ]
+  },
+  "Lake Life Partners": {
+    "label": "Lake Life Partners",
+    "franchise_names": [
+      "Lake Life Partners Burton LLC",
+      "Lake Life Partners Van Dyke, LLC",
+      "Lake Life Partners, LLC"
+    ],
+    "stores": {
+      "1572": "1572 - Burton",
+      "1573": "1573 - Sterling Heights",
+      "1979": "1979 - Big Rapids",
+      "497": "497 - Plainfield",
+      "734": "734 - 28th St",
+      "735": "735 - Kentwood"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1572", "1573"],
+        "label": "LLife (1572 BurMI & 1573 SHMI)"
+      },
+      {
+        "stores": ["497", "734"],
+        "label": "LLife (497 GRMI & 734 GRMI)"
+      },
+      {
+        "stores": ["735", "1979"],
+        "label": "LLife (735 KenMI & 1979 BRMI)"
+      }
+    ]
+  },
+  "MDM Java": {
+    "label": "MDM (2471 BCMI)",
+    "franchise_names": ["MDM Java LLC"],
+    "stores": {
+      "2471": ""
+    },
+    "use_classes": false
+  },
+  "Mile 40 Corp - Main": {
+    "label": "M40 (Roy + PV)",
+    "franchise_names": ["Mile 40 Corporation", "Mile 40, Corp"],
+    "stores": {
+      "152": "Roy",
+      "329": "Pleasant View"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["152", "329"],
+        "label": "M40 (152 RoyUT & 329 PVUT)"
+      }
+    ]
+  },
+  "Mile 40 Corp - Clearfield": {
+    "label": "M40 (1425 ClFiUT)",
+    "franchise_names": ["Mile 40 Corporation", "Mile 40, Corp"],
+    "stores": {
+      "1425": "Clearfield"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["1425"],
+        "label": "M40 (1425 ClFiUT)"
+      }
+    ],
+    "royalty_overrides": {
+      "1425": 0.08
+    }
+  },
+  "NSV Brew": {
+    "label": "NSVB (2082 BlMN)",
+    "franchise_names": ["NSV Brew LLC"],
+    "stores": {
+      "2082": ""
+    },
+    "use_classes": false
+  },
+  "Parker Enterprises": {
+    "label": "Parker Enterprises",
+    "franchise_names": ["Black Dog Coffee, LLC", "Black Dog Coffee II, LLC", "DC Enterprise, LLC"],
+    "stores": {
+      "469": "469 - BD1",
+      "470": "470 - BD2",
+      "471": "471 - DC Ent"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["469", "470"],
+        "label": "BDog (469 CleTN & 470 DayTN)"
+      },
+      {
+        "stores": ["471"],
+        "label": "BDogDCE (471 SweTN)"
+      }
+    ]
+  },
+  "Premier Coffee": {
+    "label": "PreCof (2557 CarMS)",
+    "franchise_names": ["Premier Coffee, LLC"],
+    "stores": {
+      "2557": ""
+    },
+    "use_classes": false
+  },
+  "Sweet Magnolia": {
+    "label": "SwMag (2486 FPayAL)",
+    "franchise_names": ["Sweet Magnolia Ventures, LLC"],
+    "stores": {
+      "2486": ""
+    },
+    "use_classes": false
+  },
+  "Tuff Scooter": {
+    "label": "Tuff Scooter",
+    "franchise_names": ["Tuff Scooter Pharmer, LLC"],
+    "stores": {
+      "345": "345 - Garfield",
+      "581": "581 - Eisenhower"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["345", "581"],
+        "label": "Tuff (345 Gar & 581 Eis)"
+      }
+    ]
+  },
+  "VI Coffee": {
+    "label": "VICof (2226 PhoAZ)",
+    "franchise_names": ["VI Coffee LLC"],
+    "stores": {
+      "2226": ""
+    },
+    "use_classes": false
+  },
+  "Whoa N Go Wabash": {
+    "label": "WNG (759 Wab)",
+    "franchise_names": ["Whoa N Go Coffee 2, LLC"],
+    "stores": {
+      "759": "(759 Wab)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go Clear Lake": {
+    "label": "WNG (758 CLake)",
+    "franchise_names": ["Whoa N Go Coffee LLC"],
+    "stores": {
+      "758": "(758 CLake)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go Taylor": {
+    "label": "WNG (1003 TayIL)",
+    "franchise_names": ["Marcus and Lauryn McGlasson"],
+    "stores": {
+      "1003": "(1003 TayIL)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go FV Hill": {
+    "label": "WNG (1818 FVHIL)",
+    "franchise_names": ["Whoa N Go Services 1 LLC"],
+    "stores": {
+      "1818": "(1818 FVHIL)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go Swansea": {
+    "label": "WNG (1819 SwaIL)",
+    "franchise_names": ["Whoa N Go Services 1 LLC"],
+    "stores": {
+      "1819": "(1819 SwaIL)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go Chatham": {
+    "label": "WNG (2114 ChaIL)",
+    "franchise_names": ["Whoa N Go Services 1 LLC"],
+    "stores": {
+      "2114": "(2114 ChaIL)"
+    },
+    "use_classes": false
+  },
+  "Whoa N Go TH": {
+    "label": "WNG Terra Haute",
+    "franchise_names": ["WNG Terra Haute LLC"],
+    "stores": {
+      "761": "761 - Terre Haute",
+      "1778": "1778 - Linton"
+    },
+    "use_classes": true,
+    "grouping": [
+      {
+        "stores": ["761", "1778"],
+        "label": "WNGTH (761 THIN & 1778 LinIN)"
+      }
+    ]
+  }
+}

@@ -2312,6 +2312,366 @@ app.post('/db/save', requireAuth, (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// SCOOTER'S: Sales Journal Entry Parser
+// Reads Power BI Excel export → builds JE payloads for each franchise
+// ─────────────────────────────────────────────────────────────────
+const XLSX = require('xlsx');
+
+// Load Scooter's config files
+const SCOOTERS_CONFIG_DIR = path.join(__dirname, 'config');
+let FRANCHISE_MAP = {}, ACCOUNT_PRESETS = {}, ROYALTY_OVERRIDES = {};
+try {
+  FRANCHISE_MAP = JSON.parse(fs.readFileSync(path.join(SCOOTERS_CONFIG_DIR, 'franchises.json'), 'utf8'));
+  ACCOUNT_PRESETS = JSON.parse(fs.readFileSync(path.join(SCOOTERS_CONFIG_DIR, 'account_presets.json'), 'utf8'));
+  ROYALTY_OVERRIDES = JSON.parse(fs.readFileSync(path.join(SCOOTERS_CONFIG_DIR, 'royalty_overrides.json'), 'utf8'));
+  console.log(`✓ Scooter's config loaded — ${Object.keys(FRANCHISE_MAP).length} franchises`);
+} catch (e) {
+  console.log('Scooter\'s config not loaded:', e.message);
+}
+
+function sjeGetAccount(key, franchiseKey) {
+  const presetName = FRANCHISE_MAP[franchiseKey]?.account_preset;
+  if (presetName && ACCOUNT_PRESETS[presetName]?.[key]) return ACCOUNT_PRESETS[presetName][key];
+  if (ACCOUNT_PRESETS.default?.[key]) return ACCOUNT_PRESETS.default[key];
+  return key;
+}
+
+function sjeGetRoyaltyRate(franchiseKey, storeId) {
+  const override = ROYALTY_OVERRIDES[franchiseKey];
+  if (typeof override === 'object' && override !== null && !Array.isArray(override)) {
+    if (storeId && override[storeId] !== undefined) return override[storeId];
+    return ROYALTY_OVERRIDES.default_rate || 0.06;
+  }
+  if (override !== undefined && override !== null) return override;
+  return ROYALTY_OVERRIDES.default_rate || 0.06;
+}
+
+function sjeGetAdFundRate() { return ROYALTY_OVERRIDES.ad_fund_rate || 0.02; }
+
+function sjeFindColumn(headers, possibleNames) {
+  for (const col of headers) {
+    const lower = String(col).toLowerCase().trim();
+    for (const p of possibleNames) {
+      if (lower.includes(p.toLowerCase())) return col;
+    }
+  }
+  return null;
+}
+
+function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
+  const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+  const grossSales = num(row['Gross Sales']);
+  const discount = num(row['Discount']);
+  const empDiscount = num(row['Employee Discount']);
+  const netSales = num(row['Net Sales']);
+  const gcLoad = num(row['Gift Card Load']);
+  const tax = num(row['Tax']);
+  const tip = num(row['Tip']);
+  const cash = num(row['Cash']);
+  const cc = num(row['Credit Card']);
+  const gc = num(row['Gift Card']);
+  const mobile = num(row['Mobile App']);
+  const donation = num(row['Donation']);
+  const promo = num(row['Promotion']);
+  const other = num(row['Other']);
+  const recon = num(row['Reconciliation']);
+  const rounding = num(row['Rounding']);
+  const avgCheck = num(row['Avg Check']);
+  const grossFood = num(row['Gross Food %']);
+  const trafficCount = num(row['Traffic Count']);
+
+  const d = new Date(dateStr);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const journalNo = grossSales === 0 ? `${mm}.${dd}.${yyyy} - NO DATA` : `${mm}.${dd}.${yyyy}`;
+  const journalDate = `${mm}/${dd}/${yyyy}`;
+
+  const adyenFees = Math.round(mobile * 0.0362 * 100) / 100;
+  const adyenDeposits = Math.round((mobile - adyenFees) * 100) / 100;
+
+  const royaltyRate = sjeGetRoyaltyRate(franchiseKey, storeId);
+  const royaltyFees = Math.round(netSales * royaltyRate * 100) / 100;
+  const adFund = Math.round(netSales * sjeGetAdFundRate() * 100) / 100;
+  const royaltyPayable = royaltyFees + adFund;
+
+  const royaltyDesc = Math.abs(royaltyRate - 0.08) < 0.0001 ? '8%' : '';
+
+  const advTotal = other + promo - recon - donation - rounding;
+  const advDebits = advTotal >= 0 ? Math.round(advTotal * 100) / 100 : null;
+  const advCredits = advTotal < 0 ? Math.round(-advTotal * 100) / 100 : null;
+
+  const descParts = [];
+  if (avgCheck > 0) descParts.push(`Avg: $${avgCheck.toFixed(2)}`);
+  if (grossFood > 0) descParts.push(`Food: ${grossFood.toFixed(1)}%`);
+  if (trafficCount > 0) descParts.push(`T Count: ${Math.round(trafficCount)}`);
+  const avgCheckDesc = descParts.join(' - ');
+
+  const r = (v) => v !== null && v !== undefined ? Math.round(v * 100) / 100 : null;
+
+  const lines = [
+    { account: sjeGetAccount('sales', franchiseKey),              debit: null,           credit: r(grossSales),  description: avgCheckDesc, class: className },
+    { account: sjeGetAccount('store_discounts', franchiseKey),    debit: r(discount),    credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('emp_discounts', franchiseKey),      debit: r(empDiscount), credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('gift_card_sold', franchiseKey),     debit: null,           credit: r(gcLoad),      description: 'Gift Cards Sold', class: className },
+    { account: sjeGetAccount('sales_tax_payable', franchiseKey),  debit: null,           credit: r(tax),         description: '',           class: className },
+    { account: sjeGetAccount('tips_received', franchiseKey),      debit: null,           credit: r(tip),         description: '',           class: className },
+    { account: sjeGetAccount('cash_deposits', franchiseKey),      debit: r(cash),        credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('credit_card_deposits', franchiseKey), debit: r(cc),        credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('gift_card_redeemed', franchiseKey), debit: r(gc),          credit: null,           description: 'Gift Cards Redeemed', class: className },
+    { account: sjeGetAccount('adyen_deposits', franchiseKey),     debit: r(adyenDeposits), credit: null,         description: '',           class: className },
+    { account: sjeGetAccount('adyen_fees', franchiseKey),         debit: r(adyenFees),   credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('advertising_marketing', franchiseKey), debit: advDebits,   credit: advCredits,     description: 'Donations, Promo, Recon, Rounding & Other', class: className },
+    { account: sjeGetAccount('royalty_fees', franchiseKey),       debit: r(royaltyFees), credit: null,           description: royaltyDesc,  class: className },
+    { account: sjeGetAccount('ad_fund_national', franchiseKey),   debit: r(adFund),      credit: null,           description: '',           class: className },
+    { account: sjeGetAccount('royalty_payable', franchiseKey),    debit: null,           credit: r(royaltyPayable), description: '',        class: className },
+  ];
+
+  return { date: journalDate, journalNo, lines };
+}
+
+app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    console.log(`Scooter's parse: ${req.file.originalname} (${(req.file.size/1024).toFixed(1)} KB) by ${req.arkUser.userName}`);
+
+    // Parse Excel
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = XLSX.utils.sheet_to_json(sheet);
+
+    if (!rawData.length) return res.status(400).json({ error: 'Excel file is empty' });
+
+    // Map columns
+    const headers = Object.keys(rawData[0]);
+    const colMap = {
+      'Store': sjeFindColumn(headers, ['store']),
+      'Day': sjeFindColumn(headers, ['day', 'date']),
+      'Franchise': sjeFindColumn(headers, ['franchise']),
+      'Gross Sales': sjeFindColumn(headers, ['gross sales']),
+      'Discount': sjeFindColumn(headers, ['discount']),
+      'Employee Discount': sjeFindColumn(headers, ['employee discount', 'emp discount']),
+      'Net Sales': sjeFindColumn(headers, ['net sales']),
+      'Gift Card Load': sjeFindColumn(headers, ['gift card load', 'gift cards sold', 'gc load', 'gift card sold', 'loaded gift card', 'sold gc', 'gift load']),
+      'Tax': sjeFindColumn(headers, ['tax']),
+      'Donation': sjeFindColumn(headers, ['donation', 'donations']),
+      'Tip': sjeFindColumn(headers, ['tip']),
+      'Cash': sjeFindColumn(headers, ['cash']),
+      'Credit Card': sjeFindColumn(headers, ['credit card']),
+      'Gift Card': sjeFindColumn(headers, ['gift card redeemed', 'gift cards redeemed', 'gc redeemed', 'gift card used', 'redeemed gift card', 'gift redemption', 'gc redemption', 'gift redeemed', 'redeem gc']),
+      'Mobile App': sjeFindColumn(headers, ['mobile app']),
+      'Promotion': sjeFindColumn(headers, ['promotion']),
+      'Other': sjeFindColumn(headers, ['other']),
+      'Reconciliation': sjeFindColumn(headers, ['reconciliation']),
+      'Rounding': sjeFindColumn(headers, ['rounding']),
+      'Avg Check': sjeFindColumn(headers, ['avg check', 'average check', 'avg ticket']),
+      'Discount %': sjeFindColumn(headers, ['discount %']),
+      'Traffic Count': sjeFindColumn(headers, ['traffic count']),
+      'Gross Food %': sjeFindColumn(headers, ['gross food %']),
+    };
+
+    // Normalize rows
+    const rows = rawData.map(raw => {
+      const row = {};
+      for (const [newName, oldName] of Object.entries(colMap)) {
+        row[newName] = oldName ? raw[oldName] : null;
+      }
+      // Parse date
+      if (row['Day']) {
+        if (row['Day'] instanceof Date) {
+          row['_date'] = row['Day'];
+        } else if (typeof row['Day'] === 'number') {
+          // Excel serial date
+          row['_date'] = new Date((row['Day'] - 25569) * 86400000);
+        } else {
+          row['_date'] = new Date(row['Day']);
+        }
+      }
+      return row;
+    }).filter(r => r['_date'] && !isNaN(r['_date'].getTime()));
+
+    console.log(`  Parsed ${rows.length} valid rows, columns: ${Object.entries(colMap).filter(([k,v])=>v).map(([k])=>k).join(', ')}`);
+
+    // Load CRM client data for realm ID matching
+    let crmClients = [];
+    try {
+      if (fs.existsSync(ARK_DB_FILE)) {
+        const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+        crmClients = db.clients || [];
+      }
+    } catch (_) {}
+
+    // Helper: find realmId and QBO name for a store number
+    function findRealmForStore(storeNum) {
+      for (const client of crmClients) {
+        if (!client.franchises?.length) continue;
+        for (const f of client.franchises) {
+          if (f.storeNumber === storeNum && f.qboRealmId) {
+            return { realmId: f.qboRealmId, qboName: f.qboName || '', clientName: client.biz };
+          }
+        }
+      }
+      return null;
+    }
+
+    // Process each franchise config
+    const franchises = [];
+    const warnings = [];
+    let totalDebits = 0, totalCredits = 0, totalEntries = 0;
+
+    for (const [franchiseKey, info] of Object.entries(FRANCHISE_MAP)) {
+      // Filter rows matching this franchise
+      const franchiseRows = rows.filter(r => {
+        const fName = String(r['Franchise'] || '').trim();
+        return (info.franchise_names || []).some(n => n.toLowerCase() === fName.toLowerCase());
+      });
+
+      if (!franchiseRows.length) continue;
+
+      if (!info.use_classes) {
+        // Simple: one store per franchise entry
+        for (const [storeId, className] of Object.entries(info.stores || {})) {
+          const storeRows = franchiseRows.filter(r => String(r['Store'] || '').includes(storeId));
+          if (!storeRows.length) continue;
+
+          const realm = findRealmForStore(storeId);
+          const entries = [];
+          let fDebits = 0, fCredits = 0;
+
+          // Sort by date
+          storeRows.sort((a, b) => a._date - b._date);
+          const dates = [...new Set(storeRows.map(r => r._date.toISOString().slice(0, 10)))];
+
+          for (const dateKey of dates) {
+            const dayRows = storeRows.filter(r => r._date.toISOString().slice(0, 10) === dateKey);
+            const entry = sjeBuildEntry(dayRows[0], franchiseKey, className || storeId, dayRows[0]._date.toISOString(), storeId);
+            entries.push(entry);
+            const d = entry.lines.reduce((s, l) => s + (l.debit || 0), 0);
+            const c = entry.lines.reduce((s, l) => s + (l.credit || 0), 0);
+            fDebits += d;
+            fCredits += c;
+          }
+
+          const dateRange = dates.length ? `${storeRows[0]._date.toLocaleDateString('en-US')} - ${storeRows[storeRows.length-1]._date.toLocaleDateString('en-US')}` : '';
+
+          franchises.push({
+            key: franchiseKey,
+            label: info.label || franchiseKey,
+            storeId,
+            className: className || '',
+            realmId: realm?.realmId || '',
+            qboCompanyName: realm?.qboName || realm?.clientName || '',
+            linked: !!realm?.realmId,
+            dateRange,
+            entryCount: entries.length,
+            totalDebits: Math.round(fDebits * 100) / 100,
+            totalCredits: Math.round(fCredits * 100) / 100,
+            balanced: Math.abs(fDebits - fCredits) < 0.01,
+            entries,
+          });
+
+          totalDebits += fDebits;
+          totalCredits += fCredits;
+          totalEntries += entries.length;
+        }
+      } else {
+        // Grouped mode — use_classes = true
+        const groupings = info.grouping || Object.entries(info.stores || {}).map(([sid]) => ({ stores: [sid], label: info.label || sid }));
+
+        for (const group of groupings) {
+          const groupStores = group.stores || [];
+          const groupLabel = group.label || groupStores.join(' & ');
+
+          // Find realm from first store in group
+          const realm = findRealmForStore(groupStores[0]);
+          const entries = [];
+          let fDebits = 0, fCredits = 0;
+
+          // Collect all dates across all stores in group
+          const allDates = new Set();
+          for (const storeId of groupStores) {
+            franchiseRows.filter(r => String(r['Store'] || '').includes(storeId))
+              .forEach(r => allDates.add(r._date.toISOString().slice(0, 10)));
+          }
+          const sortedDates = [...allDates].sort();
+
+          for (const dateKey of sortedDates) {
+            for (const storeId of groupStores) {
+              const className = info.stores?.[storeId] || storeId;
+              const dayRows = franchiseRows.filter(r =>
+                String(r['Store'] || '').includes(storeId) &&
+                r._date.toISOString().slice(0, 10) === dateKey
+              );
+              if (!dayRows.length) continue;
+
+              const entry = sjeBuildEntry(dayRows[0], franchiseKey, className, dayRows[0]._date.toISOString(), storeId);
+              entries.push(entry);
+              const d = entry.lines.reduce((s, l) => s + (l.debit || 0), 0);
+              const c = entry.lines.reduce((s, l) => s + (l.credit || 0), 0);
+              fDebits += d;
+              fCredits += c;
+            }
+          }
+
+          if (!entries.length) continue;
+
+          const classNames = groupStores.map(s => info.stores?.[s] || s).filter(Boolean).join(', ');
+          const dateRange = sortedDates.length ? `${new Date(sortedDates[0]).toLocaleDateString('en-US')} - ${new Date(sortedDates[sortedDates.length-1]).toLocaleDateString('en-US')}` : '';
+
+          franchises.push({
+            key: franchiseKey,
+            label: groupLabel,
+            storeId: groupStores.join(', '),
+            className: classNames,
+            realmId: realm?.realmId || '',
+            qboCompanyName: realm?.qboName || realm?.clientName || '',
+            linked: !!realm?.realmId,
+            dateRange,
+            entryCount: entries.length,
+            totalDebits: Math.round(fDebits * 100) / 100,
+            totalCredits: Math.round(fCredits * 100) / 100,
+            balanced: Math.abs(fDebits - fCredits) < 0.01,
+            entries,
+          });
+
+          totalDebits += fDebits;
+          totalCredits += fCredits;
+          totalEntries += entries.length;
+        }
+      }
+    }
+
+    // Check for unmatched franchise names in the data
+    const allFranchiseNames = new Set();
+    Object.values(FRANCHISE_MAP).forEach(info => (info.franchise_names || []).forEach(n => allFranchiseNames.add(n.toLowerCase())));
+    const unmatchedNames = new Set();
+    rows.forEach(r => {
+      const fName = String(r['Franchise'] || '').trim();
+      if (fName && !allFranchiseNames.has(fName.toLowerCase())) unmatchedNames.add(fName);
+    });
+    unmatchedNames.forEach(n => warnings.push(`Franchise "${n}" not found in config`));
+
+    console.log(`  Generated ${franchises.length} franchise groups, ${totalEntries} entries, ${warnings.length} warnings`);
+
+    res.json({
+      franchises,
+      warnings,
+      stats: {
+        totalFranchises: franchises.length,
+        totalEntries,
+        totalDebits: Math.round(totalDebits * 100) / 100,
+        totalCredits: Math.round(totalCredits * 100) / 100,
+      },
+    });
+
+  } catch (e) {
+    console.error('Scooter\'s parse error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
