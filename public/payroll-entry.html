@@ -583,6 +583,18 @@ function bulkImportHomebase(file) {
       const text = e.target.result;
       const lines = text.split('\n');
 
+      // Extract pay period from first line: "Payroll Period,03-01-2026 to 03-14-2026"
+      const firstLine = lines[0] || '';
+      const periodMatch = firstLine.match(/(\d{2})-(\d{2})-(\d{4})\s+to\s+(\d{2})-(\d{2})-(\d{4})/);
+      if (periodMatch) {
+        const startDate = `${periodMatch[3]}-${periodMatch[1]}-${periodMatch[2]}`;
+        const endDate = `${periodMatch[6]}-${periodMatch[4]}-${periodMatch[5]}`;
+        const startEl = document.getElementById('entry-period-start');
+        const endEl = document.getElementById('entry-period-end');
+        if (startEl) startEl.value = startDate;
+        if (endEl) endEl.value = endDate;
+      }
+
       let headerIdx = 0;
       for (let i = 0; i < Math.min(5, lines.length); i++) {
         if (lines[i].toLowerCase().includes('first name')) { headerIdx = i; break; }

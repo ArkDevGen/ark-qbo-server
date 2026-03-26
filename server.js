@@ -1677,6 +1677,70 @@ app.post('/payroll/employees/:clientSlug/:storeId/link', (req, res) => {
   res.json({ success: true, employee: { id: sourceEmp.id, firstName: sourceEmp.firstName, lastName: sourceEmp.lastName, position: sourceEmp.position } });
 });
 
+// ── Payroll Admin Portal ─────────────────────────────────────────
+app.get('/payroll-admin', (req, res) => {
+  res.sendFile(__dirname + '/public/payroll-admin.html');
+});
+
+// Get all payroll data (admin only — requires valid CRM session)
+app.get('/payroll/admin/data', requireAuth, (req, res) => {
+  // Strip sensitive fields like passwords and session tokens before sending
+  const safe = { clients: {} };
+  for (const [slug, client] of Object.entries(payrollData.clients || {})) {
+    const { _sessionToken, ...rest } = client;
+    safe.clients[slug] = rest;
+  }
+  res.json(safe);
+});
+
+// Update employee (admin)
+app.put('/payroll/admin/employee', requireAuth, (req, res) => {
+  const { clientSlug, storeId, empIdx, updates } = req.body;
+  if (!clientSlug || !storeId || empIdx === undefined || !updates) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const client = payrollData.clients[clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const store = client.stores?.[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const emp = store.employees?.[empIdx];
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  // Apply updates
+  if (updates.firstName) emp.firstName = updates.firstName;
+  if (updates.lastName) emp.lastName = updates.lastName;
+  if (updates.position !== undefined) emp.position = updates.position;
+  if (updates.payRate !== undefined) emp.payRate = updates.payRate;
+  if (updates.payType) emp.payType = updates.payType;
+  if (updates.email !== undefined) emp.email = updates.email;
+
+  savePayrollData();
+  console.log(`Admin updated employee ${emp.firstName} ${emp.lastName} in ${clientSlug}/${storeId}`);
+  res.json({ success: true });
+});
+
+// Delete employee (admin)
+app.delete('/payroll/admin/employee', requireAuth, (req, res) => {
+  const { clientSlug, storeId, empIdx } = req.body;
+  if (!clientSlug || !storeId || empIdx === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const client = payrollData.clients[clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const store = client.stores?.[storeId];
+  if (!store?.employees?.[empIdx]) return res.status(404).json({ error: 'Employee not found' });
+
+  const removed = store.employees.splice(empIdx, 1)[0];
+  savePayrollData();
+  console.log(`Admin removed employee ${removed.firstName} ${removed.lastName} from ${clientSlug}/${storeId}`);
+  res.json({ success: true });
+});
+
 // ── Client adds a new employee on the fly ────────────────────────
 app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const { clientSlug, storeId } = req.params;
