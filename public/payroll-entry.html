@@ -139,6 +139,43 @@
       <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
     </div>
 
+    <!-- Bulk Import Card -->
+    <div class="card" id="bulk-import-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h2 style="margin-bottom:0;">Bulk Import</h2>
+        <span style="font-size:11px;color:var(--muted);">Import files for all stores at once</span>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:12px;">
+        <div style="flex:1;">
+          <button class="btn btn-outline" onclick="document.getElementById('bulk-homebase-input').click()" style="width:100%;border-color:var(--orange);color:var(--orange);padding:14px;font-size:14px;">📊 Import Homebase CSV</button>
+          <input type="file" id="bulk-homebase-input" accept=".csv" style="display:none;" onchange="bulkImportHomebase(this.files[0])">
+          <div id="bulk-homebase-status" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center;min-height:16px;"></div>
+        </div>
+        <div style="flex:1;">
+          <button class="btn btn-outline" onclick="document.getElementById('bulk-tips-input').click()" style="width:100%;border-color:var(--green);color:var(--green);padding:14px;font-size:14px;">💰 Import Tips Report</button>
+          <input type="file" id="bulk-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="bulkImportTips(this.files[0])">
+          <div id="bulk-tips-status" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center;min-height:16px;"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="bulk-populate-btn" onclick="bulkPopulateAll()" style="width:100%;padding:12px;font-size:14px;display:none;">Populate All Stores →</button>
+    </div>
+
+    <!-- Store Confirmation Tracker -->
+    <div class="card" id="store-tracker" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin-bottom:0;">Store Review</h2>
+        <span id="store-tracker-count" style="font-size:12px;color:var(--muted);">0 of 0 confirmed</span>
+      </div>
+      <div id="store-tracker-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+      <div style="height:4px;background:var(--surface);border-radius:2px;overflow:hidden;">
+        <div id="store-tracker-bar" style="height:100%;background:var(--green);border-radius:2px;width:0%;transition:width .3s;"></div>
+      </div>
+      <div id="bulk-submit-wrap" style="display:none;margin-top:14px;">
+        <button class="btn btn-green" id="bulk-submit-btn" onclick="bulkSubmitAll()" style="width:100%;padding:14px;font-size:15px;font-weight:700;">✓ Submit All Confirmed Payrolls</button>
+        <div id="bulk-submit-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:18px;"></div>
+      </div>
+    </div>
+
     <!-- Step 1: Select store, pay period, pay date -->
     <div class="card">
       <h2>Payroll Details</h2>
@@ -200,7 +237,7 @@
         </table>
       </div>
       <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;">
-        <button class="btn btn-green" onclick="submitPayroll()">Submit Payroll</button>
+        <button class="btn btn-green" id="store-action-btn" onclick="_bulkMode ? bulkConfirmStore() : submitPayroll()">Submit Payroll</button>
       </div>
       <div id="submit-status" class="status"></div>
     </div>
@@ -443,6 +480,11 @@ async function onStoreChange() {
     _employees = data.employees || [];
     renderEmployeeTable();
     section.classList.remove('hidden');
+
+    // If in bulk mode, auto-apply imported data
+    if (_bulkMode) {
+      setTimeout(() => bulkApplyData(), 50);
+    }
   } catch(e) {
     console.error('Failed to load employees:', e);
   }
@@ -493,7 +535,437 @@ function renderEmployeeTable() {
   }
 }
 
-// ─── Homebase CSV Import ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  BULK IMPORT — All stores at once
+// ═══════════════════════════════════════════════════════════════════
+
+let _bulkMode = false;
+let _bulkHomebase = null;       // { [storeNum]: [{firstName, lastName, regular, overtime, pto, holidayPay, cashTips, creditTips}] }
+let _bulkTips = null;           // { [storeNum]: tipTotal }
+let _bulkStoreStatus = {};      // { [storeId]: 'empty' | 'populated' | 'confirmed' }
+let _bulkEmployeeData = {};     // { [storeId]: { [empIdx:field]: value } }
+
+function bulkImportHomebase(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('bulk-homebase-status');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split('\n');
+
+      let headerIdx = 0;
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        if (lines[i].toLowerCase().includes('first name')) { headerIdx = i; break; }
+      }
+
+      const headers = parseCSVLine(lines[headerIdx]);
+      const colIdx = {};
+      headers.forEach((h, i) => { colIdx[h.trim().toLowerCase()] = i; });
+
+      _bulkHomebase = {};
+      let totalEmps = 0;
+
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = parseCSVLine(line);
+        if (!cols.length) continue;
+
+        const firstName = (cols[colIdx['first name']] || '').trim();
+        const lastName = (cols[colIdx['last name']] || '').trim();
+        const location = (cols[colIdx['location']] || '').trim();
+
+        if (location === 'TOTALS' || !firstName) continue;
+
+        const locNum = location.replace(/[^0-9]/g, '').trim();
+        if (!locNum) continue;
+
+        const num = (idx) => {
+          const raw = (cols[idx] || '').replace(/[$,]/g, '').trim();
+          const n = parseFloat(raw);
+          return isNaN(n) ? 0 : n;
+        };
+
+        if (!_bulkHomebase[locNum]) _bulkHomebase[locNum] = [];
+        _bulkHomebase[locNum].push({
+          firstName, lastName,
+          regular: num(colIdx['regular']),
+          overtime: num(colIdx['overtime']),
+          pto: num(colIdx['pto']),
+          holidayPay: num(colIdx['holiday pay']),
+          cashTips: num(colIdx['cash tips']),
+          creditTips: num(colIdx['credit tips']),
+        });
+        totalEmps++;
+      }
+
+      const storeCount = Object.keys(_bulkHomebase).length;
+      statusEl.innerHTML = `<span style="color:var(--green);">✓ ${totalEmps} employees across ${storeCount} stores</span>`;
+      document.getElementById('bulk-homebase-input').value = '';
+      bulkCheckReady();
+
+    } catch (err) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ ${err.message}</span>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function bulkImportTips(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('bulk-tips-status');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+
+      _bulkTips = {};
+      let totalTips = 0;
+
+      for (const row of rows) {
+        const storeVal = String(row['Store'] || '');
+        if (storeVal === 'Total' || !storeVal) continue;
+        const match = storeVal.replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
+        if (!match) continue;
+        const storeNum = match[1];
+        const tips = parseFloat(row['Tip']) || 0;
+        _bulkTips[storeNum] = tips;
+        totalTips += tips;
+      }
+
+      const storeCount = Object.keys(_bulkTips).length;
+      statusEl.innerHTML = `<span style="color:var(--green);">✓ ${storeCount} stores, $${totalTips.toFixed(2)} total tips</span>`;
+      document.getElementById('bulk-tips-input').value = '';
+      bulkCheckReady();
+
+    } catch (err) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ ${err.message}</span>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function bulkCheckReady() {
+  const btn = document.getElementById('bulk-populate-btn');
+  btn.style.display = _bulkHomebase ? '' : 'none';
+}
+
+function bulkPopulateAll() {
+  if (!_bulkHomebase) return;
+
+  _bulkMode = true;
+  _bulkStoreStatus = {};
+  _bulkEmployeeData = {};
+
+  // Map store dropdown options to store numbers
+  const storeSel = document.getElementById('entry-store');
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    const storeNum = opt.text.replace(/[^0-9]/g, '');
+    const hasData = _bulkHomebase[storeNum] && _bulkHomebase[storeNum].length > 0;
+    _bulkStoreStatus[opt.value] = hasData ? 'populated' : 'empty';
+  }
+
+  // Update UI
+  document.getElementById('store-tracker').style.display = '';
+  document.getElementById('store-action-btn').textContent = '✓ Confirm Store';
+
+  bulkRenderTracker();
+
+  // Auto-select first populated store
+  const firstPopulated = Object.entries(_bulkStoreStatus).find(([id, s]) => s === 'populated');
+  if (firstPopulated) {
+    storeSel.value = firstPopulated[0];
+    onStoreChange();
+  }
+}
+
+function bulkRenderTracker() {
+  const chipsEl = document.getElementById('store-tracker-chips');
+  const countEl = document.getElementById('store-tracker-count');
+  const barEl = document.getElementById('store-tracker-bar');
+  const storeSel = document.getElementById('entry-store');
+
+  let confirmed = 0, total = 0;
+  let html = '';
+
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    total++;
+    const status = _bulkStoreStatus[opt.value] || 'empty';
+    if (status === 'confirmed') confirmed++;
+
+    let bg, border, color, icon;
+    if (status === 'confirmed') { bg = 'rgba(77,255,160,.15)'; border = 'var(--green)'; color = 'var(--green)'; icon = '✓'; }
+    else if (status === 'populated') { bg = 'rgba(255,169,77,.1)'; border = 'var(--orange)'; color = 'var(--orange)'; icon = '⏳'; }
+    else { bg = 'rgba(255,92,92,.08)'; border = 'var(--red)'; color = 'var(--red)'; icon = '—'; }
+
+    const active = opt.value === storeSel.value ? 'outline:2px solid var(--accent);outline-offset:2px;' : '';
+    html += `<div onclick="bulkSelectStore('${opt.value}')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${border};background:${bg};color:${color};transition:all .15s;${active}white-space:nowrap;">${icon} ${opt.text}</div>`;
+  }
+
+  chipsEl.innerHTML = html;
+  countEl.textContent = `${confirmed} of ${total} confirmed`;
+  barEl.style.width = total > 0 ? Math.round((confirmed / total) * 100) + '%' : '0%';
+
+  // Show submit button when all confirmed
+  const submitWrap = document.getElementById('bulk-submit-wrap');
+  submitWrap.style.display = (confirmed > 0 && confirmed === total) ? '' : 'none';
+}
+
+function bulkSelectStore(storeId) {
+  // Save current store data before switching
+  bulkSaveCurrentStore();
+
+  const storeSel = document.getElementById('entry-store');
+  storeSel.value = storeId;
+  onStoreChange();
+  bulkRenderTracker();
+}
+
+function bulkSaveCurrentStore() {
+  const storeId = document.getElementById('entry-store')?.value;
+  if (!storeId || !_bulkMode) return;
+
+  const saved = {};
+  _employees.forEach((emp, i) => {
+    ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus','notes'].forEach(field => {
+      const input = document.querySelector(`input[data-idx="${i}"][data-field="${field}"]`);
+      if (input && input.value) saved[`${i}:${field}`] = input.value;
+    });
+  });
+  _bulkEmployeeData[storeId] = saved;
+}
+
+// Override onStoreChange to apply bulk data
+const _origOnStoreChange = typeof onStoreChange === 'function' ? onStoreChange : null;
+
+// We'll patch after onStoreChange loads — see bottom of bulk section
+
+function bulkApplyData() {
+  if (!_bulkMode) return;
+
+  const storeId = document.getElementById('entry-store')?.value;
+  if (!storeId) return;
+
+  // Check if we have saved edits for this store
+  const saved = _bulkEmployeeData[storeId];
+  if (saved && Object.keys(saved).length > 0) {
+    // Restore saved values
+    for (const [key, val] of Object.entries(saved)) {
+      const [idx, field] = key.split(':');
+      const input = document.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
+      if (input) input.value = val;
+    }
+    return;
+  }
+
+  // Otherwise apply fresh bulk data
+  const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+  const storeNum = storeText.replace(/[^0-9]/g, '');
+
+  if (!storeNum) return;
+
+  // Apply Homebase hours
+  const homebaseRows = _bulkHomebase?.[storeNum] || [];
+  homebaseRows.forEach(row => {
+    const empIdx = _employees.findIndex(emp =>
+      emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
+      emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+    );
+    if (empIdx >= 0) {
+      setInputVal(empIdx, 'regHours', row.regular);
+      setInputVal(empIdx, 'otHours', row.overtime);
+      setInputVal(empIdx, 'ptoHours', row.pto);
+      setInputVal(empIdx, 'holidayHours', row.holidayPay);
+    }
+  });
+
+  // Apply tips (proportional by hours)
+  const storeTips = _bulkTips?.[storeNum];
+  if (storeTips && storeTips > 0) {
+    let totalHours = 0;
+    const empHours = [];
+    _employees.forEach((emp, i) => {
+      const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
+      const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
+      const hours = (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
+      empHours.push(hours);
+      totalHours += hours;
+    });
+
+    if (totalHours > 0) {
+      _employees.forEach((emp, i) => {
+        if (empHours[i] > 0) {
+          const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
+          setInputVal(i, 'tips', share);
+        }
+      });
+    }
+  }
+
+  // Update action button text
+  const btn = document.getElementById('store-action-btn');
+  if (_bulkMode) {
+    const status = _bulkStoreStatus[storeId];
+    btn.textContent = status === 'confirmed' ? '✓ Confirmed — Edit & Re-confirm' : '✓ Confirm Store';
+  }
+}
+
+function bulkConfirmStore() {
+  const storeId = document.getElementById('entry-store')?.value;
+  if (!storeId) return;
+
+  // Save current data
+  bulkSaveCurrentStore();
+
+  // Mark confirmed
+  _bulkStoreStatus[storeId] = 'confirmed';
+  bulkRenderTracker();
+
+  // Auto-advance to next unconfirmed store
+  const storeSel = document.getElementById('entry-store');
+  let nextStore = null;
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    if (_bulkStoreStatus[opt.value] === 'populated') {
+      nextStore = opt.value;
+      break;
+    }
+  }
+
+  if (nextStore) {
+    bulkSelectStore(nextStore);
+  } else {
+    // All done — show submit
+    bulkRenderTracker();
+    const btn = document.getElementById('store-action-btn');
+    btn.textContent = '✓ All Stores Confirmed';
+    btn.disabled = true;
+  }
+}
+
+async function bulkSubmitAll() {
+  const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
+  if (!confirmed.length) return;
+
+  const payStart = document.getElementById('entry-period-start')?.value;
+  const payEnd = document.getElementById('entry-period-end')?.value;
+  const payDate = document.getElementById('entry-pay-date')?.value;
+
+  if (!payStart || !payEnd || !payDate) {
+    document.getElementById('bulk-submit-status').innerHTML = '<span style="color:var(--red);">Please fill in Pay Period Start, End, and Pay Date above</span>';
+    return;
+  }
+
+  if (!confirm(`Submit payroll for ${confirmed.length} stores?`)) return;
+
+  const submitBtn = document.getElementById('bulk-submit-btn');
+  const statusEl = document.getElementById('bulk-submit-status');
+  submitBtn.disabled = true;
+
+  const results = [];
+  let idx = 0;
+
+  for (const [storeId, status] of confirmed) {
+    idx++;
+    statusEl.innerHTML = `<span style="color:var(--accent);">Submitting store ${idx} of ${confirmed.length}...</span>`;
+
+    // Load employees for this store
+    try {
+      const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}`, {
+        headers: { 'Authorization': `Bearer ${_token}` },
+      });
+      const data = await resp.json();
+      const employees = data.employees || [];
+      const savedData = _bulkEmployeeData[storeId] || {};
+
+      // Build entries from saved data
+      const entries = [];
+      employees.forEach((emp, i) => {
+        const get = (field) => parseFloat(savedData[`${i}:${field}`]) || 0;
+        const getStr = (field) => savedData[`${i}:${field}`] || '';
+        const regHours = get('regHours');
+        const otHours = get('otHours');
+        const ptoHours = get('ptoHours');
+        const holidayHours = get('holidayHours');
+        const tips = get('tips');
+        const mileage = get('mileage');
+        const reimbursement = get('reimbursement');
+        const bonus = get('bonus');
+        const notes = getStr('notes');
+
+        if (regHours || otHours || ptoHours || holidayHours || tips || mileage || reimbursement || bonus) {
+          entries.push({
+            employeeId: emp.id, firstName: emp.firstName, lastName: emp.lastName,
+            position: emp.position, payRate: emp.payRate, payType: emp.payType,
+            regHours, otHours, ptoHours, holidayHours, tips, mileage, reimbursement, bonus, notes,
+          });
+        }
+      });
+
+      if (!entries.length) {
+        results.push({ storeId, status: 'skipped', message: 'No employee data' });
+        continue;
+      }
+
+      const submitResp = await fetch(`${API}/payroll/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({
+          clientSlug: _clientSlug, storeId,
+          payPeriodStart: payStart, payPeriodEnd: payEnd, payDate,
+          entries, rateChanges: null,
+        }),
+      });
+      const submitData = await submitResp.json();
+      if (submitData.error) throw new Error(submitData.error);
+      results.push({ storeId, status: 'success', submissionId: submitData.submissionId || submitData.id });
+
+    } catch (e) {
+      results.push({ storeId, status: 'failed', message: e.message });
+    }
+  }
+
+  // Show summary
+  const success = results.filter(r => r.status === 'success').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  const skipped = results.filter(r => r.status === 'skipped').length;
+
+  const storeSel = document.getElementById('entry-store');
+  const storeNames = {};
+  for (const opt of storeSel.options) { if (opt.value) storeNames[opt.value] = opt.text; }
+
+  let summary = `<div style="margin-top:12px;">`;
+  summary += `<div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:12px;">✓ Bulk Submission Complete</div>`;
+  summary += `<div style="font-size:13px;color:var(--muted);margin-bottom:12px;">${success} submitted · ${failed} failed · ${skipped} skipped</div>`;
+  results.forEach(r => {
+    const name = storeNames[r.storeId] || r.storeId;
+    const color = r.status === 'success' ? 'var(--green)' : r.status === 'failed' ? 'var(--red)' : 'var(--muted)';
+    const icon = r.status === 'success' ? '✓' : r.status === 'failed' ? '✗' : '—';
+    const detail = r.submissionId ? `ID: ${r.submissionId}` : r.message || '';
+    summary += `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;">
+      <span style="color:${color};">${icon} ${name}</span>
+      <span style="color:var(--muted);font-size:11px;">${detail}</span>
+    </div>`;
+  });
+  summary += `</div>`;
+
+  statusEl.innerHTML = summary;
+  submitBtn.textContent = '✓ All Submitted';
+}
+
+// ─── Patch onStoreChange to apply bulk data after render ─────────
+const _patchedOnStoreChange = window.onStoreChange;
+// We'll monkey-patch after original is defined (see bottom)
+
+// ─── Homebase CSV Import (per-store, existing) ──────────────────
 function importHomebaseCSV(file) {
   if (!file) return;
   const statusEl = document.getElementById('homebase-import-status');
@@ -1204,6 +1676,11 @@ function doLogout() {
   _rateChanges = {};
   _workLocations = [];
   _payFrequency = '';
+  _bulkMode = false;
+  _bulkHomebase = null;
+  _bulkTips = null;
+  _bulkStoreStatus = {};
+  _bulkEmployeeData = {};
 
   document.getElementById('screen-entry').classList.add('hidden');
   document.getElementById('screen-success').classList.add('hidden');
