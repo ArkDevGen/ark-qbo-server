@@ -10617,10 +10617,34 @@ async function gcalDisconnect() {
     await fetch(`${QBO_SERVER}/gcal/disconnect`, { method: 'POST' });
     CAL_DAYS = [];
     _gcalConnected = false;
+    gcalStopPolling();
     renderCalWidget();
     renderCalHeaderActions();
     if(typeof showToast==='function') showToast('Google Calendar disconnected','info');
   } catch(e) { console.error(e); }
+}
+
+// ── Live Calendar Sync — polls every 2 minutes ───────────────────
+let _gcalPollTimer = null;
+const GCAL_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
+function gcalStartPolling() {
+  if (_gcalPollTimer) return; // already polling
+  _gcalPollTimer = setInterval(async () => {
+    if (!_gcalConnected) return;
+    const fetched = await fetchCalendarEvents();
+    if (fetched) {
+      renderCalWidget();
+      // Update "last synced" timestamp
+      const el = document.getElementById('cal-last-sync');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+  }, GCAL_POLL_INTERVAL);
+  console.log('ARK: Calendar live sync started (every 2m)');
+}
+
+function gcalStopPolling() {
+  if (_gcalPollTimer) { clearInterval(_gcalPollTimer); _gcalPollTimer = null; }
 }
 
 // Update the header actions area
@@ -10628,11 +10652,15 @@ function renderCalHeaderActions() {
   const el = document.getElementById('cal-header-actions');
   if (!el) return;
   if (_gcalConnected) {
-    el.innerHTML = `<span style="font-size:10px;color:var(--green);font-weight:600;margin-right:8px;">● Synced</span>
+    const syncTime = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    el.innerHTML = `<span style="font-size:10px;color:var(--green);font-weight:600;margin-right:8px;">● Live</span>
+      <span style="font-size:10px;color:var(--text-d);margin-right:8px;">Last sync: <span id="cal-last-sync">${syncTime}</span></span>
       <a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a>
       <button class="btn btn-ghost btn-sm" onclick="gcalDisconnect()" style="font-size:10px;color:var(--text-d);">Disconnect</button>`;
+    gcalStartPolling();
   } else {
     el.innerHTML = `<button class="btn btn-primary btn-sm" onclick="gcalConnect()">Connect Google Calendar</button>`;
+    gcalStopPolling();
   }
 }
 
