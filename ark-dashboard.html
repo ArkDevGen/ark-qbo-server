@@ -6062,7 +6062,7 @@ async function _reAuth() {
   if (!currentUser) return false;
   const fullName = currentUser.lname ? `${currentUser.fname} ${currentUser.lname}` : currentUser.fname;
   try {
-    const resp = await fetch(fcServerUrl() + '/auth/login', {
+    const resp = await fetch(ARK_SERVER + '/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: _ARK_API_KEY, userId: currentUser.id, userName: fullName, role: currentUser.role || 'am' }),
@@ -6107,7 +6107,7 @@ async function loginAs(userId){
   // Authenticate with the server to get a session token
   const fullName = u.lname ? `${u.fname} ${u.lname}` : u.fname;
   try {
-    const resp = await fetch(fcServerUrl() + '/auth/login', {
+    const resp = await fetch(ARK_SERVER + '/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -6133,7 +6133,7 @@ async function loginAs(userId){
   document.getElementById('pill-av').style.background = u.color || '#1a2440';
   applyNavPermissions(u);
   document.getElementById('sidebar-footer').textContent = `Logged in: ${u.fname}`;
-  notifInit();
+  if(typeof notifInit === 'function') notifInit();
 
   // Persist session so refresh keeps you logged in
   sessionStorage.setItem('ark_session', JSON.stringify({
