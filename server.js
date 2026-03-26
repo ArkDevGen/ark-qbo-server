@@ -11,6 +11,7 @@ const path        = require('path');
 const crypto      = require('crypto');
 const fs          = require('fs');
 const multer      = require('multer');
+const bcrypt      = require('bcryptjs');
 // S3/B2 imports removed — now using ShareFile API
 const { google }       = require('googleapis');
 
@@ -72,14 +73,44 @@ app.use((req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// SESSION AUTHENTICATION
-// Dashboard logs in with the API key, gets a session token.
-// All /files/* endpoints require a valid session token.
+// USER AUTHENTICATION & MANAGEMENT
+// Per-user login with username/password, bcrypt hashing, role-based access
 // ─────────────────────────────────────────────────────────────────
-const _sessions = new Map(); // token → { userId, userName, role, createdAt }
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+let _users = [];
+
+// Load users from file
+if (fs.existsSync(USERS_FILE)) {
+  try {
+    _users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    console.log(`✓ Users loaded — ${_users.length} user(s)`);
+  } catch (e) { console.log('Could not load users:', e.message); }
+}
+
+function saveUsers() {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(_users, null, 2));
+}
+
+function findUser(username) {
+  return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.status === 'Active');
+}
+
+function safeUser(u) {
+  if (!u) return null;
+  const { passwordHash, ...safe } = u;
+  return safe;
+}
+
+const DEFAULT_PERMISSIONS = {
+  admin: { canEditClients:true, canDeleteClients:true, canViewFiles:true, canUploadFiles:true, canDeleteFiles:true, canRunPayroll:true, canPushQBO:true, canManageUsers:true },
+  am:    { canEditClients:true, canDeleteClients:false, canViewFiles:true, canUploadFiles:true, canDeleteFiles:false, canRunPayroll:true, canPushQBO:true, canManageUsers:false },
+  viewer:{ canEditClients:false, canDeleteClients:false, canViewFiles:true, canUploadFiles:false, canDeleteFiles:false, canRunPayroll:false, canPushQBO:false, canManageUsers:false },
+};
+
+// ─── Sessions ────────────────────────────────────────────────────
+const _sessions = new Map(); // token → { userId, userName, role, user, createdAt }
 const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
-// Clean up expired sessions every hour
 setInterval(() => {
   const now = Date.now();
   for (const [token, session] of _sessions) {
@@ -87,38 +118,109 @@ setInterval(() => {
   }
 }, 3600000);
 
-// Login — dashboard sends API key + user info, gets a session token
-app.post('/auth/login', (req, res) => {
-  const { apiKey, userId, userName, role } = req.body;
+// ─── Seed initial admin user (one-time) ──────────────────────────
+app.post('/auth/seed', async (req, res) => {
+  if (_users.length > 0) return res.json({ message: 'Users already exist', count: _users.length });
 
-  if (!apiKey || apiKey !== process.env.ARK_API_KEY) {
-    return res.status(401).json({ error: 'Invalid API key' });
-  }
-  if (!userId || !userName) {
-    return res.status(400).json({ error: 'User info required' });
-  }
+  const apiKey = process.env.ARK_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ARK_API_KEY not set' });
 
-  const token = crypto.randomUUID();
-  _sessions.set(token, {
-    userId,
-    userName,
-    role: role || 'am',
-    createdAt: Date.now(),
-  });
-
-  console.log(`Auth: session created for ${userName} (${role || 'am'})`);
-  res.json({ success: true, token });
+  const hash = await bcrypt.hash(apiKey, 10);
+  const admin = {
+    id: 'usr_' + crypto.randomUUID().slice(0, 8),
+    username: 'jacob',
+    passwordHash: hash,
+    fname: 'Jacob',
+    lname: 'Malousek',
+    email: 'jacob@arkfinancialservices.com',
+    role: 'admin',
+    title: 'Owner / Admin',
+    phone: '',
+    color: '#1a2440',
+    status: 'Active',
+    assignedClients: [],
+    permissions: { ...DEFAULT_PERMISSIONS.admin },
+    createdAt: new Date().toISOString(),
+    lastLogin: null,
+  };
+  _users.push(admin);
+  saveUsers();
+  console.log('✓ Seeded initial admin user: jacob');
+  res.json({ success: true, message: 'Admin user created', username: 'jacob' });
 });
 
-// Logout — invalidate session
+// ─── Login ───────────────────────────────────────────────────────
+app.post('/auth/login', async (req, res) => {
+  const { username, password, apiKey, userId, userName, role } = req.body;
+
+  // === NEW: Username + password login ===
+  if (username && password) {
+    const user = findUser(username);
+    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
+
+    // Update last login
+    user.lastLogin = new Date().toISOString();
+    saveUsers();
+
+    const token = crypto.randomUUID();
+    _sessions.set(token, {
+      userId: user.id,
+      userName: `${user.fname} ${user.lname}`,
+      role: user.role,
+      user: safeUser(user),
+      createdAt: Date.now(),
+    });
+
+    console.log(`Auth: ${user.fname} ${user.lname} logged in (${user.role})`);
+    return res.json({ success: true, token, user: safeUser(user) });
+  }
+
+  // === LEGACY: API key login (backward compat) ===
+  if (apiKey) {
+    if (apiKey !== process.env.ARK_API_KEY) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+    if (!userId || !userName) {
+      return res.status(400).json({ error: 'User info required' });
+    }
+
+    const token = crypto.randomUUID();
+    const legacyUser = {
+      id: userId,
+      username: userId,
+      fname: userName.split(' ')[0] || userName,
+      lname: userName.split(' ').slice(1).join(' ') || '',
+      role: role || 'admin',
+      permissions: { ...DEFAULT_PERMISSIONS.admin },
+      status: 'Active',
+    };
+    _sessions.set(token, {
+      userId,
+      userName,
+      role: role || 'admin',
+      user: legacyUser,
+      createdAt: Date.now(),
+    });
+
+    console.log(`Auth (legacy): session created for ${userName}`);
+    return res.json({ success: true, token, user: legacyUser });
+  }
+
+  return res.status(400).json({ error: 'Username/password or API key required' });
+});
+
+// ─── Logout ──────────────────────────────────────────────────────
 app.post('/auth/logout', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   if (token) _sessions.delete(token);
   res.json({ success: true });
 });
 
-// Verify CRM password (for revealing sensitive fields)
-app.post('/auth/verify-password', (req, res) => {
+// ─── Verify password (for revealing sensitive fields) ────────────
+app.post('/auth/verify-password', async (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   const session = _sessions.get(token);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
@@ -126,15 +228,44 @@ app.post('/auth/verify-password', (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password required' });
 
-  // Verify against the API key (same credential used for login)
-  const verified = password === process.env.ARK_API_KEY;
-  if (verified) {
-    console.log(`Password verified for ${session.userName} (sensitive field reveal)`);
+  // Try matching against user's own password first
+  const user = _users.find(u => u.id === session.userId);
+  let verified = false;
+  if (user) {
+    verified = await bcrypt.compare(password, user.passwordHash);
   }
+  // Fallback: check against API key
+  if (!verified) {
+    verified = password === process.env.ARK_API_KEY;
+  }
+
+  if (verified) console.log(`Password verified for ${session.userName}`);
   res.json({ verified });
 });
 
-// Auth middleware — validates Bearer token on protected routes
+// ─── Change own password ─────────────────────────────────────────
+app.post('/auth/change-password', async (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const session = _sessions.get(token);
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  const user = _users.find(u => u.id === session.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+
+  user.passwordHash = await bcrypt.hash(newPassword, 10);
+  saveUsers();
+  console.log(`Password changed for ${user.fname} ${user.lname}`);
+  res.json({ success: true });
+});
+
+// ─── Auth middleware ──────────────────────────────────────────────
 function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token || '';
   if (!token) return res.status(401).json({ error: 'Authentication required' });
@@ -142,16 +273,100 @@ function requireAuth(req, res, next) {
   const session = _sessions.get(token);
   if (!session) return res.status(401).json({ error: 'Invalid or expired session' });
 
-  // Check expiry
   if (Date.now() - session.createdAt > SESSION_TTL) {
     _sessions.delete(token);
     return res.status(401).json({ error: 'Session expired' });
   }
 
-  // Attach session to request for audit logging
   req.arkUser = session;
   next();
 }
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.arkUser) return res.status(401).json({ error: 'Not authenticated' });
+    if (!roles.includes(req.arkUser.role)) return res.status(403).json({ error: 'Insufficient permissions' });
+    next();
+  };
+}
+
+// ─── User CRUD (admin only) ─────────────────────────────────────
+app.get('/users', requireAuth, requireRole('admin'), (req, res) => {
+  res.json({ users: _users.map(safeUser) });
+});
+
+app.post('/users', requireAuth, requireRole('admin'), async (req, res) => {
+  const { username, password, fname, lname, email, phone, role, title, color, assignedClients, permissions } = req.body;
+
+  if (!username || !password || !fname || !lname) {
+    return res.status(400).json({ error: 'Username, password, first name, and last name are required' });
+  }
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (_users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+    return res.status(409).json({ error: 'Username already exists' });
+  }
+
+  const validRoles = ['admin', 'am', 'viewer'];
+  const userRole = validRoles.includes(role) ? role : 'am';
+
+  const newUser = {
+    id: 'usr_' + crypto.randomUUID().slice(0, 8),
+    username: username.toLowerCase().replace(/\s/g, ''),
+    passwordHash: await bcrypt.hash(password, 10),
+    fname, lname,
+    email: email || '',
+    phone: phone || '',
+    role: userRole,
+    title: title || '',
+    color: color || '#1a2440',
+    status: 'Active',
+    assignedClients: assignedClients || [],
+    permissions: permissions || { ...DEFAULT_PERMISSIONS[userRole] },
+    createdAt: new Date().toISOString(),
+    lastLogin: null,
+  };
+
+  _users.push(newUser);
+  saveUsers();
+  console.log(`User created: ${fname} ${lname} (${username}, ${userRole}) by ${req.arkUser.userName}`);
+  res.json({ success: true, user: safeUser(newUser) });
+});
+
+app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const user = _users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const { fname, lname, email, phone, role, title, color, status, assignedClients, permissions, newPassword } = req.body;
+
+  if (fname !== undefined) user.fname = fname;
+  if (lname !== undefined) user.lname = lname;
+  if (email !== undefined) user.email = email;
+  if (phone !== undefined) user.phone = phone;
+  if (title !== undefined) user.title = title;
+  if (color !== undefined) user.color = color;
+  if (status !== undefined) user.status = status;
+  if (role && ['admin', 'am', 'viewer'].includes(role)) user.role = role;
+  if (assignedClients !== undefined) user.assignedClients = assignedClients;
+  if (permissions !== undefined) user.permissions = permissions;
+  if (newPassword && newPassword.length >= 6) {
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+  }
+
+  saveUsers();
+  console.log(`User updated: ${user.fname} ${user.lname} by ${req.arkUser.userName}`);
+  res.json({ success: true, user: safeUser(user) });
+});
+
+app.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
+  const user = _users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // Don't delete, just deactivate
+  user.status = 'Inactive';
+  saveUsers();
+  console.log(`User deactivated: ${user.fname} ${user.lname} by ${req.arkUser.userName}`);
+  res.json({ success: true });
+});
 
 // ─────────────────────────────────────────────────────────────────
 // FILE AUDIT LOG
