@@ -4357,75 +4357,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   <!-- /main -->
 
-<!-- ════ USER EDIT MODAL ════ -->
-<div class="overlay" id="modal-user-edit" style="display:none" onclick="overlayClose(event,'modal-user-edit')">
-  <div class="modal" style="width:640px;max-height:92vh;display:flex;flex-direction:column;">
-    <div class="modal-head">
-      <div class="modal-title" id="user-edit-title">Add User</div>
-      <button class="modal-close" onclick="closeModal('modal-user-edit')">×</button>
-    </div>
-    <div class="modal-body" style="overflow-y:auto;">
-      <input type="hidden" id="ue-id">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Username</label>
-          <input type="text" id="ue-username" class="form-control" placeholder="e.g. jmalousek" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;" id="ue-password-label">Temporary Password</label>
-          <input type="text" id="ue-password" class="form-control" placeholder="For new users" style="width:100%;box-sizing:border-box;">
-          <div id="ue-reset-pw-wrap" style="display:none;margin-top:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ue-password').style.display='';document.getElementById('ue-password').placeholder='Enter new password';document.getElementById('ue-reset-pw-wrap').style.display='none';" style="font-size:11px;color:var(--accent);">🔑 Reset Password</button>
-          </div>
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">First Name</label>
-          <input type="text" id="ue-fname" class="form-control" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Last Name</label>
-          <input type="text" id="ue-lname" class="form-control" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Email</label>
-          <input type="email" id="ue-email" class="form-control" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Phone</label>
-          <input type="tel" id="ue-phone" class="form-control" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Role</label>
-          <select id="ue-role" class="form-control" style="width:100%;box-sizing:border-box;">
-            <option value="admin">Admin</option>
-            <option value="am" selected>Account Manager</option>
-            <option value="pm">Payroll Manager</option>
-            <option value="viewer">Viewer</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Title</label>
-          <input type="text" id="ue-title" class="form-control" placeholder="e.g. Senior Account Manager" style="width:100%;box-sizing:border-box;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Status</label>
-          <select id="ue-status" class="form-control" style="width:100%;box-sizing:border-box;">
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-top:18px;">
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:8px;">Assigned Clients</label>
-        <div id="ue-clients-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:4px;"></div>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('modal-user-edit')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
-    </div>
-  </div>
-</div>
+<!-- USER EDIT MODAL moved to end of body -->
 
 <!-- ════ CLIENT MODAL ════ -->
 <div class="overlay" id="modal-client" style="display:none" onclick="overlayClose(event,'modal-client')">
@@ -27151,6 +27083,38 @@ function fcUpdateStats() {
   </div>
 </div>
 
+
+<!-- ════ USER EDIT MODAL (at body root to avoid view nesting) ════ -->
+<div class="overlay" id="modal-user-edit" style="display:none" onclick="overlayClose(event,'modal-user-edit')">
+  <div class="modal" style="width:640px;max-height:92vh;display:flex;flex-direction:column;">
+    <div class="modal-head">
+      <div class="modal-title" id="user-edit-title">Add User</div>
+      <button class="modal-close" onclick="closeModal('modal-user-edit')">×</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;">
+      <input type="hidden" id="ue-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Username</label><input type="text" id="ue-username" class="form-control" placeholder="e.g. jmalousek" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;" id="ue-password-label">Temporary Password</label><input type="text" id="ue-password" class="form-control" placeholder="For new users" style="width:100%;box-sizing:border-box;"><div id="ue-reset-pw-wrap" style="display:none;margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('ue-password').style.display='';document.getElementById('ue-password').placeholder='Enter new password';document.getElementById('ue-reset-pw-wrap').style.display='none';" style="font-size:11px;color:var(--accent);">🔑 Reset Password</button></div></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">First Name</label><input type="text" id="ue-fname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Last Name</label><input type="text" id="ue-lname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Email</label><input type="email" id="ue-email" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Phone</label><input type="tel" id="ue-phone" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Role</label><select id="ue-role" class="form-control" style="width:100%;box-sizing:border-box;"><option value="admin">Admin</option><option value="am" selected>Account Manager</option><option value="pm">Payroll Manager</option><option value="viewer">Viewer</option></select></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Title</label><input type="text" id="ue-title" class="form-control" placeholder="e.g. Senior Account Manager" style="width:100%;box-sizing:border-box;"></div>
+        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Status</label><select id="ue-status" class="form-control" style="width:100%;box-sizing:border-box;"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      </div>
+      <div style="margin-top:18px;">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:8px;">Assigned Clients</label>
+        <div id="ue-clients-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user-edit')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
