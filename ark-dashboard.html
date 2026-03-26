@@ -5334,6 +5334,12 @@ const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{},
 let _dbSaveTimer = null;
 const DB_SAVE_DEBOUNCE = 1000; // 1 second
 
+// ── ADDING NEW DATA FIELDS ──
+// To persist a new data type to the shared server disk:
+// 1. Add the field to DB object above (e.g. DB.myData = [])
+// 2. Add it to BOTH _buildDBPayload() AND _applyDBPayload() below
+// 3. Use saveDB() after any modification — it auto-syncs to server
+// That's it. No other changes needed.
 function _buildDBPayload() {
   return {
     clients:        DB.clients,
