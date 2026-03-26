@@ -291,6 +291,19 @@ function requireRole(...roles) {
   };
 }
 
+// ─── Emergency password reset (requires API key) ────────────────
+app.post('/auth/reset-password', async (req, res) => {
+  const { apiKey, username, newPassword } = req.body;
+  if (!apiKey || apiKey !== process.env.ARK_API_KEY) return res.status(401).json({ error: 'Invalid API key' });
+  if (!username || !newPassword) return res.status(400).json({ error: 'Username and newPassword required' });
+  const user = _users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.passwordHash = await bcrypt.hash(newPassword, 10);
+  saveUsers();
+  console.log(`Emergency password reset for ${user.fname} ${user.lname}`);
+  res.json({ success: true, message: `Password reset for ${username}` });
+});
+
 // ─── User CRUD (admin only) ─────────────────────────────────────
 app.get('/users', requireAuth, requireRole('admin'), (req, res) => {
   res.json({ users: _users.map(safeUser) });
