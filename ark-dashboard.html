@@ -12588,22 +12588,28 @@ function buildEFW2(year, records, client){
   const lines=[];
   const ein=(client.ein||'').replace(/\D/g,'').slice(0,9).padEnd(9,' ');
 
-  // RA — Submitter
-  lines.push(('RA'+'W2'+'08'+' '.repeat(7)+
+  // RA — Submitter (ARK Financial)
+  const _arkEin = '473557775';
+  lines.push(('RA'+_arkEin+'T3DGKD3B'+' '.repeat(4)+' '.repeat(5)+'98'+
     _e2Str('ARK FINANCIAL SERVICES',57)+
-    _e2Str('133 N 14TH ST',22)+_e2Str('',22)+
+    _e2Str('133 N 14TH ST',22)+_e2Str('133 N 14TH ST',22)+
     _e2Str('ASHLAND',22)+'NE'+_zip5('68003')+'    '+
-    _e2Str('US',2)+_e2Str('ARK FINANCIAL',22)+
-    _e2Str('8885765525',15)+_e2Str('',5)+' '+' '.repeat(9)+
-    _e2Str('',40)+' '.repeat(9)+'I'+' '.repeat(199)).slice(0,512));
+    _e2Str('US',2)+_e2Str('ARK FINANCIAL',27)+
+    _e2Str('8885765525',15)+_e2Str('',5)+' '.repeat(3)+
+    _e2Str('',40)+' '.repeat(3)+_e2Str('',10)+' '+
+    _e2Str('L',1)+' '.repeat(12)+' '.repeat(155)).slice(0,512));
 
   // RE — Employer
+  const empAddr = client.addrStreet||client.street||'';
+  const empCity = client.addrCity||client.city||'';
+  const empState = client.addrState||client.state||'';
+  const empZip = client.addrZip||client.zip||'';
   lines.push(('RE'+
     String(year).slice(-2)+' '+ein+' '.repeat(9)+' '+' '.repeat(6)+' '+' '.repeat(4)+
     _e2Str(client.biz||'',57)+
-    _e2Str(client.street||'',22)+_e2Str('',22)+
-    _e2Str(client.city||'',22)+_stAbbr(client.state)+
-    _zip5(client.zip||'')+'    '+_e2Str('US',2)+'E'+' '+' '+' '.repeat(6)+' '.repeat(332)).slice(0,512));
+    _e2Str(empAddr,22)+_e2Str('',22)+
+    _e2Str(empCity,22)+_stAbbr(empState)+
+    _zip5(empZip)+'    '+_e2Str('US',2)+'E'+' '+' '+' '.repeat(6)+' '.repeat(332)).slice(0,512));
 
   // RW — Employee Wage Records
   let t1=0,t2=0,t3=0,t4=0,t5=0,t6=0,t7=0,t8=0,t10=0,t11=0;
@@ -12856,8 +12862,8 @@ function buildRCA(submitter, wfid) {
   const s = submitter || {};
   let rec = '';
   rec += 'RCA';                                          // 1-3
-  rec += _efw2cEIN(s.ein);                               // 4-12
-  rec += _efw2cStr(s.bsoUserId || '', 8);                // 13-20  BSO User ID
+  rec += _efw2cEIN(s.ein || '473557775');                // 4-12  ARK Financial EIN
+  rec += _efw2cStr(s.bsoUserId || 'T3DGKD3B', 8);      // 13-20  ARK BSO User ID
   rec += _efw2cStr(s.softwareVendorCode || '', 4);       // 21-24
   rec += ' '.repeat(5);                                   // 25-29  Blank
   rec += _efw2cStr(s.softwareCode || '98', 2);           // 30-31  98=in-house
@@ -12931,21 +12937,25 @@ function buildRCA(submitter, wfid) {
 // ══════════════════════════════════════════════════════════════════════════════
 function buildRCE(year, client) {
   const c = client || {};
+  const addr = c.addrStreet || c.street || '';
+  const city = c.addrCity || c.city || '';
+  const state = c.addrState || c.state || '';
+  const zip = c.addrZip || c.zip || '';
   let rec = '';
   rec += 'RCE';                                           // 1-3
   rec += String(year).substring(0, 4).padStart(4, '0');   // 4-7  Tax Year CCYY
   rec += ' '.repeat(9);                                    // 8-16  Orig EIN (blank if not correcting)
   rec += _efw2cEIN(c.ein);                                // 17-25 Employer EIN
-  rec += ' ';                                              // 26 Agent Indicator
+  rec += ' ';                                              // 26 Agent Indicator (blank = not an agent)
   rec += ' '.repeat(9);                                    // 27-35 Agent EIN
   rec += _efw2cStr(c.origEstabNum || '', 4);              // 36-39
   rec += _efw2cStr(c.corrEstabNum || '', 4);              // 40-43
   rec += _efw2cStr(c.biz || c.name || '', 57);           // 44-100 Employer Name
-  rec += _efw2cStr(c.locationAddr || c.street || '', 22); // 101-122
-  rec += _efw2cStr(c.deliveryAddr || c.street || '', 22); // 123-144 Delivery Address
-  rec += _efw2cStr(c.city || '', 22);                     // 145-166
-  rec += _efw2cState(c.state || '');                      // 167-168
-  rec += _efw2cZip5(c.zip || '');                         // 169-173
+  rec += _efw2cStr(addr, 22);                             // 101-122 Location Address
+  rec += _efw2cStr(addr, 22);                             // 123-144 Delivery Address
+  rec += _efw2cStr(city, 22);                             // 145-166
+  rec += _efw2cState(state);                              // 167-168
+  rec += _efw2cZip5(zip);                                 // 169-173
   rec += _efw2cStr(c.zipExt || '', 4);                   // 174-177
   rec += ' '.repeat(4);                                    // 178-181 Blank
   rec += ' '.repeat(23);                                   // 182-204 Foreign State
