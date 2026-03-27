@@ -825,8 +825,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
-      <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Users</div>
-      <div class="nav-item" id="nav-amcenter" onclick="nav('acctmgrs')"><span class="ni">★</span>AM Center</div>
+      <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Team & Users</div>
       <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
     </div>
   </nav>
@@ -3116,7 +3115,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-users">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">User Management</h2>
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">Team & Users</h2>
         <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Manage dashboard user accounts, roles, and access</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
@@ -3131,10 +3130,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <thead>
           <tr style="border-bottom:2px solid var(--border);text-align:left;">
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Name</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Username</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Role</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Clients</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Open Tasks</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Status</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Last Login</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Actions</th>
@@ -6993,26 +6992,45 @@ async function renderUsers(q){
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-d);">No users found.</td></tr>';
       return;
     }
+    // Count assigned clients from CRM DB
+    const crmClients = DB?.clients || [];
+
     tbody.innerHTML = filtered.map(u => {
       const fullName = u.lname ? `${u.fname} ${u.lname}` : (u.fname||'Unknown');
       const roleBadge = typeof getRoleBadge === 'function' ? getRoleBadge(u.role) : u.role;
       const statusDot = (u.status||'active') === 'active'
         ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;"><span style="width:7px;height:7px;border-radius:50%;background:#27ae60;display:inline-block;"></span> Active</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-d);"><span style="width:7px;height:7px;border-radius:50%;background:#ccc;display:inline-block;"></span> Inactive</span>';
-      const clientCount = (u.assignedClients||[]).length;
+      // Count clients assigned to this user (match by user ID or username)
+      const uid = u._id || u.id;
+      const clientCount = crmClients.filter(c => c.am === uid || c.am === u.username).length;
+      const assignedCount = (u.assignedClients||[]).length;
+      const displayClients = clientCount || assignedCount;
+      // Count open tasks for this user
+      const openTasks = (DB?.tasks || []).filter(t => t.assignee === uid && t.status !== 'done' && t.status !== 'completed').length;
       const lastLogin = u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—';
+      const avatarBg = u.color || '#1a2440';
+      const initials = ((u.fname||'?')[0] + (u.lname||'?')[0]).toUpperCase();
       return `<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:10px 12px;font-weight:600;">${fullName}</td>
-        <td style="padding:10px 12px;color:var(--text-d);font-family:monospace;font-size:12px;">${u.username||'—'}</td>
+        <td style="padding:10px 12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">${initials}</div>
+            <div>
+              <div style="font-weight:600;">${fullName}</div>
+              <div style="font-size:11px;color:var(--text-d);font-family:monospace;">${u.username||'—'}</div>
+            </div>
+          </div>
+        </td>
         <td style="padding:10px 12px;">${roleBadge}</td>
         <td style="padding:10px 12px;font-size:12px;">${u.email||'—'}</td>
-        <td style="padding:10px 12px;text-align:center;">${clientCount}</td>
+        <td style="padding:10px 12px;text-align:center;font-weight:600;color:var(--navy);">${displayClients}</td>
+        <td style="padding:10px 12px;text-align:center;">${openTasks > 0 ? '<span style="font-weight:600;color:var(--gold);">'+openTasks+'</span>' : '<span style="color:var(--text-d);">0</span>'}</td>
         <td style="padding:10px 12px;">${statusDot}</td>
         <td style="padding:10px 12px;font-size:12px;color:var(--text-d);">${lastLogin}</td>
         <td style="padding:10px 12px;">
           <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="openUserModal('${u._id||u.id}')">Edit</button>
-            ${(u.status||'active')==='active' ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${u._id||u.id}')">Deactivate</button>` : `<button class="btn btn-ghost btn-sm" onclick="activateUser('${u._id||u.id}')">Activate</button>`}
+            <button class="btn btn-ghost btn-sm" onclick="openUserModal('${uid}')">Edit</button>
+            ${(u.status||'active')==='active' ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${uid}')">Deactivate</button>` : `<button class="btn btn-ghost btn-sm" onclick="activateUser('${uid}')">Activate</button>`}
           </div>
         </td>
       </tr>`;
@@ -7206,7 +7224,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'User Management'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
