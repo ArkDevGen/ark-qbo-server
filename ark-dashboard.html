@@ -513,7 +513,12 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .quick-action-card{transition:all .2s cubic-bezier(.4,0,.2,1) !important;}
 
 /* Topbar clock */
-#topbar-clock{font-size:11px;color:var(--text-d);font-family:'DM Sans',sans-serif;font-weight:500;letter-spacing:.5px;}
+#topbar-clock{display:flex;align-items:center;gap:12px;white-space:nowrap;user-select:none;}
+#topbar-clock .tz-main{font-size:14px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;letter-spacing:.5px;line-height:1;}
+#topbar-clock .tz-main .tz-label{font-size:8px;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:.08em;text-transform:uppercase;display:block;margin-top:1px;font-family:'DM Sans',sans-serif;}
+#topbar-clock .tz-others{display:flex;gap:10px;padding-left:10px;border-left:1px solid rgba(255,255,255,.1);}
+#topbar-clock .tz-sm{font-size:10px;color:rgba(255,255,255,.35);font-family:'DM Mono',monospace;letter-spacing:.3px;line-height:1;text-align:center;}
+#topbar-clock .tz-sm .tz-label{font-size:7px;color:rgba(255,255,255,.22);letter-spacing:.06em;text-transform:uppercase;display:block;margin-top:2px;font-family:'DM Sans',sans-serif;}
 
 /* Nav badge refinement */
 .nav-badge{font-size:9px;background:var(--gold);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:700;letter-spacing:.04em;}
@@ -820,7 +825,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="topbar-title" id="page-title">Dashboard</div>
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:10px;">
-      <span id="topbar-clock" style="font-size:11px;color:var(--text-d);letter-spacing:.4px;white-space:nowrap;"></span>
+      <div id="topbar-clock"></div>
       <div id="topbar-actions"></div>
 
       <!-- ── Notification Bell ── -->
@@ -20160,10 +20165,20 @@ function tcCopyBankField(field){
     const el = document.getElementById('topbar-clock');
     if(!el) return;
     const now = new Date();
-    el.textContent = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',weekday:'short',month:'short',day:'numeric'});
+    const fmt = (tz) => now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:tz});
+    const ct = fmt('America/Chicago');
+    const et = fmt('America/New_York');
+    const mt = fmt('America/Denver');
+    const pt = fmt('America/Los_Angeles');
+    el.innerHTML = `<div class="tz-main">${ct}<span class="tz-label">Central</span></div>
+      <div class="tz-others">
+        <div class="tz-sm">${et}<span class="tz-label">ET</span></div>
+        <div class="tz-sm">${mt}<span class="tz-label">MT</span></div>
+        <div class="tz-sm">${pt}<span class="tz-label">PT</span></div>
+      </div>`;
   }
   updateClock();
-  setInterval(updateClock, 10000);
+  setInterval(updateClock, 15000);
   // Topbar scroll shadow
   window.addEventListener('scroll',()=>{
     const tb = document.querySelector('.topbar');
