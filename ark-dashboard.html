@@ -6008,20 +6008,17 @@ async function loadDB(){
     }
   } catch(e){}
 
-  // Pick the richest source — prefer the one with more clients and more data
+  // Pick the most recently saved source — server wins on ties (shared source of truth)
   let best = null;
   if(serverData && localData){
-    const serverScore = (serverData.clients||[]).length +
-      (serverData.clients||[]).filter(c => c.qboRealmId || (c.franchises||[]).some(f=>f.qboRealmId)).length * 10;
-    const localScore = (localData.clients||[]).length +
-      (localData.clients||[]).filter(c => c.qboRealmId || (c.franchises||[]).some(f=>f.qboRealmId)).length * 10;
-    if(localScore > serverScore){
-      console.log(`ARK: localStorage has richer data (score ${localScore} vs server ${serverScore}) — using local and syncing to server`);
+    const serverTime = serverData._savedAt ? new Date(serverData._savedAt).getTime() : 0;
+    const localTime  = localData._savedAt  ? new Date(localData._savedAt).getTime()  : 0;
+    if(localTime > serverTime){
+      console.log(`ARK: localStorage is newer (${localData._savedAt} vs server ${serverData._savedAt}) — using local and syncing to server`);
       best = localData;
-      // Push richer local data to server
       setTimeout(() => saveDB(), 500);
     } else {
-      console.log(`ARK: server has richer data (score ${serverScore} vs local ${localScore}) — using server`);
+      console.log(`ARK: server is newer or equal (${serverData._savedAt}) — using server`);
       best = serverData;
     }
   } else if(serverData){
