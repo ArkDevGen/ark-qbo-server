@@ -91,8 +91,8 @@ function saveUsers() {
   fs.writeFileSync(USERS_FILE, JSON.stringify(_users, null, 2));
 }
 
-function findUser(username) {
-  return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && (u.status||'').toLowerCase() === 'active');
+function findUser(username, includeInactive) {
+  return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && (includeInactive || (u.status||'').toLowerCase() === 'active'));
 }
 
 function safeUser(u) {
@@ -386,6 +386,35 @@ app.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   saveUsers();
   console.log(`User deactivated: ${user.fname} ${user.lname} by ${req.arkUser.userName}`);
   res.json({ success: true });
+});
+
+// ─── Reactivate user ─────────────────────────────────────────────
+app.post('/users/:id/reactivate', requireAuth, (req, res) => {
+  if (req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const user = _users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.status = 'Active';
+  saveUsers();
+  console.log(`User reactivated: ${user.fname} ${user.lname} by ${req.arkUser.userName}`);
+  res.json({ success: true });
+});
+
+// ─── Emergency: reactivate all admin users (no auth required, uses API key) ──
+app.post('/auth/reactivate-admins', async (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey || apiKey !== process.env.ARK_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  let count = 0;
+  _users.forEach(u => {
+    if (u.role === 'admin' && u.status !== 'Active') {
+      u.status = 'Active';
+      count++;
+    }
+  });
+  saveUsers();
+  console.log(`Emergency reactivate: ${count} admin users reactivated`);
+  res.json({ success: true, reactivated: count });
 });
 
 // ─────────────────────────────────────────────────────────────────
