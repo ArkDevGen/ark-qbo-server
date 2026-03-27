@@ -399,12 +399,25 @@ app.post('/users/:id/reactivate', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ─── Emergency: reactivate all admin users (no auth required, uses API key) ──
+// ─── Emergency: reactivate + reset admin password (no auth required, uses API key) ──
 app.post('/auth/reactivate-admins', async (req, res) => {
-  const { apiKey } = req.body;
+  const { apiKey, resetUsername, newPassword } = req.body;
   if (!apiKey || apiKey !== process.env.ARK_API_KEY) {
     return res.status(401).json({ error: 'Invalid API key' });
   }
+
+  // If resetUsername + newPassword provided, reset that specific user's password
+  if (resetUsername && newPassword) {
+    const user = _users.find(u => u.username.toLowerCase() === resetUsername.toLowerCase());
+    if (!user) return res.status(404).json({ error: 'User not found: ' + resetUsername });
+    user.status = 'Active';
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    saveUsers();
+    console.log(`Emergency reset: ${user.fname} ${user.lname} — reactivated + password reset`);
+    return res.json({ success: true, message: `${user.username} reactivated and password reset` });
+  }
+
+  // Otherwise reactivate all admins
   let count = 0;
   _users.forEach(u => {
     if (u.role === 'admin' && u.status !== 'Active') {
