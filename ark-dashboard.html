@@ -5415,6 +5415,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
+      <!-- Payer Readiness Check -->
+      <div id="f1099-payer-status" style="display:none;"></div>
+
       <!-- Row 2: 1099 Type radio -->
       <div>
         <label class="field-label">1099 Type <span style="color:#c0392b;">*</span></label>
@@ -11815,6 +11818,86 @@ function select1099Client(id, name){
   document.getElementById('f1099-payer-id').value = id;
   document.getElementById('f1099-payer-search').value = name;
   document.getElementById('f1099-client-dd').style.display = 'none';
+  check1099PayerReadiness(id);
+}
+
+// ── Payer (Client) Readiness Check for eFileMyForms ──────────────
+function check1099PayerReadiness(clientId) {
+  const panel = document.getElementById('f1099-payer-status');
+  if (!panel) return;
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  if (!client) { panel.style.display = 'none'; return; }
+
+  // Required fields for eFileMyForms filer section
+  const checks = [
+    { key: 'ein', label: 'EIN / Tax ID', value: client.ein, field: 'ein', placeholder: 'XX-XXXXXXX' },
+    { key: 'addrStreet', label: 'Street Address', value: client.addrStreet || client.street, field: 'addrStreet', placeholder: '123 Main St' },
+    { key: 'addrCity', label: 'City', value: client.addrCity || client.city, field: 'addrCity', placeholder: 'City' },
+    { key: 'addrState', label: 'State', value: client.addrState || client.state, field: 'addrState', placeholder: 'NE' },
+    { key: 'addrZip', label: 'ZIP Code', value: client.addrZip || client.zip, field: 'addrZip', placeholder: '68xxx' },
+  ];
+
+  const missing = checks.filter(c => !c.value || !c.value.trim());
+  const present = checks.filter(c => c.value && c.value.trim());
+
+  if (!missing.length) {
+    // All good — show green status
+    panel.style.display = '';
+    panel.innerHTML = `<div style="background:rgba(46,125,94,.08);border:1px solid rgba(46,125,94,.25);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:8px;">
+      <span style="color:var(--green);font-size:14px;">&#10003;</span>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--green);">Payer info complete</div>
+        <div style="font-size:10px;color:var(--text-d);margin-top:2px;">${client.biz} &middot; EIN: ${client.ein} &middot; ${[client.addrStreet||client.street, client.addrCity||client.city, client.addrState||client.state, client.addrZip||client.zip].filter(Boolean).join(', ')}</div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Missing fields — show warning with inline edit
+  panel.style.display = '';
+  panel.innerHTML = `<div style="background:rgba(192,57,43,.06);border:1px solid rgba(192,57,43,.2);border-radius:var(--radius-sm);padding:12px 14px;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span style="color:#c0392b;font-size:13px;">&#9888;</span>
+      <span style="font-size:11px;font-weight:600;color:#c0392b;">Missing payer info for eFileMyForms</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-m);margin-bottom:10px;">The following fields are required for 1099 filing. Add them now or the export will fail.</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${missing.map(m => `<div id="f1099-fix-row-${m.key}" style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--text-d);width:100px;text-align:right;flex-shrink:0;">${m.label}</span>
+        <input id="f1099-fix-${m.key}" type="text" placeholder="${m.placeholder}" class="field-input" style="font-size:12px;padding:5px 10px;flex:1;">
+        <button onclick="fix1099PayerField('${clientId}','${m.field}','f1099-fix-${m.key}')" class="btn btn-sm" style="font-size:10px;white-space:nowrap;background:var(--navy);color:#fff;border-color:var(--navy);">Save</button>
+      </div>`).join('')}
+    </div>
+    ${present.length ? `<div style="margin-top:8px;font-size:10px;color:var(--text-d);">
+      On file: ${present.map(p => `${p.label}: <strong>${p.value}</strong>`).join(' &middot; ')}
+    </div>` : ''}
+  </div>`;
+}
+
+// ── Save a single client field from the 1099 payer fix UI ────────
+function fix1099PayerField(clientId, field, inputId) {
+  const input = document.getElementById(inputId);
+  const value = input?.value?.trim();
+  if (!value) { showToast('Please enter a value'); return; }
+
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  if (!client) return;
+
+  client[field] = value;
+  saveDB();
+
+  // Visual feedback on the row
+  const row = document.getElementById(`f1099-fix-row-${field === 'addrStreet' ? 'addrStreet' : field}`);
+  if (row) {
+    row.innerHTML = `<span style="font-size:11px;color:var(--text-d);width:100px;text-align:right;flex-shrink:0;">${field === 'ein' ? 'EIN / Tax ID' : field === 'addrStreet' ? 'Street Address' : field === 'addrCity' ? 'City' : field === 'addrState' ? 'State' : 'ZIP Code'}</span>
+      <span style="font-size:12px;color:var(--green);font-weight:600;flex:1;">&#10003; ${value}</span>`;
+  }
+
+  showToast(`Updated ${client.biz}`);
+  logAct(`Client updated: ${field} set to "${value}" for ${client.biz} (from 1099 Center)`);
+
+  // Re-check readiness after a tick so the row animation looks right
+  setTimeout(() => check1099PayerReadiness(clientId), 400);
 }
 
 // ── Vendor dropdown for 1099 modal ──
@@ -11849,6 +11932,21 @@ function select1099Vendor(id){
     ${v.tin?`<span style="margin-left:12px;font-family:monospace;font-size:12px;">TIN: ${v.tin}</span>`:''}
     ${v.addr?`<div style="font-size:12px;color:var(--text-d);margin-top:3px;">${[v.addr,v.city,v.state,v.zip].filter(Boolean).join(', ')}</div>`:''}
     ${v.w9FileName?`<div style="font-size:11px;color:#2e7d5e;margin-top:3px;">📎 W-9 on file: ${v.w9FileName}</div>`:'<div style="font-size:11px;color:#c0392b;margin-top:3px;">⚠ No W-9 on file</div>'}`;
+  // Check vendor readiness
+  const vendorMissing = [];
+  if(!v.tin) vendorMissing.push('TIN');
+  if(!v.name) vendorMissing.push('Name');
+  if(!v.addr) vendorMissing.push('Address');
+  if(!v.city) vendorMissing.push('City');
+  if(!v.state) vendorMissing.push('State');
+  if(!v.zip) vendorMissing.push('ZIP');
+  if(vendorMissing.length) {
+    cont.innerHTML += `<div style="margin-top:6px;padding:6px 10px;background:rgba(192,57,43,.06);border:1px solid rgba(192,57,43,.15);border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;">
+      <span style="color:#c0392b;font-size:12px;">&#9888;</span>
+      <span style="font-size:10px;color:#c0392b;">Missing: <strong>${vendorMissing.join(', ')}</strong></span>
+      <button onclick="openEditVendor('${v.id}')" class="btn btn-sm" style="font-size:9px;margin-left:auto;padding:2px 8px;">Edit Vendor</button>
+    </div>`;
+  }
   prev.style.display = 'block';
 }
 
@@ -11867,6 +11965,37 @@ function save1099(){
   if(type==='MISC' && !miscBox) { msg.textContent = '⚠ Please select a MISC box number.'; return; }
   if(!vendorId) { msg.textContent = '⚠ Please select a vendor.'; return; }
   if(!amount || amount <= 0) { msg.textContent = '⚠ Please enter an amount greater than $0.'; return; }
+
+  // Check payer readiness for eFileMyForms export
+  const payerClient = (DB.clients||[]).find(c=>c.id===payerId);
+  if(payerClient) {
+    const missingFields = [];
+    if(!payerClient.ein) missingFields.push('EIN');
+    if(!(payerClient.addrStreet||payerClient.street)) missingFields.push('Street Address');
+    if(!(payerClient.addrCity||payerClient.city)) missingFields.push('City');
+    if(!(payerClient.addrState||payerClient.state)) missingFields.push('State');
+    if(!(payerClient.addrZip||payerClient.zip)) missingFields.push('ZIP');
+    if(missingFields.length) {
+      msg.innerHTML = `⚠ Payer is missing: <strong>${missingFields.join(', ')}</strong>. Fix above before saving — the eFileMyForms export will fail without these.`;
+      return;
+    }
+  }
+
+  // Check vendor readiness
+  const vendorRec = (DB.vendors||[]).find(v=>v.id===vendorId);
+  if(vendorRec) {
+    const missingVendor = [];
+    if(!vendorRec.tin) missingVendor.push('TIN');
+    if(!vendorRec.addr) missingVendor.push('Address');
+    if(!vendorRec.city) missingVendor.push('City');
+    if(!vendorRec.state) missingVendor.push('State');
+    if(!vendorRec.zip) missingVendor.push('ZIP');
+    if(missingVendor.length) {
+      msg.innerHTML = `⚠ Vendor is missing: <strong>${missingVendor.join(', ')}</strong>. Edit the vendor to add these fields — eFileMyForms requires them.`;
+      return;
+    }
+  }
+
   msg.textContent = '';
 
   // Check for existing entry (same payer + vendor + type + year) → update amount
@@ -14970,6 +15099,47 @@ function runEfileExport(){
     return;
   }
 
+  // Pre-export validation: check all payers and vendors for completeness
+  const warnings = [];
+  const checkedClients = new Set();
+  const checkedVendors = new Set();
+  for (const f of entries) {
+    if (!checkedClients.has(f.payerId)) {
+      checkedClients.add(f.payerId);
+      const c = (DB.clients||[]).find(x=>x.id===f.payerId);
+      if (c) {
+        const cm = [];
+        if (!c.ein) cm.push('EIN');
+        if (!(c.addrStreet||c.street)) cm.push('Address');
+        if (!(c.addrCity||c.city)) cm.push('City');
+        if (!(c.addrState||c.state)) cm.push('State');
+        if (!(c.addrZip||c.zip)) cm.push('ZIP');
+        if (cm.length) warnings.push(`<strong>Payer "${c.biz}"</strong> missing: ${cm.join(', ')}`);
+      }
+    }
+    if (!checkedVendors.has(f.vendorId)) {
+      checkedVendors.add(f.vendorId);
+      const v = (DB.vendors||[]).find(x=>x.id===f.vendorId);
+      if (v) {
+        const vm = [];
+        if (!v.tin) vm.push('TIN');
+        if (!v.addr) vm.push('Address');
+        if (!v.city) vm.push('City');
+        if (!v.state) vm.push('State');
+        if (!v.zip) vm.push('ZIP');
+        if (vm.length) warnings.push(`<strong>Vendor "${v.name}"</strong> missing: ${vm.join(', ')}`);
+      }
+    }
+  }
+  if (warnings.length) {
+    preview.innerHTML = `<div style="color:#c0392b;font-size:12px;line-height:1.7;">
+      <div style="font-weight:600;margin-bottom:4px;">&#9888; Export blocked — incomplete records:</div>
+      ${warnings.map(w => '<div style="margin-left:12px;">&#8226; ' + w + '</div>').join('')}
+      <div style="margin-top:8px;font-size:11px;color:var(--text-d);">Fix these in the Client Center or Vendor Library, then try again.</div>
+    </div>`;
+    return;
+  }
+
   // Group by type then by client
   const byType = {};
   entries.forEach(f => {
@@ -15014,11 +15184,11 @@ function buildEfileRows(type, forms, client){
     FilerName1:   client?.biz||'',
     FilerName2:   '',
     FilerTIN:     client?.ein||'',
-    FilerAddress1: client?.street||'',
+    FilerAddress1: client?.addrStreet||client?.street||'',
     FilerAddress2: '',
-    FilerCity:    client?.city||'',
-    FilerState:   client?.state||'',
-    FilerZip:     client?.zip||'',
+    FilerCity:    client?.addrCity||client?.city||'',
+    FilerState:   client?.addrState||client?.state||'',
+    FilerZip:     client?.addrZip||client?.zip||'',
     FilerPhone:   '8885765525',
     FilerPhoneExt:'',
     FilerLocation:'',
