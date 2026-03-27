@@ -1106,7 +1106,8 @@ function reconcileAddNew(unmatchedIdx) {
   const storeSel = document.getElementById('entry-store');
   storeSel.value = store.storeId;
 
-  // Open Add Employee modal with pre-filled name
+  // Hide reconcile modal, open Add Employee modal
+  document.getElementById('modal-reconcile').classList.add('hidden');
   showAddEmployee();
   document.getElementById('new-emp-first').value = emp.firstName;
   document.getElementById('new-emp-last').value = emp.lastName;
