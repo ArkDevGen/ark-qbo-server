@@ -160,6 +160,8 @@ app.post('/auth/login', async (req, res) => {
     console.log(`Login attempt: "${username}" (password length: ${password.length}, has symbols: ${/[^a-zA-Z0-9]/.test(password)})`);
     if (!user) return res.status(401).json({ error: 'Invalid username or password' });
 
+    if (user.status === 'Inactive') return res.status(403).json({ error: 'Account is deactivated — contact an admin' });
+
     const valid = await bcrypt.compare(password, user.passwordHash);
     console.log(`  bcrypt compare result: ${valid} (hash starts: ${user.passwordHash?.slice(0,20)})`);
     if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
