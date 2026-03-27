@@ -106,6 +106,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .nav-item .ni{font-size:14px;width:20px;text-align:center;opacity:.65;flex-shrink:0;}
 .nav-item.active .ni{opacity:1;}
+.nav-group{overflow:hidden;max-height:500px;transition:max-height .25s ease-in-out;}
+.nav-group.collapsed{max-height:0;}
+.nav-section .nav-arrow{transition:transform .2s;}
+.nav-group.collapsed + .nav-section .nav-arrow,
+.nav-section.collapsed-header .nav-arrow{transform:rotate(-90deg);}
 .sidebar-footer{padding:14px 24px;border-top:1px solid rgba(255,255,255,.07);font-size:10px;color:rgba(255,255,255,.18);}
 
 /* ════════════════════════════════════════
@@ -783,24 +788,47 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <nav class="nav">
     <div class="nav-section">Overview</div>
     <div class="nav-item active" onclick="nav('dashboard')"><span class="ni">◈</span>Dashboard</div>
-    <div class="nav-section">Centers</div>
-    <div class="nav-item" id="nav-c360" onclick="nav('c360')"><span class="ni">🔍</span>Client 360</div>
-    <div class="nav-item" id="nav-tasks" onclick="nav('tasks')"><span class="ni">🏭</span>Production</div>
-    <div class="nav-item" onclick="nav('clients')"><span class="ni">◉</span>Client Center</div>
-    <div class="nav-item" id="nav-amcenter" onclick="nav('acctmgrs')"><span class="ni">★</span>AM Center</div>
-    <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
-    <div class="nav-item" id="nav-taxcenter" onclick="nav('taxcenter')"><span class="ni">🧮</span>Tax Center</div>
-    <div class="nav-item" onclick="nav('timecenter')"><span class="ni">⏱</span>Time Center</div>
-    <div class="nav-item" id="nav-commcenter" onclick="nav('commcenter')"><span class="ni">📡</span>Comm Center</div>
-    <div class="nav-item" id="nav-meetings" onclick="nav('meetings')"><span class="ni">📅</span>Meetings</div>
-    <div class="nav-item" id="nav-payrollcenter" onclick="nav('payrollcenter')"><span class="ni">💰</span>Payroll Center</div>
-    <div class="nav-item" id="nav-proposals" onclick="nav('proposals')"><span class="ni">📝</span>Lead Center</div>
-    <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
-    <div class="nav-item" id="nav-newhirereport" onclick="nav('newhirereport')"><span class="ni">📄</span>New Hire Report</div>
-    <div class="nav-item" id="nav-filecenter" onclick="nav('filecenter')"><span class="ni">📁</span>File Center</div>
-    <div class="nav-item" id="nav-activity" onclick="nav('activity')"><span class="ni">◷</span>Activity Log</div>
-    <div class="nav-item" id="nav-qbo" onclick="nav('qbo')"><span class="ni">💼</span>QBO Center</div>
-    <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Users</div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Clients <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-c360" onclick="nav('c360')"><span class="ni">🔍</span>Client 360</div>
+      <div class="nav-item" onclick="nav('clients')"><span class="ni">◉</span>Client Center</div>
+      <div class="nav-item" id="nav-proposals" onclick="nav('proposals')"><span class="ni">📝</span>Lead Center</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Operations <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-tasks" onclick="nav('tasks')"><span class="ni">🏭</span>Production</div>
+      <div class="nav-item" id="nav-payrollcenter" onclick="nav('payrollcenter')"><span class="ni">💰</span>Payroll Center</div>
+      <div class="nav-item" id="nav-taxcenter" onclick="nav('taxcenter')"><span class="ni">🧮</span>Tax Center</div>
+      <div class="nav-item" onclick="nav('timecenter')"><span class="ni">⏱</span>Time Center</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Communication <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-commcenter" onclick="nav('commcenter')"><span class="ni">📡</span>Comm Center</div>
+      <div class="nav-item" id="nav-meetings" onclick="nav('meetings')"><span class="ni">📅</span>Meetings</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Integrations <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-qbo" onclick="nav('qbo')"><span class="ni">💼</span>QBO Center</div>
+      <div class="nav-item" id="nav-filecenter" onclick="nav('filecenter')"><span class="ni">📁</span>File Center</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
+      <div class="nav-item" id="nav-activity" onclick="nav('activity')"><span class="ni">◷</span>Activity Log</div>
+      <div class="nav-item" id="nav-newhirereport" onclick="nav('newhirereport')"><span class="ni">📄</span>New Hire Report</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Users</div>
+      <div class="nav-item" id="nav-amcenter" onclick="nav('acctmgrs')"><span class="ni">★</span>AM Center</div>
+      <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
+    </div>
   </nav>
   <!-- Sidebar utility buttons -->
   <div style="padding:0 16px 10px;display:flex;flex-direction:column;gap:6px;">
@@ -7143,6 +7171,16 @@ const PAGE_ACTIONS = {
 };
 function closeAllModals(){
   document.querySelectorAll('.overlay').forEach(o=>o.style.display='none');
+}
+
+function toggleNavGroup(sectionEl) {
+  const group = sectionEl.nextElementSibling;
+  if (!group || !group.classList.contains('nav-group')) return;
+  group.classList.toggle('collapsed');
+  const arrow = sectionEl.querySelector('.nav-arrow');
+  if (arrow) {
+    arrow.style.transform = group.classList.contains('collapsed') ? 'rotate(-90deg)' : '';
+  }
 }
 
 function nav(page){
