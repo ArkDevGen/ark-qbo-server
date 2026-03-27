@@ -2079,6 +2079,40 @@ app.delete('/payroll/admin/employee', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Bulk patch employees (fill blanks only, client auth) ─────────
+app.post('/payroll/bulk-patch-employees/:clientSlug', (req, res) => {
+  const { clientSlug } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { updates } = req.body; // [{storeId, firstName, lastName, email, payRate, position}]
+  if (!Array.isArray(updates)) return res.status(400).json({ error: 'updates must be an array' });
+
+  const results = [];
+  for (const u of updates) {
+    const store = (client.stores || {})[u.storeId];
+    if (!store) { results.push({ ...u, status: 'store not found' }); continue; }
+
+    const emp = (store.employees || []).find(e =>
+      e.firstName.toLowerCase() === u.firstName.toLowerCase() &&
+      e.lastName.toLowerCase() === u.lastName.toLowerCase()
+    );
+    if (!emp) { results.push({ ...u, status: 'employee not found' }); continue; }
+
+    const changed = [];
+    if (u.email    && !emp.email)    { emp.email    = u.email;    changed.push('email'); }
+    if (u.payRate  && !emp.payRate)  { emp.payRate  = u.payRate;  changed.push('payRate'); }
+    if (u.position && !emp.position) { emp.position = u.position; changed.push('position'); }
+    results.push({ ...u, status: changed.length ? `updated: ${changed.join(', ')}` : 'no change needed' });
+  }
+
+  savePayrollData();
+  res.json({ success: true, results });
+});
+
 // ── Client adds a new employee on the fly ────────────────────────
 app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const { clientSlug, storeId } = req.params;
