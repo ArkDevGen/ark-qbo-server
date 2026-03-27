@@ -157,9 +157,11 @@ app.post('/auth/login', async (req, res) => {
   // === NEW: Username + password login ===
   if (username && password) {
     const user = findUser(username);
+    console.log(`Login attempt: "${username}" (password length: ${password.length}, has symbols: ${/[^a-zA-Z0-9]/.test(password)})`);
     if (!user) return res.status(401).json({ error: 'Invalid username or password' });
 
     const valid = await bcrypt.compare(password, user.passwordHash);
+    console.log(`  bcrypt compare result: ${valid} (hash starts: ${user.passwordHash?.slice(0,20)})`);
     if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
 
     // Update last login
@@ -356,7 +358,7 @@ app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const user = _users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { fname, lname, email, phone, role, title, color, status, assignedClients, permissions, newPassword } = req.body;
+  const { fname, lname, email, phone, role, title, color, status, assignedClients, permissions, newPassword, password } = req.body;
 
   if (fname !== undefined) user.fname = fname;
   if (lname !== undefined) user.lname = lname;
@@ -365,11 +367,12 @@ app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (title !== undefined) user.title = title;
   if (color !== undefined) user.color = color;
   if (status !== undefined) user.status = status;
-  if (role && ['admin', 'am', 'viewer'].includes(role)) user.role = role;
+  if (role && ['admin', 'am', 'pm', 'viewer'].includes(role)) user.role = role;
   if (assignedClients !== undefined) user.assignedClients = assignedClients;
   if (permissions !== undefined) user.permissions = permissions;
-  if (newPassword && newPassword.length >= 6) {
-    user.passwordHash = await bcrypt.hash(newPassword, 10);
+  const pw = newPassword || password;
+  if (pw && pw.length >= 6) {
+    user.passwordHash = await bcrypt.hash(pw, 10);
   }
 
   saveUsers();

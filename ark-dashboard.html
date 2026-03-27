@@ -7077,7 +7077,7 @@ async function saveUser(){
   }
 
   const payload = { username, fname, lname, email, phone, role, title, status, assignedClients };
-  if(password) payload.password = password;
+  if(password) { payload.password = password; payload.newPassword = password; }
 
   try {
     const url = id ? ARK_SERVER + '/users/' + id : ARK_SERVER + '/users';
