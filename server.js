@@ -1969,9 +1969,10 @@ app.post('/payroll/employees/:clientSlug/:storeId/link', (req, res) => {
     return res.status(409).json({ error: 'Employee already in this store' });
   }
 
-  // Add a copy to this store
+  // Add a copy to this store — strip position/payRate since those are store-specific
   if (!store.employees) store.employees = [];
-  store.employees.push({ ...sourceEmp });
+  const { position: _p, payRate: _r, payRates: _rs, ...empBase } = sourceEmp;
+  store.employees.push({ ...empBase, position: '', payRate: '', payRates: [] });
   savePayrollData();
 
   console.log(`Linked employee ${sourceEmp.firstName} ${sourceEmp.lastName} to store ${storeId} (${clientSlug})`);
