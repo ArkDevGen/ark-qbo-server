@@ -221,12 +221,19 @@
 
     <!-- Step 2: Employee hours grid -->
     <div id="employee-section" class="card hidden">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <h2 style="margin-bottom:0;">Employee Hours</h2>
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="btn btn-outline btn-sm" onclick="showFindEmployee()" style="border-color:var(--accent);color:var(--accent);">🔍 Find Employee</button>
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
+          <button class="btn btn-outline btn-sm" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save</button>
+          <button class="btn btn-outline btn-sm" onclick="confirmClearHours()" style="border-color:var(--red);color:var(--red);">✕ Clear</button>
         </div>
+      </div>
+      <div id="draft-save-indicator" style="text-align:right;font-size:11px;color:var(--muted);margin-bottom:10px;min-height:16px;"></div>
+      <div id="draft-restore-banner" style="display:none;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;background:rgba(77,166,255,.1);border:1px solid var(--accent);color:var(--accent);justify-content:space-between;align-items:center;">
+        <span>📋 <strong>Draft restored</strong> — unsaved data from your last session has been loaded.</span>
+        <button class="btn btn-outline btn-sm" onclick="discardDraft()" style="border-color:var(--red);color:var(--red);margin-left:12px;">Discard</button>
       </div>
       <div id="homebase-import-status" style="display:none;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;"></div>
       <div style="overflow-x:auto;">
@@ -248,7 +255,8 @@
           <tbody id="emp-tbody"></tbody>
         </table>
       </div>
-      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;">
+      <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <button class="btn btn-outline" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save Draft</button>
         <button class="btn btn-green" id="store-action-btn" onclick="_bulkMode ? bulkConfirmStore() : submitPayroll()">Submit Payroll</button>
       </div>
       <div id="submit-status" class="status"></div>
@@ -508,6 +516,11 @@ async function onStoreChange() {
     _employees = data.employees || [];
     renderEmployeeTable();
     section.classList.remove('hidden');
+
+    // Try to restore a saved draft for this store
+    if (!_bulkMode) {
+      setTimeout(() => loadDraft(), 50);
+    }
 
     // If in bulk mode, auto-apply imported data
     if (_bulkMode) {
@@ -1906,6 +1919,9 @@ async function submitPayroll() {
       return;
     }
 
+    // Clear draft since payroll was submitted successfully
+    clearDraftAfterSubmit();
+
     // Show success screen
     document.getElementById('success-id').textContent = data.submissionId;
     document.getElementById('screen-entry').classList.add('hidden');
@@ -1916,6 +1932,133 @@ async function submitPayroll() {
     statusEl.textContent = 'Connection error. Please try again.';
   }
 }
+
+// ─── Draft Save / Restore / Clear ────────────────────────────────
+function _draftKey() {
+  const storeId = document.getElementById('entry-store').value;
+  return storeId ? `payroll_draft_${_clientSlug}_${storeId}` : null;
+}
+
+function collectCurrentEntries() {
+  const entries = {};
+  _employees.forEach((emp, i) => {
+    const fields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus','notes'];
+    const row = {};
+    fields.forEach(f => {
+      const el = document.querySelector(`input[data-idx="${i}"][data-field="${f}"]`);
+      if (el) row[f] = el.value;
+    });
+    entries[i] = row;
+  });
+  return entries;
+}
+
+function saveDraft(showFeedback = false) {
+  const key = _draftKey();
+  if (!key) return;
+  const draft = {
+    storeId: document.getElementById('entry-store').value,
+    periodStart: document.getElementById('entry-period-start').value,
+    periodEnd: document.getElementById('entry-period-end').value,
+    payDate: document.getElementById('entry-pay-date').value,
+    savedAt: new Date().toISOString(),
+    entries: collectCurrentEntries(),
+    rateChanges: _rateChanges,
+  };
+  localStorage.setItem(key, JSON.stringify(draft));
+  const ind = document.getElementById('draft-save-indicator');
+  if (ind) {
+    const t = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    ind.textContent = `Draft saved at ${t}`;
+    if (showFeedback) {
+      ind.style.color = 'var(--green)';
+      setTimeout(() => { ind.style.color = 'var(--muted)'; }, 2000);
+    }
+  }
+}
+
+function loadDraft() {
+  const key = _draftKey();
+  if (!key) return false;
+  const raw = localStorage.getItem(key);
+  if (!raw) return false;
+  try {
+    const draft = JSON.parse(raw);
+    // Restore dates
+    if (draft.periodStart) document.getElementById('entry-period-start').value = draft.periodStart;
+    if (draft.periodEnd) document.getElementById('entry-period-end').value = draft.periodEnd;
+    if (draft.payDate) document.getElementById('entry-pay-date').value = draft.payDate;
+    // Restore entries
+    if (draft.entries) {
+      Object.entries(draft.entries).forEach(([idx, row]) => {
+        Object.entries(row).forEach(([field, val]) => {
+          const el = document.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
+          if (el && val !== '' && val !== null && val !== undefined) el.value = val;
+        });
+      });
+    }
+    // Restore rate changes
+    if (draft.rateChanges) _rateChanges = draft.rateChanges;
+    // Update save indicator
+    const ind = document.getElementById('draft-save-indicator');
+    if (ind && draft.savedAt) {
+      const saved = new Date(draft.savedAt);
+      ind.textContent = `Draft from ${saved.toLocaleDateString()} ${saved.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    }
+    // Show restore banner
+    const banner = document.getElementById('draft-restore-banner');
+    if (banner) banner.style.display = 'flex';
+    return true;
+  } catch(e) {
+    console.warn('Failed to load draft:', e);
+    return false;
+  }
+}
+
+function discardDraft() {
+  const key = _draftKey();
+  if (key) localStorage.removeItem(key);
+  const banner = document.getElementById('draft-restore-banner');
+  if (banner) banner.style.display = 'none';
+  const ind = document.getElementById('draft-save-indicator');
+  if (ind) ind.textContent = '';
+  // Clear all inputs
+  clearHours();
+}
+
+function clearDraftAfterSubmit() {
+  const key = _draftKey();
+  if (key) localStorage.removeItem(key);
+}
+
+function confirmClearHours() {
+  if (!confirm('Clear all hours and data for this store? This cannot be undone.')) return;
+  clearHours();
+  clearDraftAfterSubmit();
+  const ind = document.getElementById('draft-save-indicator');
+  if (ind) ind.textContent = '';
+  const banner = document.getElementById('draft-restore-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function clearHours() {
+  // Clear all table inputs
+  document.querySelectorAll('#emp-tbody input').forEach(el => { el.value = ''; });
+  // Clear pay period dates
+  document.getElementById('entry-period-start').value = '';
+  document.getElementById('entry-period-end').value = '';
+  document.getElementById('entry-pay-date').value = '';
+  // Clear rate changes
+  _rateChanges = {};
+  renderEmployeeTable();
+}
+
+// Auto-save on any table input change
+document.addEventListener('input', function(e) {
+  if (e.target.closest('#emp-tbody') || e.target.id === 'entry-period-start' || e.target.id === 'entry-period-end' || e.target.id === 'entry-pay-date') {
+    saveDraft(false);
+  }
+});
 
 // ─── Reset / Logout ──────────────────────────────────────────────
 function resetForm() {
