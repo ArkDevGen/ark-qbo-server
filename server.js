@@ -2365,24 +2365,43 @@ app.post('/payroll/notifications/clear', (req, res) => {
 const PL_HISTORY_FILE = path.join(DATA_DIR, 'pl-history.json');
 const FLEET_DATA_FILE = path.join(DATA_DIR, 'fleet-data.json');
 const PL_THRESHOLDS_FILE = path.join(DATA_DIR, 'pl-thresholds.json');
+const PL_ANTICIPATED_FILE = path.join(DATA_DIR, 'pl-anticipated.json');
 
 // Load persisted data
-let plHistory = {};    // { [realmId]: { [period]: { metrics, accounts, date } } }
-let fleetData = {};    // { accounts: { [accountName]: { storeCount, totalAmount } }, storeCount: 0 }
-let plThresholds = {}; // { _global: {...}, [realmId]: {...} }
+let plHistory = {};       // { [realmId]: { [period]: { metrics, accounts, savedAt } } }
+let fleetData = {};       // { accounts: { [name]: { storeCount, stores, amounts, avgPct, minPct, maxPct } }, storeCount: 0 }
+let plThresholds = {};    // { _global: {...}, [realmId]: {...} }
+let plAnticipated = {};   // { _templates: { scooters: [...] }, [realmId]: [...] }
 
 function loadJsonFile(filepath, fallback) {
   if (!fs.existsSync(filepath)) return fallback;
   try { return JSON.parse(fs.readFileSync(filepath, 'utf8')); }
   catch(e) { return fallback; }
 }
-plHistory   = loadJsonFile(PL_HISTORY_FILE, {});
-fleetData   = loadJsonFile(FLEET_DATA_FILE, { accounts: {}, storeCount: 0 });
+plHistory    = loadJsonFile(PL_HISTORY_FILE, {});
+fleetData    = loadJsonFile(FLEET_DATA_FILE, { accounts: {}, storeCount: 0 });
 plThresholds = loadJsonFile(PL_THRESHOLDS_FILE, { _global: {} });
+plAnticipated = loadJsonFile(PL_ANTICIPATED_FILE, {
+  _templates: {
+    scooters: [
+      { name: 'Rent', amount: 2500, pctOfSales: null, tolerance: 0.10 },
+      { name: 'Royalty Fees', amount: null, pctOfSales: 0.06, tolerance: 0.15 },
+      { name: 'Ad Fund National', amount: null, pctOfSales: 0.02, tolerance: 0.20 },
+      { name: 'Technology Fee', amount: 250, pctOfSales: null, tolerance: 0.15 },
+      { name: 'Payroll:Wages', amount: null, pctOfSales: 0.30, tolerance: 0.20 },
+      { name: 'Payroll:Payroll Taxes', amount: null, pctOfSales: 0.04, tolerance: 0.25 },
+      { name: 'Cost of Goods Sold', amount: null, pctOfSales: 0.28, tolerance: 0.20 },
+      { name: 'Insurance', amount: 800, pctOfSales: null, tolerance: 0.15 },
+      { name: 'Utilities', amount: 600, pctOfSales: null, tolerance: 0.25 },
+      { name: 'Phone', amount: 200, pctOfSales: null, tolerance: 0.20 },
+    ],
+  },
+});
 
-function savePlHistory()   { fs.writeFileSync(PL_HISTORY_FILE, JSON.stringify(plHistory, null, 2)); }
-function saveFleetData()   { fs.writeFileSync(FLEET_DATA_FILE, JSON.stringify(fleetData, null, 2)); }
-function savePlThresholds(){ fs.writeFileSync(PL_THRESHOLDS_FILE, JSON.stringify(plThresholds, null, 2)); }
+function savePlHistory()    { fs.writeFileSync(PL_HISTORY_FILE, JSON.stringify(plHistory, null, 2)); }
+function saveFleetData()    { fs.writeFileSync(FLEET_DATA_FILE, JSON.stringify(fleetData, null, 2)); }
+function savePlThresholds() { fs.writeFileSync(PL_THRESHOLDS_FILE, JSON.stringify(plThresholds, null, 2)); }
+function savePlAnticipated(){ fs.writeFileSync(PL_ANTICIPATED_FILE, JSON.stringify(plAnticipated, null, 2)); }
 
 // ── P&L History CRUD ─────────────────────────────────────────────
 app.get('/pl/history/:realmId', (req, res) => {
@@ -2414,24 +2433,45 @@ app.get('/pl/fleet', (req, res) => {
 });
 
 app.post('/pl/fleet/contribute', (req, res) => {
-  const { realmId, accounts } = req.body;
+  const { realmId, accounts, revenue } = req.body;
   if (!accounts || !Array.isArray(accounts)) return res.status(400).json({ error: 'accounts array required' });
 
-  // Track which stores have contributed (use realmId as unique store key)
+  // Track which stores have contributed
   if (!fleetData._stores) fleetData._stores = {};
-  const isNew = !fleetData._stores[realmId];
   fleetData._stores[realmId] = Date.now();
   fleetData.storeCount = Object.keys(fleetData._stores).length;
 
-  // Merge account usage
+  const totalRevenue = revenue || 1; // avoid div by zero
+
+  // Merge account usage with dollar amounts and percentages
   for (const acct of accounts) {
     const name = acct.name || acct;
+    const amount = acct.amount || 0;
     if (!fleetData.accounts[name]) {
-      fleetData.accounts[name] = { storeCount: 0, stores: [] };
+      fleetData.accounts[name] = { storeCount: 0, stores: [], amounts: {} };
     }
+    if (!fleetData.accounts[name].amounts) fleetData.accounts[name].amounts = {};
+
     if (!fleetData.accounts[name].stores.includes(realmId)) {
       fleetData.accounts[name].stores.push(realmId);
       fleetData.accounts[name].storeCount = fleetData.accounts[name].stores.length;
+    }
+
+    // Store this store's amount and % of revenue
+    fleetData.accounts[name].amounts[realmId] = {
+      amount: Math.abs(amount),
+      pctOfRevenue: totalRevenue > 1 ? Math.abs(amount) / totalRevenue : 0,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Recalculate fleet-wide stats for this account
+    const storeAmounts = Object.values(fleetData.accounts[name].amounts);
+    const pcts = storeAmounts.map(s => s.pctOfRevenue).filter(p => p > 0);
+    if (pcts.length) {
+      fleetData.accounts[name].avgPct = pcts.reduce((s, p) => s + p, 0) / pcts.length;
+      fleetData.accounts[name].minPct = Math.min(...pcts);
+      fleetData.accounts[name].maxPct = Math.max(...pcts);
+      fleetData.accounts[name].avgAmount = storeAmounts.reduce((s, a) => s + a.amount, 0) / storeAmounts.length;
     }
   }
 
@@ -2547,7 +2587,258 @@ app.get('/pl/health', (req, res) => {
     historyStores: Object.keys(plHistory).length,
     fleetStores: fleetData.storeCount || 0,
     thresholdSets: Object.keys(plThresholds).length,
+    anticipatedStores: Object.keys(plAnticipated).filter(k => k !== '_templates').length,
   });
+});
+
+// ── Anticipated Expenses ─────────────────────────────────────────
+app.get('/pl/anticipated/templates', (req, res) => {
+  const templates = plAnticipated._templates || {};
+  res.json({ templates });
+});
+
+app.get('/pl/anticipated/:realmId', (req, res) => {
+  const expenses = plAnticipated[req.params.realmId] || [];
+  const templates = Object.keys(plAnticipated._templates || {});
+  res.json({ expenses, templates });
+});
+
+app.post('/pl/anticipated/apply-template', (req, res) => {
+  const { realmId, templateName } = req.body;
+  if (!realmId || !templateName) return res.status(400).json({ error: 'realmId and templateName required' });
+  const template = (plAnticipated._templates || {})[templateName];
+  if (!template) return res.status(404).json({ error: `Template "${templateName}" not found` });
+  // Merge: keep existing custom entries, add template ones that don't already exist
+  const existing = plAnticipated[realmId] || [];
+  const existingNames = new Set(existing.map(e => e.name.toLowerCase()));
+  const merged = [...existing];
+  for (const item of template) {
+    if (!existingNames.has(item.name.toLowerCase())) {
+      merged.push({ ...item });
+    }
+  }
+  plAnticipated[realmId] = merged;
+  savePlAnticipated();
+  res.json({ success: true, expenses: merged });
+});
+
+app.post('/pl/anticipated/:realmId', (req, res) => {
+  const { expenses } = req.body;
+  if (!Array.isArray(expenses)) return res.status(400).json({ error: 'expenses array required' });
+  plAnticipated[req.params.realmId] = expenses;
+  savePlAnticipated();
+  res.json({ success: true });
+});
+
+// ── Two-Pass AI Analysis (v2) ────────────────────────────────────
+
+// Pass 1: Structural Analysis — forensic bookkeeper findings
+app.post('/pl/digest/analyze', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period } = req.body;
+
+  const systemPrompt = `You are a senior forensic bookkeeper and financial analyst reviewing a monthly P&L for a Scooters Coffee franchise store. You work for ARK Financial Services. Your job is to find EVERYTHING that is wrong, missing, unusual, or noteworthy.
+
+You have access to:
+- The current month's P&L (account-level data with amounts)
+- Up to 6 months of historical P&L data for this specific store
+- Fleet-wide averages across all Scooters stores ARK manages
+- A list of anticipated/expected monthly expenses configured for this store
+- Pre-flags from our automated rule engine
+
+YOUR ANALYSIS MUST COVER:
+
+1. MISSING EXPENSES: Compare against anticipated expenses list AND historical patterns. If rent has posted every month for 6 months but not this month, that's a CRITICAL flag. If an anticipated expense of $2,500/mo for rent is missing, flag it.
+
+2. VARIANCE ALERTS: For each account, compare the current amount against:
+   - The store's own rolling 6-month average (flag >25% variance)
+   - The fleet average % of revenue (flag if this store is an outlier)
+   - The anticipated/expected amount if configured
+
+3. TREND FINDINGS: Look for multi-month patterns:
+   - Revenue growth or decline trends
+   - Expense creep (payroll slowly climbing as % of sales over months)
+   - Seasonal patterns that might explain current variances
+   - Deteriorating or improving margins
+
+4. ANOMALIES: Transactions or accounts that don't belong:
+   - Accounts that should always be zero (Uncategorized, Ask My Accountant, Reconciliation Discrepancies)
+   - Unusual account names that might be misclassified
+   - Amounts that seem unreasonable for a coffee franchise ($50k in "Repairs"?)
+
+5. FLEET COMPARISONS: How does this store compare to peers?
+   - Flag any metric where this store is >1 standard deviation from fleet average
+   - Note where this store outperforms or underperforms
+
+6. NEW/DISAPPEARED ACCOUNTS: Accounts that appeared for the first time this month or disappeared.
+
+RULES:
+- ALWAYS include dollar amounts AND percentages in your explanations
+- When flagging a misclassification, suggest the SPECIFIC correct account
+- Be specific: "$7,560 COGS is 42% of $18,000 sales, exceeding the 35% benchmark" not "COGS seems high"
+- Severity: CRITICAL (likely error or missing item), WARNING (review needed), INFO (informational/trend)
+
+Return a JSON object with this EXACT structure:
+{
+  "missingExpenses": [{ "severity": "CRITICAL|WARNING", "account": "name", "expectedAmount": number|null, "message": "detailed explanation" }],
+  "varianceAlerts": [{ "severity": "CRITICAL|WARNING", "account": "name", "currentAmount": number, "expectedAmount": number, "variance": "string", "message": "explanation" }],
+  "trendFindings": [{ "severity": "WARNING|INFO", "metric": "name", "direction": "up|down|stable", "message": "explanation with numbers" }],
+  "anomalies": [{ "severity": "CRITICAL|WARNING|INFO", "account": "name", "amount": number|null, "message": "explanation", "suggestedAccount": "string|null" }],
+  "fleetComparisons": [{ "severity": "WARNING|INFO", "metric": "name", "storeValue": "string", "fleetAvg": "string", "message": "explanation" }],
+  "newAccounts": [{ "severity": "INFO|WARNING", "account": "name", "amount": number, "message": "explanation" }],
+  "disappearedAccounts": [{ "severity": "WARNING|INFO", "account": "name", "lastAmount": number|null, "message": "explanation" }]
+}`;
+
+  const userPrompt = `Client: ${clientName || 'Unknown'}
+Period: ${period || 'Unknown'}
+
+CURRENT MONTH P&L DATA:
+${JSON.stringify(plData, null, 2)}
+
+SUMMARY METRICS:
+${JSON.stringify(summary || {}, null, 2)}
+
+${anticipated && anticipated.length ? `ANTICIPATED MONTHLY EXPENSES (configured by AM):
+${JSON.stringify(anticipated, null, 2)}` : 'No anticipated expenses configured.'}
+
+${preFlags && preFlags.length ? `RULE ENGINE PRE-FLAGS:
+${JSON.stringify(preFlags, null, 2)}` : ''}
+
+${history ? `HISTORICAL DATA (up to 6 months):
+${JSON.stringify(history, null, 2)}` : 'No historical data available.'}
+
+${fleetContext ? `FLEET DATA (all Scooters stores):
+${JSON.stringify(fleetContext, null, 2)}` : 'No fleet data available.'}
+
+Analyze this P&L thoroughly and return the structured JSON object.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Anthropic API error (analyze):', response.status, errBody);
+      return res.status(502).json({ error: `AI service error: ${response.status}` });
+    }
+
+    const aiData = await response.json();
+    const content = aiData.content?.[0]?.text || '{}';
+
+    let findings = {};
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) findings = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('Failed to parse AI findings:', e.message);
+      findings = { anomalies: [{ severity: 'INFO', account: '', amount: null, message: 'AI analysis returned non-parseable results.', suggestedAccount: null }] };
+    }
+
+    console.log(`  ✓ P&L Analyze (Pass 1): ${Object.values(findings).flat().length} total findings`);
+    res.json({ success: true, findings, usage: aiData.usage });
+
+  } catch (e) {
+    console.error('P&L Analyze error:', e.message);
+    res.status(500).json({ error: 'AI analysis failed: ' + e.message });
+  }
+});
+
+// Pass 2: Meeting Prep — client-facing insights and talking points
+app.post('/pl/digest/meeting-prep', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const { findings, summary, clientName, period } = req.body;
+
+  const systemPrompt = `You are a senior financial advisor at ARK Financial Services preparing a client meeting brief for a Scooters Coffee franchise owner. The owner is NOT an accountant — they understand their business but need financial information presented clearly and actionably.
+
+Your job is to take the forensic analysis findings and translate them into:
+
+1. EXECUTIVE SUMMARY: 2-3 sentences that give the owner the big picture. Start with the headline (good month? bad month? something needs attention?). Include the key numbers they care about: sales, net income, and the most important variance.
+
+2. TALKING POINTS: 5-8 bullet points the ARK account manager should bring up in the meeting. Each should be specific, actionable, and include dollar amounts. Frame negatives as opportunities. Examples:
+   - "Sales were $52,400, up 8% from last month — great momentum heading into summer"
+   - "COGS hit 34% this month vs your usual 28% — that's an extra $3,120. Let's review vendor invoices"
+   - "Rent didn't post this month — this is likely a timing issue but let's confirm with the landlord"
+
+3. CLIENT INSIGHTS: 3-5 observations phrased FOR THE CLIENT (the owner), in plain English. These go in the PDF they receive. No accounting jargon. Focus on what matters for running their business.
+
+4. ACTION ITEMS: Specific next steps for the AM or client. Be concrete: "Review the $4,200 in Uncategorized Expenses and reclassify before month-end" not "Clean up categorization."
+
+Return a JSON object:
+{
+  "executiveSummary": "string",
+  "talkingPoints": ["string", ...],
+  "clientInsights": ["string", ...],
+  "actionItems": ["string", ...]
+}`;
+
+  const userPrompt = `Client: ${clientName || 'Unknown'}
+Period: ${period || 'Unknown'}
+
+SUMMARY METRICS:
+${JSON.stringify(summary || {}, null, 2)}
+
+FORENSIC ANALYSIS FINDINGS:
+${JSON.stringify(findings, null, 2)}
+
+Generate the meeting prep brief.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Anthropic API error (meeting-prep):', response.status, errBody);
+      return res.status(502).json({ error: `AI service error: ${response.status}` });
+    }
+
+    const aiData = await response.json();
+    const content = aiData.content?.[0]?.text || '{}';
+
+    let prep = {};
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) prep = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('Failed to parse meeting prep:', e.message);
+      prep = { executiveSummary: 'Meeting prep generation failed.', talkingPoints: [], clientInsights: [], actionItems: [] };
+    }
+
+    console.log(`  ✓ P&L Meeting Prep (Pass 2): ${(prep.talkingPoints||[]).length} talking points`);
+    res.json({ success: true, prep, usage: aiData.usage });
+
+  } catch (e) {
+    console.error('P&L Meeting Prep error:', e.message);
+    res.status(500).json({ error: 'Meeting prep failed: ' + e.message });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────

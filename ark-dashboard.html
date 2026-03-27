@@ -3419,6 +3419,36 @@ input[type="checkbox"]{accent-color:var(--navy);}
                   </label>
                 </div>
               </div>
+              <!-- Anticipated Expenses (collapsible) -->
+              <div style="margin-bottom:14px;">
+                <div onclick="document.getElementById('pl-anticipated-panel').style.display=document.getElementById('pl-anticipated-panel').style.display==='none'?'':'none'" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 0;">
+                  <span id="pl-anticipated-toggle" style="font-size:10px;color:var(--text-d);transition:transform .2s;">&#9654;</span>
+                  <span style="font-size:11px;font-weight:600;color:var(--text-d);letter-spacing:.04em;">Expected Monthly Expenses</span>
+                  <span id="pl-anticipated-count" style="font-size:9px;color:var(--text-d);font-family:'DM Mono',monospace;">(0 configured)</span>
+                </div>
+                <div id="pl-anticipated-panel" style="display:none;margin-top:6px;">
+                  <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:11px;" id="pl-anticipated-table">
+                      <thead>
+                        <tr style="border-bottom:1px solid var(--border);">
+                          <th style="padding:5px 8px;text-align:left;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);">Account</th>
+                          <th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:90px;">Amount</th>
+                          <th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:70px;">% of Sales</th>
+                          <th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);width:70px;">Tolerance</th>
+                          <th style="background:var(--surface2);width:24px;"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="pl-anticipated-body"></tbody>
+                    </table>
+                  </div>
+                  <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button class="btn btn-ghost btn-sm" onclick="plAddAnticipatedRow()" style="font-size:10px;">+ Add Row</button>
+                    <button class="btn btn-ghost btn-sm" onclick="plApplyTemplate('scooters')" style="font-size:10px;">Apply Scooter's Template</button>
+                    <div style="flex:1;"></div>
+                    <button class="btn btn-ghost btn-sm" onclick="plSaveAnticipated()" style="font-size:10px;color:var(--green);">Save</button>
+                  </div>
+                </div>
+              </div>
               <!-- Actions -->
               <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--border);">
                 <button class="btn btn-ghost btn-sm" onclick="plGetHistory()">Get History (12mo)</button>
@@ -3465,6 +3495,46 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </div>
             </div>
 
+            <!-- Meeting Prep Card -->
+            <div id="pl-meeting-prep-card" style="display:none;margin-bottom:12px;">
+              <div class="card" style="border-left:4px solid var(--navy);overflow:visible;">
+                <div class="card-header" style="padding:12px 16px;">
+                  <div class="card-title" style="font-size:12px;">Meeting Prep</div>
+                  <button class="btn btn-primary btn-sm" onclick="plGenerateMeetingPDF()" style="font-size:10px;background:#2ca01c;border-color:#2ca01c;">
+                    Generate Meeting PDF
+                  </button>
+                </div>
+                <div style="padding:0 16px 14px;">
+                  <div id="pl-exec-summary" style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);"></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <div>
+                      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Talking Points</div>
+                      <ul id="pl-talking-points" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
+                    </div>
+                    <div>
+                      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Action Items</div>
+                      <ul id="pl-action-items" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
+                    </div>
+                  </div>
+                  <div id="pl-client-insights-wrap" style="margin-top:12px;">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Client Insights</div>
+                    <ul id="pl-client-insights" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fleet Comparison Card -->
+            <div id="pl-fleet-card" style="display:none;margin-bottom:12px;">
+              <div class="card" style="overflow:visible;">
+                <div class="card-header" style="padding:10px 16px;">
+                  <div class="card-title" style="font-size:12px;">Fleet Comparison</div>
+                  <span id="pl-fleet-store-count" style="font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;"></span>
+                </div>
+                <div id="pl-fleet-body" style="padding:8px 16px 14px;"></div>
+              </div>
+            </div>
+
             <!-- Filter bar -->
             <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
               <button class="btn btn-sm pl-filter-btn active" onclick="plFilterFlags('all')" data-filter="all" style="font-size:10px;">All</button>
@@ -3473,9 +3543,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('INFO')" data-filter="INFO" style="font-size:10px;color:var(--blue);">Info</button>
               <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('resolved')" data-filter="resolved" style="font-size:10px;color:var(--green);">Resolved</button>
               <div style="flex:1;"></div>
-              <button class="btn btn-ghost btn-sm" onclick="plExportReport('exception')" style="font-size:10px;">Export Exceptions</button>
-              <button class="btn btn-ghost btn-sm" onclick="plExportReport('summary')" style="font-size:10px;">Export Summary</button>
-              <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:10px;">Full Audit</button>
+              <button class="btn btn-ghost btn-sm" onclick="plExportReport('exception')" style="font-size:10px;">Exceptions</button>
+              <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:10px;">Audit Trail</button>
               <button class="btn btn-primary btn-sm" onclick="plSaveToClient()" style="font-size:10px;">Save to Client</button>
             </div>
 
@@ -16596,7 +16665,71 @@ function tcToggleComplete(id){
     logAct(`Task "${t.name}" auto-spawned next due ${nextDue} (${t.clientName})`);
   }
 
+  // ── P&L Digest trigger on monthly close ────────────────────────────
+  if (t.status === 'completed' && plIsCloseTask(t)) {
+    plPromptDigestAfterClose(t);
+  }
+
   saveDB(); tcRender();
+}
+
+// ── Check if task is a monthly close task ────────────────────────────
+function plIsCloseTask(task) {
+  if (!task) return false;
+  if (task.triggerDigest) return true;
+  const cat = (task.category || '').toLowerCase();
+  const name = (task.name || '').toLowerCase();
+  if (cat === 'monthly close') return true;
+  if (cat === 'bookkeeping' && (name.includes('close') || name.includes('month-end') || name.includes('month end') || name.includes('monthly close'))) return true;
+  return false;
+}
+
+// ── Prompt to run P&L Digest after close ─────────────────────────────
+function plPromptDigestAfterClose(task) {
+  const client = (DB.clients || []).find(c => c.id === task.clientId);
+  if (!client || !client.qboRealmId) return; // can't run digest without QBO connection
+
+  // Create a floating prompt
+  const overlay = document.createElement('div');
+  overlay.id = 'pl-close-prompt';
+  overlay.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;animation:slideUp .3s ease;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid #2ca01c;border-radius:var(--radius);padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.25);max-width:380px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">Books Closed: ${client.biz}</div>
+      <div style="font-size:11px;color:var(--text-m);line-height:1.5;margin-bottom:14px;">Run the P&L Digester to check for missing items, variances, and generate meeting prep?</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pl-close-prompt')?.remove()" style="font-size:11px;">Skip</button>
+        <button class="btn btn-primary btn-sm" onclick="plAutoRunDigest('${client.id}')" style="font-size:11px;background:#2ca01c;border-color:#2ca01c;">Run P&L Digest</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Auto-dismiss after 30 seconds
+  setTimeout(() => { document.getElementById('pl-close-prompt')?.remove(); }, 30000);
+}
+
+// ── Auto-navigate and run digest for a specific client ───────────────
+function plAutoRunDigest(clientId) {
+  document.getElementById('pl-close-prompt')?.remove();
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  if (!client) return;
+
+  // Navigate to QBO Center
+  nav('qbo');
+  qboOpenTool('pldigest');
+
+  // Select client in dropdown
+  setTimeout(() => {
+    const sel = document.getElementById('pl-client-select');
+    if (sel) {
+      sel.value = clientId;
+      plOnClientChange();
+      // Set period to last month
+      plSetQuickPeriod('last-month');
+      // Auto-run after a short delay for UI to update
+      setTimeout(() => { plRunDigest(); }, 300);
+    }
+  }, 200);
 }
 
 // ── Reviewer approves a review task ──────────────────────────────────
@@ -22914,14 +23047,22 @@ async function batchBulkLink(realmId) {
 
 
 // ══════════════════════════════════════════════════════════════════
-//  P&L DIGESTER
+//  P&L DIGESTER v2 — Intelligent Close Review & Meeting Prep
 // ══════════════════════════════════════════════════════════════════
 
-let plFlags = [];        // current run flags
-let plResolvedFlags = {}; // { index: { note, resolvedAt } }
+let plFlags = [];              // current run flags (merged rule + AI)
+let plResolvedFlags = {};      // { index: { note, resolvedAt } }
 let plCurrentFilter = 'all';
 let plSelectedClient = null;
-let plRawReport = null;
+let plRawReport = null;        // raw QBO summary report
+let plDetailReport = null;     // raw QBO detail report (current month)
+let plMeetingPrep = null;      // { executiveSummary, talkingPoints[], clientInsights[], actionItems[] }
+let plStructuralFindings = null; // AI Pass 1 results
+let plHistoryData = {};        // loaded 6-month history for current run
+let plCurrentSummary = null;   // summary metrics for current run
+let plPrevSummary = null;      // prior month summary for MoM comparison
+let plFleetData = null;        // fleet data for current run
+let plAnticipatedExpenses = []; // loaded anticipated expenses for selected client
 
 // ── Scooters COA Rule Engine ─────────────────────────────────────
 const PL_ALWAYS_FLAG = ['Uncategorized Expense','Uncategorized Income','Uncategorized Asset','Ask My Accountant','Reconciliation Discrepancies'];
@@ -22967,10 +23108,75 @@ function plOnClientChange() {
     document.getElementById('pl-client-qb-badge').style.color = client.qboRealmId ? '#2ca01c' : 'var(--red)';
     document.getElementById('pl-client-qb-badge').style.background = client.qboRealmId ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
     runBtn.disabled = !client.qboRealmId;
+    // Load anticipated expenses for this client
+    plLoadAnticipated(client.qboRealmId);
   } else {
     infoBar.style.display = 'none';
     runBtn.disabled = true;
+    plAnticipatedExpenses = [];
+    plRenderAnticipated();
   }
+}
+
+// ── Anticipated Expenses Management ──────────────────────────────
+async function plLoadAnticipated(realmId) {
+  if (!realmId) return;
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/anticipated/${realmId}`).then(r => r.json());
+    plAnticipatedExpenses = res.expenses || [];
+  } catch(e) { plAnticipatedExpenses = []; }
+  plRenderAnticipated();
+}
+
+function plRenderAnticipated() {
+  const body = document.getElementById('pl-anticipated-body');
+  const countEl = document.getElementById('pl-anticipated-count');
+  if (!body) return;
+  countEl.textContent = `(${plAnticipatedExpenses.length} configured)`;
+  if (!plAnticipatedExpenses.length) {
+    body.innerHTML = '<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--text-d);font-size:11px;">No expected expenses configured. Click "Apply Scooter\'s Template" to start.</td></tr>';
+    return;
+  }
+  body.innerHTML = plAnticipatedExpenses.map((e, i) => `<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:4px 8px;"><input type="text" value="${e.name||''}" onchange="plAnticipatedExpenses[${i}].name=this.value" class="field-input" style="font-size:11px;padding:3px 6px;"></td>
+    <td style="padding:4px 8px;"><input type="number" value="${e.amount||''}" onchange="plAnticipatedExpenses[${i}].amount=parseFloat(this.value)||null" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:80px;" placeholder="$0"></td>
+    <td style="padding:4px 8px;"><input type="number" value="${e.pctOfSales ? (e.pctOfSales*100).toFixed(1) : ''}" onchange="plAnticipatedExpenses[${i}].pctOfSales=this.value?(parseFloat(this.value)/100):null" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:60px;" placeholder="%" step="0.1"></td>
+    <td style="padding:4px 8px;"><input type="number" value="${e.tolerance ? (e.tolerance*100).toFixed(0) : '15'}" onchange="plAnticipatedExpenses[${i}].tolerance=parseFloat(this.value)/100" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:50px;" placeholder="%" step="5">%</td>
+    <td style="padding:4px 4px;"><button onclick="plAnticipatedExpenses.splice(${i},1);plRenderAnticipated()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button></td>
+  </tr>`).join('');
+}
+
+function plAddAnticipatedRow() {
+  plAnticipatedExpenses.push({ name: '', amount: null, pctOfSales: null, tolerance: 0.15 });
+  plRenderAnticipated();
+}
+
+async function plApplyTemplate(templateName) {
+  if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/anticipated/apply-template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, templateName }),
+    }).then(r => r.json());
+    if (res.success) {
+      plAnticipatedExpenses = res.expenses || [];
+      plRenderAnticipated();
+      showToast(`Template "${templateName}" applied`);
+    }
+  } catch(e) { showToast('Failed to apply template'); }
+}
+
+async function plSaveAnticipated() {
+  if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
+  try {
+    await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expenses: plAnticipatedExpenses }),
+    });
+    showToast('Expected expenses saved');
+  } catch(e) { showToast('Failed to save'); }
 }
 
 // ── Quick period selector ────────────────────────────────────────
@@ -22997,7 +23203,7 @@ function plSetQuickPeriod(val) {
   if (end)   document.getElementById('pl-end-date').value   = end.toISOString().slice(0,10);
 }
 
-// ── Run the full digest ──────────────────────────────────────────
+// ── Run the full v2 digest (12-step pipeline) ───────────────────
 async function plRunDigest() {
   if (!plSelectedClient?.qboRealmId) { showToast('Select a client with a QBO Realm ID'); return; }
   const startDate = document.getElementById('pl-start-date').value;
@@ -23009,100 +23215,177 @@ async function plRunDigest() {
   plFlags = [];
   plResolvedFlags = {};
   plCurrentFilter = 'all';
+  plMeetingPrep = null;
+  plStructuralFindings = null;
+  plDetailReport = null;
+  plPrevSummary = null;
 
-  // Show progress
   const progWrap = document.getElementById('pl-progress-wrap');
   progWrap.style.display = '';
-  plProgress(10, 'Pulling P&L from QBO...');
 
   try {
-    // Step 1: Pull P&L from QBO
+    // ── Step 1: Pull P&L Detail for current month ──────────────
+    plProgress(5, 'Pulling P&L detail from QBO...');
+    const detailRes = await fetch(`${QBO_SERVER}/qbo/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType: 'detail' } }),
+    }).then(r => r.json());
+    plDetailReport = detailRes.success ? detailRes.report : null;
+
+    // ── Step 2: Pull P&L Summary for current month ─────────────
+    plProgress(10, 'Pulling P&L summary...');
     const plRes = await fetch(`${QBO_SERVER}/qbo/api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType } }),
     }).then(r => r.json());
-
     if (!plRes.success) throw new Error(plRes.error || 'Failed to fetch P&L');
     plRawReport = plRes.report;
-    plProgress(30, 'P&L received — parsing accounts...');
 
-    // Step 2: Parse the QBO report into account lines
+    // ── Step 3: Pull trailing 5 months of history from QBO ─────
+    plProgress(15, 'Pulling 5-month history from QBO...');
+    const sd = new Date(startDate);
+    const histPeriods = [];
+    for (let i = 1; i <= 5; i++) {
+      const s = new Date(sd.getFullYear(), sd.getMonth() - i, 1);
+      const e = new Date(sd.getFullYear(), sd.getMonth() - i + 1, 0);
+      histPeriods.push({ startDate: s.toISOString().slice(0,10), endDate: e.toISOString().slice(0,10), label: s.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) });
+    }
+    let trailingHistory = {};
+    try {
+      const histBatch = await fetch(`${QBO_SERVER}/qbo/api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getProfitAndLossHistory', realmId: plSelectedClient.qboRealmId, payload: { periods: histPeriods } }),
+      }).then(r => r.json());
+      if (histBatch.success) {
+        for (const result of histBatch.results) {
+          const accts = plParseReport(result.report);
+          const metrics = plBuildSummary(accts);
+          const period = `${result.startDate}_${result.endDate}`;
+          trailingHistory[period] = { metrics, accounts: accts, savedAt: new Date().toISOString() };
+          // Save to server history
+          try {
+            await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ period, metrics, accounts: accts }),
+            });
+          } catch(e) {}
+        }
+      }
+    } catch(e) { console.log('History batch failed:', e.message); }
+
+    // Also load any existing server history
+    try {
+      const existingHist = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
+      plHistoryData = { ...existingHist.history, ...trailingHistory };
+    } catch(e) { plHistoryData = trailingHistory; }
+
+    // Get previous month summary for MoM
+    const prevPeriods = Object.keys(plHistoryData).sort().reverse();
+    if (prevPeriods.length > 0) {
+      plPrevSummary = plHistoryData[prevPeriods[0]]?.metrics || null;
+    }
+
+    plProgress(30, 'Parsing current month...');
+
+    // ── Step 4: Parse current month + build summary ────────────
     const accounts = plParseReport(plRes.report);
-    plProgress(40, `Parsed ${accounts.length} accounts — running rule engine...`);
+    plCurrentSummary = plBuildSummary(accounts);
 
-    // Step 3: Run local rule engine
-    const ruleFlags = plRunRuleEngine(accounts);
-    plProgress(50, `${ruleFlags.length} rule flags — loading fleet data...`);
+    // ── Step 5: Load anticipated expenses ──────────────────────
+    plProgress(35, 'Loading expected expenses...');
+    try {
+      const antRes = await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`).then(r => r.json());
+      plAnticipatedExpenses = antRes.expenses || [];
+    } catch(e) {}
 
-    // Step 4: Get fleet data
-    let fleetContext = null;
+    // ── Step 6: Load fleet data ────────────────────────────────
+    plProgress(38, 'Loading fleet data...');
     try {
       const fleetRes = await fetch(`${QBO_SERVER}/pl/fleet`).then(r => r.json());
-      fleetContext = fleetRes.fleet;
-    } catch(e) { console.log('Fleet data unavailable'); }
+      plFleetData = fleetRes.fleet;
+    } catch(e) { plFleetData = null; }
 
-    // Step 5: Get history for this store
-    let historyContext = null;
+    // ── Step 7: Run enhanced local rule engine ─────────────────
+    plProgress(42, 'Running rule engine + pattern analysis...');
+    const ruleFlags = plRunRuleEngine(accounts);
+    const patternFlags = plAnalyzePatterns(accounts, plHistoryData);
+    const anticipatedFlags = plCheckAnticipated(accounts, plCurrentSummary);
+    const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags];
+
+    plProgress(50, `${allLocalFlags.length} local flags — sending to AI for deep analysis...`);
+
+    // ── Step 8: AI Pass 1 — Structural Analysis ────────────────
+    plProgress(55, 'AI analyzing P&L structure...');
     try {
-      const histRes = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
-      historyContext = histRes.history;
-    } catch(e) { console.log('History unavailable'); }
-
-    plProgress(60, 'Sending to AI for deep analysis...');
-
-    // Step 6: AI analysis
-    const summary = plBuildSummary(accounts);
-    let aiFlags = [];
-    try {
-      const aiRes = await fetch(`${QBO_SERVER}/pl/digest`, {
+      const analyzeRes = await fetch(`${QBO_SERVER}/pl/digest/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plData: accounts,
-          preFlags: ruleFlags,
-          summary,
-          history: historyContext,
-          fleetContext,
+          preFlags: allLocalFlags,
+          summary: plCurrentSummary,
+          history: plHistoryData,
+          fleetContext: plFleetData,
+          anticipated: plAnticipatedExpenses,
           clientName: plSelectedClient.biz,
+          period: `${startDate} to ${endDate}`,
         }),
       }).then(r => r.json());
-      if (aiRes.success) aiFlags = aiRes.flags || [];
-    } catch(e) {
-      console.error('AI analysis failed:', e);
-      aiFlags = [{ severity: 'INFO', category: 'System', account: '', amount: null, message: 'AI analysis unavailable — showing rule engine results only.', suggestedAccount: null, variance: null }];
-    }
+      if (analyzeRes.success) {
+        plStructuralFindings = analyzeRes.findings;
+      }
+    } catch(e) { console.error('AI Pass 1 failed:', e); }
 
-    plProgress(85, 'Merging results...');
+    // Convert structural findings to flags
+    const aiFlags = plFindingsToFlags(plStructuralFindings);
+    plProgress(70, 'Merging results...');
 
-    // Step 7: Merge rule + AI flags, dedup
-    plFlags = plMergeFlags(ruleFlags, aiFlags);
+    // ── Step 9: Merge all flags ────────────────────────────────
+    plFlags = plMergeFlags(allLocalFlags, aiFlags);
 
-    // Step 8: Save to history
+    // ── Step 10: AI Pass 2 — Meeting Prep ──────────────────────
+    plProgress(75, 'Generating meeting prep...');
+    try {
+      const prepRes = await fetch(`${QBO_SERVER}/pl/digest/meeting-prep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          findings: plStructuralFindings || {},
+          summary: plCurrentSummary,
+          clientName: plSelectedClient.biz,
+          period: `${startDate} to ${endDate}`,
+        }),
+      }).then(r => r.json());
+      if (prepRes.success) plMeetingPrep = prepRes.prep;
+    } catch(e) { console.error('AI Pass 2 failed:', e); }
+
+    // ── Step 11: Save enriched history + fleet contribution ────
+    plProgress(90, 'Saving data...');
     try {
       const period = `${startDate}_${endDate}`;
       await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, metrics: summary, accounts: accounts.map(a => a.name) }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, metrics: plCurrentSummary, accounts }),
       });
-    } catch(e) { console.log('Failed to save history'); }
-
-    // Step 9: Contribute to fleet
+    } catch(e) {}
     try {
       await fetch(`${QBO_SERVER}/pl/fleet/contribute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, accounts: accounts.map(a => a.name) }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, accounts, revenue: plCurrentSummary.sales }),
       });
-    } catch(e) { console.log('Failed to contribute to fleet'); }
+    } catch(e) {}
 
+    // ── Step 12: Render everything ─────────────────────────────
     plProgress(100, 'Done!');
     setTimeout(() => { progWrap.style.display = 'none'; }, 600);
-
-    // Render results
     plRenderResults();
-    qboLog('success', `P&L Digest complete: <strong>${plFlags.length} flags</strong> for ${plSelectedClient.biz}`);
+    plRenderMeetingPrep();
+    plRenderFleetComparison();
+    await plLoadHistoryPanel();
+    qboLog('success', `P&L Digest v2 complete: <strong>${plFlags.length} flags</strong> for ${plSelectedClient.biz}`);
 
   } catch (e) {
     progWrap.style.display = 'none';
@@ -23169,6 +23452,207 @@ function plBuildSummary(accounts) {
   const rent = find('Rent');
   const net = find('Net Income') || find('Net Ordinary Income');
   return { sales: Math.abs(sales), cogs: Math.abs(cogs), payroll, royalty: Math.abs(royalty), rent: Math.abs(rent), netIncome: net, accountCount: accounts.length };
+}
+
+// ── Pattern Learning Engine ───────────────────────────────────────
+function plAnalyzePatterns(currentAccounts, historyData) {
+  const flags = [];
+  const periods = Object.keys(historyData || {}).sort();
+  if (periods.length < 2) return flags; // need at least 2 months
+
+  // Build a map of account → [amounts across months]
+  const accountHistory = {};
+  for (const p of periods) {
+    const accts = historyData[p]?.accounts || [];
+    const acctList = Array.isArray(accts) ? accts : [];
+    for (const a of acctList) {
+      const name = typeof a === 'string' ? a : a.name;
+      const amount = typeof a === 'object' ? a.amount : 0;
+      if (!name) continue;
+      if (!accountHistory[name]) accountHistory[name] = [];
+      accountHistory[name].push({ period: p, amount: Math.abs(amount || 0) });
+    }
+  }
+
+  const currentNames = new Set(currentAccounts.map(a => a.name.toLowerCase()));
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+  // Check for missing recurring accounts
+  for (const [name, history] of Object.entries(accountHistory)) {
+    const appearedCount = history.filter(h => h.amount > 0).length;
+    // If account appeared in 4+ of last 6 months but not this month
+    if (appearedCount >= Math.min(4, periods.length) && !currentNames.has(name.toLowerCase())) {
+      const avgAmount = history.reduce((s, h) => s + h.amount, 0) / history.length;
+      flags.push({
+        severity: avgAmount > 500 ? 'CRITICAL' : 'WARNING',
+        category: 'Missing Recurring',
+        account: name,
+        amount: null,
+        message: `"${name}" appeared in ${appearedCount} of the last ${periods.length} months (avg ${fmt$(avgAmount)}/mo) but is MISSING this month. This may indicate a missed posting.`,
+        suggestedAccount: null,
+        variance: 'MISSING',
+        source: 'pattern',
+      });
+    }
+  }
+
+  // Check for significant variance from historical average
+  for (const acct of currentAccounts) {
+    const history = accountHistory[acct.name];
+    if (!history || history.length < 3) continue;
+    const amounts = history.map(h => h.amount).filter(a => a > 0);
+    if (amounts.length < 2) continue;
+    const avg = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    if (avg < 50) continue; // skip tiny accounts
+    const currentAmt = Math.abs(acct.amount);
+    const variancePct = avg > 0 ? ((currentAmt - avg) / avg) * 100 : 0;
+
+    if (Math.abs(variancePct) > 50) {
+      flags.push({
+        severity: 'CRITICAL', category: 'Historical Variance', account: acct.name,
+        amount: acct.amount,
+        message: `${acct.name} is ${fmt$(currentAmt)} this month vs ${fmt$(avg)} average (${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}% variance). This is a significant deviation from the ${amounts.length}-month pattern.`,
+        suggestedAccount: null, variance: `${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}%`, source: 'pattern',
+      });
+    } else if (Math.abs(variancePct) > 25) {
+      flags.push({
+        severity: 'WARNING', category: 'Historical Variance', account: acct.name,
+        amount: acct.amount,
+        message: `${acct.name} is ${fmt$(currentAmt)} this month vs ${fmt$(avg)} average (${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}% variance).`,
+        suggestedAccount: null, variance: `${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}%`, source: 'pattern',
+      });
+    }
+  }
+
+  // Detect expense creep (3+ consecutive months of increase as % of revenue)
+  if (periods.length >= 3) {
+    const metricsByPeriod = periods.map(p => historyData[p]?.metrics).filter(Boolean);
+    if (metricsByPeriod.length >= 3) {
+      const checkCreep = (label, getValue) => {
+        const values = metricsByPeriod.map(m => getValue(m)).filter(v => v > 0);
+        if (values.length < 3) return;
+        let consecutiveUp = 0;
+        for (let i = 1; i < values.length; i++) {
+          if (values[i] > values[i-1]) consecutiveUp++;
+          else consecutiveUp = 0;
+        }
+        if (consecutiveUp >= 3) {
+          const first = values[values.length - consecutiveUp - 1];
+          const last = values[values.length - 1];
+          flags.push({
+            severity: 'WARNING', category: 'Expense Creep', account: label,
+            amount: null,
+            message: `${label} has been increasing for ${consecutiveUp} consecutive months. Started at ${(first*100).toFixed(1)}% of revenue, now at ${(last*100).toFixed(1)}%.`,
+            suggestedAccount: null, variance: `${(first*100).toFixed(1)}% → ${(last*100).toFixed(1)}%`, source: 'pattern',
+          });
+        }
+      };
+      checkCreep('Payroll', m => m.sales > 0 ? m.payroll / m.sales : 0);
+      checkCreep('COGS', m => m.sales > 0 ? m.cogs / m.sales : 0);
+    }
+  }
+
+  // Detect new accounts (not seen in any prior month)
+  for (const acct of currentAccounts) {
+    if (!accountHistory[acct.name] && Math.abs(acct.amount) > 100) {
+      flags.push({
+        severity: 'INFO', category: 'New Account', account: acct.name,
+        amount: acct.amount,
+        message: `"${acct.name}" (${fmt$(acct.amount)}) is new this month — not seen in any of the prior ${periods.length} months. Verify this is correctly categorized.`,
+        suggestedAccount: null, variance: 'NEW', source: 'pattern',
+      });
+    }
+  }
+
+  return flags;
+}
+
+// ── Anticipated Expense Checker ──────────────────────────────────
+function plCheckAnticipated(accounts, summary) {
+  const flags = [];
+  if (!plAnticipatedExpenses.length) return flags;
+  const sales = summary?.sales || 1;
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+  for (const exp of plAnticipatedExpenses) {
+    if (!exp.name) continue;
+    const tolerance = exp.tolerance || 0.15;
+    const match = accounts.find(a => a.name.toLowerCase().includes(exp.name.toLowerCase()));
+
+    if (!match) {
+      // Expected expense is completely missing
+      const expectedAmt = exp.amount || (exp.pctOfSales ? exp.pctOfSales * sales : null);
+      flags.push({
+        severity: 'CRITICAL', category: 'Missing Expected', account: exp.name,
+        amount: null,
+        message: `Expected monthly expense "${exp.name}"${expectedAmt ? ` of ~${fmt$(expectedAmt)}` : ''} is NOT on this month's P&L. This likely needs to be posted.`,
+        suggestedAccount: null, variance: 'MISSING', source: 'anticipated',
+      });
+    } else {
+      // Check if amount is within tolerance
+      const actualAmt = Math.abs(match.amount);
+      let expectedAmt = null;
+      let varianceMsg = '';
+
+      if (exp.amount) {
+        expectedAmt = exp.amount;
+        const diff = (actualAmt - expectedAmt) / expectedAmt;
+        if (Math.abs(diff) > tolerance) {
+          varianceMsg = `${fmt$(actualAmt)} actual vs ${fmt$(expectedAmt)} expected (${(diff*100).toFixed(0)}% ${diff > 0 ? 'over' : 'under'})`;
+        }
+      } else if (exp.pctOfSales) {
+        const expectedPct = exp.pctOfSales;
+        const actualPct = actualAmt / sales;
+        const diff = (actualPct - expectedPct) / expectedPct;
+        if (Math.abs(diff) > tolerance) {
+          varianceMsg = `${(actualPct*100).toFixed(1)}% of sales vs expected ${(expectedPct*100).toFixed(1)}% (${fmt$(actualAmt)} actual)`;
+        }
+      }
+
+      if (varianceMsg) {
+        flags.push({
+          severity: Math.abs((actualAmt - (expectedAmt || 0)) / (expectedAmt || 1)) > tolerance * 2 ? 'CRITICAL' : 'WARNING',
+          category: 'Expected Variance', account: match.name,
+          amount: match.amount,
+          message: `${match.name}: ${varianceMsg}. Tolerance is ±${(tolerance*100).toFixed(0)}%.`,
+          suggestedAccount: null, variance: varianceMsg.split('(')[1]?.replace(')','') || '', source: 'anticipated',
+        });
+      }
+    }
+  }
+  return flags;
+}
+
+// ── Convert AI structural findings to flat flags ─────────────────
+function plFindingsToFlags(findings) {
+  if (!findings) return [];
+  const flags = [];
+  const categories = [
+    { key: 'missingExpenses', category: 'Missing (AI)' },
+    { key: 'varianceAlerts', category: 'Variance (AI)' },
+    { key: 'trendFindings', category: 'Trend (AI)' },
+    { key: 'anomalies', category: 'Anomaly (AI)' },
+    { key: 'fleetComparisons', category: 'Fleet (AI)' },
+    { key: 'newAccounts', category: 'New Acct (AI)' },
+    { key: 'disappearedAccounts', category: 'Disappeared (AI)' },
+  ];
+  for (const { key, category } of categories) {
+    const items = findings[key];
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      flags.push({
+        severity: item.severity || 'INFO',
+        category,
+        account: item.account || item.metric || '',
+        amount: item.amount || item.currentAmount || null,
+        message: item.message || '',
+        suggestedAccount: item.suggestedAccount || null,
+        variance: item.variance || item.direction || null,
+        source: 'ai',
+      });
+    }
+  }
+  return flags;
 }
 
 // ── Local rule engine ────────────────────────────────────────────
@@ -23244,6 +23728,69 @@ function plRenderResults() {
   document.getElementById('pl-results-wrap').style.display = '';
   plUpdateStats();
   plRenderFlags();
+}
+
+// ── Render meeting prep card ─────────────────────────────────────
+function plRenderMeetingPrep() {
+  const card = document.getElementById('pl-meeting-prep-card');
+  if (!card) return;
+  if (!plMeetingPrep) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const esc = (s) => s ? s.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+  document.getElementById('pl-exec-summary').innerHTML = esc(plMeetingPrep.executiveSummary || 'No summary available.');
+
+  const tpList = document.getElementById('pl-talking-points');
+  tpList.innerHTML = (plMeetingPrep.talkingPoints || []).map(tp => `<li style="margin-bottom:4px;">${esc(tp)}</li>`).join('');
+
+  const aiList = document.getElementById('pl-action-items');
+  aiList.innerHTML = (plMeetingPrep.actionItems || []).map(ai => `<li style="margin-bottom:4px;">${esc(ai)}</li>`).join('');
+
+  const ciList = document.getElementById('pl-client-insights');
+  ciList.innerHTML = (plMeetingPrep.clientInsights || []).map(ci => `<li style="margin-bottom:4px;">${esc(ci)}</li>`).join('');
+}
+
+// ── Render fleet comparison ──────────────────────────────────────
+function plRenderFleetComparison() {
+  const card = document.getElementById('pl-fleet-card');
+  if (!card || !plFleetData || !plCurrentSummary) { if (card) card.style.display = 'none'; return; }
+  const storeCount = plFleetData.storeCount || 0;
+  if (storeCount < 2) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('pl-fleet-store-count').textContent = `${storeCount} stores`;
+
+  const sales = plCurrentSummary.sales || 1;
+  const metrics = [
+    { label: 'COGS', value: plCurrentSummary.cogs, search: 'Cost of Goods Sold' },
+    { label: 'Payroll', value: plCurrentSummary.payroll, search: 'Payroll' },
+    { label: 'Royalty', value: plCurrentSummary.royalty, search: 'Royalty Fees' },
+    { label: 'Rent', value: plCurrentSummary.rent, search: 'Rent' },
+  ];
+
+  const body = document.getElementById('pl-fleet-body');
+  body.innerHTML = metrics.map(m => {
+    const storePct = (m.value / sales) * 100;
+    const fleetAcct = Object.entries(plFleetData.accounts || {}).find(([name]) => name.toLowerCase().includes(m.search.toLowerCase()));
+    const fleetPct = fleetAcct ? (fleetAcct[1].avgPct || 0) * 100 : null;
+    if (fleetPct === null) return '';
+    const diff = storePct - fleetPct;
+    const color = Math.abs(diff) < 3 ? 'var(--green)' : diff > 0 ? 'var(--red)' : 'var(--blue)';
+    const barMax = Math.max(storePct, fleetPct, 50);
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
+        <span style="font-weight:600;color:var(--text);">${m.label}</span>
+        <span style="color:${color};font-weight:600;">${storePct.toFixed(1)}% vs ${fleetPct.toFixed(1)}% fleet avg</span>
+      </div>
+      <div style="display:flex;gap:4px;height:6px;">
+        <div style="flex:${storePct/barMax};background:var(--navy);border-radius:3px;"></div>
+        <div style="flex:${(barMax-storePct)/barMax};background:var(--surface2);border-radius:3px;"></div>
+      </div>
+      <div style="display:flex;gap:4px;height:4px;margin-top:2px;">
+        <div style="flex:${fleetPct/barMax};background:var(--text-d);border-radius:2px;opacity:.4;"></div>
+        <div style="flex:${(barMax-fleetPct)/barMax};"></div>
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
 }
 
 function plUpdateStats() {
@@ -23384,7 +23931,7 @@ async function plGetHistory() {
       await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period, metrics, accounts: accounts.map(a => a.name) }),
+        body: JSON.stringify({ period, metrics, accounts }),
       });
       saved++;
     }
@@ -23440,8 +23987,15 @@ function plClearResults() {
   plFlags = [];
   plResolvedFlags = {};
   plRawReport = null;
+  plDetailReport = null;
+  plMeetingPrep = null;
+  plStructuralFindings = null;
+  plCurrentSummary = null;
+  plPrevSummary = null;
   document.getElementById('pl-results-wrap').style.display = 'none';
   document.getElementById('pl-progress-wrap').style.display = 'none';
+  document.getElementById('pl-meeting-prep-card').style.display = 'none';
+  document.getElementById('pl-fleet-card').style.display = 'none';
   document.getElementById('pl-status-badge').textContent = 'Ready';
   document.getElementById('pl-status-badge').style.background = 'var(--surface2)';
   document.getElementById('pl-status-badge').style.color = 'var(--text-d)';
@@ -23523,6 +24077,416 @@ function plExportReport(type) {
   URL.revokeObjectURL(url);
 }
 
+
+// ── Meeting Prep PDF Generator (3+ pages) ────────────────────────
+async function plGenerateMeetingPDF() {
+  if (!plSelectedClient || !plCurrentSummary) { showToast('Run a digest first'); return; }
+
+  // Load jsPDF
+  if (typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined') {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const jsPDF = window.jsPDF?.jsPDF || window.jspdf?.jsPDF || window.jsPDF;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+
+  const PW = 612, PH = 792;
+  const ML = 54, MR = 558, MT = 72;
+  let y = MT;
+  let pageNum = 1;
+
+  const navy = [26, 36, 64];
+  const dark = [30, 30, 30];
+  const gray = [100, 100, 100];
+  const lgray = [200, 200, 200];
+  const white = [255, 255, 255];
+  const green = [46, 125, 94];
+  const red = [176, 58, 58];
+  const amber = [176, 106, 26];
+  const accent = [31, 78, 121];
+
+  const setFont = (style, size, color) => { doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(...(color || dark)); };
+  const drawLine = (x1, yy, x2, w, color) => { doc.setLineWidth(w || 0.5); doc.setDrawColor(...(color || lgray)); doc.line(x1, yy, x2, yy); };
+  const fmt$ = (n) => '$' + Math.abs(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const fmtPct = (n) => (n * 100).toFixed(1) + '%';
+
+  const period = `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`;
+  const clientName = plSelectedClient.biz || 'Client';
+  const summary = plCurrentSummary;
+  const sales = summary.sales || 1;
+
+  const drawFooter = () => {
+    setFont('normal', 7, gray);
+    doc.text('Prepared by Ark Financial Services', ML, PH - 30);
+    doc.text(`Page ${pageNum}`, MR - 30, PH - 30);
+    setFont('normal', 6, lgray);
+    doc.text('Confidential — for client use only', PW / 2, PH - 20, { align: 'center' });
+  };
+
+  const newPage = () => { drawFooter(); pageNum++; doc.addPage(); y = MT; };
+  const checkY = (needed) => { if (y + needed > PH - 60) newPage(); };
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 1 — EXECUTIVE DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+
+  // Header bar
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, PW, 80, 'F');
+  setFont('bold', 20, white);
+  doc.text('Ark Financial', ML, 32);
+  setFont('normal', 9, [150, 170, 200]);
+  doc.text('MONTHLY P&L REVIEW', ML, 46);
+  setFont('bold', 11, white);
+  doc.text(clientName, ML, 64);
+  setFont('normal', 9, [150, 170, 200]);
+  doc.text(period, MR - doc.getTextWidth(period), 64);
+
+  y = 100;
+
+  // Key Metrics Grid (2 rows x 3 cols)
+  setFont('bold', 12, navy);
+  doc.text('Key Performance Metrics', ML, y); y += 18;
+
+  const metricBoxW = (MR - ML - 20) / 3;
+  const metricBoxH = 60;
+  const metricsGrid = [
+    { label: 'Gross Sales', value: fmt$(sales), sub: plPrevSummary ? `MoM: ${((sales - plPrevSummary.sales) / (plPrevSummary.sales || 1) * 100).toFixed(1)}%` : '' },
+    { label: 'COGS %', value: fmtPct(summary.cogs / sales), sub: `${fmt$(summary.cogs)}` },
+    { label: 'Total Payroll %', value: fmtPct(summary.payroll / sales), sub: `${fmt$(summary.payroll)}` },
+    { label: 'Net Income', value: fmt$(summary.netIncome), sub: `${fmtPct(summary.netIncome / sales)} margin` },
+    { label: 'Rent', value: fmt$(summary.rent), sub: `${fmtPct(summary.rent / sales)} of sales` },
+    { label: 'Flags', value: `${plFlags.length} total`, sub: `${plFlags.filter(f => f.severity === 'CRITICAL').length} critical` },
+  ];
+
+  for (let i = 0; i < metricsGrid.length; i++) {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const x = ML + col * (metricBoxW + 10);
+    const boxY = y + row * (metricBoxH + 8);
+
+    doc.setFillColor(245, 243, 239);
+    doc.roundedRect(x, boxY, metricBoxW, metricBoxH, 4, 4, 'F');
+
+    setFont('normal', 8, gray);
+    doc.text(metricsGrid[i].label, x + 10, boxY + 16);
+    setFont('bold', 18, navy);
+    doc.text(metricsGrid[i].value, x + 10, boxY + 38);
+    if (metricsGrid[i].sub) {
+      const subColor = metricsGrid[i].sub.includes('-') ? red : green;
+      setFont('normal', 8, metricsGrid[i].label === 'Flags' && plFlags.filter(f=>f.severity==='CRITICAL').length > 0 ? red : gray);
+      doc.text(metricsGrid[i].sub, x + 10, boxY + 52);
+    }
+  }
+
+  y += 2 * (metricBoxH + 8) + 20;
+
+  // MoM Comparison bars
+  if (plPrevSummary) {
+    checkY(100);
+    setFont('bold', 10, navy);
+    doc.text('Month-over-Month Comparison', ML, y); y += 16;
+
+    const momMetrics = [
+      { label: 'Sales', current: sales, prev: plPrevSummary.sales },
+      { label: 'COGS', current: summary.cogs, prev: plPrevSummary.cogs },
+      { label: 'Payroll', current: summary.payroll, prev: plPrevSummary.payroll },
+      { label: 'Net Income', current: summary.netIncome, prev: plPrevSummary.netIncome },
+    ];
+
+    for (const m of momMetrics) {
+      const change = m.prev > 0 ? ((m.current - m.prev) / m.prev * 100) : 0;
+      const barW = MR - ML - 140;
+      const maxVal = Math.max(Math.abs(m.current), Math.abs(m.prev)) || 1;
+
+      setFont('normal', 8, dark);
+      doc.text(m.label, ML, y + 8);
+
+      // Current bar
+      const currBarW = (Math.abs(m.current) / maxVal) * barW * 0.6;
+      doc.setFillColor(...navy);
+      doc.roundedRect(ML + 80, y, currBarW, 7, 2, 2, 'F');
+
+      // Previous bar
+      const prevBarW = (Math.abs(m.prev) / maxVal) * barW * 0.6;
+      doc.setFillColor(200, 200, 200);
+      doc.roundedRect(ML + 80, y + 9, prevBarW, 5, 2, 2, 'F');
+
+      // Change %
+      setFont('bold', 8, change >= 0 ? (m.label === 'COGS' || m.label === 'Payroll' ? (change > 5 ? red : gray) : green) : (m.label === 'Sales' || m.label === 'Net Income' ? red : green));
+      doc.text(`${change >= 0 ? '+' : ''}${change.toFixed(1)}%`, MR - 40, y + 8);
+
+      setFont('normal', 7, gray);
+      doc.text(fmt$(m.current), ML + 82 + currBarW + 4, y + 7);
+
+      y += 22;
+    }
+    y += 10;
+  }
+
+  // Executive Summary
+  if (plMeetingPrep?.executiveSummary) {
+    checkY(80);
+    setFont('bold', 10, navy);
+    doc.text('Executive Summary', ML, y); y += 14;
+    setFont('normal', 9, dark);
+    const lines = doc.splitTextToSize(plMeetingPrep.executiveSummary, MR - ML);
+    doc.text(lines, ML, y); y += lines.length * 12 + 10;
+  }
+
+  // Talking Points
+  if (plMeetingPrep?.talkingPoints?.length) {
+    checkY(60);
+    setFont('bold', 10, navy);
+    doc.text('Discussion Points', ML, y); y += 14;
+    for (const tp of plMeetingPrep.talkingPoints) {
+      checkY(30);
+      setFont('normal', 8, dark);
+      const lines = doc.splitTextToSize(tp, MR - ML - 14);
+      doc.text('\u2022', ML, y);
+      doc.text(lines, ML + 14, y);
+      y += lines.length * 11 + 4;
+    }
+    y += 6;
+  }
+
+  // Action Items
+  if (plMeetingPrep?.actionItems?.length) {
+    checkY(60);
+    setFont('bold', 10, navy);
+    doc.text('Action Items', ML, y); y += 14;
+    for (const ai of plMeetingPrep.actionItems) {
+      checkY(30);
+      setFont('normal', 8, dark);
+      const lines = doc.splitTextToSize(ai, MR - ML - 14);
+      doc.setFillColor(...red);
+      doc.circle(ML + 4, y - 3, 2, 'F');
+      doc.text(lines, ML + 14, y);
+      y += lines.length * 11 + 4;
+    }
+  }
+
+  drawFooter();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 2 — P&L STATEMENT
+  // ═══════════════════════════════════════════════════════════════
+  newPage();
+
+  // Header
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, PW, 50, 'F');
+  setFont('bold', 14, white);
+  doc.text('Profit & Loss Statement', ML, 32);
+  setFont('normal', 9, [150, 170, 200]);
+  doc.text(`${clientName} — ${period}`, MR - doc.getTextWidth(`${clientName} — ${period}`), 32);
+
+  y = 70;
+
+  // Parse and render P&L in a clean format
+  const plAccounts = plParseReport(plRawReport);
+
+  // Build sections from the raw report structure
+  const sections = [];
+  let currentSection = null;
+
+  function walkForPDF(rows, depth) {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.Header?.ColData) {
+        const name = row.Header.ColData[0]?.value || '';
+        if (name) {
+          currentSection = { name, accounts: [], total: 0, depth };
+          sections.push(currentSection);
+        }
+        if (row.Rows?.Row) walkForPDF(row.Rows.Row, depth + 1);
+        if (row.Summary?.ColData) {
+          const total = parseFloat(row.Summary.ColData[1]?.value) || 0;
+          if (currentSection) currentSection.total = total;
+        }
+      } else if (row.ColData && currentSection) {
+        const name = row.ColData[0]?.value || '';
+        const amt = parseFloat(row.ColData[1]?.value) || 0;
+        if (name && amt !== 0) {
+          currentSection.accounts.push({ name, amount: amt });
+        }
+      }
+      if (row.Rows?.Row && !row.Header) walkForPDF(row.Rows.Row, depth);
+    }
+  }
+  walkForPDF(plRawReport?.Rows?.Row || [], 0);
+
+  // Column headers
+  setFont('bold', 8, gray);
+  doc.text('Account', ML, y);
+  doc.text('Amount', MR - 80, y, { align: 'right' });
+  doc.text('% of Sales', MR, y, { align: 'right' });
+  y += 6;
+  drawLine(ML, y, MR, 1, navy); y += 12;
+
+  for (const section of sections) {
+    checkY(40);
+
+    // Section header
+    setFont('bold', 9, section.depth === 0 ? navy : accent);
+    doc.text(section.name, ML + (section.depth * 10), y);
+    y += 14;
+
+    // Accounts
+    for (const acct of section.accounts) {
+      checkY(14);
+      setFont('normal', 8, dark);
+      doc.text(acct.name, ML + 20 + (section.depth * 10), y);
+      setFont('normal', 8, dark);
+      doc.text(fmt$(acct.amount), MR - 80, y, { align: 'right' });
+      const pct = sales > 0 ? fmtPct(Math.abs(acct.amount) / sales) : '—';
+      setFont('normal', 8, gray);
+      doc.text(pct, MR, y, { align: 'right' });
+      y += 12;
+    }
+
+    // Section total
+    if (section.total !== 0) {
+      checkY(18);
+      drawLine(ML + 15, y - 2, MR, 0.3, lgray);
+      setFont('bold', 9, dark);
+      doc.text(`Total ${section.name}`, ML + 20 + (section.depth * 10), y + 6);
+      doc.text(fmt$(section.total), MR - 80, y + 6, { align: 'right' });
+      const pct = sales > 0 ? fmtPct(Math.abs(section.total) / sales) : '—';
+      setFont('bold', 8, gray);
+      doc.text(pct, MR, y + 6, { align: 'right' });
+      y += 18;
+    }
+    y += 4;
+  }
+
+  // Net Income highlight
+  checkY(40);
+  drawLine(ML, y, MR, 2, navy); y += 10;
+  doc.setFillColor(240, 245, 240);
+  doc.roundedRect(ML, y - 4, MR - ML, 24, 3, 3, 'F');
+  setFont('bold', 11, summary.netIncome >= 0 ? green : red);
+  doc.text('Net Income', ML + 10, y + 10);
+  doc.text(fmt$(summary.netIncome), MR - 80, y + 10, { align: 'right' });
+  doc.text(fmtPct(summary.netIncome / sales), MR, y + 10, { align: 'right' });
+
+  drawFooter();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 3+ — DETAIL REPORT
+  // ═══════════════════════════════════════════════════════════════
+  if (plDetailReport) {
+    newPage();
+
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, PW, 50, 'F');
+    setFont('bold', 14, white);
+    doc.text('Transaction Detail', ML, 32);
+    setFont('normal', 9, [150, 170, 200]);
+    doc.text(`${clientName} — ${period}`, MR - doc.getTextWidth(`${clientName} — ${period}`), 32);
+
+    y = 70;
+
+    setFont('normal', 8, gray);
+    doc.text('This section shows individual transactions that compose the P&L above.', ML, y); y += 16;
+
+    // Parse detail report — it has a deeper structure with transaction rows
+    const detailSections = [];
+    let detailSection = null;
+
+    function walkDetail(rows, parentName, depth) {
+      if (!rows) return;
+      for (const row of rows) {
+        if (row.Header?.ColData) {
+          const name = row.Header.ColData[0]?.value || '';
+          if (name) {
+            detailSection = { name: parentName ? `${parentName}: ${name}` : name, transactions: [], depth };
+            detailSections.push(detailSection);
+          }
+          if (row.Rows?.Row) walkDetail(row.Rows.Row, name, depth + 1);
+        } else if (row.ColData && detailSection) {
+          // Detail rows typically have: Date, Transaction Type, Num, Name, Memo, Split, Amount, Balance
+          const cols = row.ColData.map(c => c.value || '');
+          if (cols.length >= 2 && cols[0]) {
+            const amount = parseFloat(cols[cols.length - 1]) || parseFloat(cols[cols.length - 2]) || 0;
+            if (amount !== 0) {
+              detailSection.transactions.push({
+                date: cols[0] || '',
+                type: cols[1] || '',
+                num: cols[2] || '',
+                name: cols[3] || '',
+                memo: cols[4] || '',
+                amount,
+              });
+            }
+          }
+        }
+        if (row.Rows?.Row && !row.Header) walkDetail(row.Rows.Row, parentName, depth);
+      }
+    }
+    walkDetail(plDetailReport?.Rows?.Row || [], '', 0);
+
+    for (const section of detailSections) {
+      if (!section.transactions.length) continue;
+      checkY(40);
+
+      // Section header
+      setFont('bold', 9, navy);
+      doc.text(section.name, ML, y); y += 4;
+      drawLine(ML, y, MR, 0.5, accent); y += 10;
+
+      // Column headers
+      setFont('bold', 7, gray);
+      doc.text('Date', ML, y);
+      doc.text('Description', ML + 60, y);
+      doc.text('Amount', MR, y, { align: 'right' });
+      y += 10;
+
+      for (const tx of section.transactions) {
+        checkY(12);
+        setFont('normal', 7, dark);
+        doc.text((tx.date || '').substring(0, 10), ML, y);
+        const desc = [tx.name, tx.memo, tx.type].filter(Boolean).join(' — ').substring(0, 70);
+        doc.text(desc, ML + 60, y);
+        setFont('normal', 7, tx.amount < 0 ? red : dark);
+        doc.text(fmt$(tx.amount), MR, y, { align: 'right' });
+        y += 10;
+      }
+      y += 8;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  FINAL SECTION — CLIENT INSIGHTS
+  // ═══════════════════════════════════════════════════════════════
+  if (plMeetingPrep?.clientInsights?.length) {
+    checkY(80);
+    y += 10;
+    drawLine(ML, y, MR, 1, navy); y += 16;
+    setFont('bold', 10, navy);
+    doc.text('Insights for Your Business', ML, y); y += 16;
+    for (const ci of plMeetingPrep.clientInsights) {
+      checkY(30);
+      setFont('normal', 9, dark);
+      const lines = doc.splitTextToSize(ci, MR - ML - 14);
+      doc.text('\u2022', ML, y);
+      doc.text(lines, ML + 14, y);
+      y += lines.length * 12 + 6;
+    }
+  }
+
+  drawFooter();
+
+  // Save
+  const fileName = `PL-Review-${clientName.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(fileName);
+  showToast(`PDF generated: ${fileName}`);
+  qboLog('success', `Meeting prep PDF generated for ${clientName}`);
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  QBO CENTER — TAB NAVIGATION
@@ -26159,6 +27123,7 @@ function fcUpdateStats() {
           <select id="tc-category" class="field-input" onchange="tcCheckBankPanel()">
             <option value="Bank">Bank</option>
             <option value="Bookkeeping">Bookkeeping</option>
+            <option value="Monthly Close">Monthly Close</option>
             <option value="Banking">🏦 Banking</option>
             <option value="Payroll">Payroll</option>
             <option value="Tax">Tax</option>
@@ -26901,7 +27866,7 @@ function fcUpdateStats() {
           <div style="flex:1;">
             <label style="font-size:11px;font-weight:600;color:var(--text-m);display:block;margin-bottom:5px;">Default Category</label>
             <select id="td-cat-sel" class="field-input" style="margin:0;">
-              <option>Bookkeeping</option><option>Banking</option><option>Payroll</option>
+              <option>Bookkeeping</option><option>Monthly Close</option><option>Banking</option><option>Payroll</option>
               <option>Tax</option><option>Sales Tax</option><option>Compliance</option>
               <option>Advisory</option><option>Onboarding</option><option value="Other" selected>Other</option>
             </select>
