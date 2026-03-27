@@ -9940,6 +9940,8 @@ function clearOwners(){
 //  CLIENT CRUD
 // ══════════════════════════════════════════════
 function openAddClient(){
+  const _mc=document.getElementById('modal-client');
+  if(_mc && _mc.parentElement !== document.body) document.body.appendChild(_mc);
   DB._editClient=null;
   document.getElementById('mc-title').textContent='Add Client';
   document.getElementById('mc-biz-label').textContent='';
@@ -9985,6 +9987,8 @@ function openAddClient(){
   document.getElementById('modal-client').style.display='flex';
 }
 function openEditClient(id){
+  const _mc=document.getElementById('modal-client');
+  if(_mc && _mc.parentElement !== document.body) document.body.appendChild(_mc);
   const c=DB.clients.find(x=>x.id===id);if(!c)return;
   DB._editClient=id;
   document.getElementById('mc-title').textContent='Edit Client';
@@ -10775,6 +10779,8 @@ function deleteEmp(id){
 //  CLIENT DETAIL
 // ══════════════════════════════════════════════
 function openDetail(id){
+  const _md=document.getElementById('modal-detail');
+  if(_md && _md.parentElement !== document.body) document.body.appendChild(_md);
   const c=DB.clients.find(x=>x.id===id);if(!c)return;
   DB._detailId=id;
   document.getElementById('det-name').textContent=c.biz;
