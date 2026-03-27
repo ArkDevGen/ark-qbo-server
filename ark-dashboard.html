@@ -792,6 +792,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-item" id="nav-taxcenter" onclick="nav('taxcenter')"><span class="ni">🧮</span>Tax Center</div>
     <div class="nav-item" onclick="nav('timecenter')"><span class="ni">⏱</span>Time Center</div>
     <div class="nav-item" id="nav-commcenter" onclick="nav('commcenter')"><span class="ni">📡</span>Comm Center</div>
+    <div class="nav-item" id="nav-meetings" onclick="nav('meetings')"><span class="ni">📅</span>Meetings</div>
     <div class="nav-item" id="nav-payrollcenter" onclick="nav('payrollcenter')"><span class="ni">💰</span>Payroll Center</div>
     <div class="nav-item" id="nav-proposals" onclick="nav('proposals')"><span class="ni">📝</span>Lead Center</div>
     <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
@@ -4429,6 +4430,142 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   </div>
 
+  <!-- ════ MEETINGS CENTER ════ -->
+  <div class="view content" id="view-meetings" style="padding:28px 32px;">
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:22px;align-items:start;">
+      <!-- LEFT: meetings list -->
+      <div>
+        <!-- Today's Meetings -->
+        <div class="card" style="margin-bottom:18px;">
+          <div class="card-header" style="padding:14px 18px;">
+            <div class="card-title" style="font-size:14px;">Today's Meetings</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="mtg-zoom-badge" style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.04em;text-transform:uppercase;"></span>
+              <span id="mtg-today-count" style="font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;"></span>
+            </div>
+          </div>
+          <div id="mtg-today-body" style="padding:0 18px 14px;"></div>
+        </div>
+
+        <!-- Upcoming (next 7 days) -->
+        <div class="card" style="margin-bottom:18px;">
+          <div class="card-header" style="padding:14px 18px;">
+            <div class="card-title" style="font-size:14px;">Upcoming</div>
+            <span id="mtg-upcoming-count" style="font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;"></span>
+          </div>
+          <div id="mtg-upcoming-body" style="padding:0 18px 14px;max-height:400px;overflow-y:auto;"></div>
+        </div>
+
+        <!-- Past Meetings / Log -->
+        <div class="card">
+          <div class="card-header" style="padding:14px 18px;">
+            <div class="card-title" style="font-size:14px;">Meeting Log</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="mtg-log-client" class="field-input" style="font-size:11px;height:28px;padding:0 8px;width:auto;" onchange="mtgRenderLog()">
+                <option value="">All Clients</option>
+              </select>
+              <span id="mtg-log-count" style="font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;"></span>
+            </div>
+          </div>
+          <div id="mtg-log-body" style="padding:0 18px 14px;max-height:500px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: sidebar -->
+      <div>
+        <!-- Quick Schedule -->
+        <div class="card" style="margin-bottom:18px;overflow:visible;position:relative;z-index:10;">
+          <div class="card-header" style="padding:12px 16px;">
+            <div class="card-title" style="font-size:12px;">Schedule Meeting</div>
+          </div>
+          <div style="padding:12px 16px;">
+            <div style="margin-bottom:8px;">
+              <label style="font-size:10px;font-weight:600;color:var(--text-d);display:block;margin-bottom:3px;">Client</label>
+              <div style="position:relative;">
+                <input id="mtg-sched-client-search" type="text" placeholder="Search clients…" autocomplete="off"
+                  oninput="mtgFilterClientDD()" onfocus="mtgFilterClientDD()"
+                  onblur="setTimeout(()=>document.getElementById('mtg-sched-client-dd').style.display='none',180)"
+                  class="field-input" style="font-size:12px;">
+                <input type="hidden" id="mtg-sched-client-id">
+                <div id="mtg-sched-client-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="font-size:10px;font-weight:600;color:var(--text-d);display:block;margin-bottom:3px;">Title</label>
+              <input id="mtg-sched-title" type="text" placeholder="Monthly Review" class="field-input" style="font-size:12px;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div>
+                <label style="font-size:10px;font-weight:600;color:var(--text-d);display:block;margin-bottom:3px;">Date & Time</label>
+                <input id="mtg-sched-datetime" type="datetime-local" class="field-input" style="font-size:11px;">
+              </div>
+              <div>
+                <label style="font-size:10px;font-weight:600;color:var(--text-d);display:block;margin-bottom:3px;">Duration</label>
+                <select id="mtg-sched-duration" class="field-input" style="font-size:12px;">
+                  <option value="30">30 min</option>
+                  <option value="60" selected>60 min</option>
+                  <option value="90">90 min</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-bottom:10px;">
+              <label style="font-size:10px;font-weight:600;color:var(--text-d);display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="mtg-sched-zoom" checked> Create Zoom meeting
+              </label>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="mtgSchedule()" style="width:100%;font-size:12px;">Schedule Meeting</button>
+            <div id="mtg-sched-msg" style="font-size:11px;margin-top:6px;"></div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card" style="margin-bottom:18px;">
+          <div class="card-header" style="padding:12px 16px;">
+            <div class="card-title" style="font-size:12px;">Meeting Stats</div>
+          </div>
+          <div style="padding:12px 16px;" id="mtg-stats-body"></div>
+        </div>
+
+        <!-- Prep View (shown when Prep button clicked) -->
+        <div id="mtg-prep-panel" style="display:none;">
+          <div class="card" style="border-left:4px solid var(--navy);">
+            <div class="card-header" style="padding:12px 16px;">
+              <div class="card-title" style="font-size:12px;">Meeting Prep</div>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('mtg-prep-panel').style.display='none'" style="font-size:10px;">Close</button>
+            </div>
+            <div id="mtg-prep-content" style="padding:0 16px 14px;max-height:600px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ MEETING COMPLETE MODAL ════ -->
+  <div class="overlay" id="modal-meeting-complete" style="display:none" onclick="overlayClose(event,'modal-meeting-complete')">
+    <div class="modal" style="width:600px;">
+      <div class="modal-head">
+        <div class="modal-title" id="mtg-complete-title">Complete Meeting</div>
+        <button class="modal-close" onclick="closeModal('modal-meeting-complete')">×</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;">
+        <input type="hidden" id="mtg-complete-id">
+        <div>
+          <label class="field-label">Meeting Notes / Summary</label>
+          <textarea id="mtg-complete-notes" class="field-input" rows="4" placeholder="What was discussed…" style="resize:vertical;font-size:12px;"></textarea>
+        </div>
+        <div>
+          <label class="field-label">Action Items</label>
+          <div id="mtg-complete-tasks"></div>
+          <button class="btn btn-ghost btn-sm" onclick="mtgAddTaskRow()" style="font-size:10px;margin-top:6px;">+ Add Action Item</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding-top:8px;border-top:1px solid var(--border);">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-meeting-complete')">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="mtgSaveComplete()" style="background:#2ca01c;border-color:#2ca01c;">Save & Complete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- /main -->
 
 <!-- USER EDIT MODAL moved to end of body -->
@@ -7018,7 +7155,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -7031,7 +7168,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',payrollcenter:'Payroll Center',filecenter:'File Center',users:'User Management'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'User Management'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -7064,6 +7201,7 @@ function nav(page){
   if(page==='salestax'){ stTab('crm'); renderSalesTax(); }
   if(page==='taxcenter'){ renderTaxHub(); }
   if(page==='commcenter'){ ccInit(); }
+  if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){ renderPayrollCenter(); }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
@@ -7164,7 +7302,7 @@ function renderClients(q=''){
   if(!body) return;
   body.innerHTML=list.map(c=>`
     <tr>
-      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:#2ca01c;border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}</div></div></div></td>
+      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:#2ca01c;border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}${(()=>{const lm=typeof mtgLastMeetingDate==='function'?mtgLastMeetingDate(c.id):null;return lm?' <span style="color:var(--text-d);font-size:10px;opacity:.7;">· mtg '+new Date(lm).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</span>':'';})()}</div></div></div></td>
       <td>${badgeEntity(c.entity)}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-m)">${c.ein||'—'}</td>
       <td><div class="chip-row">${svcChips(c.services)}</div></td>
@@ -24681,6 +24819,457 @@ async function plGenerateMeetingPDF() {
   doc.save(fileName);
   showToast(`PDF generated: ${fileName}`);
   qboLog('success', `Meeting prep PDF generated for ${clientName}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MEETINGS CENTER
+// ══════════════════════════════════════════════════════════════════
+
+if (!DB.meetings) DB.meetings = [];
+let _mtgZoomConfigured = false;
+
+function mtgInit() {
+  mtgCheckZoom();
+  mtgPopulateLogFilter();
+  mtgRenderToday();
+  mtgRenderUpcoming();
+  mtgRenderLog();
+  mtgRenderStats();
+}
+
+async function mtgCheckZoom() {
+  try {
+    const res = await fetch(`${QBO_SERVER}/zoom/status`).then(r => r.json());
+    _mtgZoomConfigured = res.configured;
+  } catch (e) { _mtgZoomConfigured = false; }
+  const badge = document.getElementById('mtg-zoom-badge');
+  if (badge) {
+    badge.textContent = _mtgZoomConfigured ? 'Zoom Connected' : 'Zoom Not Configured';
+    badge.style.background = _mtgZoomConfigured ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
+    badge.style.color = _mtgZoomConfigured ? '#2ca01c' : 'var(--red)';
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function mtgFmtTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+}
+function mtgFmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function mtgFmtDateShort(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function mtgIsToday(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+
+// ── Meeting Row HTML ─────────────────────────────────────────────
+function mtgRow(m, showDate) {
+  const client = (DB.clients || []).find(c => c.id === m.clientId);
+  const am = (DB.accountManagers || []).find(a => a.id === m.amId);
+  const isCompleted = m.status === 'completed';
+  const statusColor = isCompleted ? 'var(--text-d)' : 'var(--navy)';
+  const opacity = isCompleted ? 'opacity:.6;' : '';
+  const actionCount = (m.actionItems || []).length;
+
+  return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);${opacity}">
+    <div style="min-width:58px;text-align:center;">
+      ${showDate ? `<div style="font-size:9px;color:var(--text-d);letter-spacing:.04em;">${mtgFmtDate(m.scheduledAt)}</div>` : ''}
+      <div style="font-size:13px;font-weight:700;color:${statusColor};font-family:'DM Mono',monospace;">${mtgFmtTime(m.scheduledAt)}</div>
+      <div style="font-size:9px;color:var(--text-d);">${m.duration || 60} min</div>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.title || 'Meeting'}</div>
+      <div style="font-size:11px;color:var(--text-m);margin-top:2px;">
+        ${client ? client.biz : (m.clientName || '—')}${am ? ' · ' + am.fname : ''}
+        ${actionCount ? ` · <span style="color:var(--navy);">${actionCount} action item${actionCount !== 1 ? 's' : ''}</span>` : ''}
+      </div>
+      ${m.notes && isCompleted ? `<div style="font-size:10px;color:var(--text-d);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.notes.substring(0, 80)}${m.notes.length > 80 ? '…' : ''}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      ${m.zoomLink && !isCompleted ? `<a href="${m.zoomLink}" target="_blank" class="btn btn-sm" style="font-size:10px;background:var(--blue);color:#fff;border-color:var(--blue);text-decoration:none;">Join Zoom</a>` : ''}
+      ${!isCompleted ? `<button class="btn btn-ghost btn-sm" onclick="mtgShowPrep('${m.id}')" style="font-size:10px;">Prep</button>` : ''}
+      ${!isCompleted ? `<button class="btn btn-sm" onclick="mtgOpenComplete('${m.id}')" style="font-size:10px;background:#2ca01c;color:#fff;border-color:#2ca01c;">Complete</button>` : ''}
+      ${isCompleted ? `<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--green-bg);color:var(--green);text-transform:uppercase;letter-spacing:.04em;">Done</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Render Today's Meetings ──────────────────────────────────────
+function mtgRenderToday() {
+  const body = document.getElementById('mtg-today-body');
+  const countEl = document.getElementById('mtg-today-count');
+  if (!body) return;
+  const today = (DB.meetings || []).filter(m => m.status !== 'cancelled' && mtgIsToday(m.scheduledAt))
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+  countEl.textContent = `${today.length} meeting${today.length !== 1 ? 's' : ''}`;
+  if (!today.length) {
+    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text-d);">No meetings scheduled for today.</div>';
+    return;
+  }
+  body.innerHTML = today.map(m => mtgRow(m, false)).join('');
+}
+
+// ── Render Upcoming (next 7 days, excluding today) ───────────────
+function mtgRenderUpcoming() {
+  const body = document.getElementById('mtg-upcoming-body');
+  const countEl = document.getElementById('mtg-upcoming-count');
+  if (!body) return;
+  const now = new Date();
+  const weekOut = new Date(now); weekOut.setDate(weekOut.getDate() + 7);
+  const upcoming = (DB.meetings || []).filter(m => {
+    if (m.status === 'cancelled' || m.status === 'completed') return false;
+    const d = new Date(m.scheduledAt);
+    return d > now && d <= weekOut && !mtgIsToday(m.scheduledAt);
+  }).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+  countEl.textContent = `${upcoming.length} upcoming`;
+  if (!upcoming.length) {
+    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text-d);">No meetings in the next 7 days.</div>';
+    return;
+  }
+  body.innerHTML = upcoming.map(m => mtgRow(m, true)).join('');
+}
+
+// ── Render Meeting Log (past completed) ──────────────────────────
+function mtgPopulateLogFilter() {
+  const sel = document.getElementById('mtg-log-client');
+  if (!sel) return;
+  const clientIds = [...new Set((DB.meetings || []).map(m => m.clientId).filter(Boolean))];
+  sel.innerHTML = '<option value="">All Clients</option>' +
+    clientIds.map(id => {
+      const c = (DB.clients || []).find(x => x.id === id);
+      return c ? `<option value="${id}">${c.biz}</option>` : '';
+    }).filter(Boolean).join('');
+}
+
+function mtgRenderLog() {
+  const body = document.getElementById('mtg-log-body');
+  const countEl = document.getElementById('mtg-log-count');
+  const clientFilter = document.getElementById('mtg-log-client')?.value;
+  if (!body) return;
+  let logs = (DB.meetings || []).filter(m => m.status === 'completed')
+    .sort((a, b) => new Date(b.completedAt || b.scheduledAt) - new Date(a.completedAt || a.scheduledAt));
+  if (clientFilter) logs = logs.filter(m => m.clientId === clientFilter);
+  countEl.textContent = `${logs.length} past`;
+  if (!logs.length) {
+    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text-d);">No completed meetings yet.</div>';
+    return;
+  }
+  body.innerHTML = logs.slice(0, 50).map(m => mtgRow(m, true)).join('');
+}
+
+// ── Stats ────────────────────────────────────────────────────────
+function mtgRenderStats() {
+  const body = document.getElementById('mtg-stats-body');
+  if (!body) return;
+  const now = new Date();
+  const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+  const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate() - 30);
+  const all = DB.meetings || [];
+  const thisWeek = all.filter(m => new Date(m.scheduledAt) >= weekAgo).length;
+  const thisMonth = all.filter(m => new Date(m.scheduledAt) >= monthAgo).length;
+  const completed = all.filter(m => m.status === 'completed');
+  const avgDur = completed.length ? Math.round(completed.reduce((s, m) => s + (m.duration || 60), 0) / completed.length) : 0;
+
+  // Clients not met in 30+ days
+  const clientLastMtg = {};
+  for (const m of completed) {
+    if (!m.clientId) continue;
+    const d = new Date(m.scheduledAt);
+    if (!clientLastMtg[m.clientId] || d > clientLastMtg[m.clientId]) clientLastMtg[m.clientId] = d;
+  }
+  const stale = (DB.clients || []).filter(c => c.status === 'Active' && (!clientLastMtg[c.id] || clientLastMtg[c.id] < monthAgo));
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="text-align:center;padding:10px;background:var(--surface2);border-radius:var(--radius-sm);">
+        <div style="font-size:20px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;">${thisWeek}</div>
+        <div style="font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">This Week</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--surface2);border-radius:var(--radius-sm);">
+        <div style="font-size:20px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;">${thisMonth}</div>
+        <div style="font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">This Month</div>
+      </div>
+    </div>
+    ${avgDur ? `<div style="font-size:11px;color:var(--text-m);margin-bottom:10px;">Avg duration: <strong>${avgDur} min</strong></div>` : ''}
+    ${stale.length ? `<div style="margin-top:8px;">
+      <div style="font-size:9px;font-weight:700;color:var(--red);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">No Meeting in 30+ Days</div>
+      ${stale.slice(0, 8).map(c => `<div style="font-size:11px;color:var(--text-m);padding:3px 0;border-bottom:1px solid var(--border);">${c.biz}</div>`).join('')}
+      ${stale.length > 8 ? `<div style="font-size:10px;color:var(--text-d);margin-top:4px;">+${stale.length - 8} more</div>` : ''}
+    </div>` : '<div style="font-size:11px;color:var(--green);margin-top:8px;">All active clients met within 30 days</div>'}`;
+}
+
+// ── Client Dropdown for Schedule ─────────────────────────────────
+function mtgFilterClientDD() {
+  const val = (document.getElementById('mtg-sched-client-search')?.value || '').toLowerCase();
+  const dd = document.getElementById('mtg-sched-client-dd');
+  const list = (DB.clients || []).filter(c => c.status === 'Active' && (!val || c.biz.toLowerCase().includes(val)));
+  dd.innerHTML = list.length
+    ? list.sort((a, b) => a.biz.localeCompare(b.biz)).map(c =>
+      `<div onmousedown="mtgSelectClient('${c.id}','${c.biz.replace(/'/g, "\\'")}');event.preventDefault();"
+        style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='#fff'">${c.biz}</div>`).join('')
+    : '<div style="padding:10px 12px;font-size:11px;color:var(--text-d);font-style:italic;">No clients found</div>';
+  dd.style.display = 'block';
+}
+
+function mtgSelectClient(id, name) {
+  document.getElementById('mtg-sched-client-id').value = id;
+  document.getElementById('mtg-sched-client-search').value = name;
+  document.getElementById('mtg-sched-client-dd').style.display = 'none';
+  // Auto-fill title
+  const titleEl = document.getElementById('mtg-sched-title');
+  if (!titleEl.value) titleEl.value = `${name} — Monthly Review`;
+}
+
+// ── Schedule Meeting ─────────────────────────────────────────────
+async function mtgSchedule() {
+  const clientId = document.getElementById('mtg-sched-client-id').value;
+  const title = document.getElementById('mtg-sched-title').value.trim();
+  const datetime = document.getElementById('mtg-sched-datetime').value;
+  const duration = parseInt(document.getElementById('mtg-sched-duration').value) || 60;
+  const createZoom = document.getElementById('mtg-sched-zoom').checked;
+  const msg = document.getElementById('mtg-sched-msg');
+
+  if (!clientId) { msg.innerHTML = '<span style="color:var(--red);">Select a client</span>'; return; }
+  if (!datetime) { msg.innerHTML = '<span style="color:var(--red);">Select a date/time</span>'; return; }
+
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  let zoomLink = '', zoomMeetingId = '';
+
+  if (createZoom && _mtgZoomConfigured) {
+    msg.innerHTML = '<span style="color:var(--text-d);">Creating Zoom meeting…</span>';
+    try {
+      const zoomRes = await fetch(`${QBO_SERVER}/zoom/create-meeting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: title || 'ARK Financial Meeting', startTime: new Date(datetime).toISOString(), duration }),
+      }).then(r => r.json());
+      if (zoomRes.success) {
+        zoomLink = zoomRes.joinUrl;
+        zoomMeetingId = String(zoomRes.meetingId);
+      }
+    } catch (e) { console.error('Zoom create failed:', e); }
+  }
+
+  const meeting = {
+    id: uid(),
+    clientId,
+    clientName: client?.biz || '',
+    amId: currentUser?.id || '',
+    title: title || 'Meeting',
+    zoomLink,
+    zoomMeetingId,
+    scheduledAt: new Date(datetime).toISOString(),
+    duration,
+    status: 'upcoming',
+    attendees: '',
+    notes: '',
+    actionItems: [],
+    completedAt: null,
+    completedBy: null,
+    createdAt: new Date().toISOString(),
+  };
+
+  DB.meetings.push(meeting);
+  saveDB();
+  logAct(`Meeting scheduled: ${meeting.title} (${client?.biz || '—'})`, clientId);
+
+  // Reset form
+  document.getElementById('mtg-sched-client-search').value = '';
+  document.getElementById('mtg-sched-client-id').value = '';
+  document.getElementById('mtg-sched-title').value = '';
+  document.getElementById('mtg-sched-datetime').value = '';
+
+  msg.innerHTML = `<span style="color:var(--green);">Meeting scheduled${zoomLink ? ' with Zoom link' : ''}</span>`;
+  setTimeout(() => { msg.innerHTML = ''; }, 3000);
+
+  mtgRenderToday();
+  mtgRenderUpcoming();
+  mtgRenderStats();
+}
+
+// ── Pre-Meeting Prep ─────────────────────────────────────────────
+function mtgShowPrep(meetingId) {
+  const m = (DB.meetings || []).find(x => x.id === meetingId);
+  if (!m) return;
+  const client = (DB.clients || []).find(c => c.id === m.clientId);
+  const panel = document.getElementById('mtg-prep-panel');
+  const content = document.getElementById('mtg-prep-content');
+  if (!panel || !content) return;
+
+  // Open tasks for this client
+  const openTasks = (DB.tasks || []).filter(t => t.clientId === m.clientId && t.status === 'open');
+  // Latest P&L report
+  const latestPL = client?.plReports?.length ? client.plReports[client.plReports.length - 1] : null;
+  // Last meeting with this client
+  const pastMeetings = (DB.meetings || []).filter(x => x.clientId === m.clientId && x.status === 'completed')
+    .sort((a, b) => new Date(b.completedAt || b.scheduledAt) - new Date(a.completedAt || a.scheduledAt));
+  const lastMeeting = pastMeetings[0];
+  // AM
+  const am = (DB.accountManagers || []).find(a => a.id === (client?.am || m.amId));
+
+  content.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">${client?.biz || m.clientName || '—'}</div>
+      <div style="font-size:11px;color:var(--text-d);margin-top:2px;">
+        ${am ? 'AM: ' + am.fname + ' ' + (am.lname || '') : ''}
+        ${lastMeeting ? ' · Last meeting: ' + mtgFmtDateShort(lastMeeting.scheduledAt) : ' · No prior meetings'}
+      </div>
+    </div>
+
+    ${latestPL ? `<div style="margin-bottom:12px;">
+      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Latest P&L Digest</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--navy);">${latestPL.totalFlags}</div>
+          <div style="font-size:8px;color:var(--text-d);text-transform:uppercase;">Flags</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--red);">${latestPL.critical}</div>
+          <div style="font-size:8px;color:var(--text-d);text-transform:uppercase;">Critical</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:8px;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--green);">${latestPL.resolved}</div>
+          <div style="font-size:8px;color:var(--text-d);text-transform:uppercase;">Resolved</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-d);margin-top:4px;">Period: ${latestPL.period}</div>
+    </div>` : '<div style="font-size:11px;color:var(--text-d);margin-bottom:12px;">No P&L digest on file. <a href="#" onclick="nav(\'qbo\');qboOpenTool(\'pldigest\');return false;" style="color:var(--navy);">Run digest</a></div>'}
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Open Tasks (${openTasks.length})</div>
+      ${openTasks.length ? openTasks.slice(0, 8).map(t => {
+        const overdue = t.dueDate && new Date(t.dueDate) < new Date();
+        return `<div style="font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);color:${overdue ? 'var(--red)' : 'var(--text-m)'};">${t.name}${t.dueDate ? ' · due ' + mtgFmtDateShort(t.dueDate) : ''}</div>`;
+      }).join('') : '<div style="font-size:11px;color:var(--green);">No open tasks</div>'}
+    </div>
+
+    ${lastMeeting?.notes ? `<div style="margin-bottom:12px;">
+      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Last Meeting Notes</div>
+      <div style="font-size:11px;color:var(--text-m);line-height:1.5;background:var(--surface2);padding:8px 12px;border-radius:var(--radius-sm);">${lastMeeting.notes}</div>
+    </div>` : ''}
+
+    ${lastMeeting?.actionItems?.length ? `<div style="margin-bottom:12px;">
+      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Previous Action Items</div>
+      ${lastMeeting.actionItems.map(ai => `<div style="font-size:11px;color:var(--text-m);padding:3px 0;">&#8226; ${ai.text}</div>`).join('')}
+    </div>` : ''}`;
+
+  panel.style.display = '';
+}
+
+// ── Complete Meeting Modal ────────────────────────────────────────
+let _mtgTaskRowCount = 0;
+
+function mtgOpenComplete(meetingId) {
+  const m = (DB.meetings || []).find(x => x.id === meetingId);
+  if (!m) return;
+  const client = (DB.clients || []).find(c => c.id === m.clientId);
+  document.getElementById('mtg-complete-id').value = meetingId;
+  document.getElementById('mtg-complete-title').textContent = `Complete: ${client?.biz || m.title}`;
+  document.getElementById('mtg-complete-notes').value = '';
+  _mtgTaskRowCount = 0;
+  document.getElementById('mtg-complete-tasks').innerHTML = '';
+  mtgAddTaskRow(); // start with one empty row
+  openModal('modal-meeting-complete');
+}
+
+function mtgAddTaskRow() {
+  const wrap = document.getElementById('mtg-complete-tasks');
+  const idx = _mtgTaskRowCount++;
+  const defaultDue = new Date();
+  defaultDue.setDate(defaultDue.getDate() + 7);
+  const dueStr = defaultDue.toISOString().slice(0, 10);
+  const div = document.createElement('div');
+  div.id = `mtg-task-row-${idx}`;
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 120px 24px;gap:6px;align-items:center;margin-bottom:6px;';
+  div.innerHTML = `
+    <input type="text" class="field-input mtg-task-text" placeholder="Action item…" style="font-size:12px;">
+    <input type="date" class="field-input mtg-task-due" value="${dueStr}" style="font-size:11px;">
+    <button onclick="document.getElementById('mtg-task-row-${idx}')?.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;">×</button>`;
+  wrap.appendChild(div);
+}
+
+function mtgSaveComplete() {
+  const meetingId = document.getElementById('mtg-complete-id').value;
+  const m = (DB.meetings || []).find(x => x.id === meetingId);
+  if (!m) return;
+
+  const notes = document.getElementById('mtg-complete-notes').value.trim();
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'Unknown';
+
+  // Collect action items and create tasks
+  const actionItems = [];
+  document.querySelectorAll('#mtg-complete-tasks > div').forEach(row => {
+    const text = row.querySelector('.mtg-task-text')?.value?.trim();
+    const due = row.querySelector('.mtg-task-due')?.value;
+    if (!text) return;
+
+    const task = {
+      id: uid(),
+      name: text,
+      clientId: m.clientId,
+      clientName: m.clientName || '',
+      amId: m.amId || currentUser?.id || '',
+      category: 'Advisory',
+      dueDate: due || '',
+      recurring: false,
+      recurFreq: null,
+      recurCustomN: null,
+      recurBmDay1: null,
+      recurBmDay2: null,
+      showDaysAdvance: 14,
+      priority: 'normal',
+      notes: `From meeting: ${m.title}`,
+      bankUrl: '',
+      status: 'open',
+      noteLog: [{ id: uid(), text: 'Created from meeting action items', author: 'System', at: new Date().toISOString(), type: 'note' }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: who,
+      completedAt: null,
+      completedBy: null,
+      reviewType: null,
+      reviewerId: null,
+      reviewStatus: null,
+      reviewTaskId: null,
+      parentTaskId: null,
+    };
+    DB.tasks.push(task);
+    actionItems.push({ text, taskId: task.id });
+    logAct(`Task from meeting: "${text}" (${m.clientName || '—'})`, m.clientId);
+  });
+
+  // Update meeting record
+  m.status = 'completed';
+  m.notes = notes;
+  m.actionItems = actionItems;
+  m.completedAt = new Date().toISOString();
+  m.completedBy = who;
+  saveDB();
+
+  logAct(`Meeting completed: ${m.title} (${m.clientName || '—'}) — ${actionItems.length} action item${actionItems.length !== 1 ? 's' : ''}`, m.clientId);
+  showToast(`Meeting completed${actionItems.length ? ` — ${actionItems.length} task${actionItems.length !== 1 ? 's' : ''} created` : ''}`);
+
+  closeModal('modal-meeting-complete');
+  mtgRenderToday();
+  mtgRenderUpcoming();
+  mtgRenderLog();
+  mtgRenderStats();
+  mtgPopulateLogFilter();
+}
+
+// ── Get last meeting date for a client (used by client cards) ────
+function mtgLastMeetingDate(clientId) {
+  const meetings = (DB.meetings || []).filter(m => m.clientId === clientId && m.status === 'completed')
+    .sort((a, b) => new Date(b.completedAt || b.scheduledAt) - new Date(a.completedAt || a.scheduledAt));
+  return meetings[0] ? meetings[0].scheduledAt : null;
 }
 
 // ══════════════════════════════════════════════════════════════════

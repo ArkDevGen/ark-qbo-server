@@ -2842,6 +2842,127 @@ Generate the meeting prep brief.`;
 });
 
 // ─────────────────────────────────────────────────────────────────
+// Zoom Integration (Server-to-Server OAuth)
+// ─────────────────────────────────────────────────────────────────
+
+const ZOOM_ACCOUNT_ID     = process.env.ZOOM_ACCOUNT_ID;
+const ZOOM_CLIENT_ID      = process.env.ZOOM_CLIENT_ID;
+const ZOOM_CLIENT_SECRET  = process.env.ZOOM_CLIENT_SECRET;
+
+let zoomTokenCache = { token: null, expiresAt: 0 };
+
+async function getZoomToken() {
+  if (zoomTokenCache.token && Date.now() < zoomTokenCache.expiresAt) {
+    return zoomTokenCache.token;
+  }
+  if (!ZOOM_ACCOUNT_ID || !ZOOM_CLIENT_ID || !ZOOM_CLIENT_SECRET) {
+    throw new Error('Zoom credentials not configured');
+  }
+  const basicAuth = Buffer.from(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`).toString('base64');
+  const res = await fetch('https://zoom.us/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${basicAuth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `grant_type=account_credentials&account_id=${ZOOM_ACCOUNT_ID}`,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('Zoom token error:', res.status, err);
+    throw new Error(`Zoom auth failed: ${res.status}`);
+  }
+  const data = await res.json();
+  zoomTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 300) * 1000 };
+  console.log('  ✓ Zoom token refreshed');
+  return data.access_token;
+}
+
+// Status check
+app.get('/zoom/status', (req, res) => {
+  res.json({ configured: !!(ZOOM_ACCOUNT_ID && ZOOM_CLIENT_ID && ZOOM_CLIENT_SECRET) });
+});
+
+// Create a Zoom meeting
+app.post('/zoom/create-meeting', async (req, res) => {
+  try {
+    const token = await getZoomToken();
+    const { topic, startTime, duration, agenda } = req.body;
+    const zoomRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: topic || 'ARK Financial Meeting',
+        type: startTime ? 2 : 1, // 2=scheduled, 1=instant
+        start_time: startTime || undefined,
+        duration: duration || 60,
+        timezone: 'America/Chicago',
+        agenda: agenda || '',
+        settings: {
+          join_before_host: true,
+          waiting_room: false,
+          auto_recording: 'cloud',
+          meeting_authentication: false,
+        },
+      }),
+    });
+    if (!zoomRes.ok) {
+      const err = await zoomRes.text();
+      console.error('Zoom create error:', zoomRes.status, err);
+      return res.status(502).json({ error: `Zoom API error: ${zoomRes.status}` });
+    }
+    const meeting = await zoomRes.json();
+    console.log(`  ✓ Zoom meeting created: ${meeting.id}`);
+    res.json({
+      success: true,
+      meetingId: meeting.id,
+      joinUrl: meeting.join_url,
+      startUrl: meeting.start_url,
+      password: meeting.password,
+    });
+  } catch (e) {
+    console.error('Zoom create-meeting error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List upcoming Zoom meetings
+app.get('/zoom/meetings', async (req, res) => {
+  try {
+    const token = await getZoomToken();
+    const zoomRes = await fetch('https://api.zoom.us/v2/users/me/meetings?type=upcoming&page_size=30', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!zoomRes.ok) {
+      const err = await zoomRes.text();
+      return res.status(502).json({ error: `Zoom API error: ${zoomRes.status}` });
+    }
+    const data = await zoomRes.json();
+    res.json({ success: true, meetings: data.meetings || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get past meeting details (for recording links, duration)
+app.get('/zoom/meeting/:id', async (req, res) => {
+  try {
+    const token = await getZoomToken();
+    const zoomRes = await fetch(`https://api.zoom.us/v2/past_meetings/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!zoomRes.ok) {
+      const err = await zoomRes.text();
+      return res.status(502).json({ error: `Zoom API error: ${zoomRes.status}` });
+    }
+    const data = await zoomRes.json();
+    res.json({ success: true, meeting: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Google Calendar Routes
 // ─────────────────────────────────────────────────────────────────
 
