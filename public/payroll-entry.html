@@ -98,6 +98,9 @@
     .container { padding: 12px 8px; }
   }
 
+  /* Reconcile match rows */
+  .reconcile-match-row:hover { background: rgba(77,166,255,.08) !important; }
+
   /* Success screen */
   .success-screen { text-align: center; padding: 60px 20px; }
   .success-screen .check { font-size: 64px; margin-bottom: 16px; }
@@ -464,6 +467,7 @@ async function doLogin() {
     _stores = data.stores || [];
     _workLocations = data.workLocations || [];
     _payFrequency = data.payFrequency || '';
+    loadNicknameMap();
 
     // Populate UI
     document.getElementById('entry-client-name').textContent = _clientName;
@@ -715,10 +719,24 @@ function bulkCheckReady() {
 }
 
 // ─── Reconciliation state ────────────────────────────────────────
-let _reconcileQueue = [];      // [{storeId, storeNum, storeName, unmatched: [{firstName, lastName}]}]
+let _reconcileQueue = [];      // [{storeId, storeNum, storeName, unmatched, storeEmps}]
 let _reconcileIdx = 0;         // Current store in the queue
 let _reconcileStoreUnmatched = []; // Current store's unmatched list
 let _reconcileCallback = null; // Called when all reconciliation done
+let _reconcileExpandedRow = null; // Index of currently expanded match panel
+
+// ─── Nickname map (persisted per client) ─────────────────────────
+// Stores { "Ady Ray": "emp_id_xxx" } so next payroll auto-resolves
+let _nicknameMap = {};
+function loadNicknameMap() {
+  try { _nicknameMap = JSON.parse(localStorage.getItem(`payroll_nicknames_${_clientSlug}`) || '{}'); } catch(e) { _nicknameMap = {}; }
+}
+function saveNicknameMap() {
+  localStorage.setItem(`payroll_nicknames_${_clientSlug}`, JSON.stringify(_nicknameMap));
+}
+function getNicknameKey(firstName, lastName) {
+  return `${firstName.trim().toLowerCase()} ${lastName.trim().toLowerCase()}`;
+}
 
 async function bulkPopulateAll() {
   if (!_bulkHomebase) return;
@@ -757,18 +775,36 @@ async function bulkPopulateAll() {
       const data = await resp.json();
       const storeEmps = data.employees || [];
 
-      // Find unmatched Homebase names
+      // Find unmatched Homebase names — auto-resolve known nicknames first
       const unmatched = [];
       const seen = new Set();
       homebaseRows.forEach(row => {
         const key = `${row.firstName.toLowerCase()}|${row.lastName.toLowerCase()}`;
         if (seen.has(key)) return;
         seen.add(key);
+
+        // Exact name match?
         const found = storeEmps.some(emp =>
           emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
           emp.lastName.toLowerCase() === row.lastName.toLowerCase()
         );
-        if (!found) unmatched.push({ firstName: row.firstName, lastName: row.lastName });
+        if (found) return;
+
+        // Known nickname match?
+        const nickKey = getNicknameKey(row.firstName, row.lastName);
+        const knownEmpId = _nicknameMap[nickKey];
+        if (knownEmpId) {
+          const matchedEmp = storeEmps.find(e => e.id === knownEmpId);
+          if (matchedEmp) {
+            // Patch Homebase row name to match roster name so bulkApplyData works
+            row._resolvedAs = `${matchedEmp.firstName} ${matchedEmp.lastName}`;
+            row._resolvedFirstName = matchedEmp.firstName;
+            row._resolvedLastName = matchedEmp.lastName;
+            return; // Auto-resolved, not unmatched
+          }
+        }
+
+        unmatched.push({ firstName: row.firstName, lastName: row.lastName });
       });
 
       if (unmatched.length > 0) {
@@ -777,6 +813,7 @@ async function bulkPopulateAll() {
           storeNum,
           storeName: opt.text,
           unmatched,
+          storeEmps, // Cache roster for inline matching
         });
       }
     } catch (e) {
@@ -821,6 +858,7 @@ function reconcileShowStore(idx) {
   }
 
   _reconcileIdx = idx;
+  _reconcileExpandedRow = null;
   const store = _reconcileQueue[idx];
   _reconcileStoreUnmatched = [...store.unmatched];
 
@@ -847,74 +885,146 @@ function reconcileRenderList() {
     return;
   }
 
-  listEl.innerHTML = _reconcileStoreUnmatched.map((emp, i) => `
-    <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div style="font-weight:600;font-size:14px;">${emp.firstName} ${emp.lastName}</div>
-        <div style="font-size:11px;color:var(--muted);">Not found in ${store.storeName}</div>
+  listEl.innerHTML = _reconcileStoreUnmatched.map((emp, i) => {
+    const isExpanded = _reconcileExpandedRow === i;
+    const matchPanel = isExpanded ? buildMatchPanel(i, store) : '';
+    return `
+    <div id="reconcile-row-${i}" style="border-bottom:1px solid var(--border);">
+      <div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;font-size:14px;">${emp.firstName} ${emp.lastName}</div>
+          <div style="font-size:11px;color:var(--muted);">Not found in ${store.storeName}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-outline" onclick="reconcileToggleMatch(${i})"
+            style="border-color:var(--accent);color:var(--accent);font-size:12px;${isExpanded ? 'background:rgba(77,166,255,.12);' : ''}">
+            🔍 Match to Existing
+          </button>
+          <button class="btn btn-sm btn-outline" onclick="reconcileAddNew(${i})" style="border-color:var(--orange);color:var(--orange);font-size:12px;">+ New</button>
+          <button class="btn btn-sm btn-outline" onclick="reconcileSkipEmp(${i})" style="font-size:12px;">Skip</button>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-sm btn-outline" onclick="reconcileFindEmp(${i})" style="border-color:var(--accent);color:var(--accent);font-size:12px;">🔍 Find</button>
-        <button class="btn btn-sm btn-outline" onclick="reconcileAddNew(${i})" style="border-color:var(--orange);color:var(--orange);font-size:12px;">+ New</button>
-        <button class="btn btn-sm btn-outline" onclick="reconcileSkipEmp(${i})" style="font-size:12px;">Skip</button>
-      </div>
-    </div>
-  `).join('');
+      ${matchPanel}
+    </div>`;
+  }).join('');
 }
 
-async function reconcileFindEmp(unmatchedIdx) {
-  const store = _reconcileQueue[_reconcileIdx];
+function buildMatchPanel(unmatchedIdx, store) {
   const emp = _reconcileStoreUnmatched[unmatchedIdx];
-  const statusEl = document.getElementById('reconcile-status');
+  const roster = store.storeEmps || [];
+  const lastName = emp.lastName.toLowerCase();
+  const firstLetter = emp.firstName.charAt(0).toLowerCase();
 
-  // Fetch all employees to find a match
-  try {
-    statusEl.className = 'status info';
-    statusEl.textContent = `Searching for ${emp.firstName} ${emp.lastName}...`;
+  // Sort: same last name first (highlighted), then alphabetical
+  const sorted = [...roster].sort((a, b) => {
+    const aLastMatch = a.lastName.toLowerCase() === lastName;
+    const bLastMatch = b.lastName.toLowerCase() === lastName;
+    if (aLastMatch && !bLastMatch) return -1;
+    if (!aLastMatch && bLastMatch) return 1;
+    return `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+  });
 
-    const resp = await fetch(`${API}/payroll/employees-all/${_clientSlug}`, {
-      headers: { 'Authorization': `Bearer ${_token}` },
-    });
-    const data = await resp.json();
-    const allEmps = data.employees || [];
+  const rows = sorted.map(e => {
+    const isLastMatch = e.lastName.toLowerCase() === lastName;
+    const isFirstLetterMatch = e.firstName.charAt(0).toLowerCase() === firstLetter;
+    const isSuggested = isLastMatch || (isFirstLetterMatch && isLastMatch);
+    const highlight = isLastMatch
+      ? 'color:var(--orange);font-weight:700;'
+      : '';
+    const badge = isLastMatch
+      ? '<span style="font-size:10px;background:rgba(255,169,77,.18);color:var(--orange);border:1px solid var(--orange);border-radius:3px;padding:1px 5px;margin-left:6px;">Suggested</span>'
+      : '';
+    return `<div class="reconcile-match-row" data-emp-id="${e.id}" data-first="${e.firstName}" data-last="${e.lastName}"
+        onclick="reconcileSelectMatch(${unmatchedIdx}, '${e.id}', '${e.firstName.replace(/'/g,"\\'")}', '${e.lastName.replace(/'/g,"\\'")}', this)"
+        style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:background .1s;">
+      <span style="${highlight}">${e.firstName} ${e.lastName}${badge}</span>
+      <span style="font-size:11px;color:var(--muted);">${e.position || ''}</span>
+    </div>`;
+  }).join('');
 
-    // Try exact match first
-    const match = allEmps.find(e =>
-      e.firstName.toLowerCase() === emp.firstName.toLowerCase() &&
-      e.lastName.toLowerCase() === emp.lastName.toLowerCase()
-    );
+  return `
+  <div style="margin:0 12px 12px;border:1px solid var(--accent);border-radius:8px;overflow:hidden;background:var(--surface);">
+    <div style="padding:8px 10px;background:rgba(77,166,255,.08);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;color:var(--accent);font-weight:600;">Match "${emp.firstName} ${emp.lastName}" to:</span>
+      <input type="text" placeholder="Search roster..." oninput="reconcileFilterMatch(this, ${unmatchedIdx})"
+        style="flex:1;padding:5px 9px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);outline:none;">
+    </div>
+    <div id="reconcile-match-list-${unmatchedIdx}" style="max-height:200px;overflow-y:auto;">
+      ${rows || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">No employees in this store yet.</div>'}
+    </div>
+    <div style="padding:8px 12px;background:rgba(77,166,255,.05);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="reconcile-remember-${unmatchedIdx}" checked style="width:auto;">
+      <label for="reconcile-remember-${unmatchedIdx}" style="font-size:12px;color:var(--muted);cursor:pointer;margin:0;">
+        Remember: always match <strong style="color:var(--text);">"${emp.firstName} ${emp.lastName}"</strong> to this employee
+      </label>
+    </div>
+  </div>`;
+}
 
-    if (match) {
-      // Link this employee to the store
-      const linkResp = await fetch(`${API}/payroll/employees/${_clientSlug}/${store.storeId}/link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
-        body: JSON.stringify({ employeeId: match.id }),
-      });
-      const linkData = await linkResp.json();
-
-      if (linkData.error && linkData.error.includes('already')) {
-        statusEl.className = 'status info';
-        statusEl.textContent = `${emp.firstName} ${emp.lastName} is already in this store`;
-      } else if (linkData.error) {
-        throw new Error(linkData.error);
-      } else {
-        statusEl.className = 'status success';
-        statusEl.textContent = `✓ ${emp.firstName} ${emp.lastName} added from ${match.stores.join(', ')}`;
-      }
-
-      // Remove from unmatched
-      _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
-      reconcileRenderList();
-    } else {
-      // No match found — offer to add new
-      statusEl.className = 'status error';
-      statusEl.textContent = `${emp.firstName} ${emp.lastName} not found in any store. Use "New" to add them.`;
-    }
-  } catch (e) {
-    statusEl.className = 'status error';
-    statusEl.textContent = '✗ ' + e.message;
+function reconcileToggleMatch(i) {
+  _reconcileExpandedRow = (_reconcileExpandedRow === i) ? null : i;
+  reconcileRenderList();
+  // Focus the search box if opening
+  if (_reconcileExpandedRow === i) {
+    setTimeout(() => {
+      const input = document.querySelector(`#reconcile-row-${i} input[type="text"]`);
+      if (input) input.focus();
+    }, 50);
   }
+}
+
+function reconcileFilterMatch(inputEl, unmatchedIdx) {
+  const q = inputEl.value.toLowerCase();
+  const rows = document.querySelectorAll(`#reconcile-match-list-${unmatchedIdx} .reconcile-match-row`);
+  rows.forEach(row => {
+    const name = (row.dataset.first + ' ' + row.dataset.last).toLowerCase();
+    row.style.display = name.includes(q) ? '' : 'none';
+  });
+}
+
+function reconcileSelectMatch(unmatchedIdx, empId, firstName, lastName, rowEl) {
+  // Highlight selected row
+  document.querySelectorAll(`#reconcile-match-list-${unmatchedIdx} .reconcile-match-row`).forEach(r => {
+    r.style.background = '';
+  });
+  rowEl.style.background = 'rgba(77,255,160,.1)';
+
+  // Save nickname if checkbox is checked
+  const remember = document.getElementById(`reconcile-remember-${unmatchedIdx}`);
+  const emp = _reconcileStoreUnmatched[unmatchedIdx];
+  if (remember && remember.checked) {
+    const key = getNicknameKey(emp.firstName, emp.lastName);
+    _nicknameMap[key] = empId;
+    saveNicknameMap();
+  }
+
+  // Apply match — patch the homebase data so bulkApplyData finds this employee
+  const store = _reconcileQueue[_reconcileIdx];
+  const storeNum = store.storeNum;
+  if (_bulkHomebase && _bulkHomebase[storeNum]) {
+    _bulkHomebase[storeNum].forEach(row => {
+      if (row.firstName.toLowerCase() === emp.firstName.toLowerCase() &&
+          row.lastName.toLowerCase() === emp.lastName.toLowerCase()) {
+        row._resolvedFirstName = firstName;
+        row._resolvedLastName = lastName;
+      }
+    });
+  }
+
+  // Remove from unmatched after short delay (so user sees the selection)
+  setTimeout(() => {
+    _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
+    _reconcileExpandedRow = null;
+    const statusEl = document.getElementById('reconcile-status');
+    statusEl.className = 'status success';
+    statusEl.textContent = `✓ Matched to ${firstName} ${lastName}${remember && remember.checked ? ' — will auto-match next time' : ''}`;
+    reconcileRenderList();
+  }, 300);
+}
+
+// reconcileFindEmp is now replaced by the inline match panel (reconcileToggleMatch)
+function reconcileFindEmp(unmatchedIdx) {
+  reconcileToggleMatch(unmatchedIdx);
 }
 
 function reconcileAddNew(unmatchedIdx) {
@@ -1037,12 +1147,14 @@ function bulkApplyData() {
 
   if (!storeNum) return;
 
-  // Apply Homebase hours
+  // Apply Homebase hours (use resolved name if nickname was matched)
   const homebaseRows = _bulkHomebase?.[storeNum] || [];
   homebaseRows.forEach(row => {
+    const matchFirst = (row._resolvedFirstName || row.firstName).toLowerCase();
+    const matchLast  = (row._resolvedLastName  || row.lastName).toLowerCase();
     const empIdx = _employees.findIndex(emp =>
-      emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
-      emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+      emp.firstName.toLowerCase() === matchFirst &&
+      emp.lastName.toLowerCase()  === matchLast
     );
     if (empIdx >= 0) {
       setInputVal(empIdx, 'regHours', row.regular);
