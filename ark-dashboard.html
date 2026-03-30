@@ -454,6 +454,8 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
 .view{display:none;}
 .view.active{display:block;}
+/* Payroll Center: skip entrance animation so cards are never stuck at opacity:0 */
+#view-payrollcenter,#view-payrollcenter>*{animation:none!important;opacity:1!important;transform:none!important;}
 
 /* ════════════════════════════════════════
    LOGIN SCREEN — First impression
@@ -15124,20 +15126,22 @@ let _prOutputBlob = null;
 let _prOutputName = '';
 
 function renderPayrollCenter(){
-  // Force all static cards visible — bypass CSS animation opacity:0 start state
+  // Kill animation on the view + all direct children so nothing is stuck at opacity:0
   const view = document.getElementById('view-payrollcenter');
   if (view) {
+    view.style.animation = 'none';
+    view.style.opacity   = '1';
+    view.style.transform = 'none';
     Array.from(view.children).forEach(el => {
       el.style.animation = 'none';
       el.style.opacity   = '1';
       el.style.transform = 'none';
     });
   }
-  prResetForm();
-  prRenderHistory();
+  try { prResetForm(); } catch(e) { console.warn('prResetForm error:', e); }
+  try { prRenderHistory(); } catch(e) { console.warn('prRenderHistory error:', e); }
   renderPayrollSubmissions();
-  // Pre-load client dropdown (deferred so it doesn't block card rendering)
-  setTimeout(() => prPrepInit(), 200);
+  setTimeout(() => { try { prPrepInit(); } catch(e){} }, 300);
 }
 
 // ── Payroll Submissions Inbox ─────────────────────────────────────
