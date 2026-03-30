@@ -644,6 +644,8 @@ async function onStoreChange() {
     const data = await resp.json();
     _employees = data.employees || [];
     _sortField = 'lastName'; _sortDir = 'asc';
+    // Clear the table before re-rendering so the snapshot doesn't carry over old store's values
+    document.getElementById('emp-tbody').innerHTML = '';
     renderEmployeeTable();
     section.classList.remove('hidden');
 
