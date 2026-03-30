@@ -354,6 +354,15 @@
       <div><label>Last Name <span class="required-star">*</span></label><input type="text" id="new-emp-last"></div>
     </div>
     <div class="row">
+      <div><label>Go By Name <span style="color:var(--muted);font-weight:400;font-size:12px;">(optional nickname)</span></label><input type="text" id="new-emp-goby" placeholder="e.g. Detroit"></div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="new-emp-notips" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+          <span style="font-size:13px;">Exclude from tips</span>
+        </label>
+      </div>
+    </div>
+    <div class="row">
       <div><label>SSN <span class="required-star">*</span></label><input type="text" id="new-emp-ssn" placeholder="XXX-XX-XXXX" maxlength="11" oninput="formatSSN(this)"></div>
       <div><label>Date of Birth <span class="required-star">*</span></label><input type="date" id="new-emp-dob"></div>
     </div>
@@ -447,6 +456,37 @@
       <button class="btn btn-primary" onclick="addEmployee()">Add Employee</button>
     </div>
     <div id="add-emp-status" class="status"></div>
+  </div>
+</div>
+
+<!-- ═══ EDIT EMPLOYEE MODAL ═══ -->
+<div id="modal-edit-emp" class="modal-overlay hidden" onclick="if(event.target===this)closeEditEmployee()">
+  <div class="modal" style="width:440px;">
+    <h3>Edit Employee</h3>
+    <div style="margin-bottom:14px;">
+      <div id="edit-emp-name" style="font-size:16px;font-weight:600;color:var(--text);"></div>
+      <div id="edit-emp-position" style="font-size:12px;color:var(--muted);margin-top:2px;"></div>
+    </div>
+    <input type="hidden" id="edit-emp-idx">
+
+    <div style="margin-bottom:14px;">
+      <label style="font-weight:500;">Go By Name <span style="color:var(--muted);font-weight:400;font-size:12px;">(nickname shown in parentheses)</span></label>
+      <input type="text" id="edit-emp-goby" placeholder="e.g. Detroit">
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="edit-emp-notips" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
+        <span style="font-weight:500;">Exclude from tip pool</span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-left:28px;">When checked, this employee will not receive a share of tip distributions (e.g. managers).</div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeEditEmployee()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditEmployee()">Save</button>
+    </div>
+    <div id="edit-emp-status" class="status"></div>
   </div>
 </div>
 
@@ -752,9 +792,11 @@ function renderEmployeeTable() {
     const rateClass = changed ? 'rate-display rate-changed' : 'rate-display';
 
     const tr = document.createElement('tr');
+    const goByDisplay = emp.goByName ? ` (${emp.goByName})` : '';
+    const noTipsBadge = emp.excludeFromTips ? ' <span style="font-size:10px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 5px;margin-left:4px;vertical-align:middle;">no tips</span>' : '';
     tr.innerHTML = `
       <td>
-        <div class="emp-name">${emp.firstName} ${emp.lastName}</div>
+        <div class="emp-name" onclick="openEditEmployee(${i})" style="cursor:pointer;" title="Click to edit">${emp.firstName}${goByDisplay} ${emp.lastName}${noTipsBadge}</div>
         <div class="emp-pos">${emp.position || ''}</div>
         <div class="emp-rate">
           <span class="${rateClass}" onclick="startEditRate(${i})" id="rate-disp-${i}" title="Click to update">${fmtRate(emp)}</span>${changedBadge}
@@ -1001,6 +1043,18 @@ async function bulkPopulateAll() {
           namesMatch(emp.lastName,  row.lastName)
         );
         if (found) return;
+
+        // Go-by name match? (e.g. Homebase says "Detroit Puckett", roster has Amanda "Detroit" Puckett)
+        const goByMatch = storeEmps.find(emp =>
+          emp.goByName && namesMatch(emp.goByName, row.firstName) &&
+          namesMatch(emp.lastName, row.lastName)
+        );
+        if (goByMatch) {
+          row._resolvedAs = `${goByMatch.firstName} ${goByMatch.lastName}`;
+          row._resolvedFirstName = goByMatch.firstName;
+          row._resolvedLastName = goByMatch.lastName;
+          return;
+        }
 
         // Known nickname match?
         const nickKey = getNicknameKey(row.firstName, row.lastName);
@@ -1519,10 +1573,17 @@ function bulkApplyData() {
   homebaseRows.forEach(row => {
     const matchFirst = row._resolvedFirstName || row.firstName;
     const matchLast  = row._resolvedLastName  || row.lastName;
-    const empIdx = _employees.findIndex(emp =>
+    let empIdx = _employees.findIndex(emp =>
       namesMatch(emp.firstName, matchFirst) &&
       namesMatch(emp.lastName,  matchLast)
     );
+    // Fallback: match by go-by name
+    if (empIdx < 0) {
+      empIdx = _employees.findIndex(emp =>
+        emp.goByName && namesMatch(emp.goByName, row.firstName) &&
+        namesMatch(emp.lastName, row.lastName)
+      );
+    }
     if (empIdx >= 0) {
       setInputVal(empIdx, 'regHours', row.regular);
       setInputVal(empIdx, 'otHours', row.overtime);
@@ -1531,12 +1592,13 @@ function bulkApplyData() {
     }
   });
 
-  // Apply tips (proportional by hours)
+  // Apply tips (proportional by hours, excluding tip-excluded employees)
   const storeTips = _bulkTips?.[storeNum];
   if (storeTips && storeTips > 0) {
     let totalHours = 0;
     const empHours = [];
     _employees.forEach((emp, i) => {
+      if (emp.excludeFromTips) { empHours.push(0); return; }
       const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
       const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
       const hours = (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
@@ -2067,11 +2129,12 @@ function applyPrefillData(storePrefill) {
     }
   });
 
-  // Distribute total tips proportionally by (reg + OT) hours
+  // Distribute total tips proportionally by (reg + OT) hours, excluding tip-excluded employees
   const totalTips = parseFloat(storePrefill.totalTips) || 0;
   if (totalTips > 0) {
     let totalHours = 0;
-    const empHours = _employees.map((_, i) => {
+    const empHours = _employees.map((emp, i) => {
+      if (emp.excludeFromTips) return 0;
       const reg = parseFloat(document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`)?.value) || 0;
       const ot  = parseFloat(document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`)?.value) || 0;
       const h = reg + ot; totalHours += h; return h;
@@ -2177,10 +2240,11 @@ function importTipsReport(file) {
         return;
       }
 
-      // Calculate total hours across all employees in the grid
+      // Calculate total hours across all employees in the grid (excluding tip-excluded)
       let totalHours = 0;
       const empHours = [];
       _employees.forEach((emp, i) => {
+        if (emp.excludeFromTips) { empHours.push(0); return; }
         const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
         const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
         const reg = parseFloat(regInput?.value) || 0;
@@ -2476,7 +2540,7 @@ function showAddEmployee() {
 
 function closeAddEmployee() {
   document.getElementById('modal-add-emp').classList.add('hidden');
-  const fields = ['new-emp-first','new-emp-last','new-emp-ssn','new-emp-dob','new-emp-hire',
+  const fields = ['new-emp-first','new-emp-last','new-emp-goby','new-emp-ssn','new-emp-dob','new-emp-hire',
     'new-emp-email','new-emp-street','new-emp-city','new-emp-zip',
     'new-emp-routing','new-emp-account','new-emp-allowances','new-emp-addlwh'];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -2484,6 +2548,7 @@ function closeAddEmployee() {
   document.getElementById('new-emp-location').value = '';
   document.getElementById('new-emp-accttype').value = '';
   document.getElementById('new-emp-filing').value = '';
+  document.getElementById('new-emp-notips').checked = false;
   document.getElementById('pay-rates-list').innerHTML = '';
   _payRateCount = 0;
   document.getElementById('add-emp-status').className = 'status';
@@ -2507,6 +2572,8 @@ async function addEmployee() {
   const routingNumber = document.getElementById('new-emp-routing').value.trim();
   const accountNumber = document.getElementById('new-emp-account').value.trim();
   const accountType = document.getElementById('new-emp-accttype').value;
+  const goByName = document.getElementById('new-emp-goby').value.trim();
+  const excludeFromTips = document.getElementById('new-emp-notips').checked;
   const payRates = getPayRates();
   const statusEl = document.getElementById('add-emp-status');
 
@@ -2533,11 +2600,12 @@ async function addEmployee() {
         'Authorization': `Bearer ${_token}`,
       },
       body: JSON.stringify({
-        firstName: first, lastName: last, ssn, dob, hireDate, email,
+        firstName: first, lastName: last, goByName, ssn, dob, hireDate, email,
         street, city, state, zip,
         workLocation, paySchedule: _payFrequency, payRates,
         routingNumber, accountNumber, accountType,
         filingStatus, allowances, additionalWithholding,
+        excludeFromTips,
       }),
     });
     const data = await resp.json();
@@ -2565,6 +2633,57 @@ async function addEmployee() {
         reconcileRenderList();
       }, 300);
     }
+  } catch(e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Connection error. Please try again.';
+  }
+}
+
+// ─── Edit Employee Modal ─────────────────────────────────────────
+function openEditEmployee(idx) {
+  const emp = _employees[idx];
+  if (!emp) return;
+  document.getElementById('edit-emp-idx').value = idx;
+  document.getElementById('edit-emp-name').textContent = `${emp.firstName} ${emp.lastName}`;
+  document.getElementById('edit-emp-position').textContent = emp.position || '';
+  document.getElementById('edit-emp-goby').value = emp.goByName || '';
+  document.getElementById('edit-emp-notips').checked = !!emp.excludeFromTips;
+  document.getElementById('edit-emp-status').className = 'status';
+  document.getElementById('edit-emp-status').textContent = '';
+  document.getElementById('modal-edit-emp').classList.remove('hidden');
+}
+function closeEditEmployee() {
+  document.getElementById('modal-edit-emp').classList.add('hidden');
+}
+async function saveEditEmployee() {
+  const idx = parseInt(document.getElementById('edit-emp-idx').value);
+  const emp = _employees[idx];
+  if (!emp) return;
+  const goByName = document.getElementById('edit-emp-goby').value.trim();
+  const excludeFromTips = document.getElementById('edit-emp-notips').checked;
+  const statusEl = document.getElementById('edit-emp-status');
+  const storeId = document.getElementById('entry-store').value;
+
+  statusEl.className = 'status info';
+  statusEl.textContent = 'Saving...';
+
+  try {
+    const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}/${emp.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify({ goByName, excludeFromTips }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      statusEl.className = 'status error';
+      statusEl.textContent = data.error || 'Failed to save.';
+      return;
+    }
+    // Update local employee data
+    emp.goByName = goByName;
+    emp.excludeFromTips = excludeFromTips;
+    renderEmployeeTable();
+    closeEditEmployee();
   } catch(e) {
     statusEl.className = 'status error';
     statusEl.textContent = 'Connection error. Please try again.';

@@ -1933,11 +1933,13 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     id: e.id,
     firstName: e.firstName,
     lastName: e.lastName,
+    goByName: e.goByName || '',
     position: e.position || '(Admin)',
     payRate: e.payRate || '',
     payType: e.payType || 'hourly',
     annualRate: e.annualRate || '',
     periodRate: e.periodRate || '',
+    excludeFromTips: !!e.excludeFromTips,
     isAdmin: true,
   }));
 
@@ -1945,11 +1947,13 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     id: e.id,
     firstName: e.firstName,
     lastName: e.lastName,
+    goByName: e.goByName || '',
     position: e.position || '',
     payRate: e.payRate || '',
     payType: e.payType || 'hourly',
     annualRate: e.annualRate || '',
     periodRate: e.periodRate || '',
+    excludeFromTips: !!e.excludeFromTips,
   }));
 
   const storePrefill = client._prefill?.stores?.[storeId] || null;
@@ -2049,12 +2053,14 @@ app.patch('/payroll/employees/:clientSlug/:storeId/:empId', (req, res) => {
   const emp = (store.employees || []).find(e => e.id === empId);
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
-  const { position, payRate } = req.body;
+  const { position, payRate, goByName, excludeFromTips } = req.body;
   if (position !== undefined) emp.position = position;
   if (payRate  !== undefined) emp.payRate  = payRate;
+  if (goByName !== undefined) emp.goByName = goByName;
+  if (excludeFromTips !== undefined) emp.excludeFromTips = !!excludeFromTips;
   savePayrollData();
 
-  res.json({ success: true, employee: { id: emp.id, position: emp.position, payRate: emp.payRate } });
+  res.json({ success: true, employee: { id: emp.id, position: emp.position, payRate: emp.payRate, goByName: emp.goByName || '', excludeFromTips: !!emp.excludeFromTips } });
 });
 
 // ── Payroll Admin Portal ─────────────────────────────────────────
@@ -2092,12 +2098,14 @@ app.post('/payroll/admin/employee', requireAuth, (req, res) => {
     id: crypto.randomUUID(),
     firstName: employee.firstName || '',
     lastName: employee.lastName || '',
+    goByName: employee.goByName || '',
     position: employee.position || '',
     payRate: employee.payRate || '',
     payType: employee.payType || 'hourly',
     annualRate: employee.annualRate || '',
     periodRate: employee.periodRate || '',
     email: employee.email || '',
+    excludeFromTips: !!employee.excludeFromTips,
   };
 
   store.employees.push(newEmp);
@@ -2132,6 +2140,8 @@ app.put('/payroll/admin/employee', requireAuth, (req, res) => {
   if (updates.annualRate !== undefined) emp.annualRate = updates.annualRate;
   if (updates.periodRate !== undefined) emp.periodRate = updates.periodRate;
   if (updates.email !== undefined) emp.email = updates.email;
+  if (updates.goByName !== undefined) emp.goByName = updates.goByName;
+  if (updates.excludeFromTips !== undefined) emp.excludeFromTips = !!updates.excludeFromTips;
 
   savePayrollData();
   console.log(`Admin updated employee ${emp.firstName} ${emp.lastName} in ${clientSlug}/${storeId}`);
@@ -2199,6 +2209,8 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
       allowances: b.allowances || '',
       additionalWithholding: b.additionalWithholding || '',
     },
+    goByName: b.goByName || '',
+    excludeFromTips: !!b.excludeFromTips,
     addedByClient: true,
     addedAt: new Date().toISOString(),
   };
