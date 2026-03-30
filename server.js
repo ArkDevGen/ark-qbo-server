@@ -2454,6 +2454,15 @@ app.patch('/payroll/submissions/:id', (req, res) => {
   res.json({ success: true, submission: sub });
 });
 
+// ── Dashboard: Delete a submission ───────────────────────────────
+app.delete('/payroll/submissions/:id', (req, res) => {
+  const idx = payrollData.submissions.findIndex(s => s.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Submission not found' });
+  payrollData.submissions.splice(idx, 1);
+  savePayrollData();
+  res.json({ success: true });
+});
+
 // ── Dashboard: Get notifications (new employees, etc.) ───────────
 app.get('/payroll/notifications', (req, res) => {
   const all = [];

@@ -294,6 +294,27 @@
 
   </div>
 
+  <!-- ═══ SUBMIT RECAP OVERLAY ═══ -->
+  <div id="recap-overlay" class="modal-overlay hidden">
+    <div class="modal" style="width:680px;max-width:96vw;">
+      <h3 style="font-size:18px;margin-bottom:6px;">📋 Submission Recap</h3>
+      <div id="recap-period-label" style="font-size:13px;color:var(--muted);margin-bottom:18px;"></div>
+
+      <!-- Per-store breakdown -->
+      <div id="recap-stores-body"></div>
+
+      <!-- Grand totals -->
+      <div id="recap-totals-block" style="margin-top:4px;padding:14px 16px;background:var(--surface);border-radius:8px;border:1px solid var(--border);"></div>
+
+      <div id="recap-status" style="min-height:16px;font-size:12px;color:var(--red);margin-top:10px;"></div>
+
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-outline" onclick="closeRecap()" id="recap-back-btn" style="flex:1;">← Go Back</button>
+        <button class="btn btn-green" id="recap-submit-btn" onclick="doSubmitAll()" style="flex:2;font-weight:700;">✓ Confirm &amp; Submit All</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ SUCCESS SCREEN ═══ -->
   <div id="screen-success" class="hidden">
     <div class="card success-screen">
@@ -740,6 +761,9 @@ let _bulkHomebase = null;       // { [storeNum]: [{firstName, lastName, regular,
 let _bulkTips = null;           // { [storeNum]: tipTotal }
 let _bulkStoreStatus = {};      // { [storeId]: 'empty' | 'populated' | 'confirmed' }
 let _bulkEmployeeData = {};     // { [storeId]: { [empIdx:field]: value } }
+let _bulkStoreTotals = {};      // { [storeId]: { regHours, otHours, ptoHours, holidayHours, tips, mileage, reimbursement, bonus, empCount } }
+let _bulkStoreEmpsSnapshot = {};// { [storeId]: [{id, firstName, lastName, position, payRate}] }
+let _reconcileLinkedEmps = {};  // { [storeId]: [{firstName, lastName}] } — newly linked this session
 
 function bulkImportHomebase(file) {
   if (!file) return;
@@ -1270,6 +1294,9 @@ async function reconcileConfirmMatch(unmatchedIdx) {
       // Update _reconcileAllEmployees so this store now shows them
       const emp2 = (_reconcileAllEmployees || []).find(e => e.id === empId);
       if (emp2 && !emp2.stores.includes(store.storeId)) emp2.stores.push(store.storeId);
+      // Track newly linked employees for recap
+      if (!_reconcileLinkedEmps[store.storeId]) _reconcileLinkedEmps[store.storeId] = [];
+      _reconcileLinkedEmps[store.storeId].push({ firstName, lastName });
     } catch(e) {
       statusEl.className = 'status error';
       statusEl.textContent = `✗ Connection error: ${e.message}`;
@@ -1506,6 +1533,22 @@ function bulkConfirmStore() {
   // Save current data
   bulkSaveCurrentStore();
 
+  // Snapshot employee list and compute totals for recap
+  _bulkStoreEmpsSnapshot[storeId] = [...(_employees || [])];
+  const savedData = _bulkEmployeeData[storeId] || {};
+  const snap = { regHours:0, otHours:0, ptoHours:0, holidayHours:0, tips:0, mileage:0, reimbursement:0, bonus:0, empCount:0 };
+  (_employees || []).forEach((emp, i) => {
+    const g = f => parseFloat(savedData[`${i}:${f}`]) || 0;
+    const r = g('regHours'), ot = g('otHours'), pto = g('ptoHours'), hol = g('holidayHours');
+    const ti = g('tips'), mi = g('mileage'), re = g('reimbursement'), bo = g('bonus');
+    if (r || ot || pto || hol || ti || mi || re || bo) {
+      snap.empCount++;
+      snap.regHours += r;  snap.otHours += ot; snap.ptoHours += pto; snap.holidayHours += hol;
+      snap.tips += ti;     snap.mileage += mi; snap.reimbursement += re; snap.bonus += bo;
+    }
+  });
+  _bulkStoreTotals[storeId] = snap;
+
   // Mark confirmed
   _bulkStoreStatus[storeId] = 'confirmed';
   bulkRenderTracker();
@@ -1532,7 +1575,7 @@ function bulkConfirmStore() {
   }
 }
 
-async function bulkSubmitAll() {
+function bulkSubmitAll() {
   const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
   if (!confirmed.length) return;
 
@@ -1545,18 +1588,157 @@ async function bulkSubmitAll() {
     return;
   }
 
-  if (!confirm(`Submit payroll for ${confirmed.length} stores?`)) return;
+  showSubmitRecap();
+}
 
-  const submitBtn = document.getElementById('bulk-submit-btn');
-  const statusEl = document.getElementById('bulk-submit-status');
+// ─── Recap helpers ───────────────────────────────────────────────
+function _recapFmt(d) {
+  if (!d) return '—';
+  const p = d.split('-');
+  if (p.length === 3) {
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${mo[parseInt(p[1])-1]} ${parseInt(p[2])}, ${p[0]}`;
+  }
+  return d;
+}
+
+function showSubmitRecap() {
+  const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
+  const payStart = document.getElementById('entry-period-start')?.value;
+  const payEnd   = document.getElementById('entry-period-end')?.value;
+  const payDate  = document.getElementById('entry-pay-date')?.value;
+
+  const storeSel = document.getElementById('entry-store');
+  const storeNames = {};
+  for (const opt of storeSel.options) { if (opt.value) storeNames[opt.value] = opt.text; }
+
+  document.getElementById('recap-period-label').textContent =
+    `Pay period: ${_recapFmt(payStart)} – ${_recapFmt(payEnd)}  ·  Pay date: ${_recapFmt(payDate)}`;
+
+  const numFields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus'];
+  const dollarF   = new Set(['tips','reimbursement','bonus']);
+  const grand     = { regHours:0, otHours:0, ptoHours:0, holidayHours:0, tips:0, mileage:0, reimbursement:0, bonus:0, empCount:0 };
+
+  let storesHTML = '';
+  for (const [storeId] of confirmed) {
+    const name     = storeNames[storeId] || storeId;
+    const t        = _bulkStoreTotals[storeId];
+    const newEmps  = _reconcileLinkedEmps[storeId] || [];
+
+    numFields.forEach(f => { grand[f] += (t ? (t[f]||0) : 0); });
+    grand.empCount += t ? (t.empCount||0) : 0;
+
+    let bodyHTML = '';
+    if (!t) {
+      bodyHTML = `<div style="font-size:12px;color:var(--muted);">Data will be submitted — no preview available.</div>`;
+    } else {
+      const stats = [
+        { label:'Reg Hours',  val:t.regHours,      isDollar:false },
+        { label:'OT Hours',   val:t.otHours,       isDollar:false },
+        { label:'PTO',        val:t.ptoHours,      isDollar:false },
+        { label:'Holiday',    val:t.holidayHours,  isDollar:false },
+        { label:'Tips',       val:t.tips,          isDollar:true,  hi:true },
+        { label:'Mileage',    val:t.mileage,       isDollar:false },
+        { label:'Reimb.',     val:t.reimbursement, isDollar:true },
+        { label:'Bonus',      val:t.bonus,         isDollar:true },
+      ].filter(s => s.val > 0);
+
+      if (!stats.length) {
+        bodyHTML = `<div style="font-size:12px;color:var(--muted);">No hours or amounts entered.</div>`;
+      } else {
+        bodyHTML = `<div style="display:flex;flex-wrap:wrap;gap:20px;">` +
+          stats.map(s => {
+            const disp = s.isDollar ? '$' + s.val.toFixed(2) : (s.val % 1 === 0 ? s.val : s.val.toFixed(2));
+            const color = s.hi ? 'var(--green)' : 'var(--accent)';
+            return `<div style="text-align:center;">
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${s.label}</div>
+              <div style="font-size:17px;font-weight:700;color:${color};">${disp}</div>
+            </div>`;
+          }).join('') + `</div>`;
+      }
+    }
+
+    const newEmpHTML = newEmps.length
+      ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(77,166,255,.08);border:1px solid rgba(77,166,255,.25);border-radius:6px;font-size:12px;color:var(--accent);">
+           <strong>★ New to this store this period:</strong>
+           ${newEmps.map(e => `<span style="color:var(--text);margin-left:10px;">• ${e.firstName} ${e.lastName}</span>`).join('')}
+         </div>`
+      : '';
+
+    storesHTML += `<div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+        <div style="font-size:14px;font-weight:700;color:var(--text);">${name}</div>
+        <div style="font-size:12px;color:var(--muted);">${t ? t.empCount : '?'} employee${(t&&t.empCount)===1?'':'s'} with hours</div>
+      </div>
+      ${bodyHTML}
+      ${newEmpHTML}
+    </div>`;
+  }
+  document.getElementById('recap-stores-body').innerHTML = storesHTML;
+
+  // Grand totals block
+  const totalHrs = grand.regHours + grand.otHours + grand.ptoHours + grand.holidayHours;
+  const grandStats = [
+    { label:'Total Hours', val:totalHrs,           isDollar:false, large:true },
+    { label:'Reg',         val:grand.regHours,     isDollar:false },
+    { label:'OT',          val:grand.otHours,      isDollar:false },
+    { label:'PTO',         val:grand.ptoHours,     isDollar:false },
+    { label:'Holiday',     val:grand.holidayHours, isDollar:false },
+    { label:'Tips',        val:grand.tips,         isDollar:true, hi:true },
+    { label:'Mileage',     val:grand.mileage,      isDollar:false },
+    { label:'Reimb.',      val:grand.reimbursement,isDollar:true },
+    { label:'Bonus',       val:grand.bonus,        isDollar:true },
+  ].filter(s => s.val > 0 || s.large);
+
+  let totalsHTML = `<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">
+    Grand Totals &nbsp;·&nbsp; ${confirmed.length} store${confirmed.length!==1?'s':''} &nbsp;·&nbsp; ${grand.empCount} employee${grand.empCount!==1?'s':''}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:22px;">` +
+    grandStats.map(s => {
+      const disp = s.isDollar ? '$' + s.val.toFixed(2) : (s.val % 1 === 0 ? s.val : s.val.toFixed(2));
+      const color = s.hi ? 'var(--green)' : 'var(--text)';
+      const sz = s.large ? '22px' : '18px';
+      return `<div style="text-align:center;">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${s.label}</div>
+        <div style="font-size:${sz};font-weight:700;color:${color};">${disp}</div>
+      </div>`;
+    }).join('') + `</div>`;
+
+  document.getElementById('recap-totals-block').innerHTML = totalsHTML;
+  document.getElementById('recap-status').textContent = '';
+  const btn = document.getElementById('recap-submit-btn');
+  btn.disabled = false;
+  btn.textContent = '✓ Confirm & Submit All';
+
+  document.getElementById('recap-overlay').classList.remove('hidden');
+}
+
+function closeRecap() {
+  document.getElementById('recap-overlay').classList.add('hidden');
+}
+
+async function doSubmitAll() {
+  const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
+  if (!confirmed.length) return;
+
+  const payStart = document.getElementById('entry-period-start')?.value;
+  const payEnd   = document.getElementById('entry-period-end')?.value;
+  const payDate  = document.getElementById('entry-pay-date')?.value;
+
+  const submitBtn = document.getElementById('recap-submit-btn');
+  const backBtn   = document.getElementById('recap-back-btn');
+  const statusEl  = document.getElementById('recap-status');
   submitBtn.disabled = true;
+  backBtn.disabled   = true;
+  submitBtn.textContent = 'Submitting…';
 
   const results = [];
   let idx = 0;
 
   for (const [storeId, status] of confirmed) {
     idx++;
-    statusEl.innerHTML = `<span style="color:var(--accent);">Submitting store ${idx} of ${confirmed.length}...</span>`;
+    statusEl.style.color = 'var(--accent)';
+    statusEl.textContent = `Submitting store ${idx} of ${confirmed.length}…`;
 
     // Load employees for this store
     try {
@@ -1614,32 +1796,42 @@ async function bulkSubmitAll() {
     }
   }
 
-  // Show summary
+  // Show result summary inside the recap overlay
   const success = results.filter(r => r.status === 'success').length;
-  const failed = results.filter(r => r.status === 'failed').length;
+  const failed  = results.filter(r => r.status === 'failed').length;
   const skipped = results.filter(r => r.status === 'skipped').length;
 
-  const storeSel = document.getElementById('entry-store');
-  const storeNames = {};
-  for (const opt of storeSel.options) { if (opt.value) storeNames[opt.value] = opt.text; }
+  const storeSel2 = document.getElementById('entry-store');
+  const storeNames2 = {};
+  for (const opt of storeSel2.options) { if (opt.value) storeNames2[opt.value] = opt.text; }
 
-  let summary = `<div style="margin-top:12px;">`;
-  summary += `<div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:12px;">✓ Bulk Submission Complete</div>`;
-  summary += `<div style="font-size:13px;color:var(--muted);margin-bottom:12px;">${success} submitted · ${failed} failed · ${skipped} skipped</div>`;
-  results.forEach(r => {
-    const name = storeNames[r.storeId] || r.storeId;
+  let resultRows = results.map(r => {
+    const name  = storeNames2[r.storeId] || r.storeId;
     const color = r.status === 'success' ? 'var(--green)' : r.status === 'failed' ? 'var(--red)' : 'var(--muted)';
-    const icon = r.status === 'success' ? '✓' : r.status === 'failed' ? '✗' : '—';
-    const detail = r.submissionId ? `ID: ${r.submissionId}` : r.message || '';
-    summary += `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;">
+    const icon  = r.status === 'success' ? '✓' : r.status === 'failed' ? '✗' : '—';
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;">
       <span style="color:${color};">${icon} ${name}</span>
-      <span style="color:var(--muted);font-size:11px;">${detail}</span>
+      <span style="color:var(--muted);font-size:11px;">${r.submissionId ? 'Submitted' : r.message || ''}</span>
     </div>`;
-  });
-  summary += `</div>`;
+  }).join('');
 
-  statusEl.innerHTML = summary;
+  // Replace store cards with result summary
+  document.getElementById('recap-stores-body').innerHTML =
+    `<div style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:10px;">✓ Submission Complete</div>
+     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${success} submitted · ${failed} failed · ${skipped} skipped</div>
+     ${resultRows}`;
+  document.getElementById('recap-totals-block').style.display = 'none';
+
+  statusEl.style.color = failed ? 'var(--red)' : 'var(--green)';
+  statusEl.textContent = failed ? `${failed} store(s) failed — check above.` : '';
   submitBtn.textContent = '✓ All Submitted';
+  backBtn.disabled = false;
+  backBtn.textContent = '✕ Close';
+  backBtn.onclick = closeRecap;
+
+  // Also update the page-level submit button
+  const pageSubmitBtn = document.getElementById('bulk-submit-btn');
+  if (pageSubmitBtn) pageSubmitBtn.textContent = '✓ All Submitted';
 }
 
 // ─── Patch onStoreChange to apply bulk data after render ─────────

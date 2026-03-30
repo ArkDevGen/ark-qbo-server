@@ -4367,6 +4367,23 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="font-size:12px;color:var(--text-d);margin-top:3px;">Process payroll exports and timesheet calculations</div>
     </div>
 
+    <!-- Pending Submissions Inbox -->
+    <div class="card" style="max-width:960px;margin-bottom:22px;">
+      <div class="card-header" style="border-bottom:2px solid rgba(184,146,42,.2);">
+        <div>
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">📥</span> Pending Submissions
+            <span id="pr-sub-badge" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;background:var(--text-d);color:#fff;border-radius:10px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;">0</span>
+          </div>
+          <div class="card-subtitle">Payroll periods submitted by clients — review and mark as processed</div>
+        </div>
+        <button onclick="renderPayrollSubmissions()" class="btn" style="font-size:11px;padding:5px 11px;">↻ Refresh</button>
+      </div>
+      <div id="pr-sub-body" style="padding:14px 18px;">
+        <div style="font-size:12px;color:var(--text-d);text-align:center;padding:20px 0;">Loading submissions…</div>
+      </div>
+    </div>
+
     <!-- Payroll Exports Module -->
     <div class="card" style="max-width:720px;overflow:visible;position:relative;z-index:10;">
       <div class="card-header" style="border-bottom:2px solid rgba(184,146,42,.2);">
@@ -15014,6 +15031,223 @@ let _prOutputName = '';
 function renderPayrollCenter(){
   prResetForm();
   prRenderHistory();
+  renderPayrollSubmissions();
+}
+
+// ── Payroll Submissions Inbox ─────────────────────────────────────
+const PR_API = 'https://ark-qbo-server.onrender.com';
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _fmtSubmitDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+
+function _fmtPayDate(d) {
+  if (!d) return '—';
+  const p = d.split('-');
+  if (p.length === 3) {
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${mo[parseInt(p[1])-1]} ${parseInt(p[2])}, ${p[0]}`;
+  }
+  return d;
+}
+
+async function renderPayrollSubmissions() {
+  const body = document.getElementById('pr-sub-body');
+  const badge = document.getElementById('pr-sub-badge');
+  if (!body) return;
+  body.innerHTML = '<div style="font-size:12px;color:var(--text-d);text-align:center;padding:20px 0;">Loading…</div>';
+  try {
+    const res = await fetch(`${PR_API}/payroll/submissions`);
+    const data = await res.json();
+    const all = data.submissions || [];
+    const subs = all.filter(s => s.status !== 'deleted');
+
+    const pending = subs.filter(s => s.status === 'pending');
+    if (badge) {
+      badge.textContent = pending.length;
+      badge.style.background = pending.length > 0 ? '#c0392b' : 'var(--text-d)';
+    }
+
+    if (subs.length === 0) {
+      body.innerHTML = '<div style="font-size:12px;color:var(--text-d);text-align:center;padding:24px 0;">No submissions yet</div>';
+      return;
+    }
+
+    // Sort: pending first, then by submittedAt descending
+    subs.sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (a.status !== 'pending' && b.status === 'pending') return 1;
+      return new Date(b.submittedAt) - new Date(a.submittedAt);
+    });
+
+    body.innerHTML = subs.map(s => _prSubRow(s)).join('');
+  } catch(e) {
+    body.innerHTML = `<div style="font-size:12px;color:#c0392b;text-align:center;padding:20px 0;">Failed to load submissions — ${_esc(e.message)}</div>`;
+  }
+}
+
+function _prSubRow(s) {
+  const isPending = s.status === 'pending';
+  const isProcessed = s.status === 'processed';
+
+  const statusBadge = isPending
+    ? `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;background:#fff3cd;color:#856404;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;">Pending</span>`
+    : isProcessed
+      ? `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;background:#d4edda;color:#155724;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;">Processed</span>`
+      : `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;background:var(--surface2);color:var(--text-d);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;">Dismissed</span>`;
+
+  const payPeriod = s.payPeriodStart && s.payPeriodEnd
+    ? `${_fmtPayDate(s.payPeriodStart)} – ${_fmtPayDate(s.payPeriodEnd)}`
+    : (s.payPeriodStart ? _fmtPayDate(s.payPeriodStart) : '—');
+
+  const rateCount = s.rateChanges ? Object.keys(s.rateChanges).length : 0;
+  const rateNote = rateCount > 0
+    ? `<span style="font-size:10px;color:#856404;background:#fff3cd;padding:2px 7px;border-radius:8px;margin-left:6px;">⚠ ${rateCount} rate change${rateCount>1?'s':''}</span>`
+    : '';
+
+  const actionBtns = isPending
+    ? `<button onclick="prSubMarkProcessed('${s.id}')" class="btn btn-primary" style="font-size:11px;padding:4px 11px;background:#2e7d32;border-color:#2e7d32;">✓ Mark Processed</button>
+       <button onclick="prSubDismiss('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;">Dismiss</button>`
+    : `<button onclick="prSubDelete('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;color:#c0392b;border-color:#e8c2c2;">✕ Remove</button>`;
+
+  const empCount = s.entries ? s.entries.length : 0;
+  const dimStyle = isPending ? '' : 'opacity:0.72;';
+
+  return `<div id="prsub-${s.id}" style="border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;${dimStyle}">
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface2);cursor:pointer;user-select:none;" onclick="prSubToggle('${s.id}')">
+      <span id="prsub-arrow-${s.id}" style="font-size:10px;color:var(--text-d);display:inline-block;transition:transform .15s;">▶</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          ${_esc(s.clientName)} <span style="color:var(--text-d);font-weight:400;">—</span> ${_esc(s.storeName)}${rateNote}
+        </div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:3px;">
+          Pay period: <strong style="color:var(--navy);">${payPeriod}</strong>
+          ${s.payDate ? ` &nbsp;·&nbsp; Pay date: <strong style="color:var(--navy);">${_fmtPayDate(s.payDate)}</strong>` : ''}
+          &nbsp;·&nbsp; <strong style="color:var(--navy);">${empCount}</strong> employee${empCount!==1?'s':''}
+          &nbsp;·&nbsp; Submitted ${_fmtSubmitDate(s.submittedAt)}
+        </div>
+      </div>
+      ${statusBadge}
+      <div style="display:flex;gap:6px;flex-shrink:0;" onclick="event.stopPropagation()">
+        ${actionBtns}
+      </div>
+    </div>
+    <div id="prsub-detail-${s.id}" style="display:none;border-top:1px solid var(--border);">
+      ${_prSubDetailHTML(s)}
+    </div>
+  </div>`;
+}
+
+function _prSubDetailHTML(s) {
+  const entries = s.entries || [];
+  if (!entries.length) return '<div style="padding:14px 18px;font-size:12px;color:var(--text-d);">No employee entries</div>';
+
+  const numFields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus'];
+  const dollarFields = new Set(['tips','reimbursement','bonus']);
+  const totals = {};
+  numFields.forEach(f => totals[f] = 0);
+  entries.forEach(e => numFields.forEach(f => { totals[f] += parseFloat(e[f]) || 0; }));
+
+  const ch = (lbl, align='right') => `<th style="font-size:10px;text-align:${align};white-space:nowrap;padding:7px 10px;">${lbl}</th>`;
+  const cd = (val, isDollar=false, align='right') => {
+    const n = parseFloat(val) || 0;
+    const disp = n===0 ? '—' : isDollar ? '$'+n.toFixed(2) : (n%1===0 ? String(n) : n.toFixed(2));
+    return `<td style="text-align:${align};font-size:12px;font-family:'DM Mono',monospace;color:${n===0?'var(--text-d)':'inherit'};padding:7px 10px;">${disp}</td>`;
+  };
+  const ct = (f) => {
+    const v = totals[f]; const isDollar = dollarFields.has(f);
+    const disp = v===0 ? '—' : isDollar ? '$'+v.toFixed(2) : (v%1===0 ? String(v) : v.toFixed(2));
+    return `<td style="text-align:right;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;padding:7px 10px;color:${v===0?'var(--text-d)':'var(--navy)'};">${disp}</td>`;
+  };
+
+  const rows = entries.map(e => `<tr>
+    <td style="font-size:12px;padding:7px 10px;white-space:nowrap;">${_esc(e.firstName)} ${_esc(e.lastName)}</td>
+    <td style="font-size:11px;color:var(--text-d);padding:7px 10px;">${_esc(e.position||'—')}</td>
+    <td style="font-size:11px;font-family:'DM Mono',monospace;text-align:right;padding:7px 10px;">${e.payRate ? '$'+parseFloat(e.payRate).toFixed(2) : '—'}</td>
+    ${cd(e.regHours)} ${cd(e.otHours)} ${cd(e.ptoHours)} ${cd(e.holidayHours)}
+    ${cd(e.tips,true)} ${cd(e.mileage)} ${cd(e.reimbursement,true)} ${cd(e.bonus,true)}
+    <td style="font-size:11px;color:var(--text-d);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 10px;" title="${_esc(e.notes||'')}">${_esc(e.notes||'')}</td>
+  </tr>`).join('');
+
+  let rateHTML = '';
+  if (s.rateChanges && Object.keys(s.rateChanges).length > 0) {
+    rateHTML = `<div style="margin:12px 14px 0;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius);font-size:12px;">
+      <strong style="color:#856404;">⚠ Pay Rate Changes Requested</strong>
+      <ul style="margin:6px 0 0 16px;padding:0;color:#856404;">
+        ${Object.values(s.rateChanges).map(rc=>`<li>${_esc(rc.name)}: $${rc.from} → $${rc.to}</li>`).join('')}
+      </ul>
+    </div>`;
+  }
+
+  return `${rateHTML}
+  <div style="overflow-x:auto;padding:2px 0 0;">
+    <table style="min-width:860px;border-collapse:collapse;width:100%;">
+      <thead style="background:var(--surface2);">
+        <tr>
+          ${ch('Employee','left')} ${ch('Position','left')} ${ch('Rate')}
+          ${ch('Reg')} ${ch('OT')} ${ch('PTO')} ${ch('Holiday')}
+          ${ch('Tips')} ${ch('Mileage')} ${ch('Reimb.')} ${ch('Bonus')}
+          ${ch('Notes','left')}
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr style="background:var(--surface2);border-top:2px solid var(--border);">
+          <td colspan="3" style="font-size:11px;font-weight:700;color:var(--text-d);padding:7px 10px;letter-spacing:.04em;">TOTALS</td>
+          ${ct('regHours')} ${ct('otHours')} ${ct('ptoHours')} ${ct('holidayHours')}
+          ${ct('tips')} ${ct('mileage')} ${ct('reimbursement')} ${ct('bonus')}
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>`;
+}
+
+function prSubToggle(id) {
+  const detail = document.getElementById(`prsub-detail-${id}`);
+  const arrow  = document.getElementById(`prsub-arrow-${id}`);
+  if (!detail) return;
+  const open = detail.style.display !== 'none';
+  detail.style.display = open ? 'none' : '';
+  if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+async function prSubMarkProcessed(id) {
+  try {
+    const r = await fetch(`${PR_API}/payroll/submissions/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'processed' })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    renderPayrollSubmissions();
+  } catch(e) { alert('Failed to update: ' + e.message); }
+}
+
+async function prSubDismiss(id) {
+  try {
+    const r = await fetch(`${PR_API}/payroll/submissions/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'dismissed' })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    renderPayrollSubmissions();
+  } catch(e) { alert('Failed to dismiss: ' + e.message); }
+}
+
+async function prSubDelete(id) {
+  if (!confirm('Permanently remove this submission record?')) return;
+  try {
+    const r = await fetch(`${PR_API}/payroll/submissions/${id}`, { method:'DELETE' });
+    if (!r.ok) throw new Error(await r.text());
+    renderPayrollSubmissions();
+  } catch(e) { alert('Failed to remove: ' + e.message); }
 }
 
 // ── Client search & selection ──
