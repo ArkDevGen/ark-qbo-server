@@ -3067,6 +3067,8 @@ async function loadDraft() {
     }
     // Restore rate changes
     if (draft.rateChanges) _rateChanges = draft.rateChanges;
+    // Recalculate totals row
+    updateTotals();
     // Restore confirmed status
     if (draft.confirmed) {
       _bulkStoreStatus[storeId] = 'confirmed';
