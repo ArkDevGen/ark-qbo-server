@@ -28,7 +28,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -43,7 +48,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -58,7 +68,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -73,7 +88,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -92,10 +112,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "stephen.allen.film@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "16.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -108,7 +133,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -122,10 +152,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "johhnycrew101@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -138,7 +173,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -153,7 +193,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -168,7 +213,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -183,7 +233,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -197,10 +252,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "cody.obryan17@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "15.60",
               "payType": "hourly",
               "payRates": []
             },
@@ -213,7 +273,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -227,10 +292,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "sipeamelia@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "15.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -243,7 +313,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -257,10 +332,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "flyscarlet@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Manager in Training",
+              "payRate": "18.00",
               "payType": "hourly",
               "payRates": []
             }
@@ -277,10 +357,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "kaleybwlng795@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "18.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -292,10 +377,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "nickbriney502@yahoo.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -308,7 +398,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -323,7 +418,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -338,7 +438,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -353,7 +458,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -368,7 +478,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -383,7 +498,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -397,10 +517,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "lewellen_john@yahoo.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "24.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -413,7 +538,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -428,7 +558,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -443,7 +578,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -457,10 +597,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "chloemohr137@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -473,7 +618,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -488,7 +638,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -503,7 +658,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -517,10 +677,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "email": "max.payne@stu.bullitt.kyschools.us",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
-              "payRate": "",
+              "payRate": "17.00",
               "payType": "hourly",
               "payRates": []
             }
@@ -537,10 +702,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "briana.aviles06@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "26.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -552,10 +722,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "karmyn.a.05@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "19.35",
               "payType": "hourly",
               "payRates": []
             },
@@ -567,10 +742,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "raistlin3572@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "18.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -582,10 +762,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "cclemons1121@outlook.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "16.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -598,7 +783,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -612,10 +802,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "email": "jeffrey.p.faughender98@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
-              "payRate": "",
+              "payRate": "14.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -628,7 +823,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -643,7 +843,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -657,10 +862,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "jadafayhorne@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "17.35",
               "payType": "hourly",
               "payRates": []
             },
@@ -672,10 +882,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "aubreyjasmine08@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -687,10 +902,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "12333brandon@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "17.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -703,7 +923,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -717,10 +942,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "pedenskylar@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "20.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -733,7 +963,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -747,10 +982,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "email": "jaylinsmothers12@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
-              "payRate": "",
+              "payRate": "19.85",
               "payType": "hourly",
               "payRates": []
             },
@@ -762,10 +1002,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "ycor8764@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "16.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -777,10 +1022,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "camw01@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.50",
               "payType": "hourly",
               "payRates": []
             }
@@ -798,7 +1048,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -812,10 +1067,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "mirandacaldera69@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -827,10 +1087,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "mollyhicks984@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.60",
               "payType": "hourly",
               "payRates": []
             },
@@ -842,10 +1107,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "jacobhorvitz4@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -858,7 +1128,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -872,10 +1147,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "colton.lindsey08@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "12.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -888,7 +1168,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -903,7 +1188,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -918,7 +1208,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -932,10 +1227,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "alexisskylerm@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -948,7 +1248,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -963,7 +1268,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -978,7 +1288,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -993,7 +1308,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1008,7 +1328,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1023,7 +1348,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1038,7 +1368,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1053,7 +1388,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1073,7 +1413,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1088,7 +1433,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1102,10 +1452,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "alyssabottoms0228@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Store Manager",
+              "payRate": "23.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1117,10 +1472,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "brennaebottoms@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -1133,7 +1493,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1147,10 +1512,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "driggershaleigh@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "17.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1162,10 +1532,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "jaylagoldwair@outlook.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "16.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1178,7 +1553,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1192,10 +1572,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "hayleaj29@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "17.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1208,7 +1593,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1223,7 +1613,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1238,7 +1633,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1253,7 +1653,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1267,10 +1672,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "amourashlyn@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -1283,7 +1693,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1303,7 +1718,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1317,10 +1737,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "petiepandas@outlook.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1333,7 +1758,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1348,7 +1778,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1363,7 +1798,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1377,10 +1817,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "kaylih0106@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1393,7 +1838,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1407,10 +1857,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "aubreyleasor@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -1423,7 +1878,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1438,7 +1898,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1453,7 +1918,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1467,10 +1937,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "louisvilleeli@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -1483,7 +1958,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1497,10 +1977,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "badbiddyy69@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1512,10 +1997,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "floraschumacher3002@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "15.75",
               "payType": "hourly",
               "payRates": []
             },
@@ -1528,7 +2018,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1543,7 +2038,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1558,7 +2058,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1572,10 +2077,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "mareenawilliamson400@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.00",
               "payType": "hourly",
               "payRates": []
             }
@@ -1593,7 +2103,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1608,7 +2123,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1622,10 +2142,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "nataliegb001@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "17.35",
               "payType": "hourly",
               "payRates": []
             },
@@ -1637,10 +2162,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "lyla.dennison4@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "16.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -1653,7 +2183,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1668,7 +2203,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1682,10 +2222,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "anneliesejo47@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1697,10 +2242,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "gymnastdani905@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "16.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -1712,10 +2262,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "eleanor.kroencke@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -1727,10 +2282,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "macnailt@yahoo.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "14.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -1743,7 +2303,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1757,10 +2322,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "camlinnunn@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Manager",
+              "payRate": "18.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -1773,7 +2343,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1788,7 +2363,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1803,7 +2383,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1818,7 +2403,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1833,7 +2423,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1848,7 +2443,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1867,10 +2467,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "kyrakyrakyrakyra12@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "12.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -1883,7 +2488,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1897,10 +2507,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "savannahcaple@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "17.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -1912,10 +2527,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "wyattcox813@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "12.25",
               "payType": "hourly",
               "payRates": []
             },
@@ -1928,7 +2548,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1943,7 +2568,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1958,7 +2588,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1973,7 +2608,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -1987,10 +2627,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "kayla.neville05@yahoo.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "16.35",
               "payType": "hourly",
               "payRates": []
             },
@@ -2002,10 +2647,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "makennaneville14@yahoo.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -2017,10 +2667,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "stparker401@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Shift Lead",
+              "payRate": "16.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -2033,7 +2688,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2048,7 +2708,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2062,10 +2727,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "audreyrose0703@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -2077,10 +2747,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "abigailsharpe1214@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.50",
               "payType": "hourly",
               "payRates": []
             },
@@ -2092,10 +2767,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "vrock765@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Admin",
+              "payRate": "24.00",
               "payType": "hourly",
               "payRates": []
             },
@@ -2108,7 +2788,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2123,7 +2808,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2137,10 +2827,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "princesskylee425@icloud.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "15.10",
               "payType": "hourly",
               "payRates": []
             },
@@ -2153,7 +2848,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2168,7 +2868,12 @@
               "dob": "",
               "hireDate": "",
               "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
               "position": "",
               "payRate": "",
               "payType": "hourly",
@@ -2182,10 +2887,15 @@
               "ssn": "",
               "dob": "",
               "hireDate": "",
-              "email": "",
-              "address": { "street": "", "city": "", "state": "", "zip": "" },
-              "position": "",
-              "payRate": "",
+              "email": "ware1080@gmail.com",
+              "address": {
+                "street": "",
+                "city": "",
+                "state": "",
+                "zip": ""
+              },
+              "position": "Barista",
+              "payRate": "13.00",
               "payType": "hourly",
               "payRates": []
             }
