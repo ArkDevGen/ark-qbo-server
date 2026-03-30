@@ -7375,9 +7375,18 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    const _v=document.getElementById('view-payrollcenter');
-    if(typeof showToast==='function') showToast(`PC: display=${_v?getComputedStyle(_v).display:'null'} active=${_v?.classList.contains('active')}`);
     renderPayrollCenter();
+    // Detailed diagnostic — fires after render to capture layout info
+    setTimeout(()=>{
+      const _v=document.getElementById('view-payrollcenter');
+      const _b=document.getElementById('pr-debug-banner');
+      if(!_v||!_b) return;
+      const vr=_v.getBoundingClientRect();
+      const br=_b.getBoundingClientRect();
+      const bs=getComputedStyle(_b);
+      const info=`VIEW: top=${Math.round(vr.top)} h=${Math.round(vr.height)} w=${Math.round(vr.width)}\nBANNER: top=${Math.round(br.top)} h=${Math.round(br.height)} vis=${bs.visibility} op=${bs.opacity} disp=${bs.display} overflow=${getComputedStyle(_v).overflow}`;
+      alert(info);
+    },500);
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
