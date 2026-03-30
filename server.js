@@ -1779,6 +1779,8 @@ if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
         _sessionToken:  diskClient._sessionToken  ?? null,
         _notifications: diskClient._notifications ?? [],
         password:       diskClient.password       ?? null,
+        _drafts:        diskClient._drafts        ?? {},
+        _prefill:       diskClient._prefill       ?? null,
       };
       Object.assign(diskClient, repoMeta, authFields);
 
@@ -1854,6 +1856,8 @@ app.post('/payroll/force-sync', (req, res) => {
       if (diskClient) {
         client._sessionToken = diskClient._sessionToken || null;
         client._notifications = diskClient._notifications || [];
+        client._drafts = diskClient._drafts || {};
+        client._prefill = diskClient._prefill || null;
       }
     }
     payrollData = repoCopy;
