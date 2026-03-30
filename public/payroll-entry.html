@@ -852,6 +852,20 @@ function renderEmployeeTable() {
   }
 }
 
+// ─── Autosave on edit (debounced 2s) ─────────────────────────────
+let _autosaveTimer = null;
+function triggerAutosave() {
+  if (_autosaveTimer) clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(() => saveDraft(false), 2000);
+}
+// Listen for changes on the employee grid
+document.getElementById('emp-tbody').addEventListener('input', triggerAutosave);
+// Listen for date field changes
+['entry-period-start', 'entry-period-end', 'entry-pay-date'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', triggerAutosave);
+});
+
 // ═══════════════════════════════════════════════════════════════════
 //  BULK IMPORT — All stores at once
 // ═══════════════════════════════════════════════════════════════════
