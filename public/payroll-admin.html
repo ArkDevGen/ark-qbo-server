@@ -324,7 +324,7 @@ function renderClientDetail() {
   if (!c) return;
 
   const detailEl = document.getElementById('client-detail');
-  const stores = Object.entries(c.stores || {}).filter(([id]) => id !== 'admin');
+  const stores = Object.entries(c.stores || {});
   const adminStore = c.stores?.admin;
 
   // Build store tabs
@@ -354,39 +354,10 @@ function renderClientDetail() {
 
       ${stores.length > 1 ? `<div class="store-tabs">${storeTabs}</div>` : stores.length === 1 ? `<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:12px;">${stores[0][1].name || 'Store ' + stores[0][0]}</div>` : ''}
 
-      ${adminEmps.length ? `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Admin / Company-Wide (${adminEmps.length})</div>
-          <button class="btn btn-outline btn-sm" onclick="showAddEmp('${c.slug}','admin')" style="border-color:var(--green);color:var(--green);">+ Add Admin</button>
-        </div>
-        <table class="emp-table" style="margin-bottom:16px;">
-          <thead><tr>
-            <th class="sortable${_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('firstName')">First Name${_sortIndicator('firstName')}</th>
-            <th class="sortable${_adminSortField==='lastName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
-            <th>Position</th><th>Pay Type</th>
-            <th class="sortable${_adminSortField==='rate'?' active':''}" onclick="setAdminSort('rate')">Rate${_sortIndicator('rate')}</th>
-            <th>Actions</th>
-          </tr></thead>
-          <tbody>
-            ${_sortedWithIdx(adminEmps).map(({emp, origIdx}) => `<tr>
-              <td style="font-weight:500;">${emp.firstName}</td>
-              <td style="font-weight:500;">${emp.lastName}</td>
-              <td style="color:var(--muted);">${emp.position || '—'}</td>
-              <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
-              <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
-              <td>
-                <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','admin',${origIdx})">Edit</button>
-                <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','admin',${origIdx},'${emp.firstName} ${emp.lastName}')">✕</button>
-              </td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      ` : ''}
-
       ${_activeStore && currentStore ? `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">
-            ${currentStore.name || 'Store ' + _activeStore} Employees (${storeEmps.length})
+            ${_activeStore === 'admin' ? 'Admin' : (currentStore.name || 'Store ' + _activeStore)} Employees (${storeEmps.length})
           </div>
           <button class="btn btn-outline btn-sm" onclick="showAddEmp('${c.slug}','${_activeStore}')" style="border-color:var(--green);color:var(--green);">+ Add Employee</button>
         </div>
