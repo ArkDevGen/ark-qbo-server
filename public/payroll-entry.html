@@ -269,6 +269,20 @@
             </tr>
           </thead>
           <tbody id="emp-tbody"></tbody>
+          <tfoot id="emp-tfoot">
+            <tr style="background:var(--surface);border-top:2px solid var(--border);">
+              <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Totals</td>
+              <td id="tot-regHours"     style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--accent);text-align:center;">—</td>
+              <td id="tot-otHours"      style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--accent);text-align:center;">—</td>
+              <td id="tot-ptoHours"     style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--accent);text-align:center;">—</td>
+              <td id="tot-holidayHours" style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--accent);text-align:center;">—</td>
+              <td id="tot-tips"         style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--green);text-align:center;">—</td>
+              <td id="tot-mileage"      style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--accent);text-align:center;">—</td>
+              <td id="tot-reimbursement"style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--green);text-align:center;">—</td>
+              <td id="tot-bonus"        style="padding:8px 10px;font-size:13px;font-weight:700;color:var(--green);text-align:center;">—</td>
+              <td style="padding:8px 10px;"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
@@ -589,6 +603,33 @@ async function refreshEmployees() {
   if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; btn.style.color = 'var(--green)'; btn.style.borderColor = 'var(--green)'; setTimeout(() => { btn.style.color = 'var(--muted)'; btn.style.borderColor = 'var(--muted)'; }, 1500); }
 }
 
+function updateTotals() {
+  const fields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus'];
+  const dollarFields = new Set(['tips','reimbursement','bonus']);
+  const totals = {};
+  fields.forEach(f => { totals[f] = 0; });
+
+  document.querySelectorAll('#emp-tbody input[data-field]').forEach(el => {
+    const f = el.dataset.field;
+    if (f && totals[f] !== undefined) {
+      totals[f] += parseFloat(el.value) || 0;
+    }
+  });
+
+  fields.forEach(f => {
+    const cell = document.getElementById('tot-' + f);
+    if (!cell) return;
+    const val = totals[f];
+    if (val === 0) {
+      cell.textContent = '—';
+      cell.style.opacity = '0.4';
+    } else {
+      cell.textContent = dollarFields.has(f) ? '$' + val.toFixed(2) : val % 1 === 0 ? val.toString() : val.toFixed(2);
+      cell.style.opacity = '1';
+    }
+  });
+}
+
 function setSort(field) {
   if (_sortField === field) {
     if (_sortDir === 'asc') _sortDir = 'desc';
@@ -682,6 +723,8 @@ function renderEmployeeTable() {
       if (el) el.value = val;
     });
   });
+
+  updateTotals();
 
   if (_employees.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">No employees found for this store. Click "+ Add Employee" to get started.</td></tr>';
@@ -1452,6 +1495,8 @@ function bulkApplyData() {
     const status = _bulkStoreStatus[storeId];
     btn.textContent = status === 'confirmed' ? '✓ Confirmed — Edit & Re-confirm' : '✓ Confirm Store';
   }
+
+  updateTotals();
 }
 
 function bulkConfirmStore() {
@@ -2467,7 +2512,10 @@ function clearHours() {
 
 // Auto-save on any table input change
 document.addEventListener('input', function(e) {
-  if (e.target.closest('#emp-tbody') || e.target.id === 'entry-period-start' || e.target.id === 'entry-period-end' || e.target.id === 'entry-pay-date') {
+  if (e.target.closest('#emp-tbody')) {
+    updateTotals();
+    saveDraft(false);
+  } else if (e.target.id === 'entry-period-start' || e.target.id === 'entry-period-end' || e.target.id === 'entry-pay-date') {
     saveDraft(false);
   }
 });
