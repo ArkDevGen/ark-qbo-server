@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ARK Dashboard — ARK Financial</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
 
@@ -4365,6 +4366,100 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div style="margin-bottom:22px;">
       <div style="font-size:22px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">Payroll Center</div>
       <div style="font-size:12px;color:var(--text-d);margin-top:3px;">Process payroll exports and timesheet calculations</div>
+    </div>
+
+    <!-- Prepare Client Payroll -->
+    <div class="card" style="max-width:960px;margin-bottom:22px;overflow:visible;position:relative;z-index:20;">
+      <div class="card-header" style="border-bottom:2px solid rgba(184,146,42,.2);">
+        <div>
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">📤</span> Prepare Client Payroll
+          </div>
+          <div class="card-subtitle">Upload Homebase + Tips files to pre-populate hours for client review</div>
+        </div>
+        <button onclick="prPrepToggle()" class="btn" style="font-size:11px;padding:5px 11px;" id="pr-prep-toggle-btn">+ New</button>
+      </div>
+      <div id="pr-prep-body" style="display:none;padding:18px 22px;">
+
+        <!-- Row 1: Client + Dates -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+          <div style="grid-column:1/3;">
+            <label class="field-label">Client</label>
+            <div style="position:relative;">
+              <select id="pr-prep-client" class="field-input" onchange="prPrepClientChange()" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-size:13px;width:100%;color:var(--navy);">
+                <option value="">— Select client —</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Pay Period Start</label>
+            <input type="date" id="pr-prep-start" class="field-input" style="font-size:13px;">
+          </div>
+          <div>
+            <label class="field-label">Pay Period End</label>
+            <input type="date" id="pr-prep-end" class="field-input" style="font-size:13px;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+          <div>
+            <label class="field-label">Pay Date</label>
+            <input type="date" id="pr-prep-paydate" class="field-input" style="font-size:13px;">
+          </div>
+        </div>
+
+        <!-- Row 2: File uploads -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+          <!-- Homebase CSV -->
+          <div>
+            <label class="field-label">Homebase CSV</label>
+            <div id="pr-prep-hb-drop"
+              onclick="document.getElementById('pr-prep-hb-input').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+              ondragleave="this.style.borderColor='var(--border)'"
+              ondrop="event.preventDefault();this.style.borderColor='var(--border)';prPrepImportHomebase(event.dataTransfer.files[0])"
+              style="border:2px dashed var(--border);border-radius:var(--radius);padding:16px 12px;text-align:center;cursor:pointer;transition:border-color .15s;background:var(--surface2);">
+              <div style="font-size:20px;margin-bottom:4px;">📊</div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-m);">Drop Homebase CSV or click</div>
+            </div>
+            <input type="file" id="pr-prep-hb-input" accept=".csv" style="display:none;" onchange="prPrepImportHomebase(this.files[0])">
+            <div id="pr-prep-hb-status" style="font-size:11px;color:var(--text-d);margin-top:5px;min-height:16px;"></div>
+          </div>
+          <!-- Tips XLSX -->
+          <div>
+            <label class="field-label">Tips Report (XLSX)</label>
+            <div id="pr-prep-tips-drop"
+              onclick="document.getElementById('pr-prep-tips-input').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+              ondragleave="this.style.borderColor='var(--border)'"
+              ondrop="event.preventDefault();this.style.borderColor='var(--border)';prPrepImportTips(event.dataTransfer.files[0])"
+              style="border:2px dashed var(--border);border-radius:var(--radius);padding:16px 12px;text-align:center;cursor:pointer;transition:border-color .15s;background:var(--surface2);">
+              <div style="font-size:20px;margin-bottom:4px;">💰</div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-m);">Drop Tips XLSX or click</div>
+            </div>
+            <input type="file" id="pr-prep-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="prPrepImportTips(this.files[0])">
+            <div id="pr-prep-tips-status" style="font-size:11px;color:var(--text-d);margin-top:5px;min-height:16px;"></div>
+          </div>
+        </div>
+
+        <!-- Preview table -->
+        <div id="pr-prep-preview" style="display:none;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+          <div style="padding:8px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);letter-spacing:.05em;text-transform:uppercase;">Preview</div>
+          <div id="pr-prep-preview-body" style="padding:12px 14px;font-size:12px;max-height:220px;overflow-y:auto;"></div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button onclick="prPrepSave()" class="btn btn-primary" id="pr-prep-save-btn" style="font-size:12px;padding:7px 18px;" disabled>💾 Save for Client Review</button>
+          <div id="pr-prep-save-status" style="font-size:12px;color:var(--text-d);min-height:18px;"></div>
+        </div>
+
+        <!-- Active prefill indicator per client -->
+        <div id="pr-prep-active" style="display:none;margin-top:14px;padding:10px 14px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);font-size:12px;color:#2e7d32;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span id="pr-prep-active-text">✓ Prefill saved</span>
+          <button onclick="prPrepClear()" class="btn" style="font-size:11px;padding:4px 10px;color:#c0392b;border-color:#e8c2c2;">✕ Clear</button>
+        </div>
+
+      </div>
     </div>
 
     <!-- Pending Submissions Inbox -->
@@ -15113,9 +15208,11 @@ function _prSubRow(s) {
     : '';
 
   const actionBtns = isPending
-    ? `<button onclick="prSubMarkProcessed('${s.id}')" class="btn btn-primary" style="font-size:11px;padding:4px 11px;background:#2e7d32;border-color:#2e7d32;">✓ Mark Processed</button>
+    ? `<button onclick="prSubExport('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;" title="Export to XLSX">📥 Export</button>
+       <button onclick="prSubMarkProcessed('${s.id}')" class="btn btn-primary" style="font-size:11px;padding:4px 11px;background:#2e7d32;border-color:#2e7d32;">✓ Mark Processed</button>
        <button onclick="prSubDismiss('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;">Dismiss</button>`
-    : `<button onclick="prSubDelete('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;color:#c0392b;border-color:#e8c2c2;">✕ Remove</button>`;
+    : `<button onclick="prSubExport('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;" title="Export to XLSX">📥 Export</button>
+       <button onclick="prSubDelete('${s.id}')" class="btn" style="font-size:11px;padding:4px 10px;color:#c0392b;border-color:#e8c2c2;">✕ Remove</button>`;
 
   const empCount = s.entries ? s.entries.length : 0;
   const dimStyle = isPending ? '' : 'opacity:0.72;';
@@ -15248,6 +15345,268 @@ async function prSubDelete(id) {
     if (!r.ok) throw new Error(await r.text());
     renderPayrollSubmissions();
   } catch(e) { alert('Failed to remove: ' + e.message); }
+}
+
+// ── Export a submission to XLSX ───────────────────────────────────
+function prSubExport(id) {
+  fetch(`${PR_API}/payroll/submissions`)
+    .then(r => r.json())
+    .then(data => {
+      const s = (data.submissions || []).find(x => x.id === id);
+      if (!s) { alert('Submission not found'); return; }
+      _prSubExportToXLSX(s);
+    })
+    .catch(e => alert('Export failed: ' + e.message));
+}
+
+function _prSubExportToXLSX(s) {
+  if (typeof XLSX === 'undefined') { alert('XLSX library not loaded yet — please wait a moment and try again.'); return; }
+  const fmt = (d) => {
+    if (!d) return '';
+    const p = d.split('-');
+    if (p.length === 3) { const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mo[parseInt(p[1])-1]} ${parseInt(p[2])}, ${p[0]}`; }
+    return d;
+  };
+  const wb = XLSX.utils.book_new();
+  const summaryRows = [
+    [`Payroll Report — ${s.clientName} / ${s.storeName}`],
+    [`Pay Period: ${fmt(s.payPeriodStart)} – ${fmt(s.payPeriodEnd)}`],
+    [`Pay Date: ${fmt(s.payDate)}`],
+    [`Submitted: ${new Date(s.submittedAt).toLocaleString()}`],
+    [],
+    ['Employee','Position','Pay Rate','Reg Hrs','OT Hrs','PTO Hrs','Holiday','Tips ($)','Mileage','Reimb ($)','Bonus ($)','Notes'],
+  ];
+  (s.entries || []).forEach(e => {
+    summaryRows.push([
+      `${e.firstName} ${e.lastName}`, e.position||'',
+      e.payRate ? `$${parseFloat(e.payRate).toFixed(2)}` : '',
+      parseFloat(e.regHours)||0, parseFloat(e.otHours)||0,
+      parseFloat(e.ptoHours)||0, parseFloat(e.holidayHours)||0,
+      parseFloat(e.tips)||0, parseFloat(e.mileage)||0,
+      parseFloat(e.reimbursement)||0, parseFloat(e.bonus)||0,
+      e.notes||'',
+    ]);
+  });
+  const fields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus'];
+  const totals = {};
+  fields.forEach(f => { totals[f] = (s.entries||[]).reduce((sum,e)=>sum+(parseFloat(e[f])||0),0); });
+  summaryRows.push(['TOTALS','','',totals.regHours,totals.otHours,totals.ptoHours,totals.holidayHours,totals.tips,totals.mileage,totals.reimbursement,totals.bonus,'']);
+  const ws = XLSX.utils.aoa_to_sheet(summaryRows);
+  ws['!cols'] = [22,16,10,9,9,9,9,10,9,10,10,24].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws, (s.storeName||'Payroll').replace(/[\/\\?*[\]]/g,'').slice(0,31));
+  const safeClient = (s.clientName||'Payroll').replace(/[\/\\:*?"<>|]/g,'_');
+  const safeStore  = (s.storeName||'Store').replace(/[\/\\:*?"<>|]/g,'_');
+  const datePart   = (s.payPeriodEnd||'').replace(/-/g,'');
+  XLSX.writeFile(wb, `${safeClient}_${safeStore}_${datePart}.xlsx`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ════ PREPARE CLIENT PAYROLL (AM uploads → prefills client portal)
+// ══════════════════════════════════════════════════════════════════
+
+let _prPrepHomebase = null;
+let _prPrepTips     = null;
+let _prPrepClients  = {};
+
+async function prPrepInit() {
+  try {
+    const r = await authFetch(`${PR_API}/payroll/config`);
+    const data = await r.json();
+    _prPrepClients = data.clients || {};
+    const sel = document.getElementById('pr-prep-client');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select client —</option>';
+    Object.entries(_prPrepClients)
+      .sort((a,b) => (a[1].name||a[0]).localeCompare(b[1].name||b[0]))
+      .forEach(([slug,c]) => {
+        const opt = document.createElement('option');
+        opt.value = slug; opt.textContent = c.name || slug;
+        sel.appendChild(opt);
+      });
+  } catch(e) { console.error('Failed to load payroll clients for prep:', e); }
+}
+
+function prPrepToggle() {
+  const body = document.getElementById('pr-prep-body');
+  const btn  = document.getElementById('pr-prep-toggle-btn');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  btn.textContent = open ? '+ New' : '✕ Close';
+  if (!open) prPrepInit();
+}
+
+function prPrepClientChange() {
+  const slug = document.getElementById('pr-prep-client').value;
+  const activeDiv = document.getElementById('pr-prep-active');
+  if (!slug) { activeDiv.style.display = 'none'; return; }
+  const c = _prPrepClients[slug];
+  if (c && c._prefill) {
+    const pf = c._prefill;
+    const fmt = (d) => { if(!d) return ''; const p=d.split('-'); const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mo[parseInt(p[1])-1]} ${parseInt(p[2])}, ${p[0]}`; };
+    document.getElementById('pr-prep-active-text').textContent = `✓ Active prefill: ${fmt(pf.payPeriodStart)} – ${fmt(pf.payPeriodEnd)} (${Object.keys(pf.stores||{}).length} store${Object.keys(pf.stores||{}).length!==1?'s':''})`;
+    activeDiv.style.display = 'flex';
+  } else {
+    activeDiv.style.display = 'none';
+  }
+  prPrepUpdateSaveBtn();
+}
+
+function prPrepParseCSVLine(line) {
+  const result=[]; let current=''; let inQuotes=false;
+  for (let i=0;i<line.length;i++) {
+    const ch=line[i];
+    if(ch==='"'){if(inQuotes&&i+1<line.length&&line[i+1]==='"'){current+='"';i++;}else{inQuotes=!inQuotes;}}
+    else if(ch===','&&!inQuotes){result.push(current);current='';}
+    else{current+=ch;}
+  }
+  result.push(current); return result;
+}
+
+function prPrepImportHomebase(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('pr-prep-hb-status');
+  statusEl.innerHTML = '<span style="color:var(--text-d);">Parsing…</span>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const lines = e.target.result.split('\n');
+      const periodMatch = (lines[0]||'').match(/(\d{2})-(\d{2})-(\d{4})\s+to\s+(\d{2})-(\d{2})-(\d{4})/);
+      if (periodMatch) {
+        document.getElementById('pr-prep-start').value = `${periodMatch[3]}-${periodMatch[1]}-${periodMatch[2]}`;
+        document.getElementById('pr-prep-end').value   = `${periodMatch[6]}-${periodMatch[4]}-${periodMatch[5]}`;
+      }
+      let headerIdx=0;
+      for(let i=0;i<Math.min(5,lines.length);i++){if(lines[i].toLowerCase().includes('first name')){headerIdx=i;break;}}
+      const headers=prPrepParseCSVLine(lines[headerIdx]);
+      const col={};
+      headers.forEach((h,i)=>{col[h.trim().toLowerCase()]=i;});
+      _prPrepHomebase={}; let total=0;
+      for(let i=headerIdx+1;i<lines.length;i++){
+        const line=lines[i].trim(); if(!line) continue;
+        const cols=prPrepParseCSVLine(line);
+        const firstName=(cols[col['first name']]||'').trim();
+        const lastName=(cols[col['last name']]||'').trim();
+        const location=(cols[col['location']]||'').trim();
+        if(location==='TOTALS'||!firstName) continue;
+        const locNum=location.replace(/[^0-9]/g,'').trim(); if(!locNum) continue;
+        const num=(idx)=>{const raw=(cols[idx]||'').replace(/[$,]/g,'').trim();const n=parseFloat(raw);return isNaN(n)?0:n;};
+        if(!_prPrepHomebase[locNum]) _prPrepHomebase[locNum]=[];
+        _prPrepHomebase[locNum].push({firstName,lastName,regular:num(col['regular']),overtime:num(col['overtime']),pto:num(col['pto']),holidayPay:num(col['holiday pay'])});
+        total++;
+      }
+      const storeCount=Object.keys(_prPrepHomebase).length;
+      statusEl.innerHTML=`<span style="color:#2e7d32;">✓ ${total} employees · ${storeCount} store${storeCount!==1?'s':''}</span>`;
+      document.getElementById('pr-prep-hb-input').value='';
+      prPrepBuildPreview(); prPrepUpdateSaveBtn();
+    } catch(err) { statusEl.innerHTML=`<span style="color:#c0392b;">✗ ${err.message}</span>`; }
+  };
+  reader.readAsText(file);
+}
+
+function prPrepImportTips(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('pr-prep-tips-status');
+  statusEl.innerHTML = '<span style="color:var(--text-d);">Parsing…</span>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws);
+      _prPrepTips={}; let totalTips=0;
+      for(const row of rows){
+        const storeVal=String(row['Store']||'');
+        if(storeVal==='Total'||!storeVal) continue;
+        const match=storeVal.replace(/[^\d\s-]/g,'').trim().match(/^(\d+)/);
+        if(!match) continue;
+        const tips=parseFloat(row['Tip'])||0;
+        _prPrepTips[match[1]]=tips; totalTips+=tips;
+      }
+      const sc=Object.keys(_prPrepTips).length;
+      statusEl.innerHTML=`<span style="color:#2e7d32;">✓ ${sc} store${sc!==1?'s':''} · $${totalTips.toFixed(2)} tips</span>`;
+      document.getElementById('pr-prep-tips-input').value='';
+      prPrepBuildPreview(); prPrepUpdateSaveBtn();
+    } catch(err) { statusEl.innerHTML=`<span style="color:#c0392b;">✗ ${err.message}</span>`; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function prPrepBuildPreview() {
+  if (!_prPrepHomebase) return;
+  const previewDiv=document.getElementById('pr-prep-preview');
+  const bodyDiv=document.getElementById('pr-prep-preview-body');
+  const storeNums=Object.keys(_prPrepHomebase).sort();
+  if (!storeNums.length) { previewDiv.style.display='none'; return; }
+  let html='';
+  storeNums.forEach(num=>{
+    const emps=_prPrepHomebase[num]||[];
+    const tips=_prPrepTips?.[num]||0;
+    html+=`<div style="margin-bottom:10px;">
+      <div style="font-weight:700;font-size:12px;color:var(--navy);margin-bottom:4px;">Store ${num} — ${emps.length} employee${emps.length!==1?'s':''}${tips>0?' · <span style="color:#2e7d32;">$'+tips.toFixed(2)+' tips</span>':''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">`;
+    emps.forEach(emp=>{
+      const hrs=emp.regular+emp.overtime;
+      html+=`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface2);color:var(--text-m);">${emp.firstName} ${emp.lastName} (${hrs}h)</span>`;
+    });
+    html+=`</div></div>`;
+  });
+  bodyDiv.innerHTML=html; previewDiv.style.display='';
+}
+
+function prPrepUpdateSaveBtn() {
+  const btn=document.getElementById('pr-prep-save-btn');
+  const slug=document.getElementById('pr-prep-client')?.value;
+  const start=document.getElementById('pr-prep-start')?.value;
+  const end=document.getElementById('pr-prep-end')?.value;
+  const paydate=document.getElementById('pr-prep-paydate')?.value;
+  if (btn) btn.disabled=!(_prPrepHomebase&&slug&&start&&end&&paydate);
+}
+
+async function prPrepSave() {
+  const slug=document.getElementById('pr-prep-client').value;
+  const start=document.getElementById('pr-prep-start').value;
+  const end=document.getElementById('pr-prep-end').value;
+  const paydate=document.getElementById('pr-prep-paydate').value;
+  const statusEl=document.getElementById('pr-prep-save-status');
+  if (!slug||!start||!end||!paydate||!_prPrepHomebase) { statusEl.textContent='Please select a client, set dates, and upload Homebase CSV.'; return; }
+  statusEl.textContent='Saving…';
+
+  // Build stores object keyed by store ID from client config
+  const client=_prPrepClients[slug];
+  const clientStores=Object.entries(client?.stores||{}).filter(([id])=>id!=='admin');
+  const stores={};
+  Object.entries(_prPrepHomebase).forEach(([storeNum,emps])=>{
+    const match=clientStores.find(([id,s])=>(s.name||'').replace(/[^0-9]/g,'')===storeNum||id.replace(/[^0-9]/g,'')===storeNum);
+    const storeId=match?match[0]:`store-${storeNum}`;
+    stores[storeId]={
+      employees:emps.map(emp=>({firstName:emp.firstName,lastName:emp.lastName,regHours:emp.regular,otHours:emp.overtime,ptoHours:emp.pto,holidayHours:emp.holidayPay})),
+      totalTips:_prPrepTips?.[storeNum]||0,
+    };
+  });
+
+  try {
+    const r=await authFetch(`${PR_API}/payroll/prefill/${slug}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({payPeriodStart:start,payPeriodEnd:end,payDate:paydate,stores})});
+    if(!r.ok) throw new Error(await r.text());
+    statusEl.innerHTML='<span style="color:#2e7d32;">✓ Saved — client can now log in and see pre-populated hours</span>';
+    if(!_prPrepClients[slug]) _prPrepClients[slug]={};
+    _prPrepClients[slug]._prefill={payPeriodStart:start,payPeriodEnd:end,payDate:paydate,stores};
+    prPrepClientChange();
+  } catch(e) { statusEl.innerHTML=`<span style="color:#c0392b;">✗ ${e.message}</span>`; }
+}
+
+async function prPrepClear() {
+  const slug=document.getElementById('pr-prep-client').value;
+  if (!slug) return;
+  if (!confirm('Clear the saved prefill data for this client? The client portal will go back to blank entry.')) return;
+  try {
+    const r=await authFetch(`${PR_API}/payroll/prefill/${slug}`,{method:'DELETE'});
+    if(!r.ok) throw new Error(await r.text());
+    if(_prPrepClients[slug]) delete _prPrepClients[slug]._prefill;
+    document.getElementById('pr-prep-active').style.display='none';
+    document.getElementById('pr-prep-save-status').innerHTML='<span style="color:var(--text-d);">Prefill cleared.</span>';
+  } catch(e) { alert('Failed to clear: '+e.message); }
 }
 
 // ── Client search & selection ──

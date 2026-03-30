@@ -1891,6 +1891,7 @@ app.post('/payroll/login', (req, res) => {
   client._sessionToken = token;
   savePayrollData();
 
+  const prefill = client._prefill;
   res.json({
     success: true,
     token,
@@ -1903,6 +1904,13 @@ app.post('/payroll/login', (req, res) => {
       })),
     payFrequency: client.payFrequency || '',
     workLocations: client.workLocations || [],
+    hasPrefill: !!prefill,
+    prefillDates: prefill ? {
+      payPeriodStart: prefill.payPeriodStart,
+      payPeriodEnd: prefill.payPeriodEnd,
+      payDate: prefill.payDate,
+      createdAt: prefill.createdAt,
+    } : null,
   });
 });
 
@@ -1944,8 +1952,10 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     periodRate: e.periodRate || '',
   }));
 
+  const storePrefill = client._prefill?.stores?.[storeId] || null;
   res.json({
     employees: [...adminEmps, ...storeEmps],
+    prefillData: storePrefill || null,
   });
 });
 
@@ -2417,7 +2427,7 @@ app.get('/payroll/config', (req, res) => {
 
 // ── Dashboard: Save/update a payroll client config ───────────────
 app.post('/payroll/config', (req, res) => {
-  const { slug, name, password, stores, payFrequency } = req.body;
+  const { slug, name, password, stores, payFrequency, contactEmail, workLocations } = req.body;
   if (!slug || !name) return res.status(400).json({ error: 'Slug and name required' });
 
   const existing = payrollData.clients[slug];
@@ -2426,8 +2436,11 @@ app.post('/payroll/config', (req, res) => {
     password: password || (existing ? existing.password : ''),
     stores: stores || (existing ? existing.stores : {}),
     payFrequency: payFrequency || (existing ? existing.payFrequency : ''),
+    contactEmail: contactEmail !== undefined ? contactEmail : (existing ? (existing.contactEmail || '') : ''),
+    workLocations: workLocations || (existing ? existing.workLocations : []),
     _sessionToken: existing ? existing._sessionToken : null,
     _notifications: existing ? existing._notifications : [],
+    _prefill: existing ? existing._prefill : undefined,
   };
   savePayrollData();
   res.json({ success: true });
@@ -2436,6 +2449,40 @@ app.post('/payroll/config', (req, res) => {
 // ── Dashboard: Delete a payroll client config ────────────────────
 app.delete('/payroll/config/:slug', (req, res) => {
   delete payrollData.clients[req.params.slug];
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Save contact email for a payroll client ───────────
+app.patch('/payroll/config/:slug/email', requireAuth, (req, res) => {
+  const client = payrollData.clients[req.params.slug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  client.contactEmail = req.body.contactEmail || '';
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Save pre-filled hours for a client (AM uploads) ───
+app.post('/payroll/prefill/:slug', requireAuth, (req, res) => {
+  const client = payrollData.clients[req.params.slug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const { payPeriodStart, payPeriodEnd, payDate, stores } = req.body;
+  if (!payPeriodStart || !payPeriodEnd || !payDate || !stores) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  client._prefill = {
+    payPeriodStart, payPeriodEnd, payDate, stores,
+    createdAt: new Date().toISOString(),
+  };
+  savePayrollData();
+  res.json({ success: true });
+});
+
+// ── Dashboard: Clear prefill data for a client ───────────────────
+app.delete('/payroll/prefill/:slug', requireAuth, (req, res) => {
+  const client = payrollData.clients[req.params.slug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  delete client._prefill;
   savePayrollData();
   res.json({ success: true });
 });
