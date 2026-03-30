@@ -1897,10 +1897,9 @@ app.post('/payroll/login', (req, res) => {
     token,
     clientName: client.name,
     stores: Object.entries(client.stores || {})
-      .filter(([id]) => id !== 'admin')
       .map(([id, s]) => ({
         id,
-        name: s.name,
+        name: id === 'admin' ? (s.name || 'Admin') : s.name,
       })),
     payFrequency: client.payFrequency || '',
     workLocations: client.workLocations || [],
@@ -1927,22 +1926,6 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
-  // Include admin employees in every store so managers show up everywhere
-  const adminStore = (client.stores || {}).admin;
-  const adminEmps = (adminStore && adminStore.employees || []).map(e => ({
-    id: e.id,
-    firstName: e.firstName,
-    lastName: e.lastName,
-    goByName: e.goByName || '',
-    position: e.position || '(Admin)',
-    payRate: e.payRate || '',
-    payType: e.payType || 'hourly',
-    annualRate: e.annualRate || '',
-    periodRate: e.periodRate || '',
-    excludeFromTips: !!e.excludeFromTips,
-    isAdmin: true,
-  }));
-
   const storeEmps = (store.employees || []).map(e => ({
     id: e.id,
     firstName: e.firstName,
@@ -1958,7 +1941,7 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
 
   const storePrefill = client._prefill?.stores?.[storeId] || null;
   res.json({
-    employees: [...adminEmps, ...storeEmps],
+    employees: storeEmps,
     prefillData: storePrefill || null,
   });
 });
