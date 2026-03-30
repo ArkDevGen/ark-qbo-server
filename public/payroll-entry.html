@@ -611,6 +611,19 @@ async function doLogin() {
       storeSel.appendChild(opt);
     });
 
+    // Load existing draft statuses (to show confirmed stores from other sessions)
+    try {
+      const draftResp = await fetch(`${API}/payroll/drafts/${_clientSlug}`, {
+        headers: { 'Authorization': `Bearer ${_token}` },
+      });
+      const draftData = await draftResp.json();
+      if (draftData.drafts) {
+        for (const [storeId, info] of Object.entries(draftData.drafts)) {
+          if (info.confirmed) _bulkStoreStatus[storeId] = 'confirmed';
+        }
+      }
+    } catch(e) { console.warn('Failed to load draft statuses:', e); }
+
     // If only one store, auto-select it
     if (_stores.length === 1) {
       storeSel.value = _stores[0].id;
@@ -1669,6 +1682,9 @@ function bulkConfirmStore() {
   // Mark confirmed
   _bulkStoreStatus[storeId] = 'confirmed';
   bulkRenderTracker();
+
+  // Persist confirmed data to server so others can see progress
+  saveDraft(false);
 
   // Auto-advance to next unconfirmed store
   const storeSel = document.getElementById('entry-store');
@@ -2992,6 +3008,7 @@ async function saveDraft(showFeedback = false) {
     payDate: document.getElementById('entry-pay-date').value,
     entries: collectCurrentEntries(),
     rateChanges: _rateChanges,
+    confirmed: _bulkStoreStatus[storeId] === 'confirmed' || false,
   };
   try {
     await fetch(`${API}/payroll/drafts/${_clientSlug}/${storeId}`, {
@@ -3036,6 +3053,11 @@ async function loadDraft() {
     }
     // Restore rate changes
     if (draft.rateChanges) _rateChanges = draft.rateChanges;
+    // Restore confirmed status
+    if (draft.confirmed) {
+      _bulkStoreStatus[storeId] = 'confirmed';
+      if (typeof bulkRenderTracker === 'function') bulkRenderTracker();
+    }
     // Update save indicator
     const ind = document.getElementById('draft-save-indicator');
     if (ind && draft.savedAt) {

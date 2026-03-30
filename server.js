@@ -2534,6 +2534,26 @@ app.delete('/payroll/drafts/:clientSlug', (req, res) => {
   res.json({ success: true });
 });
 
+// ── Get all draft statuses for a client (see which stores are confirmed) ──
+app.get('/payroll/drafts/:clientSlug', (req, res) => {
+  const { clientSlug } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const drafts = client._drafts || {};
+  const summary = {};
+  for (const [storeId, draft] of Object.entries(drafts)) {
+    summary[storeId] = {
+      confirmed: !!draft.confirmed,
+      savedAt: draft.savedAt || null,
+      periodStart: draft.periodStart || null,
+      periodEnd: draft.periodEnd || null,
+    };
+  }
+  res.json({ drafts: summary });
+});
+
 // ── Dashboard: Get pending submissions ───────────────────────────
 app.get('/payroll/submissions', (req, res) => {
   res.json({ submissions: payrollData.submissions });
