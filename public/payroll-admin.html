@@ -361,16 +361,16 @@ function renderClientDetail() {
         </div>
         <table class="emp-table" style="margin-bottom:16px;">
           <thead><tr>
-            <th class="sortable${_adminSortField==='lastName'||_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
             <th class="sortable${_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('firstName')">First Name${_sortIndicator('firstName')}</th>
+            <th class="sortable${_adminSortField==='lastName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
             <th>Position</th><th>Pay Type</th>
             <th class="sortable${_adminSortField==='rate'?' active':''}" onclick="setAdminSort('rate')">Rate${_sortIndicator('rate')}</th>
             <th>Actions</th>
           </tr></thead>
           <tbody>
             ${_sortedWithIdx(adminEmps).map(({emp, origIdx}) => `<tr>
-              <td style="font-weight:500;">${emp.lastName}</td>
               <td style="font-weight:500;">${emp.firstName}</td>
+              <td style="font-weight:500;">${emp.lastName}</td>
               <td style="color:var(--muted);">${emp.position || '—'}</td>
               <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
               <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
@@ -393,16 +393,16 @@ function renderClientDetail() {
         ${storeEmps.length ? `
           <table class="emp-table">
             <thead><tr>
-              <th class="sortable${_adminSortField==='lastName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
               <th class="sortable${_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('firstName')">First Name${_sortIndicator('firstName')}</th>
+              <th class="sortable${_adminSortField==='lastName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
               <th>Position</th><th>Pay Type</th>
               <th class="sortable${_adminSortField==='rate'?' active':''}" onclick="setAdminSort('rate')">Rate${_sortIndicator('rate')}</th>
               <th>Email</th><th>Actions</th>
             </tr></thead>
             <tbody>
               ${_sortedWithIdx(storeEmps).map(({emp, origIdx}) => `<tr>
-                <td style="font-weight:500;">${emp.lastName}</td>
                 <td style="font-weight:500;">${emp.firstName}</td>
+                <td style="font-weight:500;">${emp.lastName}</td>
                 <td style="color:var(--muted);">${emp.position || '—'}</td>
                 <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
                 <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
