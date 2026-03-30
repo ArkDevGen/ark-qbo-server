@@ -208,6 +208,7 @@
       </div>
       <div id="bulk-submit-wrap" style="display:none;margin-top:14px;">
         <button class="btn btn-green" id="bulk-submit-btn" onclick="bulkSubmitAll()" style="width:100%;padding:14px;font-size:15px;font-weight:700;">✓ Submit All Confirmed Payrolls</button>
+        <button class="btn btn-outline" onclick="exportPayrollXLSX()" style="width:100%;padding:12px;font-size:14px;font-weight:600;margin-top:8px;border-color:var(--accent);color:var(--accent);">📥 Export Payroll to XLSX</button>
         <div id="bulk-submit-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:18px;"></div>
       </div>
     </div>
@@ -300,7 +301,10 @@
         </table>
       </div>
       <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <button class="btn btn-outline" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save Draft</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save Draft</button>
+          <button class="btn btn-outline" onclick="recalculateTips()" id="recalc-tips-btn" style="border-color:var(--orange);color:var(--orange);">🔄 Recalculate Tips</button>
+        </div>
         <button class="btn btn-green" id="store-action-btn" onclick="_bulkMode ? bulkConfirmStore() : submitPayroll()">Submit Payroll</button>
       </div>
       <div id="submit-status" class="status"></div>
@@ -2308,6 +2312,178 @@ function importTipsReport(file) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ─── Recalculate Tips ────────────────────────────────────────────
+function recalculateTips() {
+  const storeId = document.getElementById('entry-store').value;
+  if (!storeId) return;
+
+  // Admin store doesn't get tips
+  if (storeId === 'admin') {
+    alert('Admin employees do not receive tips.');
+    return;
+  }
+
+  // Find the tip total for this store from bulk tips data
+  const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+  const storeNum = storeText.replace(/[^0-9]/g, '');
+  const storeTips = _bulkTips?.[storeNum] || 0;
+
+  if (storeTips <= 0) {
+    alert(`No tip total found for ${storeText}. Import a tips file first.`);
+    return;
+  }
+
+  // Calculate total hours (reg + OT) excluding tip-excluded employees
+  let totalHours = 0;
+  const empHours = [];
+  _employees.forEach((emp, i) => {
+    if (emp.excludeFromTips) { empHours.push(0); return; }
+    const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
+    const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
+    const hours = (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
+    empHours.push(hours);
+    totalHours += hours;
+  });
+
+  if (totalHours <= 0) {
+    alert('No hours found. Enter hours first, then recalculate tips.');
+    return;
+  }
+
+  // Distribute proportionally
+  let distributed = 0;
+  _employees.forEach((emp, i) => {
+    const tipInput = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
+    if (!tipInput || tipInput.readOnly) return;
+    if (empHours[i] > 0) {
+      const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
+      tipInput.value = share.toFixed(2);
+      tipInput.style.borderColor = 'var(--green)';
+      setTimeout(() => { tipInput.style.borderColor = ''; }, 2000);
+      distributed++;
+    } else {
+      tipInput.value = '0';
+    }
+  });
+
+  updateTotals();
+
+  // Show feedback
+  const assignedTotal = _employees.reduce((sum, emp, i) => {
+    const tipInput = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
+    return sum + (parseFloat(tipInput?.value) || 0);
+  }, 0);
+  const diff = Math.abs(storeTips - assignedTotal);
+
+  const btn = document.getElementById('recalc-tips-btn');
+  const origText = btn.textContent;
+  btn.textContent = `✓ $${storeTips.toFixed(2)} → ${distributed} employees`;
+  btn.style.borderColor = 'var(--green)';
+  btn.style.color = 'var(--green)';
+  setTimeout(() => { btn.textContent = origText; btn.style.borderColor = 'var(--orange)'; btn.style.color = 'var(--orange)'; }, 3000);
+}
+
+// ─── Export Payroll to XLSX ───────────────────────────────────────
+async function exportPayrollXLSX() {
+  const storeSel = document.getElementById('entry-store');
+  const storeNames = {};
+  for (const opt of storeSel.options) {
+    if (opt.value) storeNames[opt.value] = opt.text;
+  }
+
+  // Ensure admin store employees are snapshotted (they don't go through bulk confirm)
+  if (!_bulkStoreEmpsSnapshot['admin']) {
+    try {
+      const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/admin`, {
+        headers: { 'Authorization': `Bearer ${_token}` },
+      });
+      const data = await resp.json();
+      if (data.employees) {
+        _bulkStoreEmpsSnapshot['admin'] = data.employees;
+        const adminSaved = {};
+        data.employees.forEach((emp, i) => {
+          adminSaved[`${i}:regHours`] = '80';
+          adminSaved[`${i}:otHours`] = '0';
+          adminSaved[`${i}:ptoHours`] = '0';
+          adminSaved[`${i}:holidayHours`] = '0';
+          adminSaved[`${i}:tips`] = '0';
+        });
+        _bulkEmployeeData['admin'] = adminSaved;
+      }
+    } catch(e) { console.warn('Failed to fetch admin employees for export:', e); }
+  }
+
+  // Collect confirmed stores + admin
+  const storeIds = [];
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    if (opt.value === 'admin' || _bulkStoreStatus[opt.value] === 'confirmed') {
+      storeIds.push(opt.value);
+    }
+  }
+
+  if (storeIds.filter(id => id !== 'admin').length === 0) {
+    alert('No confirmed stores to export. Confirm at least one store first.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  for (const storeId of storeIds) {
+    const emps = _bulkStoreEmpsSnapshot[storeId] || [];
+    const savedData = _bulkEmployeeData[storeId] || {};
+    const isAdmin = storeId === 'admin';
+    const sheetName = (storeNames[storeId] || storeId).substring(0, 31); // Excel max 31 chars
+
+    // Build rows sorted by last name
+    const rows = [];
+    emps.forEach((emp, i) => {
+      const g = f => savedData[`${i}:${f}`] || '';
+      const goBy = emp.goByName ? ` (${emp.goByName})` : '';
+      const fullFirst = emp.firstName + goBy;
+
+      rows.push({
+        'First Name': fullFirst,
+        'Last Name': emp.lastName,
+        'Position': emp.position || '',
+        'Pay Type': emp.payType === 'salary' ? 'Salary' : 'Hourly',
+        'Pay Rate': emp.payRate ? parseFloat(emp.payRate) : '',
+        'Reg Hours': isAdmin ? 80 : (parseFloat(g('regHours')) || 0),
+        'OT Hours': isAdmin ? 0 : (parseFloat(g('otHours')) || 0),
+        'PTO Hours': isAdmin ? 0 : (parseFloat(g('ptoHours')) || 0),
+        'Holiday Hours': isAdmin ? 0 : (parseFloat(g('holidayHours')) || 0),
+        'Tips': isAdmin ? 0 : (parseFloat(g('tips')) || 0),
+        'Mileage': parseFloat(g('mileage')) || 0,
+        'Reimbursement': parseFloat(g('reimbursement')) || 0,
+        'Bonus': parseFloat(g('bonus')) || 0,
+        'Notes': g('notes') || '',
+      });
+    });
+
+    // Sort by last name
+    rows.sort((a, b) => a['Last Name'].toLowerCase().localeCompare(b['Last Name'].toLowerCase()));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Auto-size columns
+    const colWidths = Object.keys(rows[0] || {}).map(key => {
+      const maxLen = Math.max(key.length, ...rows.map(r => String(r[key] || '').length));
+      return { wch: Math.min(maxLen + 2, 30) };
+    });
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  // Generate filename with date
+  const payStart = document.getElementById('entry-period-start')?.value || '';
+  const payEnd = document.getElementById('entry-period-end')?.value || '';
+  const datePart = payStart && payEnd ? `_${payStart}_to_${payEnd}` : `_${new Date().toISOString().slice(0,10)}`;
+  const fileName = `${_clientName || _clientSlug}_Payroll${datePart}.xlsx`;
+
+  XLSX.writeFile(wb, fileName);
 }
 
 // ─── Find Employee (from other stores) ───────────────────────────

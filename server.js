@@ -3767,6 +3767,52 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 });
 
 // ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// HEALTH CHECK — Render uses this for zero-downtime deploys
+// ─────────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), dataDir: DATA_DIR });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// GRACEFUL SHUTDOWN — flush all in-memory data to disk before exit
+// ─────────────────────────────────────────────────────────────────
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received — flushing all data to disk...`);
+  try {
+    savePayrollData();
+    console.log('  ✓ Payroll data saved');
+  } catch (e) { console.error('  ✗ Payroll data save failed:', e.message); }
+  try {
+    saveUsers();
+    console.log('  ✓ Users saved');
+  } catch (e) { console.error('  ✗ Users save failed:', e.message); }
+  try {
+    saveTokenStore();
+    console.log('  ✓ Token store saved');
+  } catch (e) { console.error('  ✗ Token store save failed:', e.message); }
+  try {
+    saveGcalTokens();
+    console.log('  ✓ GCal tokens saved');
+  } catch (e) { console.error('  ✗ GCal tokens save failed:', e.message); }
+  try {
+    saveSfTokens();
+    console.log('  ✓ ShareFile tokens saved');
+  } catch (e) { console.error('  ✗ ShareFile tokens save failed:', e.message); }
+  try {
+    savePlHistory();
+    saveFleetData();
+    savePlThresholds();
+    savePlAnticipated();
+    console.log('  ✓ P&L / Fleet data saved');
+  } catch (e) { console.error('  ✗ P&L / Fleet data save failed:', e.message); }
+  console.log('All data flushed. Shutting down.');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
