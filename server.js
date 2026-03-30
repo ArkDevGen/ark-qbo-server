@@ -1747,36 +1747,26 @@ if (fs.existsSync(PAYROLL_FILE)) {
   }
 }
 
-// Sync: if repo copy has more store/employee data, replace the client config
+// Sync: always use repo copy for client/store/employee config on each deploy
 // (preserves submissions and session tokens on disk, but overwrites client configs from repo)
 const localCopy = path.join(__dirname, 'payroll-data.json');
 if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
   try {
     const repoCopy = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
-    let updated = false;
     for (const [slug, repoClient] of Object.entries(repoCopy.clients || {})) {
       const diskClient = payrollData.clients[slug];
-      // Count total employees in repo vs disk
-      const repoEmpCount = Object.values(repoClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0);
-      const diskEmpCount = diskClient ? Object.values(diskClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0) : 0;
+      // Always use repo version for client config, preserve session token & notifications from disk
+      const preserved = {
+        _sessionToken: diskClient?._sessionToken || null,
+        _notifications: diskClient?._notifications || [],
+      };
+      payrollData.clients[slug] = { ...repoClient, ...preserved };
       const repoStoreCount = Object.keys(repoClient.stores || {}).length;
-      const diskStoreCount = diskClient ? Object.keys(diskClient.stores || {}).length : 0;
-
-      if (!diskClient || repoEmpCount > diskEmpCount || repoStoreCount > diskStoreCount) {
-        // Repo has more data — use repo version but preserve session token & notifications
-        const preserved = {
-          _sessionToken: diskClient?._sessionToken || null,
-          _notifications: diskClient?._notifications || [],
-        };
-        payrollData.clients[slug] = { ...repoClient, ...preserved };
-        updated = true;
-        console.log(`  → Synced ${slug}: ${repoStoreCount} stores, ${repoEmpCount} employees`);
-      }
+      const repoEmpCount = Object.values(repoClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0);
+      console.log(`  → Synced ${slug}: ${repoStoreCount} stores, ${repoEmpCount} employees`);
     }
-    if (updated) {
-      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
-      console.log('✓ Payroll data synced from repo to persistent disk');
-    }
+    fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+    console.log('✓ Payroll client config synced from repo to persistent disk');
   } catch(e) {
     console.log('Could not sync payroll data from repo:', e.message);
   }
