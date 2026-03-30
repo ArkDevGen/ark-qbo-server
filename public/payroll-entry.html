@@ -941,12 +941,22 @@ function bulkImportTips(file) {
       _bulkTips = {};
       let totalTips = 0;
 
+      // Build set of valid store numbers from dropdown (exclude admin)
+      const validStoreNums = new Set();
+      const storeSel = document.getElementById('entry-store');
+      for (const opt of storeSel.options) {
+        if (!opt.value || opt.value === 'admin') continue;
+        const num = opt.text.replace(/[^0-9]/g, '');
+        if (num) validStoreNums.add(num);
+      }
+
       for (const row of rows) {
         const storeVal = String(row['Store'] || '');
         if (storeVal === 'Total' || !storeVal) continue;
         const match = storeVal.replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
         if (!match) continue;
         const storeNum = match[1];
+        if (!validStoreNums.has(storeNum)) continue; // skip stores not in our list
         const tips = parseFloat(row['Tip']) || 0;
         _bulkTips[storeNum] = tips;
         totalTips += tips;
