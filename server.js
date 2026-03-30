@@ -1747,28 +1747,84 @@ if (fs.existsSync(PAYROLL_FILE)) {
   }
 }
 
-// Sync: always use repo copy for client/store/employee config on each deploy
-// (preserves submissions and session tokens on disk, but overwrites client configs from repo)
+// Sync: smart merge — runtime additions/edits on disk survive deploys.
+// Rules:
+//   • New client in repo  → seed entirely from repo
+//   • New store in repo   → add to disk
+//   • New employee ID in repo not on disk → add to disk (CSV bakes land here)
+//   • Employee already on disk → keep disk version (preserves admin edits & additions)
+//   • Client meta (name, payFrequency, etc.) → updated from repo
+//   • Auth fields (password, _sessionToken, _notifications) → always from disk
+// Use POST /payroll/force-sync to intentionally overwrite disk with repo (e.g. after pruning).
 const localCopy = path.join(__dirname, 'payroll-data.json');
 if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
   try {
     const repoCopy = JSON.parse(fs.readFileSync(localCopy, 'utf8'));
+    let changed = false;
+
     for (const [slug, repoClient] of Object.entries(repoCopy.clients || {})) {
+      if (!payrollData.clients[slug]) {
+        // Brand-new client — seed entirely from repo
+        payrollData.clients[slug] = { ...repoClient };
+        changed = true;
+        console.log(`  → Seeded new client ${slug}`);
+        continue;
+      }
+
       const diskClient = payrollData.clients[slug];
-      // Always use repo version for client config, preserve session token & notifications from disk
-      const preserved = {
-        _sessionToken: diskClient?._sessionToken || null,
-        _notifications: diskClient?._notifications || [],
+
+      // Update top-level client meta from repo, but preserve auth/runtime fields from disk
+      const { stores: repoStores, ...repoMeta } = repoClient;
+      const authFields = {
+        _sessionToken:  diskClient._sessionToken  ?? null,
+        _notifications: diskClient._notifications ?? [],
+        password:       diskClient.password       ?? null,
       };
-      payrollData.clients[slug] = { ...repoClient, ...preserved };
-      const repoStoreCount = Object.keys(repoClient.stores || {}).length;
-      const repoEmpCount = Object.values(repoClient.stores || {}).reduce((sum, s) => sum + (s.employees || []).length, 0);
-      console.log(`  → Synced ${slug}: ${repoStoreCount} stores, ${repoEmpCount} employees`);
+      Object.assign(diskClient, repoMeta, authFields);
+
+      // Merge stores
+      for (const [storeId, repoStore] of Object.entries(repoStores || {})) {
+        if (!diskClient.stores) diskClient.stores = {};
+
+        if (!diskClient.stores[storeId]) {
+          // New store — add entirely from repo
+          diskClient.stores[storeId] = { ...repoStore };
+          changed = true;
+          console.log(`  → Added new store ${storeId} to ${slug}`);
+          continue;
+        }
+
+        const diskStore = diskClient.stores[storeId];
+
+        // Update store-level meta (name, etc.) from repo
+        const { employees: repoEmps, ...storeMeta } = repoStore;
+        Object.assign(diskStore, storeMeta);
+
+        // Add any employee IDs from repo that don't exist on disk yet
+        const diskEmpIds = new Set((diskStore.employees || []).map(e => e.id));
+        let added = 0;
+        for (const repoEmp of (repoEmps || [])) {
+          if (!diskEmpIds.has(repoEmp.id)) {
+            if (!diskStore.employees) diskStore.employees = [];
+            diskStore.employees.push({ ...repoEmp });
+            diskEmpIds.add(repoEmp.id);
+            added++;
+            changed = true;
+          }
+          // Employee already on disk → keep disk version (admin edits preserved)
+        }
+        if (added > 0) console.log(`  → Added ${added} new employee(s) to ${storeId} (${slug})`);
+      }
     }
-    fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
-    console.log('✓ Payroll client config synced from repo to persistent disk');
+
+    if (changed) {
+      fs.writeFileSync(PAYROLL_FILE, JSON.stringify(payrollData, null, 2));
+      console.log('✓ Payroll data merged from repo into disk');
+    } else {
+      console.log('✓ Payroll data up to date — no merge needed');
+    }
   } catch(e) {
-    console.log('Could not sync payroll data from repo:', e.message);
+    console.log('Could not merge payroll data from repo:', e.message);
   }
 } else if (!fs.existsSync(PAYROLL_FILE) && fs.existsSync(localCopy)) {
   // First deploy — seed from repo
