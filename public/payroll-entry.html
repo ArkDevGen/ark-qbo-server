@@ -1578,16 +1578,6 @@ function bulkConfirmStore() {
 function bulkSubmitAll() {
   const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
   if (!confirmed.length) return;
-
-  const payStart = document.getElementById('entry-period-start')?.value;
-  const payEnd = document.getElementById('entry-period-end')?.value;
-  const payDate = document.getElementById('entry-pay-date')?.value;
-
-  if (!payStart || !payEnd || !payDate) {
-    document.getElementById('bulk-submit-status').innerHTML = '<span style="color:var(--red);">Please fill in Pay Period Start, End, and Pay Date above</span>';
-    return;
-  }
-
   showSubmitRecap();
 }
 
@@ -1612,8 +1602,25 @@ function showSubmitRecap() {
   const storeNames = {};
   for (const opt of storeSel.options) { if (opt.value) storeNames[opt.value] = opt.text; }
 
-  document.getElementById('recap-period-label').textContent =
-    `Pay period: ${_recapFmt(payStart)} – ${_recapFmt(payEnd)}  ·  Pay date: ${_recapFmt(payDate)}`;
+  // Build period label — show inline date inputs if any are missing
+  const missingDates = !payStart || !payEnd || !payDate;
+  if (missingDates) {
+    document.getElementById('recap-period-label').innerHTML =
+      `<div style="background:rgba(255,92,92,.1);border:1px solid var(--red);border-radius:6px;padding:10px 12px;">
+        <div style="color:var(--red);font-weight:700;margin-bottom:8px;">⚠ Please fill in the missing date(s) before submitting:</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Pay Period Start</label>
+            <input type="date" id="recap-pay-start" value="${payStart||''}" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:13px;" oninput="document.getElementById('entry-period-start').value=this.value"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Pay Period End</label>
+            <input type="date" id="recap-pay-end" value="${payEnd||''}" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:13px;" oninput="document.getElementById('entry-period-end').value=this.value"></div>
+          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Pay Date</label>
+            <input type="date" id="recap-pay-date" value="${payDate||''}" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;font-size:13px;" oninput="document.getElementById('entry-pay-date').value=this.value"></div>
+        </div>
+      </div>`;
+  } else {
+    document.getElementById('recap-period-label').textContent =
+      `Pay period: ${_recapFmt(payStart)} – ${_recapFmt(payEnd)}  ·  Pay date: ${_recapFmt(payDate)}`;
+  }
 
   const numFields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus'];
   const dollarF   = new Set(['tips','reimbursement','bonus']);
@@ -1721,13 +1728,21 @@ async function doSubmitAll() {
   const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
   if (!confirmed.length) return;
 
-  const payStart = document.getElementById('entry-period-start')?.value;
-  const payEnd   = document.getElementById('entry-period-end')?.value;
-  const payDate  = document.getElementById('entry-pay-date')?.value;
+  // Read from recap inline inputs first (user may have filled them in there), fall back to main form
+  const payStart = (document.getElementById('recap-pay-start')?.value || document.getElementById('entry-period-start')?.value || '').trim();
+  const payEnd   = (document.getElementById('recap-pay-end')?.value   || document.getElementById('entry-period-end')?.value   || '').trim();
+  const payDate  = (document.getElementById('recap-pay-date')?.value  || document.getElementById('entry-pay-date')?.value     || '').trim();
 
   const submitBtn = document.getElementById('recap-submit-btn');
   const backBtn   = document.getElementById('recap-back-btn');
   const statusEl  = document.getElementById('recap-status');
+
+  if (!payStart || !payEnd || !payDate) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '⚠ Please fill in Pay Period Start, End, and Pay Date above before submitting.';
+    return;
+  }
+
   submitBtn.disabled = true;
   backBtn.disabled   = true;
   submitBtn.textContent = 'Submitting…';
