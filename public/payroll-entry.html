@@ -230,6 +230,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <h2 style="margin-bottom:0;">Employee Hours</h2>
         <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" onclick="refreshEmployees()" title="Re-fetch employee list (picks up any employees added by admin)" style="border-color:var(--muted);color:var(--muted);">↻ Refresh</button>
           <button class="btn btn-outline btn-sm" onclick="showFindEmployee()" style="border-color:var(--accent);color:var(--accent);">🔍 Find Employee</button>
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
           <button class="btn btn-outline btn-sm" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save</button>
@@ -562,6 +563,32 @@ function fmtRate(emp) {
   return `<span>$${parseFloat(emp.payRate).toFixed(2)}/hr</span>`;
 }
 
+// ─── Normalise a name for loose matching ──────────────────────────
+// Strips middle initials (Jane M. Doe → Jane Doe), common suffixes
+// (Jr, Sr, II, III, IV), and collapses extra whitespace.
+function normaliseName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/\b(jr\.?|sr\.?|ii|iii|iv|v)\b/g, '')  // suffixes
+    .replace(/\b[a-z]\.\s*/g, '')                     // middle initials like "M."
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function namesMatch(a, b) {
+  return normaliseName(a) === normaliseName(b);
+}
+
+async function refreshEmployees() {
+  const storeId = document.getElementById('entry-store').value;
+  if (!storeId) return;
+  const btn = document.querySelector('button[onclick="refreshEmployees()"]');
+  if (btn) { btn.textContent = '↻ ...'; btn.disabled = true; }
+  // Save any entered data first
+  saveDraft(false);
+  await onStoreChange();
+  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; btn.style.color = 'var(--green)'; btn.style.borderColor = 'var(--green)'; setTimeout(() => { btn.style.color = 'var(--muted)'; btn.style.borderColor = 'var(--muted)'; }, 1500); }
+}
+
 function setSort(field) {
   if (_sortField === field) {
     if (_sortDir === 'asc') _sortDir = 'desc';
@@ -863,10 +890,10 @@ async function bulkPopulateAll() {
         if (seen.has(key)) return;
         seen.add(key);
 
-        // Exact name match?
+        // Name match (tolerates middle initials, suffixes, extra spaces)?
         const found = storeEmps.some(emp =>
-          emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
-          emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+          namesMatch(emp.firstName, row.firstName) &&
+          namesMatch(emp.lastName,  row.lastName)
         );
         if (found) return;
 
@@ -1382,11 +1409,11 @@ function bulkApplyData() {
   // Apply Homebase hours (use resolved name if nickname was matched)
   const homebaseRows = _bulkHomebase?.[storeNum] || [];
   homebaseRows.forEach(row => {
-    const matchFirst = (row._resolvedFirstName || row.firstName).toLowerCase();
-    const matchLast  = (row._resolvedLastName  || row.lastName).toLowerCase();
+    const matchFirst = row._resolvedFirstName || row.firstName;
+    const matchLast  = row._resolvedLastName  || row.lastName;
     const empIdx = _employees.findIndex(emp =>
-      emp.firstName.toLowerCase() === matchFirst &&
-      emp.lastName.toLowerCase()  === matchLast
+      namesMatch(emp.firstName, matchFirst) &&
+      namesMatch(emp.lastName,  matchLast)
     );
     if (empIdx >= 0) {
       setInputVal(empIdx, 'regHours', row.regular);
@@ -1646,10 +1673,10 @@ function importHomebaseCSV(file) {
       const unmatchedCSV = [];
 
       csvRows.forEach(row => {
-        // Find matching employee by first name + last name (case-insensitive)
+        // Find matching employee by name (tolerates middle initials, suffixes, spaces)
         const empIdx = _employees.findIndex(emp =>
-          emp.firstName.toLowerCase() === row.firstName.toLowerCase() &&
-          emp.lastName.toLowerCase() === row.lastName.toLowerCase()
+          namesMatch(emp.firstName, row.firstName) &&
+          namesMatch(emp.lastName,  row.lastName)
         );
 
         if (empIdx >= 0) {
@@ -1668,8 +1695,8 @@ function importHomebaseCSV(file) {
       // Check for employees in grid that weren't in CSV
       _employees.forEach(emp => {
         const found = csvRows.some(r =>
-          r.firstName.toLowerCase() === emp.firstName.toLowerCase() &&
-          r.lastName.toLowerCase() === emp.lastName.toLowerCase()
+          namesMatch(r.firstName, emp.firstName) &&
+          namesMatch(r.lastName,  emp.lastName)
         );
         if (!found) unmatched.push(`${emp.firstName} ${emp.lastName}`);
       });
