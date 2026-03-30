@@ -54,8 +54,14 @@
   /* Employee table */
   .emp-table { width: 100%; border-collapse: collapse; }
   .emp-table th { background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .emp-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .emp-table th.sortable:hover { color: var(--accent); }
+  .emp-table th.sortable.active { color: var(--accent); }
   .emp-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .emp-table tr:hover { background: rgba(77,166,255,.04); }
+
+  /* Save toast */
+  #save-toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: #0d1b2a; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 9999; }
 
   /* Store tabs */
   .store-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--border); overflow-x: auto; }
@@ -79,6 +85,7 @@
 </head>
 <body>
 
+<div id="save-toast">✓ Saved</div>
 <div class="container">
   <div class="logo-bar">
     <h1>Ark Financial</h1>
@@ -180,6 +187,47 @@ let _payrollData = null;
 let _activeClient = null;
 let _activeStore = null;
 let _editingEmp = null; // { clientSlug, storeId, empIdx }
+let _adminSortField = 'lastName';
+let _adminSortDir = 'asc';
+
+function setAdminSort(field) {
+  if (_adminSortField === field) {
+    _adminSortDir = _adminSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _adminSortField = field;
+    _adminSortDir = 'asc';
+  }
+  renderClientDetail();
+}
+
+function _sortIndicator(field) {
+  if (_adminSortField !== field) return ' <span style="opacity:.4;">↕</span>';
+  return _adminSortDir === 'asc' ? ' <span style="color:var(--accent);">↑</span>' : ' <span style="color:var(--accent);">↓</span>';
+}
+
+function _sortedWithIdx(emps) {
+  const pairs = emps.map((emp, origIdx) => ({ emp, origIdx }));
+  pairs.sort((a, b) => {
+    const ea = a.emp, eb = b.emp;
+    let va, vb;
+    if (_adminSortField === 'firstName')     { va = (ea.firstName || '').toLowerCase(); vb = (eb.firstName || '').toLowerCase(); }
+    else if (_adminSortField === 'lastName') { va = (ea.lastName  || '').toLowerCase(); vb = (eb.lastName  || '').toLowerCase(); }
+    else if (_adminSortField === 'rate')     { va = parseFloat(ea.payRate || ea.annualRate) || 0; vb = parseFloat(eb.payRate || eb.annualRate) || 0; }
+    if (va < vb) return _adminSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return _adminSortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+  return pairs;
+}
+
+let _saveToastTimer = null;
+function showSaveToast() {
+  const t = document.getElementById('save-toast');
+  if (!t) return;
+  t.style.opacity = '1';
+  clearTimeout(_saveToastTimer);
+  _saveToastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
 
 // ─── Login ───────────────────────────────────────────────────────
 async function doLogin() {
@@ -312,16 +360,23 @@ function renderClientDetail() {
           <button class="btn btn-outline btn-sm" onclick="showAddEmp('${c.slug}','admin')" style="border-color:var(--green);color:var(--green);">+ Add Admin</button>
         </div>
         <table class="emp-table" style="margin-bottom:16px;">
-          <thead><tr><th>Name</th><th>Position</th><th>Pay Type</th><th>Rate</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th class="sortable${_adminSortField==='lastName'||_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
+            <th class="sortable${_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('firstName')">First Name${_sortIndicator('firstName')}</th>
+            <th>Position</th><th>Pay Type</th>
+            <th class="sortable${_adminSortField==='rate'?' active':''}" onclick="setAdminSort('rate')">Rate${_sortIndicator('rate')}</th>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>
-            ${adminEmps.map((emp, i) => `<tr>
-              <td style="font-weight:500;">${emp.firstName} ${emp.lastName}</td>
+            ${_sortedWithIdx(adminEmps).map(({emp, origIdx}) => `<tr>
+              <td style="font-weight:500;">${emp.lastName}</td>
+              <td style="font-weight:500;">${emp.firstName}</td>
               <td style="color:var(--muted);">${emp.position || '—'}</td>
               <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
               <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
               <td>
-                <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','admin',${i})">Edit</button>
-                <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','admin',${i},'${emp.firstName} ${emp.lastName}')">✕</button>
+                <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','admin',${origIdx})">Edit</button>
+                <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','admin',${origIdx},'${emp.firstName} ${emp.lastName}')">✕</button>
               </td>
             </tr>`).join('')}
           </tbody>
@@ -337,17 +392,24 @@ function renderClientDetail() {
         </div>
         ${storeEmps.length ? `
           <table class="emp-table">
-            <thead><tr><th>Name</th><th>Position</th><th>Pay Type</th><th>Rate</th><th>Email</th><th>Actions</th></tr></thead>
+            <thead><tr>
+              <th class="sortable${_adminSortField==='lastName'?' active':''}" onclick="setAdminSort('lastName')">Last Name${_sortIndicator('lastName')}</th>
+              <th class="sortable${_adminSortField==='firstName'?' active':''}" onclick="setAdminSort('firstName')">First Name${_sortIndicator('firstName')}</th>
+              <th>Position</th><th>Pay Type</th>
+              <th class="sortable${_adminSortField==='rate'?' active':''}" onclick="setAdminSort('rate')">Rate${_sortIndicator('rate')}</th>
+              <th>Email</th><th>Actions</th>
+            </tr></thead>
             <tbody>
-              ${storeEmps.map((emp, i) => `<tr>
-                <td style="font-weight:500;">${emp.firstName} ${emp.lastName}</td>
+              ${_sortedWithIdx(storeEmps).map(({emp, origIdx}) => `<tr>
+                <td style="font-weight:500;">${emp.lastName}</td>
+                <td style="font-weight:500;">${emp.firstName}</td>
                 <td style="color:var(--muted);">${emp.position || '—'}</td>
                 <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;${emp.payType === 'salary' ? 'background:rgba(77,166,255,.15);color:var(--accent);' : 'background:rgba(255,169,77,.15);color:var(--orange);'}">${emp.payType === 'salary' ? 'Salary' : 'Hourly'}</span></td>
                 <td style="font-family:monospace;">${fmtPayRate(emp)}</td>
                 <td style="color:var(--muted);font-size:12px;">${emp.email || '—'}</td>
                 <td>
-                  <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','${_activeStore}',${i})">Edit</button>
-                  <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','${_activeStore}',${i},'${emp.firstName} ${emp.lastName}')">✕</button>
+                  <button class="btn btn-outline btn-sm" onclick="editEmp('${c.slug}','${_activeStore}',${origIdx})">Edit</button>
+                  <button class="btn btn-red btn-sm" onclick="deleteEmp('${c.slug}','${_activeStore}',${origIdx},'${emp.firstName} ${emp.lastName}')">✕</button>
                 </td>
               </tr>`).join('')}
             </tbody>
@@ -498,6 +560,7 @@ async function saveEditEmp() {
     closeEditEmp();
     renderClientDetail();
     renderClientList(); // Update employee count
+    showSaveToast();
   } catch (e) {
     statusEl.className = 'status error';
     statusEl.textContent = e.message;
@@ -519,6 +582,7 @@ async function deleteEmp(clientSlug, storeId, empIdx, empName) {
     // Update local data
     _payrollData.clients[clientSlug].stores[storeId].employees.splice(empIdx, 1);
     renderClientDetail();
+    showSaveToast();
   } catch (e) {
     alert('Error: ' + e.message);
   }

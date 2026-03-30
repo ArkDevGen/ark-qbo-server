@@ -246,7 +246,16 @@
         <table class="data-table" id="emp-table">
           <thead>
             <tr>
-              <th style="min-width:160px;">Employee</th>
+              <th style="min-width:160px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                  <span>Employee</span>
+                  <div style="display:flex;gap:3px;">
+                    <button onclick="setSort('lastName')" id="sort-btn-lastName" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 5px;line-height:1.3;font-weight:600;">Last ↕</button>
+                    <button onclick="setSort('firstName')" id="sort-btn-firstName" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 5px;line-height:1.3;font-weight:600;">First ↕</button>
+                    <button onclick="setSort('rate')" id="sort-btn-rate" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 5px;line-height:1.3;font-weight:600;">Rate ↕</button>
+                  </div>
+                </div>
+              </th>
               <th style="min-width:85px;">Reg Hours</th>
               <th style="min-width:85px;">OT Hours</th>
               <th style="min-width:85px;">PTO Hours</th>
@@ -430,6 +439,8 @@ let _clientSlug = '';
 let _clientName = '';
 let _stores = [];
 let _employees = [];
+let _sortField = null;  // 'firstName' | 'lastName' | 'rate'
+let _sortDir = 'asc';
 let _rateChanges = {};  // { employeeId: { from: oldRate, to: newRate, name: 'First Last' } }
 let _workLocations = [];
 let _payFrequency = '';
@@ -521,6 +532,7 @@ async function onStoreChange() {
     });
     const data = await resp.json();
     _employees = data.employees || [];
+    _sortField = null; _sortDir = 'asc';
     renderEmployeeTable();
     section.classList.remove('hidden');
 
@@ -550,11 +562,51 @@ function fmtRate(emp) {
   return `<span>$${parseFloat(emp.payRate).toFixed(2)}/hr</span>`;
 }
 
+function setSort(field) {
+  if (_sortField === field) {
+    if (_sortDir === 'asc') _sortDir = 'desc';
+    else { _sortField = null; _sortDir = 'asc'; }
+  } else {
+    _sortField = field;
+    _sortDir = 'asc';
+  }
+  renderEmployeeTable();
+}
+
 function renderEmployeeTable() {
   const tbody = document.getElementById('emp-tbody');
   tbody.innerHTML = '';
 
-  _employees.forEach((emp, i) => {
+  // Build sorted display order using indices — keeps _employees stable so data-idx stays correct
+  const displayOrder = [...Array(_employees.length).keys()];
+  if (_sortField) {
+    displayOrder.sort((a, b) => {
+      const ea = _employees[a], eb = _employees[b];
+      let va, vb;
+      if (_sortField === 'firstName')     { va = (ea.firstName || '').toLowerCase(); vb = (eb.firstName || '').toLowerCase(); }
+      else if (_sortField === 'lastName') { va = (ea.lastName  || '').toLowerCase(); vb = (eb.lastName  || '').toLowerCase(); }
+      else if (_sortField === 'rate')     { va = parseFloat(ea.payRate) || 0;         vb = parseFloat(eb.payRate) || 0; }
+      if (va < vb) return _sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return _sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }
+
+  // Update sort button states
+  [['lastName','Last'],['firstName','First'],['rate','Rate']].forEach(([f, label]) => {
+    const btn = document.getElementById('sort-btn-' + f);
+    if (!btn) return;
+    if (_sortField === f) {
+      btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)';
+      btn.textContent = label + (_sortDir === 'asc' ? ' ↑' : ' ↓');
+    } else {
+      btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--muted)';
+      btn.textContent = label + ' ↕';
+    }
+  });
+
+  displayOrder.forEach((i) => {
+    const emp = _employees[i];
     const changed = _rateChanges[emp.id];
     const changedBadge = changed ? '<span class="rate-badge">UPDATED</span>' : '';
     const rateClass = changed ? 'rate-display rate-changed' : 'rate-display';
