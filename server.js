@@ -1943,7 +1943,7 @@ app.post('/payroll/employees/:clientSlug/:storeId/link', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
-  const { employeeId } = req.body;
+  const { employeeId, position, payRate } = req.body;
   if (!employeeId) return res.status(400).json({ error: 'employeeId required' });
 
   // Find the employee in any store
@@ -1959,14 +1959,36 @@ app.post('/payroll/employees/:clientSlug/:storeId/link', (req, res) => {
     return res.status(409).json({ error: 'Employee already in this store' });
   }
 
-  // Add a copy to this store — strip position/payRate since those are store-specific
+  // Add a copy to this store — use provided position/payRate if given (store-specific), otherwise blank
   if (!store.employees) store.employees = [];
   const { position: _p, payRate: _r, payRates: _rs, ...empBase } = sourceEmp;
-  store.employees.push({ ...empBase, position: '', payRate: '', payRates: [] });
+  store.employees.push({ ...empBase, position: position || '', payRate: payRate || '', payRates: [] });
   savePayrollData();
 
   console.log(`Linked employee ${sourceEmp.firstName} ${sourceEmp.lastName} to store ${storeId} (${clientSlug})`);
   res.json({ success: true, employee: { id: sourceEmp.id, firstName: sourceEmp.firstName, lastName: sourceEmp.lastName, position: sourceEmp.position } });
+});
+
+// ── Update employee store-specific fields (position, payRate) ────
+app.patch('/payroll/employees/:clientSlug/:storeId/:empId', (req, res) => {
+  const { clientSlug, storeId, empId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const store = (client.stores || {})[storeId];
+  if (!store) return res.status(404).json({ error: 'Store not found' });
+
+  const emp = (store.employees || []).find(e => e.id === empId);
+  if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+  const { position, payRate } = req.body;
+  if (position !== undefined) emp.position = position;
+  if (payRate  !== undefined) emp.payRate  = payRate;
+  savePayrollData();
+
+  res.json({ success: true, employee: { id: emp.id, position: emp.position, payRate: emp.payRate } });
 });
 
 // ── Payroll Admin Portal ─────────────────────────────────────────

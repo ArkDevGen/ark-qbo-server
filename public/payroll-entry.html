@@ -780,6 +780,7 @@ let _reconcileStoreUnmatched = []; // Current store's unmatched list
 let _reconcileCallback = null; // Called when all reconciliation done
 let _reconcileExpandedRow = null;    // Index of currently expanded match panel
 let _reconcileAllEmployees = null;  // All employees across all stores (fetched once)
+let _reconcilePendingMatch = null;  // Staged match awaiting rate/position confirmation
 
 // ─── Nickname map (persisted per client) ─────────────────────────
 // Stores { "Ady Ray": "emp_id_xxx" } so next payroll auto-resolves
@@ -817,6 +818,7 @@ async function bulkPopulateAll() {
   _reconcileQueue = [];
   _reconcileIdx = 0;
   _reconcileAllEmployees = null; // Reset so it re-fetches fresh
+  _reconcilePendingMatch = null;
 
   for (const opt of storeSel.options) {
     if (!opt.value) continue;
@@ -1029,11 +1031,35 @@ function buildMatchPanel(unmatchedIdx, store) {
     <div id="reconcile-match-list-${unmatchedIdx}" style="max-height:220px;overflow-y:auto;">
       ${loadingNote || rows || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;">No employees found.</div>'}
     </div>
-    <div style="padding:8px 12px;background:rgba(77,166,255,.05);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-      <input type="checkbox" id="reconcile-remember-${unmatchedIdx}" checked style="width:auto;">
-      <label for="reconcile-remember-${unmatchedIdx}" style="font-size:12px;color:var(--muted);cursor:pointer;margin:0;">
-        Remember: always match <strong style="color:var(--text);">"${emp.firstName} ${emp.lastName}"</strong> to this employee
-      </label>
+    <!-- Staged confirmation: appears after a row is clicked -->
+    <div id="reconcile-pending-${unmatchedIdx}" style="display:none;padding:10px 12px;background:rgba(77,255,160,.06);border-top:2px solid var(--green);">
+      <div style="font-size:12px;color:var(--green);font-weight:600;margin-bottom:8px;">
+        Matching to: <span id="reconcile-pending-name-${unmatchedIdx}" style="color:var(--text);"></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px;">Position at this store</label>
+          <input type="text" id="reconcile-pos-${unmatchedIdx}" placeholder="e.g. Barista"
+            style="width:100%;padding:5px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px;">Pay rate ($/hr)</label>
+          <input type="number" id="reconcile-rate-${unmatchedIdx}" placeholder="0.00" step="0.01" min="0"
+            style="width:100%;padding:5px 8px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);outline:none;">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="reconcile-remember-${unmatchedIdx}" checked style="width:auto;">
+        <label for="reconcile-remember-${unmatchedIdx}" style="font-size:11px;color:var(--muted);cursor:pointer;margin:0;flex:1;">
+          Remember this match
+        </label>
+        <button class="btn btn-outline btn-sm" onclick="reconcileCancelStage(${unmatchedIdx})" style="border-color:var(--red);color:var(--red);">Cancel</button>
+        <button class="btn btn-green btn-sm" onclick="reconcileConfirmMatch(${unmatchedIdx})">✓ Confirm</button>
+      </div>
+    </div>
+    <!-- Hint shown before a row is selected -->
+    <div id="reconcile-hint-${unmatchedIdx}" style="padding:8px 12px;background:rgba(77,166,255,.05);border-top:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);">
+      ↑ Click an employee above to select them
     </div>
   </div>`;
 }
@@ -1078,25 +1104,70 @@ function reconcileFilterMatch(inputEl, unmatchedIdx) {
   });
 }
 
-async function reconcileSelectMatch(unmatchedIdx, empId, firstName, lastName, alreadyInStore, rowEl) {
-  // Highlight selected row
+function reconcileSelectMatch(unmatchedIdx, empId, firstName, lastName, alreadyInStore, rowEl) {
+  // Highlight selected row, clear others
   document.querySelectorAll(`#reconcile-match-list-${unmatchedIdx} .reconcile-match-row`).forEach(r => {
     r.style.background = '';
   });
   rowEl.style.background = 'rgba(77,255,160,.1)';
 
-  const store = _reconcileQueue[_reconcileIdx];
-  const statusEl = document.getElementById('reconcile-status');
-  const remember = document.getElementById(`reconcile-remember-${unmatchedIdx}`);
-  const emp = _reconcileStoreUnmatched[unmatchedIdx];
+  // Store pending match state
+  _reconcilePendingMatch = { empId, firstName, lastName, alreadyInStore, rowEl, unmatchedIdx };
 
-  // If employee is from another store, link them to this store first
+  // Pre-fill rate/position from existing employee data for this store
+  const posInput  = document.getElementById(`reconcile-pos-${unmatchedIdx}`);
+  const rateInput = document.getElementById(`reconcile-rate-${unmatchedIdx}`);
+  const nameEl    = document.getElementById(`reconcile-pending-name-${unmatchedIdx}`);
+  if (nameEl) nameEl.textContent = `${firstName} ${lastName}`;
+
+  // Look up store-specific data: if already in this store use _employees, otherwise blank
+  if (alreadyInStore) {
+    const storeEmp = (_employees || []).find(e => e.id === empId);
+    if (posInput)  posInput.value  = storeEmp?.position || '';
+    if (rateInput) rateInput.value = storeEmp?.payRate  || '';
+  } else {
+    if (posInput)  posInput.value  = '';
+    if (rateInput) rateInput.value = '';
+  }
+
+  // Show confirmation area, hide hint
+  const pendingEl = document.getElementById(`reconcile-pending-${unmatchedIdx}`);
+  const hintEl    = document.getElementById(`reconcile-hint-${unmatchedIdx}`);
+  if (pendingEl) pendingEl.style.display = '';
+  if (hintEl)    hintEl.style.display    = 'none';
+}
+
+function reconcileCancelStage(unmatchedIdx) {
+  _reconcilePendingMatch = null;
+  // Clear row highlights
+  document.querySelectorAll(`#reconcile-match-list-${unmatchedIdx} .reconcile-match-row`).forEach(r => {
+    r.style.background = '';
+  });
+  // Hide confirmation area, show hint
+  const pendingEl = document.getElementById(`reconcile-pending-${unmatchedIdx}`);
+  const hintEl    = document.getElementById(`reconcile-hint-${unmatchedIdx}`);
+  if (pendingEl) pendingEl.style.display = 'none';
+  if (hintEl)    hintEl.style.display    = '';
+}
+
+async function reconcileConfirmMatch(unmatchedIdx) {
+  if (!_reconcilePendingMatch || _reconcilePendingMatch.unmatchedIdx !== unmatchedIdx) return;
+  const { empId, firstName, lastName, alreadyInStore, rowEl } = _reconcilePendingMatch;
+
+  const store     = _reconcileQueue[_reconcileIdx];
+  const statusEl  = document.getElementById('reconcile-status');
+  const remember  = document.getElementById(`reconcile-remember-${unmatchedIdx}`);
+  const emp       = _reconcileStoreUnmatched[unmatchedIdx];
+  const position  = document.getElementById(`reconcile-pos-${unmatchedIdx}`)?.value.trim()  || '';
+  const payRate   = document.getElementById(`reconcile-rate-${unmatchedIdx}`)?.value.trim() || '';
+
+  // If employee is from another store, link them (with rate/position) first
   if (!alreadyInStore) {
     try {
       const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${store.storeId}/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
-        body: JSON.stringify({ employeeId: empId }),
+        body: JSON.stringify({ employeeId: empId, position, payRate }),
       });
       const data = await resp.json();
       if (!resp.ok && !data.error?.includes('already')) {
@@ -1113,6 +1184,17 @@ async function reconcileSelectMatch(unmatchedIdx, empId, firstName, lastName, al
       statusEl.textContent = `✗ Connection error: ${e.message}`;
       rowEl.style.background = '';
       return;
+    }
+  } else if (position || payRate) {
+    // Already in store — patch rate/position if provided
+    try {
+      await fetch(`${API}/payroll/employees/${_clientSlug}/${store.storeId}/${empId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ position, payRate }),
+      });
+    } catch(e) {
+      console.warn('Could not update rate/position:', e.message); // non-fatal
     }
   }
 
@@ -1135,14 +1217,17 @@ async function reconcileSelectMatch(unmatchedIdx, empId, firstName, lastName, al
     });
   }
 
-  // Remove from unmatched
+  // Complete the match
   setTimeout(() => {
     _reconcileStoreUnmatched.splice(unmatchedIdx, 1);
     _reconcileExpandedRow = null;
+    _reconcilePendingMatch = null;
     statusEl.className = 'status success';
-    const addedNote = !alreadyInStore ? ' — added to this store' : '';
-    const rememberNote = remember && remember.checked ? ', will auto-match next time' : '';
-    statusEl.textContent = `✓ Matched to ${firstName} ${lastName}${addedNote}${rememberNote}`;
+    const addedNote   = !alreadyInStore ? ' — added to this store' : '';
+    const rateNote    = payRate ? ` at $${parseFloat(payRate).toFixed(2)}/hr` : '';
+    const posNote     = position ? ` as ${position}` : '';
+    const rememberNote = remember && remember.checked ? ', auto-matched next time' : '';
+    statusEl.textContent = `✓ Matched to ${firstName} ${lastName}${posNote}${rateNote}${addedNote}${rememberNote}`;
     reconcileRenderList();
   }, 300);
 }
