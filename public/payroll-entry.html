@@ -792,6 +792,7 @@ function renderEmployeeTable() {
     const rateClass = changed ? 'rate-display rate-changed' : 'rate-display';
 
     const tr = document.createElement('tr');
+    const isAdminStore = document.getElementById('entry-store').value === 'admin';
     const goByDisplay = emp.goByName ? ` (${emp.goByName})` : '';
     const noTipsBadge = emp.excludeFromTips ? ' <span style="font-size:10px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 5px;margin-left:4px;vertical-align:middle;">no tips</span>' : '';
     tr.innerHTML = `
@@ -804,11 +805,11 @@ function renderEmployeeTable() {
             onblur="finishEditRate(${i})" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){cancelEditRate(${i});}">
         </div>
       </td>
-      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="regHours" placeholder="0" ${document.getElementById('entry-store').value === 'admin' ? 'value="80"' : ''}></td>
+      <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="regHours" placeholder="0" ${isAdminStore ? 'value="80" readonly style="background:var(--surface);color:var(--muted);"' : ''}></td>
       <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="otHours" placeholder="0"></td>
       <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="ptoHours" placeholder="0"></td>
       <td><input type="number" step="0.25" min="0" data-idx="${i}" data-field="holidayHours" placeholder="0"></td>
-      <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="tips" placeholder="0.00"></td>
+      <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="tips" placeholder="0.00" ${isAdminStore ? 'value="0" readonly style="background:var(--surface);color:var(--muted);"' : ''}></td>
       <td><input type="number" step="0.1" min="0" data-idx="${i}" data-field="mileage" placeholder="0"></td>
       <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="reimbursement" placeholder="0.00"></td>
       <td><input type="number" step="0.01" min="0" data-idx="${i}" data-field="bonus" placeholder="0.00"></td>
@@ -817,11 +818,11 @@ function renderEmployeeTable() {
     tbody.appendChild(tr);
   });
 
-  // Restore any previously entered values after re-render
+  // Restore any previously entered values after re-render (skip readonly fields)
   Object.entries(snapshot).forEach(([idx, row]) => {
     Object.entries(row).forEach(([field, val]) => {
       const el = tbody.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
-      if (el) el.value = val;
+      if (el && !el.readOnly) el.value = val;
     });
   });
 
@@ -2841,7 +2842,7 @@ async function loadDraft() {
       Object.entries(draft.entries).forEach(([idx, row]) => {
         Object.entries(row).forEach(([field, val]) => {
           const el = document.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
-          if (el && val !== '' && val !== null && val !== undefined) el.value = val;
+          if (el && !el.readOnly && val !== '' && val !== null && val !== undefined) el.value = val;
         });
       });
     }
