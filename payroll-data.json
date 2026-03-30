@@ -18,88 +18,7 @@
       "stores": {
         "admin": {
           "name": "Admin",
-          "employees": [
-            {
-              "id": "emp-admin-001",
-              "firstName": "Brandon",
-              "lastName": "Bowen",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-admin-002",
-              "firstName": "Lindsay",
-              "lastName": "Johnson",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-admin-003",
-              "firstName": "Briana",
-              "lastName": "Lindsey",
-              "workLocation": "739",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-admin-004",
-              "firstName": "Emily",
-              "lastName": "Piesch",
-              "workLocation": "737",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            }
-          ]
+          "employees": []
         },
         "store-737": {
           "name": "Store 737",
@@ -165,26 +84,6 @@
               "payRates": []
             },
             {
-              "id": "emp-737-004",
-              "firstName": "Anna",
-              "lastName": "Heckman",
-              "workLocation": "737",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-737-005",
               "firstName": "Gretchen",
               "lastName": "Kelly",
@@ -201,46 +100,6 @@
               },
               "position": "Barista",
               "payRate": "13.50",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-737-006",
-              "firstName": "Berlynn",
-              "lastName": "Lyman",
-              "workLocation": "737",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-737-007",
-              "firstName": "Valerie",
-              "lastName": "Mohrmann",
-              "workLocation": "737",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -301,26 +160,6 @@
               },
               "position": "Shift Lead",
               "payRate": "15.50",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-737-011",
-              "firstName": "Nikolas",
-              "lastName": "Stacy",
-              "workLocation": "737",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -410,46 +249,6 @@
               "payRates": []
             },
             {
-              "id": "emp-738-004",
-              "firstName": "Chelsea",
-              "lastName": "Cruz",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-738-005",
-              "firstName": "Audrey",
-              "lastName": "Davis",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-738-006",
               "firstName": "Anthony",
               "lastName": "Henderson",
@@ -486,26 +285,6 @@
               },
               "position": "Shift Lead",
               "payRate": "18.85",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-738-008",
-              "firstName": "Karly",
-              "lastName": "Leonard",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -550,26 +329,6 @@
               "payRates": []
             },
             {
-              "id": "emp-738-011",
-              "firstName": "Linda",
-              "lastName": "Little",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-738-012",
               "firstName": "Erika",
               "lastName": "Marshall",
@@ -606,46 +365,6 @@
               },
               "position": "Barista",
               "payRate": "14.00",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-738-014",
-              "firstName": "Logan",
-              "lastName": "Morrison",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-738-015",
-              "firstName": "Kenneth",
-              "lastName": "Osborne Jr",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -775,26 +494,6 @@
               "payRates": []
             },
             {
-              "id": "emp-739-005",
-              "firstName": "Brittany",
-              "lastName": "Devore",
-              "workLocation": "739",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-739-006",
               "firstName": "Jeffrey",
               "lastName": "Faughender",
@@ -915,26 +614,6 @@
               "payRates": []
             },
             {
-              "id": "emp-739-012",
-              "firstName": "Morgan",
-              "lastName": "O brien",
-              "workLocation": "738",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-739-013",
               "firstName": "Skylar",
               "lastName": "Peden",
@@ -1033,32 +712,21 @@
               "payRate": "13.50",
               "payType": "hourly",
               "payRates": []
+            },
+            {
+              "id": "emp-morgan-obrien-739",
+              "firstName": "Morgan",
+              "lastName": "O brien",
+              "email": "",
+              "payRate": "",
+              "position": "",
+              "payType": "hourly"
             }
           ]
         },
         "store-740": {
           "name": "Store 740",
           "employees": [
-            {
-              "id": "emp-740-001",
-              "firstName": "Aylah",
-              "lastName": "Brown",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
             {
               "id": "emp-740-002",
               "firstName": "Miranda",
@@ -1160,46 +828,6 @@
               "payRates": []
             },
             {
-              "id": "emp-740-007",
-              "firstName": "Courtney",
-              "lastName": "Lucian",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-740-008",
-              "firstName": "Selina",
-              "lastName": "Mclamb",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-740-009",
               "firstName": "Sophia",
               "lastName": "Menzil",
@@ -1260,26 +888,6 @@
               "payRates": []
             },
             {
-              "id": "emp-740-012",
-              "firstName": "Ellyssa",
-              "lastName": "Polito",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-740-013",
               "firstName": "Jenna",
               "lastName": "Presnell",
@@ -1296,66 +904,6 @@
               },
               "position": "Barista",
               "payRate": "13.75",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-740-014",
-              "firstName": "Amanda",
-              "lastName": "Puckett",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-740-015",
-              "firstName": "Chelsi",
-              "lastName": "Somer",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-740-016",
-              "firstName": "Adam",
-              "lastName": "Van Zant",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -1378,72 +926,12 @@
               "payRate": "15.85",
               "payType": "hourly",
               "payRates": []
-            },
-            {
-              "id": "emp-740-018",
-              "firstName": "Stevie",
-              "lastName": "Wilson",
-              "workLocation": "740",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
             }
           ]
         },
         "store-741": {
           "name": "Store 741",
           "employees": [
-            {
-              "id": "emp-741-001",
-              "firstName": "Alexander",
-              "lastName": "Ashley-Valdez",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-741-002",
-              "firstName": "Shenitta",
-              "lastName": "Atkins",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
             {
               "id": "emp-741-003",
               "firstName": "Alyssa",
@@ -1485,26 +973,6 @@
               "payRates": []
             },
             {
-              "id": "emp-741-005",
-              "firstName": "Allison",
-              "lastName": "Deters",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-741-006",
               "firstName": "Haleigh",
               "lastName": "Driggers",
@@ -1541,26 +1009,6 @@
               },
               "position": "Shift Lead",
               "payRate": "16.00",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-741-008",
-              "firstName": "Laslen",
-              "lastName": "Hatfield",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -1645,26 +1093,6 @@
               "payRates": []
             },
             {
-              "id": "emp-741-013",
-              "firstName": "Angelita",
-              "lastName": "Perez",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-741-014",
               "firstName": "Ashlyn",
               "lastName": "Pfeister-Wallace",
@@ -1681,26 +1109,6 @@
               },
               "position": "Barista",
               "payRate": "14.75",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-741-015",
-              "firstName": "Riley",
-              "lastName": "Wegenast",
-              "workLocation": "741",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             }
@@ -1750,66 +1158,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1192-003",
-              "firstName": "Madison",
-              "lastName": "DeVore",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-004",
-              "firstName": "Nia",
-              "lastName": "Duncan",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-005",
-              "firstName": "Robert",
-              "lastName": "Ford",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1192-006",
               "firstName": "Kayli",
               "lastName": "Hoffman",
@@ -1826,26 +1174,6 @@
               },
               "position": "Barista",
               "payRate": "15.00",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-007",
-              "firstName": "Peter",
-              "lastName": "Hyle",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -1910,26 +1238,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1192-011",
-              "firstName": "Kira",
-              "lastName": "Maxwell",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1192-012",
               "firstName": "Elijah",
               "lastName": "Miller",
@@ -1946,26 +1254,6 @@
               },
               "position": "Barista",
               "payRate": "15.25",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-013",
-              "firstName": "August",
-              "lastName": "Pittman",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -2010,66 +1298,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1192-016",
-              "firstName": "Samuel",
-              "lastName": "Shepherd",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-017",
-              "firstName": "Princeton",
-              "lastName": "Son",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1192-018",
-              "firstName": "Stacy",
-              "lastName": "Thompson",
-              "workLocation": "1192",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1192-019",
               "firstName": "MaReena",
               "lastName": "Williamson",
@@ -2094,26 +1322,6 @@
         "store-1193": {
           "name": "Store 1193",
           "employees": [
-            {
-              "id": "emp-1193-001",
-              "firstName": "Makenna",
-              "lastName": "Bectel",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
             {
               "id": "emp-1193-002",
               "firstName": "Kaylee",
@@ -2191,26 +1399,6 @@
               },
               "position": "Barista",
               "payRate": "12.50",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-006",
-              "firstName": "Sadie",
-              "lastName": "Hicks",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -2295,26 +1483,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1193-011",
-              "firstName": "Ashley",
-              "lastName": "McCleland",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1193-012",
               "firstName": "Camlin",
               "lastName": "Nunn",
@@ -2331,126 +1499,6 @@
               },
               "position": "Manager",
               "payRate": "18.50",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-013",
-              "firstName": "Sarah",
-              "lastName": "Oliver",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-014",
-              "firstName": "Danyell",
-              "lastName": "Partridge",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-015",
-              "firstName": "Emilee",
-              "lastName": "Simler",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-016",
-              "firstName": "Zowe",
-              "lastName": "Steward",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-017",
-              "firstName": "Cody",
-              "lastName": "Varner",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1193-018",
-              "firstName": "Adeline",
-              "lastName": "Vaughn",
-              "workLocation": "1193",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             }
@@ -2476,26 +1524,6 @@
               },
               "position": "Barista",
               "payRate": "12.25",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1194-002",
-              "firstName": "Emma",
-              "lastName": "Bannon",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -2556,66 +1584,6 @@
               },
               "position": "Shift Lead",
               "payRate": "16.00",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1194-006",
-              "firstName": "Aubriana",
-              "lastName": "Killebrew",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1194-007",
-              "firstName": "Courtney",
-              "lastName": "Kyle",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1194-008",
-              "firstName": "Haeli",
-              "lastName": "Martin",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -2700,26 +1668,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1194-013",
-              "firstName": "Adrian",
-              "lastName": "Quiroz Jr",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1194-014",
               "firstName": "Audrey",
               "lastName": "Rose",
@@ -2776,26 +1724,6 @@
               },
               "position": "Admin",
               "payRate": "24.00",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
-              "id": "emp-1194-017",
-              "firstName": "Kayleigh",
-              "lastName": "Stidom",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
               "payType": "hourly",
               "payRates": []
             },
@@ -2860,26 +1788,6 @@
               "payRates": []
             },
             {
-              "id": "emp-1194-021",
-              "firstName": "LaKira",
-              "lastName": "Timmons Her",
-              "workLocation": "1194",
-              "ssn": "",
-              "dob": "",
-              "hireDate": "",
-              "email": "",
-              "address": {
-                "street": "",
-                "city": "",
-                "state": "",
-                "zip": ""
-              },
-              "position": "",
-              "payRate": "",
-              "payType": "hourly",
-              "payRates": []
-            },
-            {
               "id": "emp-1194-022",
               "firstName": "Cameryn",
               "lastName": "Ware",
@@ -2898,6 +1806,15 @@
               "payRate": "13.00",
               "payType": "hourly",
               "payRates": []
+            },
+            {
+              "id": "emp-lakira-timmons-1194",
+              "firstName": "LaKira",
+              "lastName": "Timmons Her",
+              "email": "lakia.g07@gmail.com",
+              "payRate": "12.50",
+              "position": "Barista/Trainer",
+              "payType": "hourly"
             }
           ]
         }
