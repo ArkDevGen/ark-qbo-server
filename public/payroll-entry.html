@@ -439,7 +439,7 @@ let _clientSlug = '';
 let _clientName = '';
 let _stores = [];
 let _employees = [];
-let _sortField = null;  // 'firstName' | 'lastName' | 'rate'
+let _sortField = 'lastName';  // 'firstName' | 'lastName' | 'rate'
 let _sortDir = 'asc';
 let _rateChanges = {};  // { employeeId: { from: oldRate, to: newRate, name: 'First Last' } }
 let _workLocations = [];
@@ -532,7 +532,7 @@ async function onStoreChange() {
     });
     const data = await resp.json();
     _employees = data.employees || [];
-    _sortField = null; _sortDir = 'asc';
+    _sortField = 'lastName'; _sortDir = 'asc';
     renderEmployeeTable();
     section.classList.remove('hidden');
 
@@ -575,6 +575,19 @@ function setSort(field) {
 
 function renderEmployeeTable() {
   const tbody = document.getElementById('emp-tbody');
+
+  // Snapshot any already-entered values before wiping the DOM (keyed by data-idx = _employees index)
+  const snapshot = {};
+  const fields = ['regHours','otHours','ptoHours','holidayHours','tips','mileage','reimbursement','bonus','notes'];
+  tbody.querySelectorAll('input[data-idx]').forEach(el => {
+    const idx = el.dataset.idx;
+    const field = el.dataset.field;
+    if (el.value !== '') {
+      if (!snapshot[idx]) snapshot[idx] = {};
+      snapshot[idx][field] = el.value;
+    }
+  });
+
   tbody.innerHTML = '';
 
   // Build sorted display order using indices — keeps _employees stable so data-idx stays correct
@@ -633,6 +646,14 @@ function renderEmployeeTable() {
       <td><input type="text" data-idx="${i}" data-field="notes" placeholder="" style="text-align:left;"></td>
     `;
     tbody.appendChild(tr);
+  });
+
+  // Restore any previously entered values after re-render
+  Object.entries(snapshot).forEach(([idx, row]) => {
+    Object.entries(row).forEach(([field, val]) => {
+      const el = tbody.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
+      if (el) el.value = val;
+    });
   });
 
   if (_employees.length === 0) {
