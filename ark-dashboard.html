@@ -4364,6 +4364,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:28px 32px;">
 
+    <!-- DEBUG BANNER — remove once page renders correctly -->
+    <div id="pr-debug-banner" style="background:#c0392b;color:#fff;font-size:15px;font-weight:700;padding:14px 20px;border-radius:8px;margin-bottom:18px;">
+      ✓ Payroll Center view is rendering — if you see this banner, the view IS visible.
+    </div>
+
     <!-- Page header -->
     <div style="margin-bottom:22px;">
       <div style="font-size:22px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">Payroll Center</div>
@@ -15126,16 +15131,20 @@ let _prOutputBlob = null;
 let _prOutputName = '';
 
 function renderPayrollCenter(){
-  // Kill animation on the view + all direct children so nothing is stuck at opacity:0
   const view = document.getElementById('view-payrollcenter');
   if (view) {
+    // Force the view and ALL descendants fully visible regardless of CSS class/animation state
+    view.style.display   = 'block';
     view.style.animation = 'none';
     view.style.opacity   = '1';
     view.style.transform = 'none';
-    Array.from(view.children).forEach(el => {
-      el.style.animation = 'none';
-      el.style.opacity   = '1';
-      el.style.transform = 'none';
+    view.style.visibility = 'visible';
+    view.querySelectorAll('*').forEach(el => {
+      if (getComputedStyle(el).opacity === '0') {
+        el.style.opacity = '1';
+        el.style.animation = 'none';
+        el.style.transform = 'none';
+      }
     });
   }
   try { prResetForm(); } catch(e) { console.warn('prResetForm error:', e); }
