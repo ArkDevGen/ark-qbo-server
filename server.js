@@ -1926,6 +1926,7 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
   const store = (client.stores || {})[storeId];
   if (!store) return res.status(404).json({ error: 'Store not found' });
 
+  const isAdminStore = storeId === 'admin';
   const storeEmps = (store.employees || []).map(e => ({
     id: e.id,
     firstName: e.firstName,
@@ -1936,7 +1937,7 @@ app.get('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     payType: e.payType || 'hourly',
     annualRate: e.annualRate || '',
     periodRate: e.periodRate || '',
-    excludeFromTips: !!e.excludeFromTips,
+    excludeFromTips: e.excludeFromTips !== undefined ? !!e.excludeFromTips : isAdminStore,
   }));
 
   const storePrefill = client._prefill?.stores?.[storeId] || null;
