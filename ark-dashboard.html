@@ -7374,7 +7374,11 @@ function nav(page){
   if(page==='taxcenter'){ renderTaxHub(); }
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
-  if(page==='payrollcenter'){ renderPayrollCenter(); }
+  if(page==='payrollcenter'){
+    const _v=document.getElementById('view-payrollcenter');
+    if(typeof showToast==='function') showToast(`PC: display=${_v?getComputedStyle(_v).display:'null'} active=${_v?.classList.contains('active')}`);
+    renderPayrollCenter();
+  }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
   if(page==='proposals'){
