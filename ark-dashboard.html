@@ -15124,10 +15124,20 @@ let _prOutputBlob = null;
 let _prOutputName = '';
 
 function renderPayrollCenter(){
+  // Force all static cards visible — bypass CSS animation opacity:0 start state
+  const view = document.getElementById('view-payrollcenter');
+  if (view) {
+    Array.from(view.children).forEach(el => {
+      el.style.animation = 'none';
+      el.style.opacity   = '1';
+      el.style.transform = 'none';
+    });
+  }
   prResetForm();
   prRenderHistory();
   renderPayrollSubmissions();
-  prPrepInit(); // pre-load client list for the Prepare card
+  // Pre-load client dropdown (deferred so it doesn't block card rendering)
+  setTimeout(() => prPrepInit(), 200);
 }
 
 // ── Payroll Submissions Inbox ─────────────────────────────────────
