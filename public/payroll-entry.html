@@ -146,7 +146,10 @@
     <div class="card" id="bulk-import-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <h2 style="margin-bottom:0;">Bulk Import</h2>
-        <span style="font-size:11px;color:var(--muted);">Import files for all stores at once</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:11px;color:var(--muted);">Import files for all stores at once</span>
+          <button class="btn btn-outline btn-sm" onclick="confirmClearAll()" style="border-color:var(--red);color:var(--red);">✕ Clear All</button>
+        </div>
       </div>
       <div style="display:flex;gap:12px;margin-bottom:12px;">
         <div style="flex:1;">
@@ -2218,6 +2221,47 @@ function confirmClearHours() {
   if (!confirm('Clear all hours and data for this store? This cannot be undone.')) return;
   clearHours();
   clearDraftAfterSubmit();
+  const ind = document.getElementById('draft-save-indicator');
+  if (ind) ind.textContent = '';
+  const banner = document.getElementById('draft-restore-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function confirmClearAll() {
+  if (!confirm('Clear ALL uploaded timesheets, tips, and entered hours for every store? This cannot be undone.')) return;
+
+  // Clear bulk import data
+  _bulkHomebase = null;
+  _bulkTips = null;
+  _bulkStoreStatus = {};
+  _bulkEmployeeData = {};
+
+  // Clear all per-store drafts from localStorage
+  if (_clientSlug) {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(`payroll_draft_${_clientSlug}_`)) keysToRemove.push(k);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  }
+
+  // Reset bulk import UI
+  document.getElementById('bulk-homebase-status').textContent = '';
+  document.getElementById('bulk-tips-status').textContent = '';
+  document.getElementById('bulk-homebase-input').value = '';
+  document.getElementById('bulk-tips-input').value = '';
+  document.getElementById('bulk-populate-btn').style.display = 'none';
+
+  // Hide store tracker
+  const tracker = document.getElementById('store-tracker');
+  if (tracker) tracker.style.display = 'none';
+  document.getElementById('store-tracker-chips').innerHTML = '';
+  document.getElementById('store-tracker-bar').style.width = '0%';
+  document.getElementById('store-tracker-count').textContent = '0 of 0 confirmed';
+
+  // Clear current store's entered hours
+  clearHours();
   const ind = document.getElementById('draft-save-indicator');
   if (ind) ind.textContent = '';
   const banner = document.getElementById('draft-restore-banner');
