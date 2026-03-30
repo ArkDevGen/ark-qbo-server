@@ -2482,6 +2482,53 @@ app.delete('/payroll/prefill/:slug', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Payroll Drafts (server-side, shared across logins) ───────────
+app.get('/payroll/drafts/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const draft = client._drafts?.[storeId] || null;
+  res.json({ draft });
+});
+
+app.put('/payroll/drafts/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (!client._drafts) client._drafts = {};
+  client._drafts[storeId] = { ...req.body, savedAt: new Date().toISOString() };
+  savePayrollData();
+  res.json({ success: true });
+});
+
+app.delete('/payroll/drafts/:clientSlug/:storeId', (req, res) => {
+  const { clientSlug, storeId } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (client._drafts) {
+    delete client._drafts[storeId];
+    savePayrollData();
+  }
+  res.json({ success: true });
+});
+
+app.delete('/payroll/drafts/:clientSlug', (req, res) => {
+  const { clientSlug } = req.params;
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const client = payrollData.clients[clientSlug];
+  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+
+  client._drafts = {};
+  savePayrollData();
+  res.json({ success: true });
+});
+
 // ── Dashboard: Get pending submissions ───────────────────────────
 app.get('/payroll/submissions', (req, res) => {
   res.json({ submissions: payrollData.submissions });
