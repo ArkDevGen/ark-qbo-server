@@ -4454,7 +4454,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
         <!-- Active prefill indicator per client -->
-        <div id="pr-prep-active" style="display:none;margin-top:14px;padding:10px 14px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);font-size:12px;color:#2e7d32;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div id="pr-prep-active" style="display:none;margin-top:14px;padding:10px 14px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);font-size:12px;color:#2e7d32;align-items:center;justify-content:space-between;gap:10px;">
           <span id="pr-prep-active-text">✓ Prefill saved</span>
           <button onclick="prPrepClear()" class="btn" style="font-size:11px;padding:4px 10px;color:#c0392b;border-color:#e8c2c2;">✕ Clear</button>
         </div>
@@ -15127,6 +15127,7 @@ function renderPayrollCenter(){
   prResetForm();
   prRenderHistory();
   renderPayrollSubmissions();
+  prPrepInit(); // pre-load client list for the Prepare card
 }
 
 // ── Payroll Submissions Inbox ─────────────────────────────────────
@@ -15153,13 +15154,19 @@ function _fmtPayDate(d) {
   return d;
 }
 
-async function renderPayrollSubmissions() {
+async function renderPayrollSubmissions(_attempt) {
+  const attempt = _attempt || 1;
   const body = document.getElementById('pr-sub-body');
   const badge = document.getElementById('pr-sub-badge');
   if (!body) return;
-  body.innerHTML = '<div style="font-size:12px;color:var(--text-d);text-align:center;padding:20px 0;">Loading…</div>';
+  if (attempt === 1) {
+    body.innerHTML = '<div style="font-size:12px;color:var(--text-d);text-align:center;padding:20px 0;">Loading… <span style="font-size:11px;">(server may be waking up)</span></div>';
+  }
   try {
-    const res = await fetch(`${PR_API}/payroll/submissions`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000); // 90s timeout for Render cold start
+    const res = await fetch(`${PR_API}/payroll/submissions`, { signal: controller.signal });
+    clearTimeout(timeout);
     const data = await res.json();
     const all = data.submissions || [];
     const subs = all.filter(s => s.status !== 'deleted');
@@ -15184,7 +15191,14 @@ async function renderPayrollSubmissions() {
 
     body.innerHTML = subs.map(s => _prSubRow(s)).join('');
   } catch(e) {
-    body.innerHTML = `<div style="font-size:12px;color:#c0392b;text-align:center;padding:20px 0;">Failed to load submissions — ${_esc(e.message)}</div>`;
+    if (attempt < 3) {
+      // Auto-retry up to 3 times (server may be cold-starting)
+      const delay = attempt * 15000; // 15s, 30s
+      body.innerHTML = `<div style="font-size:12px;color:var(--text-d);text-align:center;padding:20px 0;">Server waking up… retrying in ${delay/1000}s (attempt ${attempt}/3)</div>`;
+      setTimeout(() => renderPayrollSubmissions(attempt + 1), delay);
+    } else {
+      body.innerHTML = `<div style="font-size:12px;color:#c0392b;text-align:center;padding:20px 0;">Failed to load submissions — ${_esc(e.message)}<br><button onclick="renderPayrollSubmissions()" class="btn" style="margin-top:8px;font-size:11px;">↻ Retry</button></div>`;
+    }
   }
 }
 

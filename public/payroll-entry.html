@@ -1775,6 +1775,10 @@ async function doSubmitAll() {
   const backBtn   = document.getElementById('recap-back-btn');
   const statusEl  = document.getElementById('recap-status');
 
+  // Clear any previous error/status before validating
+  statusEl.textContent = '';
+  statusEl.style.color = '';
+
   if (!payStart || !payEnd || !payDate) {
     statusEl.style.color = 'var(--red)';
     statusEl.textContent = '⚠ Please fill in Pay Period Start, End, and Pay Date above before submitting.';
