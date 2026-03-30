@@ -1001,7 +1001,7 @@ async function bulkPopulateAll() {
   // Map store dropdown options to store numbers
   const storeSel = document.getElementById('entry-store');
   for (const opt of storeSel.options) {
-    if (!opt.value) continue;
+    if (!opt.value || opt.value === 'admin') continue;
     const storeNum = opt.text.replace(/[^0-9]/g, '');
     const hasData = _bulkHomebase[storeNum] && _bulkHomebase[storeNum].length > 0;
     _bulkStoreStatus[opt.value] = hasData ? 'populated' : 'empty';
@@ -1017,7 +1017,7 @@ async function bulkPopulateAll() {
   _reconcilePendingMatch = null;
 
   for (const opt of storeSel.options) {
-    if (!opt.value) continue;
+    if (!opt.value || opt.value === 'admin') continue;
     const storeNum = opt.text.replace(/[^0-9]/g, '');
     const homebaseRows = _bulkHomebase[storeNum] || [];
     if (!homebaseRows.length) continue;
@@ -1493,7 +1493,7 @@ function bulkRenderTracker() {
   let html = '';
 
   for (const opt of storeSel.options) {
-    if (!opt.value) continue;
+    if (!opt.value || opt.value === 'admin') continue;
     total++;
     const status = _bulkStoreStatus[opt.value] || 'empty';
     if (status === 'confirmed') confirmed++;
@@ -1658,7 +1658,7 @@ function bulkConfirmStore() {
   const storeSel = document.getElementById('entry-store');
   let nextStore = null;
   for (const opt of storeSel.options) {
-    if (!opt.value) continue;
+    if (!opt.value || opt.value === 'admin') continue;
     if (_bulkStoreStatus[opt.value] === 'populated') {
       nextStore = opt.value;
       break;
