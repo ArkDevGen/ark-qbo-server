@@ -248,7 +248,7 @@
           <button class="btn btn-outline btn-sm" onclick="refreshEmployees()" title="Re-fetch employee list (picks up any employees added by admin)" style="border-color:var(--muted);color:var(--muted);">↻ Refresh</button>
           <button class="btn btn-outline btn-sm" onclick="showFindEmployee()" style="border-color:var(--accent);color:var(--accent);">🔍 Find Employee</button>
           <button class="btn btn-outline btn-sm" onclick="showAddEmployee()">+ Add Employee</button>
-          <button class="btn btn-outline btn-sm" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save</button>
+          <button class="btn btn-outline btn-sm" onclick="saveAllDrafts()" style="border-color:var(--green);color:var(--green);">💾 Save All</button>
           <button class="btn btn-outline btn-sm" onclick="confirmClearHours()" style="border-color:var(--red);color:var(--red);">✕ Clear</button>
         </div>
       </div>
@@ -302,7 +302,7 @@
       </div>
       <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-outline" onclick="saveDraft(true)" style="border-color:var(--green);color:var(--green);">💾 Save Draft</button>
+          <button class="btn btn-outline" onclick="saveAllDrafts()" style="border-color:var(--green);color:var(--green);">💾 Save All</button>
           <button class="btn btn-outline" onclick="recalculateTips()" id="recalc-tips-btn" style="border-color:var(--orange);color:var(--orange);">🔄 Recalculate Tips</button>
         </div>
         <button class="btn btn-green" id="store-action-btn" onclick="_bulkMode ? bulkConfirmStore() : submitPayroll()">Submit Payroll</button>
@@ -3039,6 +3039,62 @@ async function saveDraft(showFeedback = false) {
       ind.style.color = 'var(--green)';
       setTimeout(() => { ind.style.color = 'var(--muted)'; }, 2000);
     }
+  }
+}
+
+async function saveAllDrafts() {
+  // Save the current store's inputs first
+  bulkSaveCurrentStore();
+
+  const storeSel = document.getElementById('entry-store');
+  const periodStart = document.getElementById('entry-period-start').value;
+  const periodEnd = document.getElementById('entry-period-end').value;
+  const payDate = document.getElementById('entry-pay-date').value;
+  let savedCount = 0;
+
+  for (const opt of storeSel.options) {
+    if (!opt.value) continue;
+    const sid = opt.value;
+    const savedData = _bulkEmployeeData[sid];
+    if (!savedData || Object.keys(savedData).length === 0) {
+      // If this is the currently visible store, save its live inputs
+      if (sid === storeSel.value) {
+        await saveDraft(false);
+        savedCount++;
+        continue;
+      }
+      continue;
+    }
+    // Convert bulkEmployeeData format (idx:field → val) to draft entries format (idx → {field: val})
+    const entries = {};
+    for (const [key, val] of Object.entries(savedData)) {
+      const [idx, field] = key.split(':');
+      if (!entries[idx]) entries[idx] = {};
+      entries[idx][field] = val;
+    }
+    const draft = {
+      storeId: sid,
+      periodStart, periodEnd, payDate,
+      entries,
+      rateChanges: _rateChanges,
+      confirmed: _bulkStoreStatus[sid] === 'confirmed' || false,
+    };
+    try {
+      await fetch(`${API}/payroll/drafts/${_clientSlug}/${sid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify(draft),
+      });
+      savedCount++;
+    } catch(e) { console.warn(`Failed to save draft for store ${sid}:`, e); }
+  }
+
+  const ind = document.getElementById('draft-save-indicator');
+  if (ind) {
+    const t = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    ind.textContent = `All stores saved at ${t} (${savedCount} stores)`;
+    ind.style.color = 'var(--green)';
+    setTimeout(() => { ind.style.color = 'var(--muted)'; }, 2000);
   }
 }
 
