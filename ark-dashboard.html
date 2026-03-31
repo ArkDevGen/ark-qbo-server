@@ -9420,6 +9420,13 @@ async function qboUnlinkClient() {
   document.getElementById('mc-qbo-realm-id').value = '';
   document.getElementById('mc-qbo-unlink-btn').style.display = 'none';
   document.getElementById('mc-qbo-link-info').textContent = '';
+  // Clear from DB immediately so the QB badge updates
+  const client = DB.clients.find(c => c.id === clientId);
+  if (client) {
+    client.qboRealmId = '';
+    (client.franchises || []).forEach(f => { if (f.qboRealmId === realmId) { f.qboRealmId = ''; f.qboName = ''; } });
+  }
+  renderClients(document.getElementById('client-search')?.value || '');
   showToast('Client unlinked from QBO');
 }
 
@@ -9595,6 +9602,13 @@ function unlinkFranchise(idx) {
   current[idx].qboRealmId = '';
   current[idx].qboName = '';
   renderFranchiseList(current);
+  // Update DB immediately so QB badge clears
+  const client = DB.clients.find(c => c.id === DB._editClient);
+  if (client && client.franchises && client.franchises[idx]) {
+    client.franchises[idx].qboRealmId = '';
+    client.franchises[idx].qboName = '';
+  }
+  renderClients(document.getElementById('client-search')?.value || '');
   showToast('Franchise unlinked');
 }
 
