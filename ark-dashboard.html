@@ -7464,17 +7464,24 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    // Force the view visible and inject content via JS as fallback
-    const pcv = document.getElementById('view-payrollcenter');
-    if(pcv){
-      pcv.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;padding:28px 32px;min-height:400px;position:relative;z-index:1;';
-      pcv.innerHTML = '<div style="text-align:center;padding:60px 20px;background:var(--surface);border-radius:12px;border:2px solid var(--border);">' +
+    // Force the view visible via JS — use setTimeout to run after all other nav logic
+    setTimeout(()=>{
+      const pcv = document.getElementById('view-payrollcenter');
+      if(!pcv){ alert('ERROR: view-payrollcenter element not found!'); return; }
+      // Force absolutely everything
+      pcv.setAttribute('style','display:block !important;opacity:1 !important;visibility:visible !important;padding:28px 32px;min-height:400px;position:relative;z-index:999;background:#0d1b2a;');
+      pcv.classList.add('active');
+      pcv.innerHTML = '<div style="text-align:center;padding:60px 20px;background:#1a2440;border-radius:12px;border:2px solid #2a3a5c;">' +
         '<div style="font-size:48px;margin-bottom:16px;">📋</div>' +
-        '<div style="font-size:22px;font-weight:700;color:var(--navy);font-family:Cormorant Garamond,serif;margin-bottom:8px;">Payroll Center</div>' +
-        '<div style="font-size:13px;color:var(--text-d);margin-bottom:24px;">Manage employees, review hours, and process payroll</div>' +
-        '<a href="/payroll-admin" target="_blank" class="btn btn-primary" style="font-size:15px;padding:14px 32px;display:inline-flex;align-items:center;gap:10px;text-decoration:none;">Open Payroll Admin ↗</a>' +
+        '<div style="font-size:22px;font-weight:700;color:#b8922a;font-family:Cormorant Garamond,serif;margin-bottom:8px;">Payroll Center</div>' +
+        '<div style="font-size:13px;color:#8899aa;margin-bottom:24px;">Manage employees, review hours, and process payroll</div>' +
+        '<a href="/payroll-admin" target="_blank" style="font-size:15px;padding:14px 32px;display:inline-flex;align-items:center;gap:10px;text-decoration:none;background:#b8922a;color:#fff;border-radius:8px;font-weight:600;">Open Payroll Admin ↗</a>' +
         '</div>';
-    }
+      // Log for debugging
+      const rect = pcv.getBoundingClientRect();
+      const cs = getComputedStyle(pcv);
+      console.log('PAYROLL CENTER DEBUG:', { display:cs.display, opacity:cs.opacity, visibility:cs.visibility, width:rect.width, height:rect.height, top:rect.top, left:rect.left, classList:[...pcv.classList], parentDisplay:getComputedStyle(pcv.parentElement).display });
+    }, 100);
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
