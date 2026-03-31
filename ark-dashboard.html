@@ -7185,8 +7185,8 @@ function openUserModal(userId){
     document.getElementById('ue-password-label').textContent = 'Temporary Password';
     document.getElementById('ue-reset-pw-wrap').style.display = 'none';
   }
-  // Populate client checkboxes
-  const clients = DB.clients || [];
+  // Populate client checkboxes (sorted A-Z)
+  const clients = [...(DB.clients || [])].sort((a, b) => (a.biz || '').toLowerCase().localeCompare((b.biz || '').toLowerCase()));
   const cList = document.getElementById('ue-clients-list');
   cList.innerHTML = clients.map(c => `<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
     <input type="checkbox" value="${c.id}" class="ue-client-cb"> ${c.biz || c.id}
