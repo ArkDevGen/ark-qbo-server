@@ -22843,10 +22843,20 @@ async function qboDisconnect() {
     });
   } catch(e) { /* proceed anyway */ }
 
+  const disconnectedRealm = qboActiveRealmId;
   delete qboAllCompanies[qboActiveRealmId];
   qboActiveRealmId = null;
   qboCurrentCompany = null;
   qboLiveAccounts = []; qboLiveVendors = []; qboLiveClasses = []; qboLiveDepts = [];
+
+  // Clear qboRealmId from any clients/franchises linked to this realm
+  DB.clients.forEach(c => {
+    if (c.qboRealmId === disconnectedRealm) c.qboRealmId = '';
+    (c.franchises || []).forEach(f => {
+      if (f.qboRealmId === disconnectedRealm) { f.qboRealmId = ''; f.qboName = ''; }
+    });
+  });
+  renderClients(document.getElementById('client-search')?.value || '');
 
   const remaining = Object.keys(qboAllCompanies).filter(rid => qboAllCompanies[rid].connected !== false);
   if (remaining.length > 0) {
