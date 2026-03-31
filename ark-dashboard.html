@@ -9420,11 +9420,12 @@ async function qboUnlinkClient() {
   document.getElementById('mc-qbo-realm-id').value = '';
   document.getElementById('mc-qbo-unlink-btn').style.display = 'none';
   document.getElementById('mc-qbo-link-info').textContent = '';
-  // Clear from DB immediately so the QB badge updates
+  // Clear from DB immediately and persist so the QB badge updates
   const client = DB.clients.find(c => c.id === clientId);
   if (client) {
     client.qboRealmId = '';
     (client.franchises || []).forEach(f => { if (f.qboRealmId === realmId) { f.qboRealmId = ''; f.qboName = ''; } });
+    saveDB();
   }
   renderClients(document.getElementById('client-search')?.value || '');
   showToast('Client unlinked from QBO');
@@ -9602,11 +9603,12 @@ function unlinkFranchise(idx) {
   current[idx].qboRealmId = '';
   current[idx].qboName = '';
   renderFranchiseList(current);
-  // Update DB immediately so QB badge clears
+  // Update DB immediately and persist so QB badge clears
   const client = DB.clients.find(c => c.id === DB._editClient);
   if (client && client.franchises && client.franchises[idx]) {
     client.franchises[idx].qboRealmId = '';
     client.franchises[idx].qboName = '';
+    saveDB();
   }
   renderClients(document.getElementById('client-search')?.value || '');
   showToast('Franchise unlinked');
@@ -22863,13 +22865,14 @@ async function qboDisconnect() {
   qboCurrentCompany = null;
   qboLiveAccounts = []; qboLiveVendors = []; qboLiveClasses = []; qboLiveDepts = [];
 
-  // Clear qboRealmId from any clients/franchises linked to this realm
+  // Clear qboRealmId from any clients/franchises linked to this realm and persist
   DB.clients.forEach(c => {
     if (c.qboRealmId === disconnectedRealm) c.qboRealmId = '';
     (c.franchises || []).forEach(f => {
       if (f.qboRealmId === disconnectedRealm) { f.qboRealmId = ''; f.qboName = ''; }
     });
   });
+  saveDB();
   renderClients(document.getElementById('client-search')?.value || '');
 
   const remaining = Object.keys(qboAllCompanies).filter(rid => qboAllCompanies[rid].connected !== false);
