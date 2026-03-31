@@ -199,6 +199,14 @@
         </div>
       </div>
       <div id="submissions-body" style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">Click Refresh to load submissions</div>
+
+      <!-- Processed Submissions (collapsible) -->
+      <div style="margin-top:12px;">
+        <button onclick="toggleProcessed()" id="processed-toggle" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:8px 14px;width:100%;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          📁 Processed Submissions <span id="processed-count" style="background:var(--surface);padding:1px 8px;border-radius:10px;font-size:10px;">0</span> <span id="processed-arrow" style="transition:transform .2s;">▼</span>
+        </button>
+        <div id="processed-body" style="display:none;margin-top:8px;"></div>
+      </div>
     </div>
 
     <!-- Employee Management (collapsible) -->
@@ -819,8 +827,49 @@ function populateImportClientSelect() {
 // ─── Submissions & Export ─────────────────────────────────────────
 let _submissions = [];
 
+function toggleProcessed() {
+  const body = document.getElementById('processed-body');
+  const arrow = document.getElementById('processed-arrow');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    arrow.style.transform = 'rotate(180deg)';
+  } else {
+    body.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+
+function _buildSubmissionCard(clientKey, subs, isPending) {
+  subs.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  const latestTime = new Date(subs[0].submittedAt).getTime();
+  const latestBatch = subs.filter(s => Math.abs(new Date(s.submittedAt).getTime() - latestTime) < 60000);
+  const clientName = subs[0].clientName || clientKey;
+  const storeCount = latestBatch.length;
+  const totalEmps = latestBatch.reduce((sum, s) => sum + (s.entries?.length || 0), 0);
+  const period = subs[0].payPeriodStart && subs[0].payPeriodEnd ? `${subs[0].payPeriodStart} to ${subs[0].payPeriodEnd}` : '—';
+  const payDate = subs[0].payDate || '—';
+  const submittedAt = new Date(subs[0].submittedAt).toLocaleString();
+
+  const actions = isPending
+    ? `<button class="btn btn-primary btn-sm" onclick="exportSubmission('${clientKey}')" style="font-size:11px;">📥 Export XLSX</button>
+       <button class="btn btn-outline btn-sm" onclick="markProcessed('${clientKey}')" style="font-size:11px;border-color:var(--green);color:var(--green);">✓ Mark Done</button>`
+    : `<button class="btn btn-outline btn-sm" onclick="exportSubmission('${clientKey}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">📥 Export XLSX</button>`;
+
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;${isPending ? 'border-left:3px solid var(--orange);' : 'border-left:3px solid var(--green);'}">
+    <div>
+      <div style="font-weight:600;font-size:13px;">${clientName}</div>
+      <div style="font-size:11px;color:var(--muted);">${storeCount} stores · ${totalEmps} employees · ${period} · Pay: ${payDate}</div>
+      <div style="font-size:10px;color:var(--muted);">Submitted: ${submittedAt}</div>
+    </div>
+    <div style="display:flex;gap:8px;">${actions}</div>
+  </div>`;
+}
+
 async function loadSubmissions() {
   const body = document.getElementById('submissions-body');
+  const processedBody = document.getElementById('processed-body');
+  const processedToggle = document.getElementById('processed-toggle');
+  const processedCount = document.getElementById('processed-count');
   body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">Loading...</div>';
   try {
     const resp = await fetch(`${API}/payroll/submissions`);
@@ -829,10 +878,11 @@ async function loadSubmissions() {
 
     if (!_submissions.length) {
       body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">No submissions yet</div>';
+      processedToggle.style.display = 'none';
       return;
     }
 
-    // Group by client, show most recent per client
+    // Group by client
     const byClient = {};
     _submissions.forEach(s => {
       const key = s.clientSlug || s.clientName;
@@ -840,34 +890,37 @@ async function loadSubmissions() {
       byClient[key].push(s);
     });
 
-    let html = '';
+    // Separate pending vs processed
+    let pendingHtml = '';
+    let processedHtml = '';
+    let pendingCount = 0;
+    let doneCount = 0;
+
     for (const [clientKey, subs] of Object.entries(byClient)) {
-      // Get the latest batch (same submittedAt within ~5 seconds = same batch)
       subs.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
       const latestTime = new Date(subs[0].submittedAt).getTime();
       const latestBatch = subs.filter(s => Math.abs(new Date(s.submittedAt).getTime() - latestTime) < 60000);
+      const hasPending = latestBatch.some(s => s.status === 'pending');
 
-      const clientName = subs[0].clientName || clientKey;
-      const storeCount = latestBatch.length;
-      const totalEmps = latestBatch.reduce((sum, s) => sum + (s.entries?.length || 0), 0);
-      const period = subs[0].payPeriodStart && subs[0].payPeriodEnd ? `${subs[0].payPeriodStart} to ${subs[0].payPeriodEnd}` : '—';
-      const payDate = subs[0].payDate || '—';
-      const submittedAt = new Date(subs[0].submittedAt).toLocaleString();
-      const isPending = latestBatch.some(s => s.status === 'pending');
-
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;${isPending ? 'border-left:3px solid var(--orange);' : 'border-left:3px solid var(--green);'}">
-        <div>
-          <div style="font-weight:600;font-size:13px;">${clientName}</div>
-          <div style="font-size:11px;color:var(--muted);">${storeCount} stores · ${totalEmps} employees · ${period} · Pay: ${payDate}</div>
-          <div style="font-size:10px;color:var(--muted);">Submitted: ${submittedAt} · ${isPending ? '<span style="color:var(--orange);">Pending</span>' : '<span style="color:var(--green);">Processed</span>'}</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" onclick="exportSubmission('${clientKey}')" style="font-size:11px;">📥 Export XLSX</button>
-          <button class="btn btn-outline btn-sm" onclick="markProcessed('${clientKey}')" style="font-size:11px;border-color:var(--green);color:var(--green);">✓ Mark Done</button>
-        </div>
-      </div>`;
+      if (hasPending) {
+        pendingHtml += _buildSubmissionCard(clientKey, subs, true);
+        pendingCount++;
+      } else {
+        processedHtml += _buildSubmissionCard(clientKey, subs, false);
+        doneCount++;
+      }
     }
-    body.innerHTML = html;
+
+    body.innerHTML = pendingHtml || '<div style="padding:12px;text-align:center;color:var(--muted);">No pending submissions</div>';
+
+    if (doneCount > 0) {
+      processedToggle.style.display = 'flex';
+      processedCount.textContent = doneCount;
+      processedBody.innerHTML = processedHtml;
+    } else {
+      processedToggle.style.display = 'none';
+      processedBody.innerHTML = '';
+    }
   } catch(e) {
     body.innerHTML = `<div style="padding:12px;text-align:center;color:var(--red);">Failed to load: ${e.message}</div>`;
   }
