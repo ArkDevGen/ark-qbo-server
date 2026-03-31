@@ -831,6 +831,14 @@ async function clearPrefill() {
   try {
     await fetch(`${API}/payroll/prefill/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
     document.getElementById('import-push-status').innerHTML = '<span style="color:var(--muted);">Prefill cleared</span>';
+    // Clear imported data and status messages
+    _importHomebase = null;
+    _importTips = null;
+    document.getElementById('import-homebase-status').innerHTML = '';
+    document.getElementById('import-tips-status').innerHTML = '';
+    document.getElementById('import-homebase-input').value = '';
+    document.getElementById('import-tips-input').value = '';
+    updatePushBtn();
   } catch(e) { alert('Failed: ' + e.message); }
 }
 
