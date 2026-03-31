@@ -3132,7 +3132,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="border-bottom:2px solid var(--border);text-align:left;">
-            <th onclick="sortUsersBy('name')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-name">Name ↕</th>
+            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">
+              <span onclick="sortUsersBy('first')" style="cursor:pointer;user-select:none;" id="uth-first">First ↕</span>
+              <span style="color:var(--border);margin:0 2px;">|</span>
+              <span onclick="sortUsersBy('last')" style="cursor:pointer;user-select:none;" id="uth-last">Last ↕</span>
+            </th>
             <th onclick="sortUsersBy('role')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-role">Role ↕</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
             <th onclick="sortUsersBy('clients')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-clients">Clients ↕</th>
@@ -7092,7 +7096,7 @@ function removeUser(id){
 // ══════════════════════════════════════════════
 //  USER MANAGEMENT (full page view)
 // ══════════════════════════════════════════════
-let _userSortField = 'name';
+let _userSortField = 'first';
 let _userSortDir = 'asc';
 
 function sortUsersBy(field) {
@@ -7106,10 +7110,10 @@ function sortUsersBy(field) {
 }
 
 function _updateUserSortHeaders() {
-  ['name','role','clients'].forEach(f => {
+  ['first','last','role','clients'].forEach(f => {
     const th = document.getElementById('uth-' + f);
     if (!th) return;
-    const label = f === 'name' ? 'Name' : f === 'role' ? 'Role' : 'Clients';
+    const label = f === 'first' ? 'First' : f === 'last' ? 'Last' : f === 'role' ? 'Role' : 'Clients';
     if (_userSortField === f) {
       th.textContent = label + (_userSortDir === 'asc' ? ' ↑' : ' ↓');
       th.style.color = 'var(--accent)';
@@ -7144,9 +7148,12 @@ async function renderUsers(q){
     // Sort users
     filtered.sort((a, b) => {
       let va, vb;
-      if (_userSortField === 'name') {
-        va = ((a.fname||'') + ' ' + (a.lname||'')).toLowerCase();
-        vb = ((b.fname||'') + ' ' + (b.lname||'')).toLowerCase();
+      if (_userSortField === 'first') {
+        va = (a.fname||'').toLowerCase();
+        vb = (b.fname||'').toLowerCase();
+      } else if (_userSortField === 'last') {
+        va = (a.lname||'').toLowerCase();
+        vb = (b.lname||'').toLowerCase();
       } else if (_userSortField === 'role') {
         const roleOrder = { admin: 0, am: 1, payroll_manager: 2, viewer: 3 };
         va = roleOrder[a.role] ?? 99;
