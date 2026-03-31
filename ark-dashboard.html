@@ -7419,7 +7419,15 @@ function badgeStatus(s){ const m={Active:'b-active',Inactive:'b-inactive',Prospe
 function badgeEntity(e){ const m={LLC:'b-llc','S-Corp':'b-scorp','C-Corp':'b-ccorp','Non-Profit':'b-np',Partnership:'b-part','Sole Proprietor':'b-sole'};return e?`<span class="badge ${m[e]||''}">${e}</span>`:'—'; }
 function badgeSvc(s){ const m={Bookkeeping:'b-bk',Payroll:'b-pay',Advisory:'b-adv'};return`<span class="badge ${m[s]||''}">${s}</span>`; }
 function svcChips(svcs){ return (svcs||[]).map(s=>badgeSvc(s)).join(' ')||'—'; }
-function getAMName(id){ const a=DB.accountManagers.find(x=>x.id===id);return a?`${a.fname} ${a.lname}`:'—'; }
+function getAMName(id){
+  if(!id) return '—';
+  // Check users first (all users are account managers now)
+  const u=(loadUsers()||[]).find(x=>x.id===id);
+  if(u) return `${u.fname} ${u.lname||''}`.trim();
+  // Fallback to legacy account managers
+  const a=DB.accountManagers.find(x=>x.id===id);
+  return a?`${a.fname} ${a.lname}`:'—';
+}
 
 // ══════════════════════════════════════════════
 //  RENDER DASHBOARD
@@ -9148,7 +9156,9 @@ function renderActivityLog(){
 // ══════════════════════════════════════════════
 function populateAMSelect(selId=''){
   const sel=document.getElementById('mc-am');
-  sel.innerHTML=`<option value="">— Unassigned —</option>`+DB.accountManagers.filter(a=>a.status==='Active').map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+  // Use all active users as account managers
+  const users = (loadUsers() || []).filter(u => (u.status||'').toLowerCase() === 'active');
+  sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>`<option value="${u.id}" ${u.id===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`).join('');
 }
 function toggleSvc(el, evt){
   if(evt) evt.preventDefault();
