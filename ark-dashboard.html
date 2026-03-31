@@ -12071,6 +12071,7 @@ renderLoginScreen();
       applyRoleRestrictions(currentUser);
       document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
       if(typeof notifInit === 'function') notifInit();
+      await refreshServerUsersCache();
       await loadDB();
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
     } else if (saved && saved.userId) {
