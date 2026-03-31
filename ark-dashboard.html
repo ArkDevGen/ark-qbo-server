@@ -9156,8 +9156,8 @@ function renderActivityLog(){
 // ══════════════════════════════════════════════
 function populateAMSelect(selId=''){
   const sel=document.getElementById('mc-am');
-  // Use all active users as account managers
-  const users = (loadUsers() || []).filter(u => (u.status||'').toLowerCase() === 'active');
+  // Use all active users as account managers (no status field = active)
+  const users = (loadUsers() || []).filter(u => !u.status || u.status.toLowerCase() === 'active');
   sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>`<option value="${u.id}" ${u.id===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`).join('');
 }
 function toggleSvc(el, evt){
