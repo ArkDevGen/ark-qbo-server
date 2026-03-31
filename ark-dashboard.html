@@ -6704,6 +6704,9 @@ async function loginAs(userId){
     view: 'dashboard',
   }));
 
+  // Cache server users for AM name resolution
+  await refreshServerUsersCache();
+
   // Load shared DB from server (or localStorage fallback)
   const hadData = await loadDB();
   if(!hadData){
@@ -7430,9 +7433,24 @@ function badgeStatus(s){ const m={Active:'b-active',Inactive:'b-inactive',Prospe
 function badgeEntity(e){ const m={LLC:'b-llc','S-Corp':'b-scorp','C-Corp':'b-ccorp','Non-Profit':'b-np',Partnership:'b-part','Sole Proprietor':'b-sole'};return e?`<span class="badge ${m[e]||''}">${e}</span>`:'—'; }
 function badgeSvc(s){ const m={Bookkeeping:'b-bk',Payroll:'b-pay',Advisory:'b-adv'};return`<span class="badge ${m[s]||''}">${s}</span>`; }
 function svcChips(svcs){ return (svcs||[]).map(s=>badgeSvc(s)).join(' ')||'—'; }
+// Cache server users for getAMName (avoids async in sync contexts)
+let _cachedServerUsers = [];
+async function refreshServerUsersCache() {
+  try {
+    const resp = await authFetch(ARK_SERVER + '/users');
+    if (resp.ok) {
+      const data = await resp.json();
+      _cachedServerUsers = data.users || data;
+    }
+  } catch(e) {}
+}
+
 function getAMName(id){
   if(!id) return '—';
-  // Check users first (all users are account managers now)
+  // Check cached server users first
+  const su = _cachedServerUsers.find(x => (x._id||x.id) === id);
+  if(su) return `${su.fname} ${su.lname||''}`.trim();
+  // Fallback to local users
   const u=(loadUsers()||[]).find(x=>x.id===id);
   if(u) return `${u.fname} ${u.lname||''}`.trim();
   // Fallback to legacy account managers
@@ -9165,11 +9183,23 @@ function renderActivityLog(){
 // ══════════════════════════════════════════════
 //  CLIENT CRUD
 // ══════════════════════════════════════════════
-function populateAMSelect(selId=''){
+async function populateAMSelect(selId=''){
   const sel=document.getElementById('mc-am');
-  // Use all active users as account managers (no status field = active)
-  const users = (loadUsers() || []).filter(u => !u.status || u.status.toLowerCase() === 'active');
-  sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>`<option value="${u.id}" ${u.id===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`).join('');
+  sel.innerHTML=`<option value="">— Unassigned —</option>`;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/users');
+    if(!resp.ok) return;
+    const data = await resp.json();
+    const users = (data.users || data).filter(u => !u.status || u.status.toLowerCase() === 'active');
+    sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>{
+      const uid = u._id || u.id;
+      return `<option value="${uid}" ${uid===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`;
+    }).join('');
+  } catch(e) {
+    // Fallback to local users if server unreachable
+    const users = (loadUsers() || []).filter(u => !u.status || u.status.toLowerCase() === 'active');
+    sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>`<option value="${u.id}" ${u.id===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`).join('');
+  }
 }
 function toggleSvc(el, evt){
   if(evt) evt.preventDefault();
