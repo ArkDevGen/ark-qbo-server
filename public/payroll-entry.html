@@ -156,8 +156,8 @@
       </div>
     </div>
 
-    <!-- Bulk Import Card -->
-    <div class="card" id="bulk-import-card">
+    <!-- Bulk Import Card (hidden — imports now done on CRM admin side) -->
+    <div class="card" id="bulk-import-card" style="display:none !important;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <h2 style="margin-bottom:0;">Bulk Import</h2>
         <div style="display:flex;align-items:center;gap:12px;">
@@ -595,7 +595,7 @@ async function doLogin() {
       if (_prefillDates.payPeriodEnd)   document.getElementById('entry-period-end').value   = _prefillDates.payPeriodEnd;
       if (_prefillDates.payDate)        document.getElementById('entry-pay-date').value      = _prefillDates.payDate;
     } else {
-      if (bulkCard) bulkCard.style.display = '';
+      // Bulk import card stays hidden (imports done on CRM admin side)
       if (prefillBanner) prefillBanner.style.display = 'none';
     }
 
