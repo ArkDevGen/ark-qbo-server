@@ -618,10 +618,39 @@ async function doLogin() {
         headers: { 'Authorization': `Bearer ${_token}` },
       });
       const draftData = await draftResp.json();
+      let hasConfirmed = false;
       if (draftData.drafts) {
         for (const [storeId, info] of Object.entries(draftData.drafts)) {
-          if (info.confirmed) _bulkStoreStatus[storeId] = 'confirmed';
+          if (info.confirmed) { _bulkStoreStatus[storeId] = 'confirmed'; hasConfirmed = true; }
         }
+      }
+      // Restore bulk mode if any store was confirmed or had bulkMode saved
+      // Fetch one full draft to get bulkTips
+      if (hasConfirmed && _stores.length > 0) {
+        _bulkMode = true;
+        try {
+          const firstStore = _stores[0].id;
+          const fullDraft = await fetch(`${API}/payroll/drafts/${_clientSlug}/${firstStore}`, {
+            headers: { 'Authorization': `Bearer ${_token}` },
+          });
+          const fd = await fullDraft.json();
+          if (fd.draft?.bulkTips) _bulkTips = fd.draft.bulkTips;
+          if (fd.draft?.bulkMode) _bulkMode = true;
+        } catch(e) {}
+        // Mark non-confirmed stores as populated (they have data but not confirmed yet)
+        for (const s of _stores) {
+          if (s.id === 'admin') continue;
+          if (!_bulkStoreStatus[s.id]) _bulkStoreStatus[s.id] = 'populated';
+        }
+        // Show store tracker after entry screen renders
+        setTimeout(() => {
+          const tracker = document.getElementById('store-tracker');
+          if (tracker) tracker.style.display = '';
+          bulkRenderTracker();
+          // Update button text
+          const btn = document.getElementById('store-action-btn');
+          if (btn) btn.textContent = '✓ Confirm Store';
+        }, 200);
       }
     } catch(e) { console.warn('Failed to load draft statuses:', e); }
 
@@ -3024,6 +3053,9 @@ async function saveDraft(showFeedback = false) {
     entries: collectCurrentEntries(),
     rateChanges: _rateChanges,
     confirmed: _bulkStoreStatus[storeId] === 'confirmed' || false,
+    bulkMode: _bulkMode || false,
+    bulkTips: _bulkTips || null,
+    storeTipTotal: (() => { const t = document.getElementById('entry-store')?.selectedOptions[0]?.text || ''; const n = t.replace(/[^0-9]/g, ''); return _bulkTips?.[n] || 0; })(),
   };
   try {
     await fetch(`${API}/payroll/drafts/${_clientSlug}/${storeId}`, {
@@ -3079,6 +3111,9 @@ async function saveAllDrafts() {
       entries,
       rateChanges: _rateChanges,
       confirmed: _bulkStoreStatus[sid] === 'confirmed' || false,
+      bulkMode: _bulkMode || false,
+      bulkTips: _bulkTips || null,
+      storeTipTotal: (() => { const n = (opt.text || '').replace(/[^0-9]/g, ''); return _bulkTips?.[n] || 0; })(),
     };
     try {
       await fetch(`${API}/payroll/drafts/${_clientSlug}/${sid}`, {
@@ -3124,12 +3159,29 @@ async function loadDraft() {
     }
     // Restore rate changes
     if (draft.rateChanges) _rateChanges = draft.rateChanges;
+    // Restore bulk mode and tips
+    if (draft.bulkMode) _bulkMode = true;
+    if (draft.bulkTips && !_bulkTips) _bulkTips = draft.bulkTips;
+    if (draft.storeTipTotal) {
+      const sText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+      const sNum = sText.replace(/[^0-9]/g, '');
+      if (sNum && !_bulkTips) _bulkTips = {};
+      if (sNum && _bulkTips) _bulkTips[sNum] = draft.storeTipTotal;
+    }
     // Recalculate totals row
     updateTotals();
-    // Restore confirmed status
+    // Restore confirmed status and bulk mode UI
     if (draft.confirmed) {
       _bulkStoreStatus[storeId] = 'confirmed';
-      if (typeof bulkRenderTracker === 'function') bulkRenderTracker();
+    }
+    if (_bulkMode) {
+      // Update confirm button text
+      const btn = document.getElementById('store-action-btn');
+      if (btn) btn.textContent = draft.confirmed ? '✓ Confirmed — Edit & Re-confirm' : '✓ Confirm Store';
+      // Show store tracker
+      const tracker = document.getElementById('store-tracker');
+      if (tracker) tracker.style.display = '';
+      bulkRenderTracker();
     }
     // Update save indicator
     const ind = document.getElementById('draft-save-indicator');
