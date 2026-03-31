@@ -4378,11 +4378,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:28px 32px;">
 
-    <!-- DEBUG BANNER — remove once page renders correctly -->
-    <div id="pr-debug-banner" style="background:#c0392b;color:#fff;font-size:15px;font-weight:700;padding:14px 20px;border-radius:8px;margin-bottom:18px;">
-      ✓ Payroll Center view is rendering — if you see this banner, the view IS visible.
-    </div>
-
     <!-- Page header -->
     <div style="margin-bottom:22px;">
       <div style="font-size:22px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">Payroll Center</div>
@@ -7456,18 +7451,10 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
+    // Force display in case animation CSS is interfering
+    const pcView = document.getElementById('view-payrollcenter');
+    if (pcView) { pcView.style.display = 'block'; pcView.style.opacity = '1'; pcView.style.transform = 'none'; }
     renderPayrollCenter();
-    // Detailed diagnostic — fires after render to capture layout info
-    setTimeout(()=>{
-      const _v=document.getElementById('view-payrollcenter');
-      const _b=document.getElementById('pr-debug-banner');
-      if(!_v||!_b) return;
-      const vr=_v.getBoundingClientRect();
-      const br=_b.getBoundingClientRect();
-      const bs=getComputedStyle(_b);
-      const info=`VIEW: top=${Math.round(vr.top)} h=${Math.round(vr.height)} w=${Math.round(vr.width)}\nBANNER: top=${Math.round(br.top)} h=${Math.round(br.height)} vis=${bs.visibility} op=${bs.opacity} disp=${bs.display} overflow=${getComputedStyle(_v).overflow}`;
-      alert(info);
-    },500);
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
