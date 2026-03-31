@@ -7481,6 +7481,16 @@ function nav(page){
       const rect = pcv.getBoundingClientRect();
       const cs = getComputedStyle(pcv);
       console.log('PAYROLL CENTER DEBUG:', { display:cs.display, opacity:cs.opacity, visibility:cs.visibility, width:rect.width, height:rect.height, top:rect.top, left:rect.left, classList:[...pcv.classList], parentDisplay:getComputedStyle(pcv.parentElement).display });
+      // Walk up parents
+      let el = pcv.parentElement;
+      let depth = 0;
+      while(el && depth < 10) {
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        console.log('PARENT ' + depth + ':', { tag: el.tagName, id: el.id, class: el.className, display: s.display, overflow: s.overflow, width: r.width, height: r.height, top: r.top, left: r.left });
+        el = el.parentElement;
+        depth++;
+      }
     }, 100);
   }
   if(page==='filecenter'){ fcInit(); }
