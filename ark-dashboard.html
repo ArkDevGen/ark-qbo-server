@@ -1044,7 +1044,17 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Business Name</th><th>Entity Type</th><th>EIN / Tax ID</th><th>Services</th><th>Status</th><th>Account Manager</th><th>Onboarding</th><th style="text-align:center;">Health</th><th></th></tr></thead>
+          <thead><tr>
+            <th onclick="sortClientsBy('biz')" style="cursor:pointer;user-select:none;" id="cth-biz">Business Name ↕</th>
+            <th onclick="sortClientsBy('entity')" style="cursor:pointer;user-select:none;" id="cth-entity">Entity Type ↕</th>
+            <th>EIN / Tax ID</th>
+            <th onclick="sortClientsBy('services')" style="cursor:pointer;user-select:none;" id="cth-services">Services ↕</th>
+            <th onclick="sortClientsBy('status')" style="cursor:pointer;user-select:none;" id="cth-status">Status ↕</th>
+            <th onclick="sortClientsBy('am')" style="cursor:pointer;user-select:none;" id="cth-am">Account Manager ↕</th>
+            <th>Onboarding</th>
+            <th style="text-align:center;">Health</th>
+            <th></th>
+          </tr></thead>
           <tbody id="clients-body"></tbody>
         </table>
       </div>
@@ -7504,8 +7514,8 @@ async function refreshServerUsersCache() {
 
 function getAMName(id){
   if(!id) return '—';
-  // Check cached server users first
-  const su = _cachedServerUsers.find(x => (x._id||x.id) === id);
+  // Check cached server users first (by id or username)
+  const su = _cachedServerUsers.find(x => (x._id||x.id) === id || x.username === id);
   if(su) return `${su.fname} ${su.lname||''}`.trim();
   // Fallback to local users
   const u=(loadUsers()||[]).find(x=>x.id===id);
@@ -7564,6 +7574,34 @@ function renderDashboard(){
 // ══════════════════════════════════════════════
 //  RENDER CLIENTS
 // ══════════════════════════════════════════════
+let _clientSortField = 'biz';
+let _clientSortDir = 'asc';
+
+function sortClientsBy(field) {
+  if (_clientSortField === field) {
+    _clientSortDir = _clientSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _clientSortField = field;
+    _clientSortDir = 'asc';
+  }
+  renderClients(document.getElementById('client-search')?.value || '');
+}
+
+function _updateClientSortHeaders() {
+  const cols = { biz:'Business Name', entity:'Entity Type', services:'Services', status:'Status', am:'Account Manager' };
+  for (const [f, label] of Object.entries(cols)) {
+    const th = document.getElementById('cth-' + f);
+    if (!th) continue;
+    if (_clientSortField === f) {
+      th.textContent = label + (_clientSortDir === 'asc' ? ' ↑' : ' ↓');
+      th.style.color = 'var(--accent)';
+    } else {
+      th.textContent = label + ' ↕';
+      th.style.color = '';
+    }
+  }
+}
+
 function renderClients(q=''){
   const healthFilter = document.getElementById('client-health-filter')?.value || '';
   const f = (q||'').toLowerCase();
@@ -7575,6 +7613,29 @@ function renderClients(q=''){
   if(healthFilter==='at-risk')         list=list.filter(c=>c.status==='Active'&&typeof betaClientHealth==='function'&&betaClientHealth(c).tier==='red');
   if(healthFilter==='needs-attention') list=list.filter(c=>c.status==='Active'&&typeof betaClientHealth==='function'&&betaClientHealth(c).tier==='yellow');
   if(healthFilter==='healthy')         list=list.filter(c=>c.status==='Active'&&typeof betaClientHealth==='function'&&betaClientHealth(c).tier==='green');
+  // Sort clients
+  list = [...list].sort((a, b) => {
+    let va, vb;
+    if (_clientSortField === 'biz') {
+      va = (a.biz||'').toLowerCase(); vb = (b.biz||'').toLowerCase();
+    } else if (_clientSortField === 'entity') {
+      va = (a.entity||'').toLowerCase(); vb = (b.entity||'').toLowerCase();
+    } else if (_clientSortField === 'services') {
+      va = (a.services||[]).length; vb = (b.services||[]).length;
+    } else if (_clientSortField === 'status') {
+      const so = { Active:0, Prospect:1, Lead:2, Inactive:3, Declined:4 };
+      va = so[a.status] ?? 99; vb = so[b.status] ?? 99;
+    } else if (_clientSortField === 'am') {
+      va = getAMName(a.am).toLowerCase(); vb = getAMName(b.am).toLowerCase();
+    } else {
+      va = (a.biz||'').toLowerCase(); vb = (b.biz||'').toLowerCase();
+    }
+    if (va < vb) return _clientSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return _clientSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  _updateClientSortHeaders();
+
   const countEl=document.getElementById('clients-count');
   if(countEl) countEl.textContent=`${list.length} record${list.length!==1?'s':''}`;
   const body=document.getElementById('clients-body');
