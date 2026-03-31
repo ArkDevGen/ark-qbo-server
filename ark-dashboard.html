@@ -3132,10 +3132,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="border-bottom:2px solid var(--border);text-align:left;">
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Name</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Role</th>
+            <th onclick="sortUsersBy('name')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-name">Name ↕</th>
+            <th onclick="sortUsersBy('role')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-role">Role ↕</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
-            <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Clients</th>
+            <th onclick="sortUsersBy('clients')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-clients">Clients ↕</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Open Tasks</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Status</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Last Login</th>
@@ -7092,6 +7092,33 @@ function removeUser(id){
 // ══════════════════════════════════════════════
 //  USER MANAGEMENT (full page view)
 // ══════════════════════════════════════════════
+let _userSortField = 'name';
+let _userSortDir = 'asc';
+
+function sortUsersBy(field) {
+  if (_userSortField === field) {
+    _userSortDir = _userSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _userSortField = field;
+    _userSortDir = 'asc';
+  }
+  renderUsers(document.getElementById('users-search')?.value || '');
+}
+
+function _updateUserSortHeaders() {
+  ['name','role','clients'].forEach(f => {
+    const th = document.getElementById('uth-' + f);
+    if (!th) return;
+    const label = f === 'name' ? 'Name' : f === 'role' ? 'Role' : 'Clients';
+    if (_userSortField === f) {
+      th.textContent = label + (_userSortDir === 'asc' ? ' ↑' : ' ↓');
+      th.style.color = 'var(--accent)';
+    } else {
+      th.textContent = label + ' ↕';
+      th.style.color = 'var(--text-d)';
+    }
+  });
+}
 
 async function renderUsers(q){
   const tbody = document.getElementById('users-tbody');
@@ -7113,6 +7140,29 @@ async function renderUsers(q){
     }
     // Count assigned clients from CRM DB
     const crmClients = DB?.clients || [];
+
+    // Sort users
+    filtered.sort((a, b) => {
+      let va, vb;
+      if (_userSortField === 'name') {
+        va = ((a.fname||'') + ' ' + (a.lname||'')).toLowerCase();
+        vb = ((b.fname||'') + ' ' + (b.lname||'')).toLowerCase();
+      } else if (_userSortField === 'role') {
+        const roleOrder = { admin: 0, am: 1, payroll_manager: 2, viewer: 3 };
+        va = roleOrder[a.role] ?? 99;
+        vb = roleOrder[b.role] ?? 99;
+      } else if (_userSortField === 'clients') {
+        const aidA = a._id || a.id;
+        const aidB = b._id || b.id;
+        va = crmClients.filter(c => c.am === aidA || c.am === a.username).length || (a.assignedClients||[]).length;
+        vb = crmClients.filter(c => c.am === aidB || c.am === b.username).length || (b.assignedClients||[]).length;
+      }
+      if (va < vb) return _userSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return _userSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    _updateUserSortHeaders();
 
     tbody.innerHTML = filtered.map(u => {
       const fullName = u.lname ? `${u.fname} ${u.lname}` : (u.fname||'Unknown');
