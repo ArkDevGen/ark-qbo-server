@@ -3740,13 +3740,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- RIGHT: activity + config -->
-      <div>
+      <div style="position:sticky;top:20px;">
         <div class="card" style="overflow:hidden;margin-bottom:14px;">
           <div class="card-header" style="padding:10px 16px;">
             <div class="card-title" style="font-size:12px;">Activity Log</div>
             <button onclick="qboClearActivity()" style="background:none;border:none;color:var(--text-d);font-size:10px;cursor:pointer;font-family:'DM Mono',monospace;">Clear</button>
           </div>
-          <div id="qbo-activity-log" style="max-height:300px;overflow-y:auto;"></div>
+          <div id="qbo-activity-log" style="max-height:calc(100vh - 380px);overflow-y:auto;"></div>
         </div>
 
         <div class="card" style="overflow:hidden;">
