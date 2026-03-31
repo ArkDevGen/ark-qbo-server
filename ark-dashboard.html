@@ -7464,7 +7464,17 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    // iframe src is set in HTML — nothing else needed
+    // Force the view visible and inject content via JS as fallback
+    const pcv = document.getElementById('view-payrollcenter');
+    if(pcv){
+      pcv.style.cssText = 'display:block !important;opacity:1 !important;visibility:visible !important;padding:28px 32px;min-height:400px;position:relative;z-index:1;';
+      pcv.innerHTML = '<div style="text-align:center;padding:60px 20px;background:var(--surface);border-radius:12px;border:2px solid var(--border);">' +
+        '<div style="font-size:48px;margin-bottom:16px;">📋</div>' +
+        '<div style="font-size:22px;font-weight:700;color:var(--navy);font-family:Cormorant Garamond,serif;margin-bottom:8px;">Payroll Center</div>' +
+        '<div style="font-size:13px;color:var(--text-d);margin-bottom:24px;">Manage employees, review hours, and process payroll</div>' +
+        '<a href="/payroll-admin" target="_blank" class="btn btn-primary" style="font-size:15px;padding:14px 32px;display:inline-flex;align-items:center;gap:10px;text-decoration:none;">Open Payroll Admin ↗</a>' +
+        '</div>';
+    }
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
