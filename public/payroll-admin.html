@@ -187,6 +187,20 @@
       </div>
     </div>
 
+    <!-- Submissions & Export -->
+    <div class="card" style="margin-bottom:16px;" id="submissions-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--accent);">📥 Client Submissions</div>
+          <div style="font-size:11px;color:var(--muted);">Review submitted payroll and export to XLSX</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="loadSubmissions()" style="border-color:var(--accent);color:var(--accent);">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="submissions-body" style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">Click Refresh to load submissions</div>
+    </div>
+
     <div class="grid-2">
       <!-- Left: Client list -->
       <div>
@@ -781,6 +795,139 @@ function populateImportClientSelect() {
   });
 }
 
+// ─── Submissions & Export ─────────────────────────────────────────
+let _submissions = [];
+
+async function loadSubmissions() {
+  const body = document.getElementById('submissions-body');
+  body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">Loading...</div>';
+  try {
+    const resp = await fetch(`${API}/payroll/submissions`);
+    const data = await resp.json();
+    _submissions = (data.submissions || []).filter(s => s.status !== 'deleted');
+
+    if (!_submissions.length) {
+      body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">No submissions yet</div>';
+      return;
+    }
+
+    // Group by client, show most recent per client
+    const byClient = {};
+    _submissions.forEach(s => {
+      const key = s.clientSlug || s.clientName;
+      if (!byClient[key]) byClient[key] = [];
+      byClient[key].push(s);
+    });
+
+    let html = '';
+    for (const [clientKey, subs] of Object.entries(byClient)) {
+      // Get the latest batch (same submittedAt within ~5 seconds = same batch)
+      subs.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      const latestTime = new Date(subs[0].submittedAt).getTime();
+      const latestBatch = subs.filter(s => Math.abs(new Date(s.submittedAt).getTime() - latestTime) < 60000);
+
+      const clientName = subs[0].clientName || clientKey;
+      const storeCount = latestBatch.length;
+      const totalEmps = latestBatch.reduce((sum, s) => sum + (s.entries?.length || 0), 0);
+      const period = subs[0].payPeriodStart && subs[0].payPeriodEnd ? `${subs[0].payPeriodStart} to ${subs[0].payPeriodEnd}` : '—';
+      const payDate = subs[0].payDate || '—';
+      const submittedAt = new Date(subs[0].submittedAt).toLocaleString();
+      const isPending = latestBatch.some(s => s.status === 'pending');
+
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;${isPending ? 'border-left:3px solid var(--orange);' : 'border-left:3px solid var(--green);'}">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${clientName}</div>
+          <div style="font-size:11px;color:var(--muted);">${storeCount} stores · ${totalEmps} employees · ${period} · Pay: ${payDate}</div>
+          <div style="font-size:10px;color:var(--muted);">Submitted: ${submittedAt} · ${isPending ? '<span style="color:var(--orange);">Pending</span>' : '<span style="color:var(--green);">Processed</span>'}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="exportSubmission('${clientKey}')" style="font-size:11px;">📥 Export XLSX</button>
+          <button class="btn btn-outline btn-sm" onclick="markProcessed('${clientKey}')" style="font-size:11px;border-color:var(--green);color:var(--green);">✓ Mark Done</button>
+        </div>
+      </div>`;
+    }
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div style="padding:12px;text-align:center;color:var(--red);">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function exportSubmission(clientKey) {
+  // Get the latest batch for this client
+  const subs = _submissions.filter(s => (s.clientSlug || s.clientName) === clientKey);
+  subs.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  const latestTime = new Date(subs[0].submittedAt).getTime();
+  const latestBatch = subs.filter(s => Math.abs(new Date(s.submittedAt).getTime() - latestTime) < 60000);
+
+  // Use latest submission per store within this batch
+  const byStore = {};
+  latestBatch.forEach(s => { byStore[s.storeName] = s; });
+
+  const wb = XLSX.utils.book_new();
+  const storeOrder = Object.keys(byStore).sort((a, b) => {
+    const na = parseInt(a.replace(/[^0-9]/g, '')) || 9999;
+    const nb = parseInt(b.replace(/[^0-9]/g, '')) || 9999;
+    return na - nb;
+  });
+
+  for (const storeName of storeOrder) {
+    const s = byStore[storeName];
+    const entries = [...(s.entries || [])].sort((a, b) => (a.lastName || '').toLowerCase().localeCompare((b.lastName || '').toLowerCase()));
+
+    const rows = entries.map(e => ({
+      'Last Name': e.lastName || '',
+      'First Name': e.firstName || '',
+      'Position': e.position || '',
+      'Pay Rate': parseFloat(e.payRate) || 0,
+      'Pay Type': e.payType || 'hourly',
+      'Reg Hours': parseFloat(e.regHours) || 0,
+      'OT Hours': parseFloat(e.otHours) || 0,
+      'PTO Hours': parseFloat(e.ptoHours) || 0,
+      'Holiday Hours': parseFloat(e.holidayHours) || 0,
+      'Tips': parseFloat(e.tips) || 0,
+      'Mileage': parseFloat(e.mileage) || 0,
+      'Reimbursement': parseFloat(e.reimbursement) || 0,
+      'Bonus': parseFloat(e.bonus) || 0,
+      'Notes': e.notes || '',
+    }));
+
+    // Add totals row
+    if (rows.length) {
+      const totals = { 'Last Name': 'TOTALS' };
+      ['Pay Rate','Reg Hours','OT Hours','PTO Hours','Holiday Hours','Tips','Mileage','Reimbursement','Bonus'].forEach(col => {
+        totals[col] = rows.reduce((sum, r) => sum + (parseFloat(r[col]) || 0), 0);
+      });
+      rows.push(totals);
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Column widths
+    ws['!cols'] = [16,14,18,10,10,10,10,10,12,10,10,14,10,20].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, storeName.substring(0, 31));
+  }
+
+  const clientName = subs[0].clientName || clientKey;
+  const period = subs[0].payPeriodStart && subs[0].payPeriodEnd ? `_${subs[0].payPeriodStart}_to_${subs[0].payPeriodEnd}` : '';
+  XLSX.writeFile(wb, `${clientName}_Payroll${period}.xlsx`);
+}
+
+async function markProcessed(clientKey) {
+  const subs = _submissions.filter(s => (s.clientSlug || s.clientName) === clientKey && s.status === 'pending');
+  if (!subs.length) { alert('No pending submissions to mark'); return; }
+  if (!confirm(`Mark ${subs.length} submissions as processed?`)) return;
+
+  for (const s of subs) {
+    try {
+      await fetch(`${API}/payroll/submissions/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'processed' }),
+      });
+    } catch(e) {}
+  }
+  loadSubmissions();
+}
+
 // ─── Auto-authenticate when loaded inside CRM iframe ─────────────
 async function tryAutoAuth() {
   // Check for token in URL params (passed from CRM iframe)
@@ -798,6 +945,7 @@ async function tryAutoAuth() {
     document.getElementById('screen-main').classList.remove('hidden');
     renderClientList();
     populateImportClientSelect();
+    loadSubmissions();
     return true;
   } catch(e) { _token = ''; return false; }
 }
@@ -814,7 +962,7 @@ async function tryAutoAuth() {
 const _origDoLogin = doLogin;
 doLogin = async function() {
   await _origDoLogin();
-  if (_token) populateImportClientSelect();
+  if (_token) { populateImportClientSelect(); loadSubmissions(); }
 };
 </script>
 </body>
