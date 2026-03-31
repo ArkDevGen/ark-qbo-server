@@ -4377,7 +4377,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ PAYROLL CENTER ════ -->
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:0;">
-    <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0d1b2a;"></iframe>
+    <iframe id="payroll-admin-iframe" src="https://ark-qbo-server.onrender.com/payroll-admin" style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0d1b2a;"></iframe>
   </div>
 
   <!-- OLD PAYROLL CENTER (removed — replaced with embedded payroll-admin above) -->
@@ -7456,11 +7456,7 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    const iframe = document.getElementById('payroll-admin-iframe');
-    if (iframe) {
-      const target = window.location.origin + '/payroll-admin';
-      if (iframe.getAttribute('src') !== target) iframe.src = target;
-    }
+    // iframe src is set in HTML — nothing else needed
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
