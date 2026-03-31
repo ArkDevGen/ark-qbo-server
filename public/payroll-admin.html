@@ -121,8 +121,8 @@
     <div class="card" style="margin-bottom:16px;overflow:visible;" id="import-section">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--gold);">📤 Import & Push to Client</div>
-          <div style="font-size:11px;color:var(--muted);">Upload Homebase + Tips files, then push to client portal</div>
+          <div style="font-size:14px;font-weight:700;color:var(--gold);">📤 Upload Timecards + Tips</div>
+          <div style="font-size:11px;color:var(--muted);">Upload timecard and tips files, then push to client portal</div>
         </div>
         <div id="import-push-status" style="font-size:11px;min-width:200px;text-align:right;"></div>
       </div>
@@ -161,7 +161,7 @@
         <div style="flex:1;">
           <div onclick="document.getElementById('import-homebase-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-size:24px;margin-bottom:6px;">📄</div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);">Homebase CSV</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);">Timecards CSV</div>
             <div style="font-size:10px;color:var(--muted);">Click to upload</div>
           </div>
           <input type="file" id="import-homebase-input" accept=".csv" style="display:none;" onchange="importParseHomebase(this.files[0])">
