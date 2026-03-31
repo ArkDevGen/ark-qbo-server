@@ -744,13 +744,27 @@ function importParseTips(file) {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       _importTips = {};
       let totalTips = 0;
+
+      // Build valid store numbers from selected client's stores
+      const slug = document.getElementById('import-client').value;
+      const validNums = new Set();
+      if (slug && _payrollData?.clients?.[slug]?.stores) {
+        Object.entries(_payrollData.clients[slug].stores).forEach(([id, s]) => {
+          if (id === 'admin') return;
+          const num = (s.name || id).replace(/[^0-9]/g, '');
+          if (num) validNums.add(num);
+        });
+      }
+
       for (const row of rows) {
         const storeVal = String(row['Store'] || '');
         if (storeVal === 'Total' || !storeVal) continue;
         const match = storeVal.replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
         if (!match) continue;
-        _importTips[match[1]] = parseFloat(row['Tip']) || 0;
-        totalTips += _importTips[match[1]];
+        const storeNum = match[1];
+        if (validNums.size > 0 && !validNums.has(storeNum)) continue;
+        _importTips[storeNum] = parseFloat(row['Tip']) || 0;
+        totalTips += _importTips[storeNum];
       }
       statusEl.innerHTML = `<span style="color:var(--green);">✓ ${Object.keys(_importTips).length} stores, $${totalTips.toFixed(2)}</span>`;
       document.getElementById('import-tips-input').value = '';
@@ -768,6 +782,11 @@ function updatePushBtn() {
   const payDate = document.getElementById('import-pay-date').value;
   btn.disabled = !(_importHomebase && slug && start && end && payDate);
 }
+// Wire up date fields to update push button
+['import-period-start','import-period-end','import-pay-date'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', updatePushBtn);
+});
 
 async function pushToClient() {
   const slug = document.getElementById('import-client').value;
