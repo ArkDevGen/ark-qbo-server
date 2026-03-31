@@ -201,6 +201,13 @@
       <div id="submissions-body" style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">Click Refresh to load submissions</div>
     </div>
 
+    <!-- Employee Management (collapsible) -->
+    <div style="margin-bottom:16px;">
+      <button class="btn btn-outline" onclick="toggleEmpSection()" id="emp-section-toggle" style="width:100%;padding:12px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;border-color:var(--border);color:var(--muted);">
+        👥 Manage Employees <span id="emp-section-arrow" style="transition:transform .2s;">▼</span>
+      </button>
+    </div>
+    <div id="emp-section" style="display:none;">
     <div class="grid-2">
       <!-- Left: Client list -->
       <div>
@@ -216,6 +223,7 @@
         </div>
       </div>
     </div>
+    </div><!-- /emp-section -->
   </div>
 </div>
 
@@ -641,6 +649,19 @@ async function deleteEmp(clientSlug, storeId, empIdx, empName) {
     showSaveToast();
   } catch (e) {
     alert('Error: ' + e.message);
+  }
+}
+
+// ─── Employee Section Toggle ─────────────────────────────────────
+function toggleEmpSection() {
+  const section = document.getElementById('emp-section');
+  const arrow = document.getElementById('emp-section-arrow');
+  if (section.style.display === 'none') {
+    section.style.display = '';
+    arrow.style.transform = 'rotate(180deg)';
+  } else {
+    section.style.display = 'none';
+    arrow.style.transform = '';
   }
 }
 
