@@ -454,8 +454,8 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
 .view{display:none;}
 .view.active{display:block;}
-/* Payroll Center: skip entrance animation so cards are never stuck at opacity:0 */
-#view-payrollcenter,#view-payrollcenter>*{animation:none!important;opacity:1!important;transform:none!important;}
+/* Payroll Center: embedded iframe, no animation needed */
+#view-payrollcenter{animation:none!important;opacity:1!important;}
 
 /* ════════════════════════════════════════
    LOGIN SCREEN — First impression
@@ -4376,7 +4376,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════════════════════════════════════════════════════════════ -->
   <!-- ════ PAYROLL CENTER ════ -->
   <!-- ════════════════════════════════════════════════════════════ -->
-  <div class="view content" id="view-payrollcenter" style="padding:28px 32px;">
+  <div class="view content" id="view-payrollcenter" style="padding:0;">
+    <iframe id="payroll-admin-iframe" src="" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+  </div>
+
+  <!-- OLD PAYROLL CENTER (removed — replaced with embedded payroll-admin above) -->
+  <div style="display:none !important;">
 
     <!-- Page header -->
     <div style="margin-bottom:22px;">
@@ -7451,10 +7456,10 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    // Force display in case animation CSS is interfering
-    const pcView = document.getElementById('view-payrollcenter');
-    if (pcView) { pcView.style.display = 'block'; pcView.style.opacity = '1'; pcView.style.transform = 'none'; }
-    renderPayrollCenter();
+    const iframe = document.getElementById('payroll-admin-iframe');
+    if (iframe && !iframe.src.includes('payroll-admin')) {
+      iframe.src = window.location.origin + '/payroll-admin';
+    }
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){ tcRender(); }
