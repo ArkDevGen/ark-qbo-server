@@ -114,7 +114,7 @@
   <div id="screen-main" class="hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h2 style="color:var(--gold);font-size:20px;">All Payroll Clients</h2>
-      <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()" id="admin-signout-btn">Sign Out</button>
     </div>
 
     <!-- Payroll Import & Push -->
@@ -943,6 +943,11 @@ async function tryAutoAuth() {
     _payrollData = await resp.json();
     document.getElementById('screen-login').classList.add('hidden');
     document.getElementById('screen-main').classList.remove('hidden');
+    // Hide logo bar and sign out when embedded in CRM
+    const logoBar = document.querySelector('.logo-bar');
+    if (logoBar) logoBar.style.display = 'none';
+    const signOut = document.getElementById('admin-signout-btn');
+    if (signOut) signOut.style.display = 'none';
     renderClientList();
     populateImportClientSelect();
     loadSubmissions();
