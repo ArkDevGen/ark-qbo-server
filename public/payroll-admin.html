@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ark Financial — Payroll Admin</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #0d1b2a; --surface: #13243a; --card: #182d45;
@@ -114,6 +115,76 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h2 style="color:var(--gold);font-size:20px;">All Payroll Clients</h2>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+    </div>
+
+    <!-- Payroll Import & Push -->
+    <div class="card" style="margin-bottom:16px;overflow:visible;" id="import-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--gold);">📤 Import & Push to Client</div>
+          <div style="font-size:11px;color:var(--muted);">Upload Homebase + Tips files, then push to client portal</div>
+        </div>
+        <div id="import-push-status" style="font-size:11px;min-width:200px;text-align:right;"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;">
+        <!-- Client selector -->
+        <div>
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Client</label>
+          <select id="import-client" onchange="importClientChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+
+        <!-- Date fields -->
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Period Start</label>
+            <input type="date" id="import-period-start" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Period End</label>
+            <input type="date" id="import-period-end" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Pay Date</label>
+            <input type="date" id="import-pay-date" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+          </div>
+        </div>
+
+        <!-- Clear prefill button -->
+        <button class="btn btn-outline btn-sm" onclick="clearPrefill()" style="border-color:var(--red);color:var(--red);white-space:nowrap;">✕ Clear</button>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:12px;">
+        <!-- Homebase CSV drop -->
+        <div style="flex:1;">
+          <div onclick="document.getElementById('import-homebase-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:24px;margin-bottom:6px;">📄</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);">Homebase CSV</div>
+            <div style="font-size:10px;color:var(--muted);">Click to upload</div>
+          </div>
+          <input type="file" id="import-homebase-input" accept=".csv" style="display:none;" onchange="importParseHomebase(this.files[0])">
+          <div id="import-homebase-status" style="font-size:11px;margin-top:6px;min-height:16px;"></div>
+        </div>
+
+        <!-- Tips XLSX drop -->
+        <div style="flex:1;">
+          <div onclick="document.getElementById('import-tips-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-size:24px;margin-bottom:6px;">💰</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);">Tips XLSX</div>
+            <div style="font-size:10px;color:var(--muted);">Click to upload</div>
+          </div>
+          <input type="file" id="import-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="importParseTips(this.files[0])">
+          <div id="import-tips-status" style="font-size:11px;margin-top:6px;min-height:16px;"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" id="import-push-btn" onclick="pushToClient()" disabled style="display:flex;align-items:center;gap:8px;">
+          🚀 Push to Client Portal
+        </button>
+      </div>
     </div>
 
     <div class="grid-2">
@@ -558,6 +629,193 @@ async function deleteEmp(clientSlug, storeId, empIdx, empName) {
     alert('Error: ' + e.message);
   }
 }
+
+// ─── Import & Push to Client ─────────────────────────────────────
+let _importHomebase = null; // { [storeNum]: [{firstName, lastName, regular, overtime, pto, holidayPay}] }
+let _importTips = null;     // { [storeNum]: tipTotal }
+
+function importClientChange() {
+  updatePushBtn();
+}
+
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) { if (ch === '"' && line[i+1] === '"') { current += '"'; i++; } else if (ch === '"') inQuotes = false; else current += ch; }
+    else { if (ch === '"') inQuotes = true; else if (ch === ',') { result.push(current); current = ''; } else current += ch; }
+  }
+  result.push(current);
+  return result;
+}
+
+function importParseHomebase(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('import-homebase-status');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const lines = e.target.result.split('\n');
+      // Extract pay period from first line
+      const periodMatch = (lines[0] || '').match(/(\d{2})-(\d{2})-(\d{4})\s+to\s+(\d{2})-(\d{2})-(\d{4})/);
+      if (periodMatch) {
+        document.getElementById('import-period-start').value = `${periodMatch[3]}-${periodMatch[1]}-${periodMatch[2]}`;
+        document.getElementById('import-period-end').value = `${periodMatch[6]}-${periodMatch[4]}-${periodMatch[5]}`;
+      }
+      let headerIdx = 0;
+      for (let i = 0; i < Math.min(5, lines.length); i++) { if (lines[i].toLowerCase().includes('first name')) { headerIdx = i; break; } }
+      const headers = parseCSVLine(lines[headerIdx]);
+      const colIdx = {}; headers.forEach((h, i) => { colIdx[h.trim().toLowerCase()] = i; });
+      _importHomebase = {};
+      let totalEmps = 0;
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const line = lines[i].trim(); if (!line) continue;
+        const cols = parseCSVLine(line); if (!cols.length) continue;
+        const firstName = (cols[colIdx['first name']] || '').trim();
+        const lastName = (cols[colIdx['last name']] || '').trim();
+        const location = (cols[colIdx['location']] || '').trim();
+        if (location === 'TOTALS' || !firstName) continue;
+        const locNum = location.replace(/[^0-9]/g, '').trim(); if (!locNum) continue;
+        const num = (idx) => { const raw = (cols[idx] || '').replace(/[$,]/g, '').trim(); const n = parseFloat(raw); return isNaN(n) ? 0 : n; };
+        if (!_importHomebase[locNum]) _importHomebase[locNum] = [];
+        _importHomebase[locNum].push({ firstName, lastName, regular: num(colIdx['regular']), overtime: num(colIdx['overtime']), pto: num(colIdx['pto']), holidayPay: num(colIdx['holiday pay']) });
+        totalEmps++;
+      }
+      const storeCount = Object.keys(_importHomebase).length;
+      statusEl.innerHTML = `<span style="color:var(--green);">✓ ${totalEmps} employees, ${storeCount} stores</span>`;
+      document.getElementById('import-homebase-input').value = '';
+      updatePushBtn();
+    } catch (err) { statusEl.innerHTML = `<span style="color:var(--red);">✗ ${err.message}</span>`; }
+  };
+  reader.readAsText(file);
+}
+
+function importParseTips(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('import-tips-status');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      _importTips = {};
+      let totalTips = 0;
+      for (const row of rows) {
+        const storeVal = String(row['Store'] || '');
+        if (storeVal === 'Total' || !storeVal) continue;
+        const match = storeVal.replace(/[^\d\s-]/g, '').trim().match(/^(\d+)/);
+        if (!match) continue;
+        _importTips[match[1]] = parseFloat(row['Tip']) || 0;
+        totalTips += _importTips[match[1]];
+      }
+      statusEl.innerHTML = `<span style="color:var(--green);">✓ ${Object.keys(_importTips).length} stores, $${totalTips.toFixed(2)}</span>`;
+      document.getElementById('import-tips-input').value = '';
+      updatePushBtn();
+    } catch (err) { statusEl.innerHTML = `<span style="color:var(--red);">✗ ${err.message}</span>`; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updatePushBtn() {
+  const btn = document.getElementById('import-push-btn');
+  const slug = document.getElementById('import-client').value;
+  const start = document.getElementById('import-period-start').value;
+  const end = document.getElementById('import-period-end').value;
+  const payDate = document.getElementById('import-pay-date').value;
+  btn.disabled = !(_importHomebase && slug && start && end && payDate);
+}
+
+async function pushToClient() {
+  const slug = document.getElementById('import-client').value;
+  const start = document.getElementById('import-period-start').value;
+  const end = document.getElementById('import-period-end').value;
+  const payDate = document.getElementById('import-pay-date').value;
+  const statusEl = document.getElementById('import-push-status');
+  if (!slug || !start || !end || !payDate || !_importHomebase) return;
+
+  statusEl.innerHTML = '<span style="color:var(--accent);">Pushing...</span>';
+
+  // Build stores object matching storeId from client config
+  const client = _payrollData.clients[slug];
+  const clientStores = Object.entries(client?.stores || {}).filter(([id]) => id !== 'admin');
+  const stores = {};
+  Object.entries(_importHomebase).forEach(([storeNum, emps]) => {
+    const match = clientStores.find(([id, s]) => (s.name || '').replace(/[^0-9]/g, '') === storeNum || id.replace(/[^0-9]/g, '') === storeNum);
+    const storeId = match ? match[0] : `store-${storeNum}`;
+    stores[storeId] = {
+      employees: emps.map(emp => ({ firstName: emp.firstName, lastName: emp.lastName, regHours: emp.regular, otHours: emp.overtime, ptoHours: emp.pto, holidayHours: emp.holidayPay })),
+      totalTips: _importTips?.[storeNum] || 0,
+    };
+  });
+
+  try {
+    const resp = await fetch(`${API}/payroll/prefill/${slug}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify({ payPeriodStart: start, payPeriodEnd: end, payDate: payDate, stores }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    statusEl.innerHTML = '<span style="color:var(--green);">✓ Pushed — client can see hours now</span>';
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--red);">✗ ${e.message}</span>`;
+  }
+}
+
+async function clearPrefill() {
+  const slug = document.getElementById('import-client').value;
+  if (!slug) return;
+  if (!confirm('Clear prefill data for this client?')) return;
+  try {
+    await fetch(`${API}/payroll/prefill/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
+    document.getElementById('import-push-status').innerHTML = '<span style="color:var(--muted);">Prefill cleared</span>';
+  } catch(e) { alert('Failed: ' + e.message); }
+}
+
+function populateImportClientSelect() {
+  const sel = document.getElementById('import-client');
+  if (!sel || !_payrollData?.clients) return;
+  sel.innerHTML = '<option value="">— Select —</option>';
+  Object.entries(_payrollData.clients).forEach(([slug, c]) => {
+    sel.innerHTML += `<option value="${slug}">${c.name || slug}</option>`;
+  });
+}
+
+// ─── Auto-authenticate when loaded inside CRM iframe ─────────────
+async function tryAutoAuth() {
+  // Check for token in URL params (passed from CRM iframe)
+  const params = new URLSearchParams(window.location.search);
+  const urlToken = params.get('token');
+  if (!urlToken) return false;
+  try {
+    _token = urlToken;
+    const resp = await fetch(`${API}/payroll/admin/data`, {
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    if (!resp.ok) { _token = ''; return false; }
+    _payrollData = await resp.json();
+    document.getElementById('screen-login').classList.add('hidden');
+    document.getElementById('screen-main').classList.remove('hidden');
+    renderClientList();
+    populateImportClientSelect();
+    return true;
+  } catch(e) { _token = ''; return false; }
+}
+
+// On page load, try auto-auth first
+(async () => {
+  const auto = await tryAutoAuth();
+  if (!auto) {
+    // Show login screen normally
+  }
+})();
+
+// Also populate import client select after manual login
+const _origDoLogin = doLogin;
+doLogin = async function() {
+  await _origDoLogin();
+  if (_token) populateImportClientSelect();
+};
 </script>
 </body>
 </html>
