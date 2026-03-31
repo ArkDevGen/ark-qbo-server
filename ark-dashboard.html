@@ -7155,7 +7155,7 @@ async function renderUsers(q){
         va = (a.lname||'').toLowerCase();
         vb = (b.lname||'').toLowerCase();
       } else if (_userSortField === 'role') {
-        const roleOrder = { admin: 0, am: 1, payroll_manager: 2, viewer: 3 };
+        const roleOrder = { admin: 0, am: 1, pm: 2, viewer: 3 };
         va = roleOrder[a.role] ?? 99;
         vb = roleOrder[b.role] ?? 99;
       } else if (_userSortField === 'clients') {
