@@ -180,7 +180,8 @@
         </div>
       </div>
 
-      <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn btn-outline btn-sm" onclick="clearFromClientPortal()" style="border-color:var(--red);color:var(--red);font-size:11px;">🗑 Clear from Client Portal</button>
         <button class="btn btn-primary" id="import-push-btn" onclick="pushToClient()" disabled style="display:flex;align-items:center;gap:8px;">
           🚀 Push to Client Portal
         </button>
@@ -821,6 +822,22 @@ async function pushToClient() {
     statusEl.innerHTML = '<span style="color:var(--green);">✓ Pushed — client can see hours now</span>';
   } catch (e) {
     statusEl.innerHTML = `<span style="color:var(--red);">✗ ${e.message}</span>`;
+  }
+}
+
+async function clearFromClientPortal() {
+  const slug = document.getElementById('import-client').value;
+  if (!slug) { alert('Select a client first.'); return; }
+  if (!confirm('Are you sure you want to clear all payroll data from the client portal? This will remove all pre-filled hours and tips the client can see.')) return;
+  const statusEl = document.getElementById('import-push-status');
+  try {
+    // Clear prefill data
+    await fetch(`${API}/payroll/prefill/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
+    // Clear all drafts for this client
+    await fetch(`${API}/payroll/drafts/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
+    statusEl.innerHTML = '<span style="color:var(--green);">✓ Cleared — client portal is now empty</span>';
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--red);">✗ Failed to clear: ${e.message}</span>`;
   }
 }
 
