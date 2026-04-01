@@ -210,6 +210,14 @@
       </div>
     </div>
 
+    <!-- Change Log (collapsible) -->
+    <div style="margin-bottom:16px;">
+      <button onclick="toggleChangeLog()" id="changelog-toggle" style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+        📝 Employee Change Log <span id="changelog-count" style="background:var(--surface);padding:1px 8px;border-radius:10px;font-size:10px;">0</span> <span id="changelog-arrow" style="transition:transform .2s;">▼</span>
+      </button>
+      <div id="changelog-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;"></div>
+    </div>
+
     <!-- Employee Management (collapsible) -->
     <div style="margin-bottom:16px;">
       <button class="btn btn-outline" onclick="toggleEmpSection()" id="emp-section-toggle" style="width:100%;padding:12px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;border-color:var(--border);color:var(--muted);">
@@ -696,6 +704,57 @@ async function saveClientPassword() {
     _payrollData.clients[slug].password = password;
     showSaveToast();
   } catch(e) { alert('Failed to save: ' + e.message); }
+}
+
+// ─── Change Log ──────────────────────────────────────────────────
+function toggleChangeLog() {
+  const body = document.getElementById('changelog-body');
+  const arrow = document.getElementById('changelog-arrow');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    arrow.style.transform = 'rotate(180deg)';
+    loadChangeLog();
+  } else {
+    body.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+
+async function loadChangeLog() {
+  const body = document.getElementById('changelog-body');
+  const count = document.getElementById('changelog-count');
+  body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">Loading...</div>';
+  try {
+    const resp = await fetch(`${API}/payroll/changelog`);
+    const data = await resp.json();
+    const log = data.changelog || [];
+    count.textContent = log.length;
+
+    if (!log.length) {
+      body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">No changes yet</div>';
+      return;
+    }
+
+    body.innerHTML = log.map(entry => {
+      const actionColors = { added: 'var(--green)', edited: 'var(--accent)', removed: 'var(--red)' };
+      const actionIcons = { added: '+', edited: '✎', removed: '✕' };
+      const color = actionColors[entry.action] || 'var(--muted)';
+      const icon = actionIcons[entry.action] || '•';
+      const source = entry.source === 'client' ? '<span style="background:rgba(255,169,77,.15);color:var(--orange);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">CLIENT</span>' : '<span style="background:rgba(77,166,255,.15);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">ADMIN</span>';
+      const time = new Date(entry.timestamp).toLocaleString();
+      const client = entry.clientName ? `<span style="color:var(--muted);font-size:10px;">${entry.clientName}</span> · ` : '';
+      return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start;">
+        <div style="width:22px;height:22px;border-radius:50%;background:${color}22;color:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">${icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:var(--text);">${entry.employeeName} <span style="font-weight:400;color:${color};">${entry.action}</span></div>
+          <div style="font-size:11px;color:var(--muted);">${client}${entry.storeName || ''} ${entry.changes ? '· ' + entry.changes : ''}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${time} · ${source}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = `<div style="padding:12px;text-align:center;color:var(--red);">Failed: ${e.message}</div>`;
+  }
 }
 
 // ─── Employee Section Toggle ─────────────────────────────────────

@@ -1781,6 +1781,7 @@ if (fs.existsSync(localCopy) && DATA_DIR !== __dirname) {
         password:       diskClient.password       ?? null,
         _drafts:        diskClient._drafts        ?? {},
         _prefill:       diskClient._prefill       ?? null,
+        _changeLog:     diskClient._changeLog     ?? [],
       };
       Object.assign(diskClient, repoMeta, authFields);
 
@@ -1858,6 +1859,7 @@ app.post('/payroll/force-sync', (req, res) => {
         client._notifications = diskClient._notifications || [];
         client._drafts = diskClient._drafts || {};
         client._prefill = diskClient._prefill || null;
+        client._changeLog = diskClient._changeLog || [];
       }
     }
     payrollData = repoCopy;
@@ -2042,10 +2044,20 @@ app.patch('/payroll/employees/:clientSlug/:storeId/:empId', (req, res) => {
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
   const { position, payRate, goByName, excludeFromTips } = req.body;
+  const diffs = [];
+  if (position !== undefined && position !== emp.position) diffs.push(`Position: ${emp.position||'none'}→${position}`);
+  if (payRate !== undefined && String(payRate) !== String(emp.payRate)) diffs.push(`Rate: $${emp.payRate||0}→$${payRate}`);
+  if (goByName !== undefined && goByName !== (emp.goByName||'')) diffs.push(`Go-by: ${goByName||'removed'}`);
+  if (excludeFromTips !== undefined && !!excludeFromTips !== !!emp.excludeFromTips) diffs.push(excludeFromTips ? 'Excluded from tips' : 'Included in tips');
+
   if (position !== undefined) emp.position = position;
   if (payRate  !== undefined) emp.payRate  = payRate;
   if (goByName !== undefined) emp.goByName = goByName;
   if (excludeFromTips !== undefined) emp.excludeFromTips = !!excludeFromTips;
+
+  if (diffs.length) {
+    logEmployeeChange(client, { action: 'edited', employeeName: `${emp.firstName} ${emp.lastName}`, storeId, storeName: store.name, changes: diffs.join(', '), source: 'client' });
+  }
   savePayrollData();
 
   res.json({ success: true, employee: { id: emp.id, position: emp.position, payRate: emp.payRate, goByName: emp.goByName || '', excludeFromTips: !!emp.excludeFromTips } });
@@ -2066,6 +2078,24 @@ app.get('/payroll/admin/data', requireAuth, (req, res) => {
   }
   res.json(safe);
 });
+
+// ── Employee Change Log helper ───────────────────────────────────
+function logEmployeeChange(client, { action, employeeName, storeId, storeName, changes, source }) {
+  if (!client._changeLog) client._changeLog = [];
+  const entry = { action, employeeName, storeId, storeName: storeName || storeId, changes: changes || null, source: source || 'admin', timestamp: new Date().toISOString() };
+  client._changeLog.unshift(entry);
+  if (client._changeLog.length > 200) client._changeLog.length = 200; // cap at 200
+  // Also push notification
+  if (!client._notifications) client._notifications = [];
+  client._notifications.push({
+    type: action === 'added' ? 'new-employee' : action === 'edited' ? 'employee-edited' : 'employee-removed',
+    storeId, storeName: storeName || storeId,
+    employee: employeeName,
+    changes: changes || null,
+    source,
+    timestamp: entry.timestamp,
+  });
+}
 
 // Add employee (admin)
 app.post('/payroll/admin/employee', requireAuth, (req, res) => {
@@ -2097,6 +2127,7 @@ app.post('/payroll/admin/employee', requireAuth, (req, res) => {
   };
 
   store.employees.push(newEmp);
+  logEmployeeChange(client, { action: 'added', employeeName: `${newEmp.firstName} ${newEmp.lastName}`, storeId, storeName: store.name, changes: `${newEmp.position || 'No position'}, ${newEmp.payType === 'salary' ? 'Salary' : '$' + (newEmp.payRate || '0') + '/hr'}`, source: 'admin' });
   savePayrollData();
 
   console.log(`Admin added employee ${newEmp.firstName} ${newEmp.lastName} to ${clientSlug}/${storeId}`);
@@ -2119,6 +2150,14 @@ app.put('/payroll/admin/employee', requireAuth, (req, res) => {
   const emp = store.employees?.[empIdx];
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
+  // Track what changed for the log
+  const diffs = [];
+  if (updates.firstName && updates.firstName !== emp.firstName) diffs.push(`Name: ${emp.firstName}→${updates.firstName}`);
+  if (updates.lastName && updates.lastName !== emp.lastName) diffs.push(`Last: ${emp.lastName}→${updates.lastName}`);
+  if (updates.position !== undefined && updates.position !== emp.position) diffs.push(`Position: ${emp.position||'none'}→${updates.position||'none'}`);
+  if (updates.payRate !== undefined && String(updates.payRate) !== String(emp.payRate)) diffs.push(`Rate: $${emp.payRate||0}→$${updates.payRate}`);
+  if (updates.email !== undefined && updates.email !== emp.email) diffs.push(`Email updated`);
+
   // Apply updates
   if (updates.firstName) emp.firstName = updates.firstName;
   if (updates.lastName) emp.lastName = updates.lastName;
@@ -2131,6 +2170,9 @@ app.put('/payroll/admin/employee', requireAuth, (req, res) => {
   if (updates.goByName !== undefined) emp.goByName = updates.goByName;
   if (updates.excludeFromTips !== undefined) emp.excludeFromTips = !!updates.excludeFromTips;
 
+  if (diffs.length) {
+    logEmployeeChange(client, { action: 'edited', employeeName: `${emp.firstName} ${emp.lastName}`, storeId, storeName: store.name, changes: diffs.join(', '), source: 'admin' });
+  }
   savePayrollData();
   console.log(`Admin updated employee ${emp.firstName} ${emp.lastName} in ${clientSlug}/${storeId}`);
   res.json({ success: true });
@@ -2150,6 +2192,7 @@ app.delete('/payroll/admin/employee', requireAuth, (req, res) => {
   if (!store?.employees?.[empIdx]) return res.status(404).json({ error: 'Employee not found' });
 
   const removed = store.employees.splice(empIdx, 1)[0];
+  logEmployeeChange(client, { action: 'removed', employeeName: `${removed.firstName} ${removed.lastName}`, storeId, storeName: store.name, changes: removed.position || null, source: 'admin' });
   savePayrollData();
   console.log(`Admin removed employee ${removed.firstName} ${removed.lastName} from ${clientSlug}/${storeId}`);
   res.json({ success: true });
@@ -2224,18 +2267,8 @@ app.post('/payroll/employees/:clientSlug/:storeId', (req, res) => {
     status: 'pending',
   });
 
-  // Flag for notification (dashboard will check this)
-  if (!client._notifications) client._notifications = [];
-  client._notifications.push({
-    type: 'new-employee',
-    storeId,
-    storeName: store.name,
-    employee: `${b.firstName} ${b.lastName}`,
-    workLocation: b.workLocation || '',
-    payRates: b.payRates || [],
-    email: b.email || '',
-    timestamp: new Date().toISOString(),
-  });
+  // Log change and notify
+  logEmployeeChange(client, { action: 'added', employeeName: `${b.firstName} ${b.lastName}`, storeId, storeName: store.name, changes: `Added by client. Email: ${b.email || 'none'}`, source: 'client' });
   savePayrollData();
 
   res.json({ success: true, employee: newEmp });
@@ -2552,6 +2585,26 @@ app.get('/payroll/drafts/:clientSlug', (req, res) => {
     };
   }
   res.json({ drafts: summary });
+});
+
+// ── Employee Change Log ──────────────────────────────────────────
+app.get('/payroll/changelog/:clientSlug', (req, res) => {
+  const { clientSlug } = req.params;
+  const client = payrollData.clients[clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  res.json({ changelog: client._changeLog || [] });
+});
+
+app.get('/payroll/changelog', (req, res) => {
+  // All clients' changelogs combined
+  const all = [];
+  for (const [slug, client] of Object.entries(payrollData.clients || {})) {
+    (client._changeLog || []).forEach(entry => {
+      all.push({ ...entry, clientSlug: slug, clientName: client.name });
+    });
+  }
+  all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json({ changelog: all.slice(0, 100) });
 });
 
 // ── Dashboard: Get pending submissions ───────────────────────────
