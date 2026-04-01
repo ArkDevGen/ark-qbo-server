@@ -2560,7 +2560,11 @@ app.delete('/payroll/drafts/:clientSlug', (req, res) => {
   const { clientSlug } = req.params;
   const token = req.headers.authorization?.replace('Bearer ', '');
   const client = payrollData.clients[clientSlug];
-  if (!client || client._sessionToken !== token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  // Accept client session token OR admin CRM session token
+  const isClient = client._sessionToken === token;
+  const isAdmin = _sessions.has(token);
+  if (!isClient && !isAdmin) return res.status(401).json({ error: 'Unauthorized' });
 
   client._drafts = {};
   savePayrollData();
