@@ -2234,6 +2234,14 @@ function setInputVal(empIdx, field, value) {
 function applyPrefillData(storePrefill) {
   if (!storePrefill || !storePrefill.employees || !storePrefill.employees.length) return;
 
+  // Save tip total so recalculateTips() can access it later
+  const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
+  const storeNum = storeText.replace(/[^0-9]/g, '');
+  if (storeNum && storePrefill.totalTips) {
+    if (!_bulkTips) _bulkTips = {};
+    _bulkTips[storeNum] = parseFloat(storePrefill.totalTips) || 0;
+  }
+
   const hourFields = ['regHours','otHours','ptoHours','holidayHours','mileage','reimbursement','bonus'];
 
   // Apply hours by name match (with go-by name and nickname fallbacks)
@@ -2438,14 +2446,27 @@ function recalculateTips() {
     return;
   }
 
-  // Find the tip total for this store from bulk tips data
+  // Find the tip total for this store
   const storeText = document.getElementById('entry-store')?.selectedOptions[0]?.text || '';
   const storeNum = storeText.replace(/[^0-9]/g, '');
-  const storeTips = _bulkTips?.[storeNum] || 0;
+  let storeTips = _bulkTips?.[storeNum] || 0;
+
+  // Fallback: use the current total tips in the grid (sum of all tip fields)
+  if (storeTips <= 0) {
+    storeTips = _employees.reduce((sum, emp, i) => {
+      const tipInput = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
+      return sum + (parseFloat(tipInput?.value) || 0);
+    }, 0);
+  }
 
   if (storeTips <= 0) {
-    alert(`No tip total found for ${storeText}. Import a tips file first.`);
+    alert(`No tip total found for ${storeText}. No tips data available to recalculate.`);
     return;
+  }
+  // Save it so future recalculations use the same total
+  if (storeNum) {
+    if (!_bulkTips) _bulkTips = {};
+    _bulkTips[storeNum] = storeTips;
   }
 
   // Calculate total hours (reg + OT) excluding tip-excluded employees
