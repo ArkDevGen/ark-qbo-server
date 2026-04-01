@@ -112,117 +112,104 @@
 
   <!-- Main -->
   <div id="screen-main" class="hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="color:var(--gold);font-size:20px;">All Payroll Clients</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="color:var(--gold);font-size:18px;" id="admin-title">All Payroll Clients</h2>
       <button class="btn btn-outline btn-sm" onclick="doLogout()" id="admin-signout-btn">Sign Out</button>
     </div>
 
-    <!-- Payroll Import & Push -->
-    <div class="card" style="margin-bottom:16px;overflow:visible;" id="import-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--gold);">📤 Upload Timecards + Tips</div>
-          <div style="font-size:11px;color:var(--muted);">Upload timecard and tips files, then push to client portal</div>
-        </div>
-        <div id="import-push-status" style="font-size:11px;min-width:200px;text-align:right;"></div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;">
-        <!-- Client selector -->
-        <div>
-          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Client</label>
-          <select id="import-client" onchange="importClientChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
+    <!-- Top bar: Client + Dates + Actions -->
+    <div class="card" style="margin-bottom:12px;padding:14px 18px;">
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:160px;">
+          <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Client</label>
+          <select id="import-client" onchange="importClientChange()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
             <option value="">— Select —</option>
           </select>
         </div>
-
-        <!-- Date fields -->
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Period Start</label>
-            <input type="date" id="import-period-start" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-          </div>
-          <div style="flex:1;">
-            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Period End</label>
-            <input type="date" id="import-period-end" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-          </div>
-          <div style="flex:1;">
-            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Pay Date</label>
-            <input type="date" id="import-pay-date" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-          </div>
+        <div style="flex:0 0 120px;">
+          <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Period Start</label>
+          <input type="date" id="import-period-start" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
         </div>
+        <div style="flex:0 0 120px;">
+          <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Period End</label>
+          <input type="date" id="import-period-end" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
+        </div>
+        <div style="flex:0 0 120px;">
+          <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Pay Date</label>
+          <input type="date" id="import-pay-date" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="clearFromClientPortal()" title="Clear all data from client portal" style="border-color:var(--red);color:var(--red);padding:7px 8px;font-size:14px;line-height:1;">🗑</button>
+      </div>
+      <div id="import-push-status" style="font-size:11px;margin-top:6px;min-height:14px;"></div>
+    </div>
 
-        <!-- Clear prefill button -->
-        <button class="btn btn-outline btn-sm" onclick="clearPrefill()" style="border-color:var(--red);color:var(--red);white-space:nowrap;">✕ Clear</button>
+    <!-- Tabbed card: Upload | Submissions -->
+    <div class="card" style="margin-bottom:12px;overflow:visible;" id="main-tabs-card">
+      <!-- Tab bar -->
+      <div style="display:flex;border-bottom:2px solid var(--border);margin:-0px -0px 0 -0px;">
+        <div id="tab-upload" onclick="switchMainTab('upload')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--gold);margin-bottom:-2px;color:var(--gold);transition:all .15s;">📤 Upload</div>
+        <div id="tab-submissions" onclick="switchMainTab('submissions')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:all .15s;">📥 Submissions</div>
       </div>
 
-      <div style="display:flex;gap:12px;margin-top:12px;">
-        <!-- Homebase CSV drop -->
-        <div style="flex:1;">
-          <div onclick="document.getElementById('import-homebase-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-            <div style="font-size:24px;margin-bottom:6px;">📄</div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);">Timecards CSV</div>
-            <div style="font-size:10px;color:var(--muted);">Click to upload</div>
+      <!-- Upload tab -->
+      <div id="tab-content-upload" style="padding:16px 0 0;">
+        <div style="display:flex;gap:12px;">
+          <div style="flex:1;">
+            <div onclick="document.getElementById('import-homebase-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              <div style="font-size:20px;margin-bottom:4px;">📄</div>
+              <div style="font-size:12px;font-weight:600;color:var(--text);">Timecards CSV</div>
+              <div style="font-size:10px;color:var(--muted);">Click to upload</div>
+            </div>
+            <input type="file" id="import-homebase-input" accept=".csv" style="display:none;" onchange="importParseHomebase(this.files[0])">
+            <div id="import-homebase-status" style="font-size:11px;margin-top:4px;min-height:14px;text-align:center;"></div>
           </div>
-          <input type="file" id="import-homebase-input" accept=".csv" style="display:none;" onchange="importParseHomebase(this.files[0])">
-          <div id="import-homebase-status" style="font-size:11px;margin-top:6px;min-height:16px;"></div>
+          <div style="flex:1;">
+            <div onclick="document.getElementById('import-tips-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+              <div style="font-size:20px;margin-bottom:4px;">💰</div>
+              <div style="font-size:12px;font-weight:600;color:var(--text);">Tips XLSX</div>
+              <div style="font-size:10px;color:var(--muted);">Click to upload</div>
+            </div>
+            <input type="file" id="import-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="importParseTips(this.files[0])">
+            <div id="import-tips-status" style="font-size:11px;margin-top:4px;min-height:14px;text-align:center;"></div>
+          </div>
         </div>
-
-        <!-- Tips XLSX drop -->
-        <div style="flex:1;">
-          <div onclick="document.getElementById('import-tips-input').click()" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-            <div style="font-size:24px;margin-bottom:6px;">💰</div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);">Tips XLSX</div>
-            <div style="font-size:10px;color:var(--muted);">Click to upload</div>
-          </div>
-          <input type="file" id="import-tips-input" accept=".xlsx,.xls" style="display:none;" onchange="importParseTips(this.files[0])">
-          <div id="import-tips-status" style="font-size:11px;margin-top:6px;min-height:16px;"></div>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;">
+          <button class="btn btn-primary" id="import-push-btn" onclick="pushToClient()" disabled style="display:flex;align-items:center;gap:8px;">
+            🚀 Push to Client Portal
+          </button>
         </div>
       </div>
 
-      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">
-        <button class="btn btn-outline btn-sm" onclick="clearFromClientPortal()" style="border-color:var(--red);color:var(--red);font-size:11px;">🗑 Clear from Client Portal</button>
-        <button class="btn btn-primary" id="import-push-btn" onclick="pushToClient()" disabled style="display:flex;align-items:center;gap:8px;">
-          🚀 Push to Client Portal
+      <!-- Submissions tab -->
+      <div id="tab-content-submissions" style="display:none;padding:16px 0 0;">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+          <button class="btn btn-outline btn-sm" onclick="loadSubmissions()" style="border-color:var(--accent);color:var(--accent);font-size:11px;">↻ Refresh</button>
+        </div>
+        <div id="submissions-body" style="font-size:12px;color:var(--muted);text-align:center;padding:8px;">Loading...</div>
+        <div style="margin-top:10px;">
+          <button onclick="toggleProcessed()" id="processed-toggle" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:7px 12px;width:100%;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            📁 Processed <span id="processed-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span> <span id="processed-arrow" style="transition:transform .2s;">▼</span>
+          </button>
+          <div id="processed-body" style="display:none;margin-top:6px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom row: Change Log + Manage Employees side by side -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <!-- Change Log -->
+      <div>
+        <button onclick="toggleChangeLog()" id="changelog-toggle" style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          📝 Change Log <span id="changelog-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span> <span id="changelog-arrow" style="transition:transform .2s;">▼</span>
+        </button>
+        <div id="changelog-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+      </div>
+      <!-- Manage Employees -->
+      <div>
+        <button class="btn btn-outline" onclick="toggleEmpSection()" id="emp-section-toggle" style="width:100%;padding:9px 14px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;border-color:var(--border);color:var(--muted);">
+          👥 Manage Employees <span id="emp-section-arrow" style="transition:transform .2s;">▼</span>
         </button>
       </div>
-    </div>
-
-    <!-- Submissions & Export -->
-    <div class="card" style="margin-bottom:16px;" id="submissions-section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--accent);">📥 Client Submissions</div>
-          <div style="font-size:11px;color:var(--muted);">Review submitted payroll and export to XLSX</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-outline btn-sm" onclick="loadSubmissions()" style="border-color:var(--accent);color:var(--accent);">↻ Refresh</button>
-        </div>
-      </div>
-      <div id="submissions-body" style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">Click Refresh to load submissions</div>
-
-      <!-- Processed Submissions (collapsible) -->
-      <div style="margin-top:12px;">
-        <button onclick="toggleProcessed()" id="processed-toggle" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:8px 14px;width:100%;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-          📁 Processed Submissions <span id="processed-count" style="background:var(--surface);padding:1px 8px;border-radius:10px;font-size:10px;">0</span> <span id="processed-arrow" style="transition:transform .2s;">▼</span>
-        </button>
-        <div id="processed-body" style="display:none;margin-top:8px;"></div>
-      </div>
-    </div>
-
-    <!-- Change Log (collapsible) -->
-    <div style="margin-bottom:16px;">
-      <button onclick="toggleChangeLog()" id="changelog-toggle" style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-        📝 Employee Change Log <span id="changelog-count" style="background:var(--surface);padding:1px 8px;border-radius:10px;font-size:10px;">0</span> <span id="changelog-arrow" style="transition:transform .2s;">▼</span>
-      </button>
-      <div id="changelog-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;"></div>
-    </div>
-
-    <!-- Employee Management (collapsible) -->
-    <div style="margin-bottom:16px;">
-      <button class="btn btn-outline" onclick="toggleEmpSection()" id="emp-section-toggle" style="width:100%;padding:12px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;border-color:var(--border);color:var(--muted);">
-        👥 Manage Employees <span id="emp-section-arrow" style="transition:transform .2s;">▼</span>
-      </button>
     </div>
     <div id="emp-section" style="display:none;">
     <div class="grid-2">
@@ -681,6 +668,25 @@ async function deleteEmp(clientSlug, storeId, empIdx, empName) {
   }
 }
 
+// ─── Main Tab Switching ──────────────────────────────────────────
+function switchMainTab(tab) {
+  const tabs = ['upload', 'submissions'];
+  tabs.forEach(t => {
+    const tabEl = document.getElementById('tab-' + t);
+    const content = document.getElementById('tab-content-' + t);
+    if (t === tab) {
+      tabEl.style.borderBottomColor = 'var(--gold)';
+      tabEl.style.color = 'var(--gold)';
+      content.style.display = '';
+    } else {
+      tabEl.style.borderBottomColor = 'transparent';
+      tabEl.style.color = 'var(--muted)';
+      content.style.display = 'none';
+    }
+  });
+  if (tab === 'submissions') loadSubmissions();
+}
+
 // ─── Client Password Management ──────────────────────────────────
 async function saveClientPassword() {
   const slug = _activeClient?.slug;
@@ -958,10 +964,16 @@ async function clearPrefill() {
 function populateImportClientSelect() {
   const sel = document.getElementById('import-client');
   if (!sel || !_payrollData?.clients) return;
+  const clients = Object.entries(_payrollData.clients);
   sel.innerHTML = '<option value="">— Select —</option>';
-  Object.entries(_payrollData.clients).forEach(([slug, c]) => {
+  clients.forEach(([slug, c]) => {
     sel.innerHTML += `<option value="${slug}">${c.name || slug}</option>`;
   });
+  // Auto-select if only one client
+  if (clients.length === 1) {
+    sel.value = clients[0][0];
+    importClientChange();
+  }
 }
 
 // ─── Submissions & Export ─────────────────────────────────────────
@@ -1157,11 +1169,13 @@ async function tryAutoAuth() {
     _payrollData = await resp.json();
     document.getElementById('screen-login').classList.add('hidden');
     document.getElementById('screen-main').classList.remove('hidden');
-    // Hide logo bar and sign out when embedded in CRM
+    // Hide logo bar, title, and sign out when embedded in CRM
     const logoBar = document.querySelector('.logo-bar');
     if (logoBar) logoBar.style.display = 'none';
     const signOut = document.getElementById('admin-signout-btn');
     if (signOut) signOut.style.display = 'none';
+    const title = document.getElementById('admin-title');
+    if (title) title.style.display = 'none';
     renderClientList();
     populateImportClientSelect();
     loadSubmissions();
