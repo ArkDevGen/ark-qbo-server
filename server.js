@@ -2511,10 +2511,15 @@ app.post('/payroll/prefill/:slug', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Dashboard: Clear prefill data for a client ───────────────────
-app.delete('/payroll/prefill/:slug', requireAuth, (req, res) => {
+// ── Clear prefill data for a client (admin OR client token) ───────
+app.delete('/payroll/prefill/:slug', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
   const client = payrollData.clients[req.params.slug];
   if (!client) return res.status(404).json({ error: 'Client not found' });
+  // Accept client session token OR admin CRM session token
+  const isClient = client._sessionToken === token;
+  const isAdmin = _sessions.has(token);
+  if (!isClient && !isAdmin) return res.status(401).json({ error: 'Unauthorized' });
   delete client._prefill;
   savePayrollData();
   res.json({ success: true });
