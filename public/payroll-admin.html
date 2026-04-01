@@ -449,9 +449,21 @@ function renderClientDetail() {
         <h2 style="margin-bottom:0;">${c.name || c.slug}</h2>
         <span style="font-size:12px;color:var(--muted);font-family:monospace;">${c.slug}</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
         ${c.payFrequency || 'No pay schedule'} · ${stores.length} store${stores.length !== 1 ? 's' : ''}
-        ${c.password ? ' · <span style="color:var(--green);">Password set</span>' : ' · <span style="color:var(--red);">No password</span>'}
+      </div>
+
+      <!-- Client Login Credentials -->
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;padding:12px 14px;background:var(--surface);border-radius:8px;border:1px solid var(--border);">
+        <div style="flex:1;">
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Client Login Slug</label>
+          <input type="text" id="cred-slug" value="${c.slug}" readonly style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--muted);font-size:12px;font-family:monospace;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Password</label>
+          <input type="text" id="cred-password" value="${c.password || ''}" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-family:monospace;">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveClientPassword()" style="white-space:nowrap;font-size:11px;">Save</button>
       </div>
 
       ${stores.length > 1 ? `<div class="store-tabs">${storeTabs}</div>` : stores.length === 1 ? `<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:12px;">${stores[0][1].name || 'Store ' + stores[0][0]}</div>` : ''}
@@ -659,6 +671,31 @@ async function deleteEmp(clientSlug, storeId, empIdx, empName) {
   } catch (e) {
     alert('Error: ' + e.message);
   }
+}
+
+// ─── Client Password Management ──────────────────────────────────
+async function saveClientPassword() {
+  const slug = _activeClient?.slug;
+  if (!slug) return;
+  const password = document.getElementById('cred-password').value.trim();
+  if (!password) { alert('Password cannot be empty.'); return; }
+  try {
+    const resp = await fetch(`${API}/payroll/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify({
+        slug,
+        name: _activeClient.name,
+        password,
+        stores: _activeClient.stores,
+        payFrequency: _activeClient.payFrequency,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    _activeClient.password = password;
+    _payrollData.clients[slug].password = password;
+    showSaveToast();
+  } catch(e) { alert('Failed to save: ' + e.message); }
 }
 
 // ─── Employee Section Toggle ─────────────────────────────────────
