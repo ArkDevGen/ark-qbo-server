@@ -647,7 +647,7 @@ async function doLogin() {
         } catch(e) {}
         // Mark non-confirmed stores as populated (they have data but not confirmed yet)
         for (const s of _stores) {
-          if (s.id === 'admin') continue;
+          if (s.id === 'admin') { _bulkStoreStatus[s.id] = 'confirmed'; continue; }
           if (!_bulkStoreStatus[s.id]) _bulkStoreStatus[s.id] = 'populated';
         }
         // Hide dropdown — store chips handle navigation
@@ -674,9 +674,9 @@ async function doLogin() {
     // Auto-enter bulk mode when prefill data exists (pushed from CRM)
     if (_hasPrefill && _stores.length > 1 && !_bulkMode) {
       _bulkMode = true;
-      // Mark all non-admin stores as populated
+      // Mark all stores — admin auto-confirmed, others populated
       for (const s of _stores) {
-        if (s.id === 'admin') continue;
+        if (s.id === 'admin') { _bulkStoreStatus[s.id] = 'confirmed'; continue; }
         if (!_bulkStoreStatus[s.id]) _bulkStoreStatus[s.id] = 'populated';
       }
       // Hide dropdown — store chips handle navigation
@@ -1638,9 +1638,9 @@ function bulkRenderTracker() {
   let html = '';
 
   for (const opt of storeSel.options) {
-    if (!opt.value || opt.value === 'admin') continue;
+    if (!opt.value) continue;
     total++;
-    const status = _bulkStoreStatus[opt.value] || 'empty';
+    const status = _bulkStoreStatus[opt.value] || (opt.value === 'admin' ? 'confirmed' : 'empty');
     if (status === 'confirmed') confirmed++;
 
     let bg, border, color, icon;
