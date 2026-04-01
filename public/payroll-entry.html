@@ -156,6 +156,14 @@
       </div>
     </div>
 
+    <!-- Previous Submissions -->
+    <div id="prev-submissions-section" style="margin-bottom:16px;">
+      <button onclick="togglePrevSubmissions()" id="prev-sub-toggle" style="display:none;background:none;border:1px solid var(--border);border-radius:8px;padding:10px 16px;width:100%;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;text-align:center;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+        📋 Previous Submissions <span id="prev-sub-count" style="background:var(--surface);padding:1px 8px;border-radius:10px;font-size:11px;">0</span>
+      </button>
+      <div id="prev-sub-body" style="display:none;margin-top:8px;"></div>
+    </div>
+
     <!-- Bulk Import Card (hidden — imports now done on CRM admin side) -->
     <div class="card" id="bulk-import-card" style="display:none !important;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -209,7 +217,7 @@
       </div>
       <div id="bulk-submit-wrap" style="display:none;margin-top:14px;">
         <button class="btn btn-green" id="bulk-submit-btn" onclick="bulkSubmitAll()" style="width:100%;padding:14px;font-size:15px;font-weight:700;">✓ Submit All Confirmed Payrolls</button>
-        <button class="btn btn-outline" onclick="exportPayrollXLSX()" style="width:100%;padding:12px;font-size:14px;font-weight:600;margin-top:8px;border-color:var(--accent);color:var(--accent);">📥 Export Payroll to XLSX</button>
+        <!-- Export removed — done on CRM admin side -->
         <div id="bulk-submit-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:18px;"></div>
       </div>
     </div>
@@ -696,6 +704,9 @@ async function doLogin() {
 
     document.getElementById('screen-login').classList.add('hidden');
     document.getElementById('screen-entry').classList.remove('hidden');
+
+    // Load previous submissions history
+    loadPreviousSubmissions();
 
   } catch(e) {
     statusEl.className = 'status error';
@@ -2107,12 +2118,41 @@ async function doSubmitAll() {
   statusEl.textContent = failed ? `${failed} store(s) failed — check above.` : '';
   submitBtn.textContent = '✓ All Submitted';
   backBtn.disabled = false;
-  backBtn.textContent = '✕ Close';
-  backBtn.onclick = closeRecap;
-
-  // Also update the page-level submit button
-  const pageSubmitBtn = document.getElementById('bulk-submit-btn');
-  if (pageSubmitBtn) pageSubmitBtn.textContent = '✓ All Submitted';
+  backBtn.textContent = 'Done';
+  backBtn.onclick = function() {
+    closeRecap();
+    // Reset page back to initial state
+    if (!failed) {
+      // Clear all drafts
+      fetch(`${API}/payroll/drafts/${_clientSlug}`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` },
+      }).catch(() => {});
+      // Clear prefill
+      fetch(`${API}/payroll/prefill/${_clientSlug}`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` },
+      }).catch(() => {});
+      // Reset bulk state
+      _bulkMode = false;
+      _bulkHomebase = null;
+      _bulkTips = null;
+      _bulkStoreStatus = {};
+      _bulkEmployeeData = {};
+      _bulkStoreTotals = {};
+      _bulkStoreEmpsSnapshot = {};
+      _employees = [];
+      _rateChanges = {};
+      // Reset UI
+      document.getElementById('store-tracker').style.display = 'none';
+      document.getElementById('store-select-row').style.display = '';
+      document.getElementById('entry-store').value = '';
+      document.getElementById('employee-section').classList.add('hidden');
+      document.getElementById('emp-tbody').innerHTML = '';
+      const btn = document.getElementById('store-action-btn');
+      if (btn) { btn.textContent = 'Submit Payroll'; btn.onclick = function(){ submitPayroll(); }; }
+      // Load previous submissions
+      loadPreviousSubmissions();
+    }
+  };
 }
 
 // ─── Patch onStoreChange to apply bulk data after render ─────────
@@ -3398,6 +3438,73 @@ document.addEventListener('input', function(e) {
 });
 
 // ─── Reset / Logout ──────────────────────────────────────────────
+// ─── Previous Submissions ────────────────────────────────────────
+function togglePrevSubmissions() {
+  const body = document.getElementById('prev-sub-body');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+  } else {
+    body.style.display = 'none';
+  }
+}
+
+async function loadPreviousSubmissions() {
+  const toggle = document.getElementById('prev-sub-toggle');
+  const body = document.getElementById('prev-sub-body');
+  const count = document.getElementById('prev-sub-count');
+  try {
+    const resp = await fetch(`${API}/payroll/submissions`);
+    const data = await resp.json();
+    const subs = (data.submissions || []).filter(s =>
+      s.clientSlug === _clientSlug && s.status !== 'deleted'
+    );
+    if (!subs.length) {
+      toggle.style.display = 'none';
+      return;
+    }
+
+    // Group by submission time (batches within 60s)
+    const batches = [];
+    const sorted = [...subs].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    let currentBatch = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const diff = Math.abs(new Date(currentBatch[0].submittedAt) - new Date(sorted[i].submittedAt));
+      if (diff < 60000) {
+        currentBatch.push(sorted[i]);
+      } else {
+        batches.push(currentBatch);
+        currentBatch = [sorted[i]];
+      }
+    }
+    batches.push(currentBatch);
+
+    toggle.style.display = '';
+    count.textContent = batches.length;
+
+    body.innerHTML = batches.map(batch => {
+      const first = batch[0];
+      const stores = batch.map(s => s.storeName).join(', ');
+      const totalEmps = batch.reduce((sum, s) => sum + (s.entries?.length || 0), 0);
+      const period = first.payPeriodStart && first.payPeriodEnd
+        ? `${first.payPeriodStart} to ${first.payPeriodEnd}` : '—';
+      const submitted = new Date(first.submittedAt).toLocaleString();
+      const status = first.status === 'processed'
+        ? '<span style="color:var(--green);">Processed</span>'
+        : '<span style="color:var(--orange);">Pending</span>';
+      return `<div style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:600;font-size:13px;">${period}</div>
+          <div style="font-size:11px;">${status}</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${batch.length} stores · ${totalEmps} employees · Pay date: ${first.payDate || '—'}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Submitted: ${submitted}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.warn('Failed to load previous submissions:', e);
+  }
+}
+
 function resetForm() {
   document.getElementById('screen-success').classList.add('hidden');
   document.getElementById('screen-entry').classList.remove('hidden');
