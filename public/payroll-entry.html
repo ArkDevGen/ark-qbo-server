@@ -770,6 +770,33 @@ function normaliseName(name) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+// Distribute tips exactly — no rounding errors
+// Returns array of { idx, share } where sum of shares === totalTips exactly
+function distributeTipsExact(totalTips, empHoursArray) {
+  if (totalTips <= 0) return empHoursArray.map((h, i) => ({ idx: i, share: 0 }));
+  const totalHours = empHoursArray.reduce((s, h) => s + h, 0);
+  if (totalHours <= 0) return empHoursArray.map((h, i) => ({ idx: i, share: 0 }));
+
+  // Floor each share to nearest cent
+  const results = empHoursArray.map((h, i) => {
+    const exact = (h / totalHours) * totalTips;
+    return { idx: i, hours: h, share: Math.floor(exact * 100) / 100, remainder: (exact * 100) - Math.floor(exact * 100) };
+  });
+
+  // Calculate how many pennies are left over
+  const distributed = results.reduce((s, r) => s + Math.round(r.share * 100), 0);
+  let remaining = Math.round(totalTips * 100) - distributed;
+
+  // Give remaining pennies to employees with the largest remainders (most deserving)
+  const sorted = [...results].filter(r => r.hours > 0).sort((a, b) => b.remainder - a.remainder);
+  for (let i = 0; i < sorted.length && remaining > 0; i++) {
+    sorted[i].share = Math.round((sorted[i].share + 0.01) * 100) / 100;
+    remaining--;
+  }
+
+  return results;
+}
+
 function namesMatch(a, b) {
   return normaliseName(a) === normaliseName(b);
 }
@@ -1700,28 +1727,18 @@ function bulkApplyData() {
     }
   });
 
-  // Apply tips (proportional by hours, excluding tip-excluded employees)
+  // Apply tips (exact distribution, excluding tip-excluded employees)
   const storeTips = _bulkTips?.[storeNum];
   if (storeTips && storeTips > 0) {
-    let totalHours = 0;
-    const empHours = [];
-    _employees.forEach((emp, i) => {
-      if (emp.excludeFromTips) { empHours.push(0); return; }
+    const empHours = _employees.map((emp, i) => {
+      if (emp.excludeFromTips) return 0;
       const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
       const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
-      const hours = (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
-      empHours.push(hours);
-      totalHours += hours;
+      return (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
     });
-
-    if (totalHours > 0) {
-      _employees.forEach((emp, i) => {
-        if (empHours[i] > 0) {
-          const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
-          setInputVal(i, 'tips', share);
-        }
-      });
-    }
+    distributeTipsExact(storeTips, empHours).forEach(r => {
+      if (r.share > 0) setInputVal(r.idx, 'tips', r.share);
+    });
   }
 
   // Update action button text
@@ -2252,25 +2269,21 @@ function applyPrefillData(storePrefill) {
     }
   });
 
-  // Distribute total tips proportionally by (reg + OT) hours, excluding tip-excluded employees
+  // Distribute total tips exactly by (reg + OT) hours, excluding tip-excluded employees
   const totalTips = parseFloat(storePrefill.totalTips) || 0;
   if (totalTips > 0) {
-    let totalHours = 0;
     const empHours = _employees.map((emp, i) => {
       if (emp.excludeFromTips) return 0;
       const reg = parseFloat(document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`)?.value) || 0;
       const ot  = parseFloat(document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`)?.value) || 0;
-      const h = reg + ot; totalHours += h; return h;
+      return reg + ot;
     });
-    if (totalHours > 0) {
-      empHours.forEach((h, i) => {
-        const tips = h > 0 ? Math.round((h / totalHours) * totalTips * 100) / 100 : 0;
-        if (tips > 0) {
-          const input = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
-          if (input) { input.value = tips.toFixed(2); input.style.borderColor = 'var(--green)'; setTimeout(()=>{input.style.borderColor='';},2000); }
-        }
-      });
-    }
+    distributeTipsExact(totalTips, empHours).forEach(r => {
+      if (r.share > 0) {
+        const input = document.querySelector(`input[data-idx="${r.idx}"][data-field="tips"]`);
+        if (input) { input.value = r.share.toFixed(2); input.style.borderColor = 'var(--green)'; setTimeout(()=>{input.style.borderColor='';},2000); }
+      }
+    });
   }
 
   updateTotals();
@@ -2364,29 +2377,23 @@ function importTipsReport(file) {
       }
 
       // Calculate total hours across all employees in the grid (excluding tip-excluded)
-      let totalHours = 0;
-      const empHours = [];
-      _employees.forEach((emp, i) => {
-        if (emp.excludeFromTips) { empHours.push(0); return; }
+      const empHours = _employees.map((emp, i) => {
+        if (emp.excludeFromTips) return 0;
         const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
         const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
-        const reg = parseFloat(regInput?.value) || 0;
-        const ot = parseFloat(otInput?.value) || 0;
-        const hours = reg + ot;
-        empHours.push(hours);
-        totalHours += hours;
+        return (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
       });
+      const totalHours = empHours.reduce((s, h) => s + h, 0);
 
       if (totalHours <= 0) {
         throw new Error('No hours found in the grid. Import Homebase hours first, then import tips.');
       }
 
-      // Distribute tips proportionally by hours
+      // Distribute tips exactly by hours
       let distributed = 0;
-      _employees.forEach((emp, i) => {
-        if (empHours[i] > 0) {
-          const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
-          setInputVal(i, 'tips', share);
+      distributeTipsExact(storeTips, empHours).forEach(r => {
+        if (r.share > 0) {
+          setInputVal(r.idx, 'tips', r.share);
           distributed++;
         }
       });
@@ -2442,30 +2449,26 @@ function recalculateTips() {
   }
 
   // Calculate total hours (reg + OT) excluding tip-excluded employees
-  let totalHours = 0;
-  const empHours = [];
-  _employees.forEach((emp, i) => {
-    if (emp.excludeFromTips) { empHours.push(0); return; }
+  const empHours = _employees.map((emp, i) => {
+    if (emp.excludeFromTips) return 0;
     const regInput = document.querySelector(`input[data-idx="${i}"][data-field="regHours"]`);
     const otInput = document.querySelector(`input[data-idx="${i}"][data-field="otHours"]`);
-    const hours = (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
-    empHours.push(hours);
-    totalHours += hours;
+    return (parseFloat(regInput?.value) || 0) + (parseFloat(otInput?.value) || 0);
   });
+  const totalHours = empHours.reduce((s, h) => s + h, 0);
 
   if (totalHours <= 0) {
     alert('No hours found. Enter hours first, then recalculate tips.');
     return;
   }
 
-  // Distribute proportionally
+  // Distribute exactly
   let distributed = 0;
-  _employees.forEach((emp, i) => {
-    const tipInput = document.querySelector(`input[data-idx="${i}"][data-field="tips"]`);
+  distributeTipsExact(storeTips, empHours).forEach(r => {
+    const tipInput = document.querySelector(`input[data-idx="${r.idx}"][data-field="tips"]`);
     if (!tipInput || tipInput.readOnly) return;
-    if (empHours[i] > 0) {
-      const share = Math.round((empHours[i] / totalHours) * storeTips * 100) / 100;
-      tipInput.value = share.toFixed(2);
+    if (r.share > 0) {
+      tipInput.value = r.share.toFixed(2);
       tipInput.style.borderColor = 'var(--green)';
       setTimeout(() => { tipInput.style.borderColor = ''; }, 2000);
       distributed++;
