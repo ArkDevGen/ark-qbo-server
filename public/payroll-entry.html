@@ -1820,7 +1820,7 @@ function _recapFmt(d) {
   return d;
 }
 
-function showSubmitRecap() {
+async function showSubmitRecap() {
   const confirmed = Object.entries(_bulkStoreStatus).filter(([id, s]) => s === 'confirmed');
   const payStart = document.getElementById('entry-period-start')?.value;
   const payEnd   = document.getElementById('entry-period-end')?.value;
@@ -1829,6 +1829,40 @@ function showSubmitRecap() {
   const storeSel = document.getElementById('entry-store');
   const storeNames = {};
   for (const opt of storeSel.options) { if (opt.value) storeNames[opt.value] = opt.text; }
+
+  // Load totals from server drafts for stores missing in-memory data
+  for (const [storeId] of confirmed) {
+    if (_bulkStoreTotals[storeId]) continue;
+    try {
+      const resp = await fetch(`${API}/payroll/drafts/${_clientSlug}/${storeId}`, {
+        headers: { 'Authorization': `Bearer ${_token}` },
+      });
+      const data = await resp.json();
+      const draft = data.draft;
+      if (draft?.entries) {
+        const snap = { regHours:0, otHours:0, ptoHours:0, holidayHours:0, tips:0, mileage:0, reimbursement:0, bonus:0, empCount:0 };
+        Object.entries(draft.entries).forEach(([idx, row]) => {
+          const g = f => parseFloat(row[f]) || 0;
+          const r = g('regHours'), ot = g('otHours'), pto = g('ptoHours'), hol = g('holidayHours');
+          const ti = g('tips'), mi = g('mileage'), re = g('reimbursement'), bo = g('bonus');
+          if (r || ot || pto || hol || ti || mi || re || bo) {
+            snap.empCount++;
+            snap.regHours += r; snap.otHours += ot; snap.ptoHours += pto; snap.holidayHours += hol;
+            snap.tips += ti; snap.mileage += mi; snap.reimbursement += re; snap.bonus += bo;
+          }
+        });
+        _bulkStoreTotals[storeId] = snap;
+        // Also restore employee data for submission
+        if (!_bulkEmployeeData[storeId]) {
+          const saved = {};
+          Object.entries(draft.entries).forEach(([idx, row]) => {
+            Object.entries(row).forEach(([field, val]) => { saved[`${idx}:${field}`] = val; });
+          });
+          _bulkEmployeeData[storeId] = saved;
+        }
+      }
+    } catch(e) { console.warn(`Failed to load draft for ${storeId}:`, e); }
+  }
 
   // Build period label — show inline date inputs if any are missing
   const missingDates = !payStart || !payEnd || !payDate;
