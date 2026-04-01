@@ -696,10 +696,20 @@ async function doLogin() {
           onStoreChange();
         }
       }, 200);
-    } else if (_stores.length === 1) {
-      // If only one store, auto-select it
-      storeSel.value = _stores[0].id;
-      onStoreChange();
+    } else if (!_bulkMode) {
+      // No prefill and no confirmed drafts — ensure clean normal mode
+      _bulkMode = false;
+      _bulkStoreStatus = {};
+      const tracker = document.getElementById('store-tracker');
+      if (tracker) tracker.style.display = 'none';
+      const storeRow = document.getElementById('store-select-row');
+      if (storeRow) storeRow.style.display = '';
+      const btn = document.getElementById('store-action-btn');
+      if (btn) btn.textContent = 'Submit Payroll';
+      if (_stores.length === 1) {
+        storeSel.value = _stores[0].id;
+        onStoreChange();
+      }
     }
 
     document.getElementById('screen-login').classList.add('hidden');
