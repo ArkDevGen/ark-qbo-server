@@ -935,8 +935,8 @@ async function clearFromClientPortal() {
   try {
     // Clear prefill data
     await fetch(`${API}/payroll/prefill/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
-    // Clear all drafts for this client
-    await fetch(`${API}/payroll/drafts/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
+    // Clear all drafts for this client (admin endpoint)
+    await fetch(`${API}/payroll/admin/drafts/${slug}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${_token}` } });
     statusEl.innerHTML = '<span style="color:var(--green);">✓ Cleared — client portal is now empty</span>';
   } catch(e) {
     statusEl.innerHTML = `<span style="color:var(--red);">✗ Failed to clear: ${e.message}</span>`;

@@ -2571,6 +2571,15 @@ app.delete('/payroll/drafts/:clientSlug', (req, res) => {
   res.json({ success: true });
 });
 
+// ── Admin: Clear all drafts for a client ──────────────────────────
+app.delete('/payroll/admin/drafts/:clientSlug', requireAuth, (req, res) => {
+  const client = payrollData.clients[req.params.clientSlug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  client._drafts = {};
+  savePayrollData();
+  res.json({ success: true });
+});
+
 // ── Get all draft statuses for a client (see which stores are confirmed) ──
 app.get('/payroll/drafts/:clientSlug', (req, res) => {
   const { clientSlug } = req.params;
