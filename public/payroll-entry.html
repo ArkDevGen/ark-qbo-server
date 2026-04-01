@@ -2219,11 +2219,23 @@ function applyPrefillData(storePrefill) {
 
   const hourFields = ['regHours','otHours','ptoHours','holidayHours','mileage','reimbursement','bonus'];
 
-  // Apply hours by name match
+  // Apply hours by name match (with go-by name and nickname fallbacks)
   storePrefill.employees.forEach(pe => {
-    const empIdx = _employees.findIndex(emp =>
+    let empIdx = _employees.findIndex(emp =>
       namesMatch(emp.firstName, pe.firstName) && namesMatch(emp.lastName, pe.lastName)
     );
+    // Fallback: match by go-by name (e.g. "Syd" matches Sydney with goByName "Syd")
+    if (empIdx < 0) {
+      empIdx = _employees.findIndex(emp =>
+        emp.goByName && namesMatch(emp.goByName, pe.firstName) && namesMatch(emp.lastName, pe.lastName)
+      );
+    }
+    // Fallback: nickname map
+    if (empIdx < 0) {
+      const nickKey = getNicknameKey(pe.firstName, pe.lastName);
+      const knownId = _nicknameMap[nickKey];
+      if (knownId) empIdx = _employees.findIndex(emp => emp.id === knownId);
+    }
     if (empIdx < 0) return;
     hourFields.forEach(f => {
       const val = parseFloat(pe[f]) || 0;
