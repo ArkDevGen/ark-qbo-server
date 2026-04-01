@@ -217,7 +217,7 @@
     <!-- Step 1: Select store, pay period, pay date -->
     <div class="card">
       <h2>Payroll Details</h2>
-      <div class="row">
+      <div class="row" id="store-select-row">
         <div>
           <label>Store / Location</label>
           <select id="entry-store" onchange="onStoreChange()">
@@ -642,6 +642,9 @@ async function doLogin() {
           if (s.id === 'admin') continue;
           if (!_bulkStoreStatus[s.id]) _bulkStoreStatus[s.id] = 'populated';
         }
+        // Hide dropdown — store chips handle navigation
+        const storeRow2 = document.getElementById('store-select-row');
+        if (storeRow2) storeRow2.style.display = 'none';
         // Show store tracker after entry screen renders
         setTimeout(() => {
           const tracker = document.getElementById('store-tracker');
@@ -650,12 +653,43 @@ async function doLogin() {
           // Update button text
           const btn = document.getElementById('store-action-btn');
           if (btn) btn.textContent = '✓ Confirm Store';
+          // Auto-select first non-admin store
+          const firstStore = _stores.find(s => s.id !== 'admin');
+          if (firstStore && !storeSel.value) {
+            storeSel.value = firstStore.id;
+            onStoreChange();
+          }
         }, 200);
       }
     } catch(e) { console.warn('Failed to load draft statuses:', e); }
 
-    // If only one store, auto-select it
-    if (_stores.length === 1) {
+    // Auto-enter bulk mode when prefill data exists (pushed from CRM)
+    if (_hasPrefill && _stores.length > 1 && !_bulkMode) {
+      _bulkMode = true;
+      // Mark all non-admin stores as populated
+      for (const s of _stores) {
+        if (s.id === 'admin') continue;
+        if (!_bulkStoreStatus[s.id]) _bulkStoreStatus[s.id] = 'populated';
+      }
+      // Hide dropdown — store chips handle navigation
+      const storeRow = document.getElementById('store-select-row');
+      if (storeRow) storeRow.style.display = 'none';
+      // Show store tracker and select first store after screen renders
+      setTimeout(() => {
+        const tracker = document.getElementById('store-tracker');
+        if (tracker) tracker.style.display = '';
+        bulkRenderTracker();
+        const btn = document.getElementById('store-action-btn');
+        if (btn) btn.textContent = '✓ Confirm Store';
+        // Auto-select first non-admin store
+        const firstStore = _stores.find(s => s.id !== 'admin');
+        if (firstStore) {
+          storeSel.value = firstStore.id;
+          onStoreChange();
+        }
+      }, 200);
+    } else if (_stores.length === 1) {
+      // If only one store, auto-select it
       storeSel.value = _stores[0].id;
       onStoreChange();
     }
