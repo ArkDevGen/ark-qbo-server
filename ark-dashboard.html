@@ -27074,7 +27074,6 @@ function sjeShowReview() {
             <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Class</th>
             <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Debits</th>
             <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Credits</th>
-            <th style="padding:4px 8px;text-align:center;font-size:9px;color:var(--text-d);">Lines</th>
           </tr>
           ${(f.entries||[]).map(e => {
             const d = e.lines.reduce((s,l) => s + (l.debit||0), 0);
@@ -27086,7 +27085,6 @@ function sjeShowReview() {
               <td style="padding:4px 8px;font-size:10px;color:var(--text-d);">${cls}</td>
               <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${d.toFixed(2)}</td>
               <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${c.toFixed(2)}</td>
-              <td style="padding:4px 8px;text-align:center;">${e.lines.length}</td>
             </tr>`;
           }).join('')}
         </table>
