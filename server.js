@@ -556,6 +556,10 @@ function getTokenData(rid) {
   return entry?.tokenData || null;
 }
 function setTokenData(rid, data) {
+  // Compute absolute expiry from expires_in (seconds) if not already set
+  if (data.expires_in && !data.expires_at) {
+    data.expires_at = Date.now() + (data.expires_in * 1000);
+  }
   if (!tokenStore[rid]) {
     tokenStore[rid] = { tokenData: data, companyName: '', linkedClients: [], connectedAt: new Date().toISOString(), lastUsed: new Date().toISOString() };
   } else {
@@ -715,7 +719,8 @@ app.get('/qbo/status', (req, res) => {
     connected:   !!td,
     realmId:     rid,
     allRealms:   Object.keys(tokenStore),
-    expiresAt:   td ? new Date(Date.now() + (td.expires_in * 1000)).toISOString() : null,
+    expiresAt:   td?.expires_at ? new Date(td.expires_at).toISOString() : null,
+    refreshTokenAge: td?.refresh_token ? '100-day lifetime (auto-refreshes on API calls)' : null,
     environment: process.env.QBO_ENVIRONMENT || 'production',
   });
 });

@@ -28658,8 +28658,23 @@ const INTEGRATIONS = [
   {
     key: 'qbo', name: 'QuickBooks Online', icon: '💼', color: '#2CA01C',
     desc: 'Accounting, invoices, P&L reports, journal entries',
-    statusUrl: '/qbo/status', authUrl: '/qbo/auth', disconnectUrl: null,
+    statusUrl: '/qbo/status', authUrl: '/qbo/auth', disconnectUrl: '/qbo/disconnect',
     hasOwnPage: true, navPage: 'qbo',
+    customStatus: (st) => {
+      const companies = st.companies || {};
+      const count = Object.values(companies).filter(c => c.connected).length;
+      const names = Object.values(companies).filter(c => c.connected && c.companyName).map(c => c.companyName);
+      return count > 0 ? `${count} company${count>1?'ies':''} connected` + (names.length ? ': ' + names.join(', ') : '') : '';
+    },
+    customExpiry: (st) => {
+      if (!st.expiresAt) return st.refreshTokenAge || '';
+      const exp = new Date(st.expiresAt);
+      const now = new Date();
+      const diffMin = Math.round((exp - now) / 60000);
+      if (diffMin < 0) return 'Access token expired — auto-refreshes on next API call';
+      if (diffMin < 60) return `Access token refreshes in ${diffMin}m (auto-refresh on API calls)`;
+      return st.refreshTokenAge || 'Token active';
+    },
   },
   {
     key: 'gcal', name: 'Google Calendar', icon: '📅', color: '#4285F4',
@@ -28761,8 +28776,10 @@ function intRenderCards() {
     const connected = !!st.connected;
     const dot = connected ? '#22c55e' : '#64748b';
     const statusText = connected ? 'Connected' : 'Not connected';
-    const expiry = st.expiresAt ? `Token expires ${new Date(st.expiresAt).toLocaleDateString()}` : '';
-    const extra = st.accountName ? `Account: ${st.accountName}` :
+    const expiry = svc.customExpiry ? svc.customExpiry(st) :
+                   st.expiresAt ? `Token expires ${new Date(st.expiresAt).toLocaleDateString()}` : '';
+    const extra = svc.customStatus ? svc.customStatus(st) :
+                  st.accountName ? `Account: ${st.accountName}` :
                   st.userName ? `User: ${st.userName}` :
                   st.owner ? 'Authenticated' : '';
 
