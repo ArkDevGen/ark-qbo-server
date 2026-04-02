@@ -22824,13 +22824,17 @@ const QBO_SERVER = 'https://ark-qbo-server.onrender.com';
 // ── Helper: call your local server (now includes realmId) ────────
 async function qboCall(action, payload = {}, realmId) {
   const rid = realmId || qboActiveRealmId;
-  const res = await fetch(`${QBO_SERVER}/qbo/api`, {
+  const res = await authFetch(ARK_SERVER + '/qbo/api', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, payload, realmId: rid }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `Server error ${res.status}`);
+  if (!res.ok || data.error) {
+    const faultDetail = data.detail?.Fault?.Error?.[0]?.Detail || data.detail?.Fault?.Error?.[0]?.Message || '';
+    const msg = (data.error || `Server error ${res.status}`) + (faultDetail ? ' — ' + faultDetail : '');
+    throw new Error(msg);
+  }
   return data;
 }
 
