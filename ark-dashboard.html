@@ -3174,6 +3174,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <div style="font-size:13px;color:var(--text-d);">Push journal entries and expenses to QuickBooks Online · Multi-company OAuth 2.0</div>
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="qboRefreshAllTokens()" id="qbo-refresh-all-btn">🔄 Refresh Tokens</button>
       <button class="btn btn-ghost btn-sm" onclick="qboOpenFirmSettings()">⚙ API Settings</button>
     </div>
 
@@ -22892,6 +22893,23 @@ function qboPopulateCompanySelector(companies) {
 }
 
 // ── Firm Settings ─────────────────────────────────────────────────
+async function qboRefreshAllTokens() {
+  const btn = document.getElementById('qbo-refresh-all-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 Refreshing…'; }
+  try {
+    const resp = await authFetch(ARK_SERVER + '/qbo/refresh-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const data = await resp.json();
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh Tokens'; }
+    const msg = `Refreshed: ${data.refreshed} ✓\nFailed: ${data.failed}${data.errors?.length ? '\n\nFailed companies:\n' + data.errors.map(e => '  • ' + (e.companyName || e.realmId) + ': ' + e.error).join('\n') : ''}`;
+    alert(msg);
+    qboLog('info', `Token refresh: ${data.refreshed} ok, ${data.failed} failed`);
+    if (data.refreshed > 0) qboCheckServerStatus();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh Tokens'; }
+    alert('Refresh failed: ' + e.message);
+  }
+}
+
 function qboOpenFirmSettings() {
   const url = prompt('QBO Server URL (default: http://localhost:3000):', QBO_SERVER);
   if (url) { showToast(`Server URL noted — reload page to apply`); }
