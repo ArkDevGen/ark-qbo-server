@@ -27160,7 +27160,7 @@ async function sjePushAll() {
   if (!linked.length) { showToast('No linked franchises to push'); return; }
 
   const totalEntries = linked.reduce((s, f) => s + f.entries.length, 0);
-  if (!confirm(`Push ${totalEntries} journal entries across ${linked.length} franchise${linked.length!==1?'s':''}?`)) return;
+  if (!confirm(`Push up to ${totalEntries} journal entries across ${linked.length} franchise${linked.length!==1?'s':''}?\n\nExisting entries will be skipped automatically.`)) return;
 
   const pushBtn = document.getElementById('sje-push-btn');
   pushBtn.disabled = true;
@@ -27173,23 +27173,63 @@ async function sjePushAll() {
   progressEl.style.display = '';
 
   _sjePushResults = [];
-  let pushed = 0;
+  let processed = 0, totalSkipped = 0;
 
   for (const franchise of linked) {
+    // Pre-fetch accounts and classes for this realm
+    let acctMap = {}, classMap = {};
+    progressLabel.textContent = `Loading accounts for ${franchise.label}…`;
+    try {
+      const acctData = await qboCall('getAccounts', {}, franchise.realmId);
+      (acctData.accounts || []).forEach(a => { acctMap[a.name.toLowerCase()] = a.id; });
+    } catch(e) { /* continue without ID mapping */ }
+    try {
+      const classData = await qboCall('getClasses', {}, franchise.realmId);
+      (classData.classes || []).forEach(c => { classMap[c.name.toLowerCase()] = c.id; });
+    } catch(e) { /* classes may not exist */ }
+
+    // Check for existing JEs to skip duplicates
+    let existingDocNums = new Set();
+    try {
+      const prefix = franchise.entries[0]?.journalNo?.slice(0, 2) || '';
+      if (prefix) {
+        const existing = await qboCall('findJournalEntries', { docNumberPrefix: prefix }, franchise.realmId);
+        (existing.entries || []).forEach(e => existingDocNums.add(e.docNumber));
+      }
+    } catch(e) { /* continue without duplicate check */ }
+
     for (const entry of franchise.entries) {
-      pushed++;
-      progressCount.textContent = `${pushed}/${totalEntries}`;
-      progressBar.style.width = Math.round((pushed / totalEntries) * 100) + '%';
+      processed++;
+      progressCount.textContent = `${processed}/${totalEntries}`;
+      progressBar.style.width = Math.round((processed / totalEntries) * 100) + '%';
+
+      // Skip if already exists
+      if (existingDocNums.has(entry.journalNo)) {
+        totalSkipped++;
+        progressLabel.textContent = `Skipping ${franchise.label} — ${entry.date} (exists)`;
+        _sjePushResults.push({
+          franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
+          className: franchise.className, date: entry.date, journalNo: entry.journalNo,
+          status: 'skipped',
+          debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
+          credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
+        });
+        continue;
+      }
+
       progressLabel.textContent = `Pushing ${franchise.label} — ${entry.date}`;
 
       try {
-        // Build QBO JE payload
         const lines = entry.lines.map(l => {
+          const acctId = acctMap[l.account.toLowerCase()] || null;
           const lineDetail = {
             PostingType: l.debit ? 'Debit' : 'Credit',
-            AccountRef: { name: l.account },
+            AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
           };
-          if (l.class) lineDetail.ClassRef = { name: l.class };
+          if (l.class) {
+            const clsId = classMap[l.class.toLowerCase()] || null;
+            lineDetail.ClassRef = clsId ? { value: clsId, name: l.class } : { name: l.class };
+          }
           return {
             DetailType: 'JournalEntryLineDetail',
             Amount: l.debit || l.credit || 0,
@@ -27206,30 +27246,19 @@ async function sjePushAll() {
         };
 
         const result = await qboCall('createJournalEntry', payload, franchise.realmId);
-        // Small delay between entries to avoid QBO rate limiting
         await new Promise(r => setTimeout(r, 350));
         _sjePushResults.push({
-          franchise: franchise.label,
-          storeId: franchise.storeId,
-          qboCompany: franchise.qboCompanyName,
-          className: franchise.className,
-          date: entry.date,
-          journalNo: entry.journalNo,
-          status: 'success',
-          qboId: result.id,
+          franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
+          className: franchise.className, date: entry.date, journalNo: entry.journalNo,
+          status: 'success', qboId: result.id,
           debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
           credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
         });
       } catch (e) {
         _sjePushResults.push({
-          franchise: franchise.label,
-          storeId: franchise.storeId,
-          qboCompany: franchise.qboCompanyName,
-          className: franchise.className,
-          date: entry.date,
-          journalNo: entry.journalNo,
-          status: 'failed',
-          error: e.message,
+          franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
+          className: franchise.className, date: entry.date, journalNo: entry.journalNo,
+          status: 'failed', error: e.message,
           debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
           credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
         });
