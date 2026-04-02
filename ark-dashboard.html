@@ -817,6 +817,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-group">
       <div class="nav-item" id="nav-qbo" onclick="nav('qbo')"><span class="ni">💼</span>QBO Center</div>
       <div class="nav-item" id="nav-filecenter" onclick="nav('filecenter')"><span class="ni">📁</span>File Center</div>
+      <div class="nav-item" id="nav-integrations" onclick="nav('integrations')"><span class="ni">🔗</span>Integrations</div>
     </div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
@@ -4730,6 +4731,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
   </div>
 
+  <!-- ════ INTEGRATIONS CENTER ════ -->
+  <div class="view content" id="view-integrations" style="padding:28px 32px;">
+    <div id="integrations-root"></div>
+  </div>
+
   <!-- /main -->
 
 <!-- USER EDIT MODAL moved to end of body -->
@@ -7406,7 +7412,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -7419,7 +7425,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -7481,6 +7487,7 @@ function nav(page){
     if(!currentUser || currentUser.role !== 'admin'){ nav('dashboard'); return; }
     renderUsers();
   }
+  if(page==='integrations'){ integrationsInit(); }
 }
 
 // ══════════════════════════════════════════════
@@ -28640,6 +28647,227 @@ function fcUpdateStats() {
   const fileCount = _fcFiles.filter(f => f.type === 'file').length;
   const folderCount = _fcFiles.filter(f => f.type === 'folder').length;
   badge.textContent = `${fileCount} files · ${folderCount} folders`;
+}
+
+// ══════════════════════════════════════════════
+//  INTEGRATIONS CENTER
+//  Unified hub for managing all external service connections
+// ══════════════════════════════════════════════
+
+const INTEGRATIONS = [
+  {
+    key: 'qbo', name: 'QuickBooks Online', icon: '💼', color: '#2CA01C',
+    desc: 'Accounting, invoices, P&L reports, journal entries',
+    statusUrl: '/qbo/status', authUrl: '/qbo/auth', disconnectUrl: null,
+    hasOwnPage: true, navPage: 'qbo',
+  },
+  {
+    key: 'gcal', name: 'Google Calendar', icon: '📅', color: '#4285F4',
+    desc: 'Calendar sync, meeting tracking, Zoom/Teams detection',
+    statusUrl: '/gcal/status', authUrl: '/gcal/auth', disconnectUrl: '/gcal/disconnect',
+  },
+  {
+    key: 'sharefile', name: 'ShareFile', icon: '📁', color: '#0F7B3F',
+    desc: 'Client document storage, file sharing, audit logging',
+    statusUrl: '/sharefile/status', authUrl: '/sharefile/auth', disconnectUrl: '/sharefile/disconnect',
+    hasOwnPage: true, navPage: 'filecenter',
+  },
+  {
+    key: 'zoom', name: 'Zoom', icon: '🎥', color: '#2D8CFF',
+    desc: 'Meeting creation, recordings, participant tracking',
+    statusUrl: '/zoom/status', authUrl: null, disconnectUrl: null,
+    configNote: 'Server-to-server OAuth — configured via env vars',
+  },
+  {
+    key: 'calendly', name: 'Calendly', icon: '🗓', color: '#006BFF',
+    desc: 'Scheduling links, meeting bookings, event tracking',
+    statusUrl: '/calendly/status', authUrl: '/calendly/auth', disconnectUrl: '/calendly/disconnect',
+    supportsToken: true,
+  },
+  {
+    key: 'docusign', name: 'DocuSign', icon: '✍️', color: '#FFCD00',
+    desc: 'Engagement letters, e-signatures, envelope tracking',
+    statusUrl: '/docusign/status', authUrl: '/docusign/auth', disconnectUrl: '/docusign/disconnect',
+  },
+  {
+    key: 'sinch-fax', name: 'Sinch Fax', icon: '📠', color: '#A855F7',
+    desc: 'Outbound fax delivery for tax forms and documents',
+    statusUrl: '/comm/status', authUrl: null, disconnectUrl: null,
+    statusField: 'fax',
+    configNote: 'API key auth — configured via env vars',
+  },
+  {
+    key: 'sinch-sms', name: 'Sinch SMS', icon: '💬', color: '#22C55E',
+    desc: 'Client text messaging, appointment reminders',
+    statusUrl: '/comm/status', authUrl: null, disconnectUrl: null,
+    statusField: 'sms',
+    configNote: 'API token auth — configured via env vars',
+  },
+];
+
+let _intStatuses = {};
+
+async function integrationsInit() {
+  const root = document.getElementById('integrations-root');
+  root.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <span style="font-size:14px;color:var(--muted);" id="int-summary">Loading…</span>
+      <button class="btn btn-sm" onclick="integrationsInit()" style="margin-left:auto;">Refresh</button>
+    </div>
+    <div id="int-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;"></div>
+    <div id="int-token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:none;align-items:center;justify-content:center;">
+      <div class="card" style="width:420px;padding:24px;overflow:visible;">
+        <h3 style="margin:0 0 8px;">Connect with Personal Access Token</h3>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">Paste your Calendly Personal Access Token below.</p>
+        <input type="text" id="int-pat-input" class="input" placeholder="Paste token here…" style="width:100%;margin-bottom:12px;">
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-sm" onclick="intCloseTokenModal()">Cancel</button>
+          <button class="btn btn-sm btn-primary" onclick="intConnectWithToken()">Connect</button>
+        </div>
+        <div id="int-pat-msg" style="font-size:12px;margin-top:8px;"></div>
+      </div>
+    </div>
+  `;
+  await intFetchAllStatuses();
+  intRenderCards();
+}
+
+async function intFetchAllStatuses() {
+  const fetches = INTEGRATIONS.map(async (svc) => {
+    try {
+      const resp = await authFetch(ARK_SERVER + svc.statusUrl);
+      if (!resp.ok) throw new Error('fetch failed');
+      const data = await resp.json();
+      if (svc.statusField) {
+        _intStatuses[svc.key] = { connected: !!data[svc.statusField], raw: data };
+      } else {
+        _intStatuses[svc.key] = data;
+      }
+    } catch(e) {
+      _intStatuses[svc.key] = { connected: false, error: e.message };
+    }
+  });
+  await Promise.all(fetches);
+}
+
+function intRenderCards() {
+  const grid = document.getElementById('int-grid');
+  const summary = document.getElementById('int-summary');
+  const connectedCount = INTEGRATIONS.filter(s => _intStatuses[s.key]?.connected).length;
+  summary.textContent = `${connectedCount} of ${INTEGRATIONS.length} connected`;
+
+  grid.innerHTML = INTEGRATIONS.map(svc => {
+    const st = _intStatuses[svc.key] || {};
+    const connected = !!st.connected;
+    const dot = connected ? '#22c55e' : '#64748b';
+    const statusText = connected ? 'Connected' : 'Not connected';
+    const expiry = st.expiresAt ? `Token expires ${new Date(st.expiresAt).toLocaleDateString()}` : '';
+    const extra = st.accountName ? `Account: ${st.accountName}` :
+                  st.userName ? `User: ${st.userName}` :
+                  st.owner ? 'Authenticated' : '';
+
+    let actions = '';
+    if (connected) {
+      if (svc.hasOwnPage) {
+        actions += `<button class="btn btn-sm" onclick="nav('${svc.navPage}')" style="font-size:12px;">Open</button>`;
+      }
+      if (svc.disconnectUrl) {
+        actions += `<button class="btn btn-sm" onclick="intDisconnect('${svc.key}')" style="font-size:12px;color:var(--muted);">Disconnect</button>`;
+      }
+    } else {
+      if (svc.authUrl) {
+        actions += `<button class="btn btn-sm btn-primary" onclick="intConnect('${svc.key}')" style="font-size:12px;">Connect</button>`;
+      }
+      if (svc.supportsToken) {
+        actions += `<button class="btn btn-sm" onclick="intShowTokenModal('${svc.key}')" style="font-size:12px;">Use Token</button>`;
+      }
+      if (svc.configNote) {
+        actions += `<span style="font-size:11px;color:var(--muted);">${svc.configNote}</span>`;
+      }
+    }
+
+    return `
+      <div class="card" style="padding:20px;overflow:visible;position:relative;border-left:3px solid ${svc.color};">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:20px;">${svc.icon}</span>
+          <span style="font-weight:600;font-size:15px;">${svc.name}</span>
+          <span style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;" title="${statusText}"></span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">${svc.desc}</p>
+        ${extra ? `<p style="font-size:12px;color:var(--muted);margin:0 0 4px;">${extra}</p>` : ''}
+        ${expiry ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;">${expiry}</p>` : ''}
+        <div style="display:flex;gap:8px;align-items:center;">${actions}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function intConnect(key) {
+  const svc = INTEGRATIONS.find(s => s.key === key);
+  if (!svc || !svc.authUrl) return;
+  const w = window.open(ARK_SERVER + svc.authUrl, '_blank', 'width=600,height=700');
+  window.addEventListener('message', function handler(e) {
+    if (e.data && (e.data.type || '').includes('connected')) {
+      window.removeEventListener('message', handler);
+      integrationsInit();
+    }
+  });
+}
+
+async function intDisconnect(key) {
+  const svc = INTEGRATIONS.find(s => s.key === key);
+  if (!svc || !svc.disconnectUrl) return;
+  if (!confirm(`Disconnect ${svc.name}?`)) return;
+  try {
+    await authFetch(ARK_SERVER + svc.disconnectUrl, { method: 'POST' });
+    _intStatuses[key] = { connected: false };
+    intRenderCards();
+  } catch(e) {
+    alert('Disconnect failed: ' + e.message);
+  }
+}
+
+function intShowTokenModal(key) {
+  const modal = document.getElementById('int-token-modal');
+  modal.style.display = 'flex';
+  modal.dataset.key = key;
+  document.getElementById('int-pat-input').value = '';
+  document.getElementById('int-pat-msg').textContent = '';
+}
+
+function intCloseTokenModal() {
+  document.getElementById('int-token-modal').style.display = 'none';
+}
+
+async function intConnectWithToken() {
+  const modal = document.getElementById('int-token-modal');
+  const key = modal.dataset.key;
+  const token = document.getElementById('int-pat-input').value.trim();
+  const msg = document.getElementById('int-pat-msg');
+  if (!token) { msg.textContent = 'Please paste a token.'; msg.style.color = '#ef4444'; return; }
+
+  msg.textContent = 'Testing connection…';
+  msg.style.color = 'var(--muted)';
+
+  try {
+    const resp = await authFetch(ARK_SERVER + `/${key}/connect-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await resp.json();
+    if (resp.ok && data.connected) {
+      msg.textContent = 'Connected! ' + (data.name || '');
+      msg.style.color = '#22c55e';
+      setTimeout(() => { intCloseTokenModal(); integrationsInit(); }, 1000);
+    } else {
+      msg.textContent = data.error || 'Connection failed';
+      msg.style.color = '#ef4444';
+    }
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.style.color = '#ef4444';
+  }
 }
 
 </script>

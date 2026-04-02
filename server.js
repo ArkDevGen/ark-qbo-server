@@ -3445,6 +3445,602 @@ app.get('/gcal/events', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// CALENDLY — Scheduling Integration
+// OAuth2 flow + event retrieval for client meeting tracking
+// ─────────────────────────────────────────────────────────────────
+const CALENDLY_CLIENT_ID     = process.env.CALENDLY_CLIENT_ID || '';
+const CALENDLY_CLIENT_SECRET = process.env.CALENDLY_CLIENT_SECRET || '';
+const CALENDLY_TOKEN_FILE    = path.join(DATA_DIR, 'calendly-tokens.json');
+
+let calendlyTokens = null;
+if (fs.existsSync(CALENDLY_TOKEN_FILE)) {
+  try {
+    calendlyTokens = JSON.parse(fs.readFileSync(CALENDLY_TOKEN_FILE, 'utf8'));
+    console.log('✓ Calendly tokens loaded');
+  } catch(e) {
+    console.log('Could not load Calendly tokens');
+  }
+}
+
+function saveCalendlyTokens() {
+  fs.writeFileSync(CALENDLY_TOKEN_FILE, JSON.stringify(calendlyTokens, null, 2));
+}
+
+function calendlyReady() {
+  return !!(calendlyTokens && calendlyTokens.access_token);
+}
+
+async function getCalendlyHeaders() {
+  if (!calendlyTokens) throw new Error('Calendly not connected — run the auth flow first');
+
+  // Check if token is expired (5 min buffer)
+  if (calendlyTokens.expires_at && Date.now() > calendlyTokens.expires_at - 300000) {
+    console.log('Calendly token expired, refreshing...');
+    try {
+      const resp = await fetch('https://auth.calendly.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: calendlyTokens.refresh_token,
+          client_id:     CALENDLY_CLIENT_ID,
+          client_secret: CALENDLY_CLIENT_SECRET,
+        }).toString(),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        calendlyTokens = null;
+        saveCalendlyTokens();
+        throw new Error('Token refresh failed: ' + errText);
+      }
+      const data = await resp.json();
+      calendlyTokens = {
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token || calendlyTokens.refresh_token,
+        expires_at:    Date.now() + (data.expires_in * 1000),
+        owner_uri:     calendlyTokens.owner_uri,
+        org_uri:       calendlyTokens.org_uri,
+      };
+      saveCalendlyTokens();
+      console.log('✓ Calendly token refreshed');
+    } catch(e) {
+      throw new Error('Calendly token refresh failed — please reconnect');
+    }
+  }
+
+  return {
+    'Authorization': `Bearer ${calendlyTokens.access_token}`,
+    'Content-Type':  'application/json',
+  };
+}
+
+// --- Calendly OAuth routes ---
+
+app.get('/calendly/auth', (req, res) => {
+  if (!CALENDLY_CLIENT_ID) return res.status(500).send('Calendly not configured — set CALENDLY_CLIENT_ID');
+  const redirectUri = process.env.CALENDLY_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/calendly/callback';
+  const url = `https://auth.calendly.com/oauth/authorize?` +
+    `response_type=code` +
+    `&client_id=${CALENDLY_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&state=ark-cal-${Date.now()}`;
+  res.redirect(url);
+});
+
+app.get('/calendly/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) throw new Error('No authorization code received');
+
+    const redirectUri = process.env.CALENDLY_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/calendly/callback';
+    const resp = await fetch('https://auth.calendly.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'authorization_code',
+        code,
+        client_id:     CALENDLY_CLIENT_ID,
+        client_secret: CALENDLY_CLIENT_SECRET,
+        redirect_uri:  redirectUri,
+      }).toString(),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error('Token exchange failed: ' + errText);
+    }
+
+    const data = await resp.json();
+
+    // Fetch user info to get owner URI and org URI
+    const meResp = await fetch('https://api.calendly.com/users/me', {
+      headers: { 'Authorization': `Bearer ${data.access_token}` },
+    });
+    const meData = meResp.ok ? await meResp.json() : {};
+
+    calendlyTokens = {
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + (data.expires_in * 1000),
+      owner_uri:     meData.resource?.uri || '',
+      org_uri:       meData.resource?.current_organization || '',
+    };
+    saveCalendlyTokens();
+    console.log('✓ Calendly connected');
+
+    res.send(`<!DOCTYPE html><html><body style="background:#0d1b2a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui;">
+      <div style="text-align:center;color:#fff;">
+        <div style="font-size:48px;margin-bottom:16px;">✅</div>
+        <div style="font-size:20px;font-weight:600;">Connected to Calendly!</div>
+        <div style="font-size:14px;color:#8899aa;margin-top:8px;">This window will close automatically…</div>
+      </div>
+      <script>
+        if(window.opener){ window.opener.postMessage({type:'calendly-connected'},'*'); }
+        setTimeout(()=>window.close(), 2000);
+      </script>
+    </body></html>`);
+  } catch(e) {
+    console.error('Calendly callback error:', e.message);
+    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">Calendly Connection Failed</h2><p>${e.message}</p>`);
+  }
+});
+
+app.get('/calendly/status', (req, res) => {
+  res.json({
+    connected: calendlyReady(),
+    owner: calendlyTokens?.owner_uri || null,
+    expiresAt: calendlyTokens?.expires_at ? new Date(calendlyTokens.expires_at).toISOString() : null,
+  });
+});
+
+app.post('/calendly/disconnect', (req, res) => {
+  calendlyTokens = null;
+  try { fs.unlinkSync(CALENDLY_TOKEN_FILE); } catch(_) {}
+  console.log('Calendly disconnected');
+  res.json({ disconnected: true });
+});
+
+// Personal access token quick-connect (no OAuth needed)
+app.post('/calendly/connect-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+
+    const meResp = await fetch('https://api.calendly.com/users/me', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!meResp.ok) return res.status(401).json({ error: 'Invalid token' });
+
+    const meData = await meResp.json();
+    calendlyTokens = {
+      access_token:  token,
+      refresh_token: null,
+      expires_at:    null,  // PATs don't expire
+      owner_uri:     meData.resource?.uri || '',
+      org_uri:       meData.resource?.current_organization || '',
+    };
+    saveCalendlyTokens();
+    console.log('✓ Calendly connected via PAT');
+    res.json({ connected: true, name: meData.resource?.name || 'Unknown' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Fetch scheduled events
+app.get('/calendly/events', async (req, res) => {
+  try {
+    const headers = await getCalendlyHeaders();
+    const days = parseInt(req.query.days) || 14;
+    const status = req.query.status || 'active';
+    const now = new Date();
+    const future = new Date(now.getTime() + days * 86400000);
+
+    const params = new URLSearchParams({
+      user:       calendlyTokens.owner_uri,
+      min_start_time: now.toISOString(),
+      max_start_time: future.toISOString(),
+      status,
+      count:      '50',
+      sort:       'start_time:asc',
+    });
+
+    const resp = await fetch(`https://api.calendly.com/scheduled_events?${params}`, { headers });
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        calendlyTokens = null;
+        saveCalendlyTokens();
+        return res.status(401).json({ error: 'not_connected' });
+      }
+      throw new Error(`Calendly API error: ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const events = (data.collection || []).map(ev => ({
+      uri:        ev.uri,
+      name:       ev.name,
+      status:     ev.status,
+      start:      ev.start_time,
+      end:        ev.end_time,
+      location:   ev.location?.location || ev.location?.join_url || '',
+      locationType: ev.location?.type || '',
+      invitees:   ev.event_memberships?.map(m => m.user_name) || [],
+      cancelUrl:  ev.cancellation?.canceled_by || null,
+      link:       ev.uri ? `https://calendly.com/app/scheduled_events/${ev.uri.split('/').pop()}` : '',
+    }));
+
+    res.json({ events, total: data.pagination?.count || events.length });
+  } catch(e) {
+    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
+      return res.status(401).json({ error: 'not_connected' });
+    }
+    console.error('Calendly fetch error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Fetch event types (booking links)
+app.get('/calendly/event-types', async (req, res) => {
+  try {
+    const headers = await getCalendlyHeaders();
+    const params = new URLSearchParams({
+      user:   calendlyTokens.owner_uri,
+      active: 'true',
+    });
+
+    const resp = await fetch(`https://api.calendly.com/event_types?${params}`, { headers });
+    if (!resp.ok) throw new Error(`Calendly API error: ${resp.status}`);
+
+    const data = await resp.json();
+    const types = (data.collection || []).map(t => ({
+      uri:        t.uri,
+      name:       t.name,
+      slug:       t.slug,
+      duration:   t.duration,
+      active:     t.active,
+      color:      t.color,
+      bookingUrl: t.scheduling_url,
+    }));
+
+    res.json({ types });
+  } catch(e) {
+    console.error('Calendly event types error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────────
+// DOCUSIGN — e-Signature Integration
+// OAuth2 flow + envelope sending for engagement letters
+// ─────────────────────────────────────────────────────────────────
+const DOCUSIGN_CLIENT_ID      = process.env.DOCUSIGN_CLIENT_ID || '';
+const DOCUSIGN_CLIENT_SECRET  = process.env.DOCUSIGN_CLIENT_SECRET || '';
+const DOCUSIGN_BASE_URL       = process.env.DOCUSIGN_BASE_URL || 'https://account-d.docusign.com'; // -d for demo, account.docusign.com for prod
+const DOCUSIGN_API_BASE       = process.env.DOCUSIGN_API_BASE || 'https://demo.docusign.net/restapi'; // na1.docusign.net for prod
+const DOCUSIGN_TOKEN_FILE     = path.join(DATA_DIR, 'docusign-tokens.json');
+
+let docusignTokens = null;
+if (fs.existsSync(DOCUSIGN_TOKEN_FILE)) {
+  try {
+    docusignTokens = JSON.parse(fs.readFileSync(DOCUSIGN_TOKEN_FILE, 'utf8'));
+    console.log('✓ DocuSign tokens loaded');
+  } catch(e) {
+    console.log('Could not load DocuSign tokens');
+  }
+}
+
+function saveDocusignTokens() {
+  fs.writeFileSync(DOCUSIGN_TOKEN_FILE, JSON.stringify(docusignTokens, null, 2));
+}
+
+function docusignReady() {
+  return !!(docusignTokens && docusignTokens.access_token && docusignTokens.account_id);
+}
+
+async function getDocusignHeaders() {
+  if (!docusignTokens) throw new Error('DocuSign not connected — run the auth flow first');
+
+  // Check if token is expired (5 min buffer)
+  if (docusignTokens.expires_at && Date.now() > docusignTokens.expires_at - 300000) {
+    console.log('DocuSign token expired, refreshing...');
+    try {
+      const resp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: docusignTokens.refresh_token,
+          client_id:     DOCUSIGN_CLIENT_ID,
+          client_secret: DOCUSIGN_CLIENT_SECRET,
+        }).toString(),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        docusignTokens = null;
+        saveDocusignTokens();
+        throw new Error('Token refresh failed: ' + errText);
+      }
+      const data = await resp.json();
+      docusignTokens = {
+        ...docusignTokens,
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token || docusignTokens.refresh_token,
+        expires_at:    Date.now() + (data.expires_in * 1000),
+      };
+      saveDocusignTokens();
+      console.log('✓ DocuSign token refreshed');
+    } catch(e) {
+      throw new Error('DocuSign token refresh failed — please reconnect');
+    }
+  }
+
+  return {
+    'Authorization': `Bearer ${docusignTokens.access_token}`,
+    'Content-Type':  'application/json',
+  };
+}
+
+// --- DocuSign OAuth routes ---
+
+app.get('/docusign/auth', (req, res) => {
+  if (!DOCUSIGN_CLIENT_ID) return res.status(500).send('DocuSign not configured — set DOCUSIGN_CLIENT_ID');
+  const redirectUri = process.env.DOCUSIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/docusign/callback';
+  const url = `${DOCUSIGN_BASE_URL}/oauth/auth?` +
+    `response_type=code` +
+    `&scope=signature` +
+    `&client_id=${DOCUSIGN_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&state=ark-ds-${Date.now()}`;
+  res.redirect(url);
+});
+
+app.get('/docusign/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) throw new Error('No authorization code received');
+
+    const redirectUri = process.env.DOCUSIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/docusign/callback';
+    const resp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(`${DOCUSIGN_CLIENT_ID}:${DOCUSIGN_CLIENT_SECRET}`).toString('base64'),
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }).toString(),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error('Token exchange failed: ' + errText);
+    }
+
+    const data = await resp.json();
+
+    // Fetch user info to get account ID and base URI
+    const userResp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/userinfo`, {
+      headers: { 'Authorization': `Bearer ${data.access_token}` },
+    });
+    const userData = userResp.ok ? await userResp.json() : {};
+    const defaultAccount = (userData.accounts || []).find(a => a.is_default) || userData.accounts?.[0];
+
+    docusignTokens = {
+      access_token:   data.access_token,
+      refresh_token:  data.refresh_token,
+      expires_at:     Date.now() + (data.expires_in * 1000),
+      account_id:     defaultAccount?.account_id || '',
+      base_uri:       defaultAccount?.base_uri || DOCUSIGN_API_BASE,
+      account_name:   defaultAccount?.account_name || '',
+      user_name:      userData.name || '',
+      email:          userData.email || '',
+    };
+    saveDocusignTokens();
+    console.log('✓ DocuSign connected:', docusignTokens.account_name);
+
+    res.send(`<!DOCTYPE html><html><body style="background:#0d1b2a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui;">
+      <div style="text-align:center;color:#fff;">
+        <div style="font-size:48px;margin-bottom:16px;">✅</div>
+        <div style="font-size:20px;font-weight:600;">Connected to DocuSign!</div>
+        <div style="font-size:14px;color:#8899aa;margin-top:8px;">${docusignTokens.account_name || 'Account connected'}</div>
+        <div style="font-size:14px;color:#8899aa;margin-top:4px;">This window will close automatically…</div>
+      </div>
+      <script>
+        if(window.opener){ window.opener.postMessage({type:'docusign-connected'},'*'); }
+        setTimeout(()=>window.close(), 2000);
+      </script>
+    </body></html>`);
+  } catch(e) {
+    console.error('DocuSign callback error:', e.message);
+    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">DocuSign Connection Failed</h2><p>${e.message}</p>`);
+  }
+});
+
+app.get('/docusign/status', (req, res) => {
+  res.json({
+    connected: docusignReady(),
+    accountName: docusignTokens?.account_name || null,
+    userName: docusignTokens?.user_name || null,
+    email: docusignTokens?.email || null,
+    expiresAt: docusignTokens?.expires_at ? new Date(docusignTokens.expires_at).toISOString() : null,
+  });
+});
+
+app.post('/docusign/disconnect', (req, res) => {
+  docusignTokens = null;
+  try { fs.unlinkSync(DOCUSIGN_TOKEN_FILE); } catch(_) {}
+  console.log('DocuSign disconnected');
+  res.json({ disconnected: true });
+});
+
+// Send an envelope for signature
+app.post('/docusign/send-envelope', async (req, res) => {
+  try {
+    const headers = await getDocusignHeaders();
+    const { signerEmail, signerName, subject, documentBase64, documentName, templateId } = req.body;
+
+    if (!signerEmail || !signerName) {
+      return res.status(400).json({ error: 'signerEmail and signerName required' });
+    }
+
+    let envelopeBody;
+
+    if (templateId) {
+      // Send from a DocuSign template
+      envelopeBody = {
+        templateId,
+        templateRoles: [{
+          email: signerEmail,
+          name:  signerName,
+          roleName: 'Client',
+        }],
+        status: 'sent',
+        emailSubject: subject || 'Please sign this document — ARK Financial',
+      };
+    } else if (documentBase64) {
+      // Send with an attached document
+      envelopeBody = {
+        emailSubject: subject || 'Please sign this document — ARK Financial',
+        documents: [{
+          documentBase64,
+          name:       documentName || 'Document.pdf',
+          fileExtension: 'pdf',
+          documentId: '1',
+        }],
+        recipients: {
+          signers: [{
+            email:       signerEmail,
+            name:        signerName,
+            recipientId: '1',
+            routingOrder: '1',
+            tabs: {
+              signHereTabs: [{
+                anchorString:  '/sig/',
+                anchorUnits:   'pixels',
+                anchorXOffset: '0',
+                anchorYOffset: '0',
+              }],
+              dateSignedTabs: [{
+                anchorString:  '/date/',
+                anchorUnits:   'pixels',
+                anchorXOffset: '0',
+                anchorYOffset: '0',
+              }],
+            },
+          }],
+        },
+        status: 'sent',
+      };
+    } else {
+      return res.status(400).json({ error: 'Either templateId or documentBase64 required' });
+    }
+
+    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
+    const envResp = await fetch(
+      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/envelopes`,
+      { method: 'POST', headers, body: JSON.stringify(envelopeBody) }
+    );
+
+    if (!envResp.ok) {
+      const errText = await envResp.text();
+      throw new Error(`Envelope send failed: ${errText}`);
+    }
+
+    const envData = await envResp.json();
+    console.log('✓ DocuSign envelope sent:', envData.envelopeId);
+    res.json({ envelopeId: envData.envelopeId, status: envData.status, uri: envData.uri });
+  } catch(e) {
+    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
+      return res.status(401).json({ error: 'not_connected' });
+    }
+    console.error('DocuSign send error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List recent envelopes
+app.get('/docusign/envelopes', async (req, res) => {
+  try {
+    const headers = await getDocusignHeaders();
+    const days = parseInt(req.query.days) || 30;
+    const fromDate = new Date(Date.now() - days * 86400000).toISOString();
+    const status = req.query.status || 'completed,delivered,sent,created';
+
+    const params = new URLSearchParams({
+      from_date: fromDate,
+      status,
+      order_by: 'last_modified',
+      order:    'desc',
+      count:    '25',
+    });
+
+    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
+    const resp = await fetch(
+      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/envelopes?${params}`,
+      { headers }
+    );
+
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        docusignTokens = null;
+        saveDocusignTokens();
+        return res.status(401).json({ error: 'not_connected' });
+      }
+      throw new Error(`DocuSign API error: ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const envelopes = (data.envelopes || []).map(env => ({
+      envelopeId:    env.envelopeId,
+      status:        env.status,
+      subject:       env.emailSubject,
+      sentDate:      env.sentDateTime,
+      completedDate: env.completedDateTime,
+      recipients:    env.recipients?.signers?.map(s => ({ name: s.name, email: s.email, status: s.status })) || [],
+    }));
+
+    res.json({ envelopes, total: data.resultSetSize || envelopes.length });
+  } catch(e) {
+    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
+      return res.status(401).json({ error: 'not_connected' });
+    }
+    console.error('DocuSign envelopes error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List templates
+app.get('/docusign/templates', async (req, res) => {
+  try {
+    const headers = await getDocusignHeaders();
+    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
+    const resp = await fetch(
+      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/templates`,
+      { headers }
+    );
+
+    if (!resp.ok) throw new Error(`DocuSign API error: ${resp.status}`);
+
+    const data = await resp.json();
+    const templates = (data.envelopeTemplates || []).map(t => ({
+      templateId: t.templateId,
+      name:       t.name,
+      description: t.description || '',
+      lastModified: t.lastModified,
+    }));
+
+    res.json({ templates });
+  } catch(e) {
+    console.error('DocuSign templates error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────────
 // DATABASE: Server-side persistent storage for dashboard data
 // Both users share the same ark-db.json on disk
 // ─────────────────────────────────────────────────────────────────
@@ -3891,6 +4487,12 @@ function gracefulShutdown(signal) {
     console.log('  ✓ ShareFile tokens saved');
   } catch (e) { console.error('  ✗ ShareFile tokens save failed:', e.message); }
   try {
+    if (calendlyTokens) { saveCalendlyTokens(); console.log('  ✓ Calendly tokens saved'); }
+  } catch (e) { console.error('  ✗ Calendly tokens save failed:', e.message); }
+  try {
+    if (docusignTokens) { saveDocusignTokens(); console.log('  ✓ DocuSign tokens saved'); }
+  } catch (e) { console.error('  ✗ DocuSign tokens save failed:', e.message); }
+  try {
     savePlHistory();
     saveFleetData();
     savePlThresholds();
@@ -3914,5 +4516,8 @@ app.listen(PORT, '0.0.0.0', () => {
   const sfOk  = sfReady() ? '✓' : (SF_CLIENT_ID ? '○' : '✗');
   const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
   const gcalOk = gcalTokens.primary ? '✓' : '✗';
+  const calOk  = calendlyReady() ? '✓' : (CALENDLY_CLIENT_ID ? '○' : '✗');
+  const dsOk   = docusignReady() ? '✓' : (DOCUSIGN_CLIENT_ID ? '○' : '✗');
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  ShareFile: ${sfOk}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
+  console.log(`  Calendly: ${calOk}  |  DocuSign: ${dsOk}`);
 });
