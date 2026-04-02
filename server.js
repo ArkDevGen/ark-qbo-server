@@ -886,8 +886,12 @@ app.post('/qbo/api', async (req, res) => {
   try {
     qbo = await getQBOClient(targetRealm);
   } catch (e) {
+    console.error(`getQBOClient failed for realm ${targetRealm}:`, e.message);
     return res.status(401).json({ error: e.message });
   }
+
+  // Catch any unhandled errors in action handlers to prevent server crash
+  try {
 
   // ── Action: Get Chart of Accounts ────────────────────────────
   if (action === 'getAccounts') {
@@ -1251,6 +1255,12 @@ app.post('/qbo/api', async (req, res) => {
   // ── Unknown action ────────────────────────────────────────────
   } else {
     res.status(400).json({ error: `Unknown action: "${action}"` });
+  }
+  } catch (unhandled) {
+    console.error(`UNHANDLED ERROR in /qbo/api (${action}, realm ${targetRealm}):`, unhandled.message, unhandled.stack);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Server error: ' + unhandled.message });
+    }
   }
 });
 
@@ -4616,4 +4626,12 @@ app.listen(PORT, '0.0.0.0', () => {
   const ltOk   = Object.keys(lettersStore).length;
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  ShareFile: ${sfOk}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
   console.log(`  Calendly: ${calOk}  |  Letters: ${ltOk} stored`);
+});
+
+// Prevent unhandled errors from crashing the server
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION (server kept running):', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION (server kept running):', reason);
 });
