@@ -26391,7 +26391,7 @@ if (!DB.meetings) DB.meetings = [];
 let _mtgZoomConfigured = false;
 
 async function mtgInit() {
-  mtgCheckZoom();
+  await mtgCheckZoom();
   mtgPopulateLogFilter();
   await mtgSyncExternal();
   mtgRenderToday();
@@ -26495,7 +26495,8 @@ async function mtgSyncExternal() {
 
 async function mtgCheckZoom() {
   try {
-    const res = await fetch(`${QBO_SERVER}/zoom/status`).then(r => r.json());
+    const resp = await authFetch(ARK_SERVER + '/zoom/status');
+    const res = await resp.json();
     _mtgZoomConfigured = res.configured;
   } catch (e) { _mtgZoomConfigured = false; }
   const badge = document.getElementById('mtg-zoom-badge');
