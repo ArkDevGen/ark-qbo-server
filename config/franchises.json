@@ -44,7 +44,7 @@
     "label": "ABean (530 CGirMO)",
     "franchise_names": ["The Adventurous Bean, LLC"],
     "stores": {
-      "530": "(530 CGirMO)"
+      "530": ""
     },
     "use_classes": false
   },
@@ -52,7 +52,7 @@
     "label": "ABean (1160 MauAR)",
     "franchise_names": ["Adventurous Bean 2, LLC"],
     "stores": {
-      "1160": "(1160 MauAR)"
+      "1160": ""
     },
     "use_classes": false
   },
@@ -60,7 +60,7 @@
     "label": "ABean (1161 NLRAR)",
     "franchise_names": ["Adventurous Bean 3, LLC"],
     "stores": {
-      "1161": "(1161 NLRAR)"
+      "1161": ""
     },
     "use_classes": false
   },
@@ -68,7 +68,7 @@
     "label": "ABean (531 PadKY)",
     "franchise_names": ["Adventurous Bean 4, LLC"],
     "stores": {
-      "531": "(531 PadKY)"
+      "531": ""
     },
     "use_classes": false
   },
@@ -76,7 +76,7 @@
     "label": "ABeanLLP (397 SikMO)",
     "franchise_names": ["Life's Little Perks, LLC"],
     "stores": {
-      "397": "(397 SikMO)"
+      "397": ""
     },
     "use_classes": false
   },
@@ -84,7 +84,7 @@
     "label": "AgEdge (421 SterCO)",
     "franchise_names": ["AgEdge Development, L.L.C."],
     "stores": {
-      "421": "(421 SterCO)"
+      "421": ""
     },
     "use_classes": false
   },
@@ -92,7 +92,7 @@
     "label": "AgEdge (536 FMorCO)",
     "franchise_names": ["AgEdge Development, L.L.C."],
     "stores": {
-      "536": "(536 FMorCO)"
+      "536": ""
     },
     "use_classes": false
   },
@@ -100,7 +100,7 @@
     "label": "AgEdge (537 SidNE)",
     "franchise_names": ["AgEdge Development, L.L.C."],
     "stores": {
-      "537": "(537 SidNE)"
+      "537": ""
     },
     "use_classes": false
   },
@@ -193,7 +193,7 @@
     "label": "CShack (1343 HurSD)",
     "franchise_names": ["Coffee Shack Huron, LLC"],
     "stores": {
-      "1343": "(1343 HurSD)"
+      "1343": ""
     },
     "use_classes": false
   },
@@ -201,7 +201,7 @@
     "label": "CShack (255 MitSD)",
     "franchise_names": ["Shack Coffee Mitchell LLC"],
     "stores": {
-      "255": "(255 MitSD)"
+      "255": ""
     },
     "use_classes": false
   },
@@ -209,7 +209,7 @@
     "label": "CShackRCS (253 RCSD)",
     "franchise_names": ["RCS 253 LLC"],
     "stores": {
-      "253": "(253 RCSD)"
+      "253": ""
     },
     "use_classes": false
   },
@@ -217,7 +217,7 @@
     "label": "CShackRCS (276 RCSD)",
     "franchise_names": ["RCS 276 LLC"],
     "stores": {
-      "276": "(276 RCSD)"
+      "276": ""
     },
     "use_classes": false
   },
@@ -225,7 +225,7 @@
     "label": "CShackRCS (404 RCSD)",
     "franchise_names": ["RCS 404 LLC"],
     "stores": {
-      "404": "(404 RCSD)"
+      "404": ""
     },
     "use_classes": false
   },
@@ -265,7 +265,7 @@
     "label": "FBoys (849 HighIL)",
     "franchise_names": ["Frey Boys, LLC"],
     "stores": {
-      "849": "(849 HighIL)"
+      "849": ""
     },
     "use_classes": false,
     "account_preset": "freyboys"
@@ -274,7 +274,7 @@
     "label": "FBoys (1776 CollIL)",
     "franchise_names": ["Frey Boys, LLC"],
     "stores": {
-      "1776": "(1776 CollIL)"
+      "1776": ""
     },
     "use_classes": false,
     "account_preset": "freyboys"
@@ -545,7 +545,7 @@
     "label": "WNG (759 Wab)",
     "franchise_names": ["Whoa N Go Coffee 2, LLC"],
     "stores": {
-      "759": "(759 Wab)"
+      "759": ""
     },
     "use_classes": false
   },
@@ -553,7 +553,7 @@
     "label": "WNG (758 CLake)",
     "franchise_names": ["Whoa N Go Coffee LLC"],
     "stores": {
-      "758": "(758 CLake)"
+      "758": ""
     },
     "use_classes": false
   },
@@ -561,7 +561,7 @@
     "label": "WNG (1003 TayIL)",
     "franchise_names": ["Marcus and Lauryn McGlasson"],
     "stores": {
-      "1003": "(1003 TayIL)"
+      "1003": ""
     },
     "use_classes": false
   },
@@ -569,7 +569,7 @@
     "label": "WNG (1818 FVHIL)",
     "franchise_names": ["Whoa N Go Services 1 LLC"],
     "stores": {
-      "1818": "(1818 FVHIL)"
+      "1818": ""
     },
     "use_classes": false
   },
@@ -577,7 +577,7 @@
     "label": "WNG (1819 SwaIL)",
     "franchise_names": ["Whoa N Go Services 1 LLC"],
     "stores": {
-      "1819": "(1819 SwaIL)"
+      "1819": ""
     },
     "use_classes": false
   },
@@ -585,7 +585,7 @@
     "label": "WNG (2114 ChaIL)",
     "franchise_names": ["Whoa N Go Services 1 LLC"],
     "stores": {
-      "2114": "(2114 ChaIL)"
+      "2114": ""
     },
     "use_classes": false
   },
