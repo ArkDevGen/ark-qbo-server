@@ -26656,12 +26656,13 @@ function mtgRenderStats() {
     </div>
     ${avgDur ? `<div style="font-size:11px;color:var(--text-m);margin-bottom:10px;">Avg duration: <strong>${avgDur} min</strong></div>` : ''}
     ${stale.length ? `<div style="margin-top:8px;">
-      <div style="font-size:9px;font-weight:700;color:var(--red);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">No Meeting in 30+ Days</div>
-      ${stale.slice(0, 8).map(c => `<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-m);padding:4px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:9px;font-weight:700;color:var(--red);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">No Meeting in 30+ Days (${stale.length})</div>
+      <div style="max-height:320px;overflow-y:auto;">
+      ${stale.map(c => `<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-m);padding:4px 0;border-bottom:1px solid var(--border);">
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${c.biz}</span>
         <button onclick="mtgSelectClient('${c.id}','${c.biz.replace(/'/g, "\\'")}');document.getElementById('mtg-sched-client-search').scrollIntoView({behavior:'smooth',block:'center'});" class="btn btn-sm" style="font-size:9px;padding:1px 8px;flex-shrink:0;margin-left:6px;">Schedule</button>
       </div>`).join('')}
-      ${stale.length > 8 ? `<div style="font-size:10px;color:var(--text-d);margin-top:4px;">+${stale.length - 8} more</div>` : ''}
+      </div>
     </div>` : '<div style="font-size:11px;color:var(--green);margin-top:8px;">All active clients met within 30 days</div>'}`;
 }
 
