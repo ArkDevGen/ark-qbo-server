@@ -36,21 +36,21 @@
   },
 
   "freyboys": {
-    "sales":                     "Sales",
-    "store_discounts":           "Store Discounts",
-    "emp_discounts":             "Emp Discounts",
-    "gift_card_sold":            "Credit Card Deposits",
-    "gift_card_redeemed":        "Credit Card Deposits",
-    "sales_tax_payable":         "Sales Tax Payable",
-    "tips_received":             "Payroll:E Tips Received",
-    "cash_deposits":             "Cash Deposits",
-    "credit_card_deposits":      "Credit Card Deposits",
-    "adyen_deposits":            "Adyen Deposits",
-    "adyen_fees":                "Adyen Processing Fees",
-    "advertising_marketing":     "Advertising & Marketing",
-    "royalty_fees":              "Royalty Fees",
-    "ad_fund_national":          "Ad Fund National",
-    "royalty_payable":           "Royalty Payable"
+    "sales":                     "4000 Sales",
+    "store_discounts":           "4004 Store Discounts",
+    "emp_discounts":             "4005 Emp Discounts",
+    "gift_card_sold":            "1094 Credit Card Deposits",
+    "gift_card_redeemed":        "1094 Credit Card Deposits",
+    "sales_tax_payable":         "2040 Sales Tax Payable",
+    "tips_received":             "6105 Payroll: E Tips Received",
+    "cash_deposits":             "1096 Cash Deposits",
+    "credit_card_deposits":      "1094 Credit Card Deposits",
+    "adyen_deposits":            "1092 Adyen Deposits",
+    "adyen_fees":                "6025 Adyen Processing Fees",
+    "advertising_marketing":     "6121 Advertising & Marketing",
+    "royalty_fees":              "6010 Royalty Fees",
+    "ad_fund_national":          "6015 Ad Fund National",
+    "royalty_payable":           "2060 Royalty Payable"
   },
 
   "dirtroad": {
