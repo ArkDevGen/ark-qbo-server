@@ -1260,6 +1260,45 @@ app.post('/qbo/api', async (req, res) => {
       res.json({ success: true, bill: data });
     });
 
+  // ── Action: Test JE creation (debug — returns full error) ──────
+  } else if (action === 'testJournalEntry') {
+    // Directly call QBO API to get full error response
+    try {
+      oauthClient.setToken(getTokenData(targetRealm));
+      let tokens = getTokenData(targetRealm);
+      // Force refresh
+      try {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      } catch(re) { /* use existing token */ }
+
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+
+      const testPayload = payload || {
+        TxnDate: '2026-03-31',
+        DocNumber: 'TEST.DELETE',
+        PrivateNote: 'TEST',
+        Line: [
+          { DetailType: 'JournalEntryLineDetail', Amount: 100, Description: 'Test', JournalEntryLineDetail: { PostingType: 'Debit', AccountRef: { name: 'Sales' } } },
+          { DetailType: 'JournalEntryLineDetail', Amount: 100, Description: 'Test', JournalEntryLineDetail: { PostingType: 'Credit', AccountRef: { name: 'Cash Deposits' } } },
+        ],
+      };
+
+      const resp = await fetch(`${baseUrl}/v3/company/${targetRealm}/journalentry?minorversion=65`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(testPayload),
+      });
+      const body = await resp.json();
+      console.log('testJournalEntry result:', resp.status, JSON.stringify(body).substring(0, 500));
+      res.json({ status: resp.status, body });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+
   // ── Action: Find existing JEs by DocNumber prefix ──────────────
   } else if (action === 'findJournalEntries') {
     const { docNumberPrefix } = payload || {};
