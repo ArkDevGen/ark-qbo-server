@@ -3653,6 +3653,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
               <div id="batch-empty-msg" style="display:none;text-align:center;padding:32px 0;color:var(--text-d);font-size:13px;">No QBO clients found. Import clients or set QB Type to "QBO" in client records.</div>
 
+            </div>
+          </div>
+        </div><!-- /qbo-batch-workspace -->
+
         <!-- COA Sync workspace -->
         <div id="qbo-ws-coasync" style="display:none;">
           <div class="card" style="overflow:visible;">
@@ -3884,6 +3888,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
       </div>
+    </div><!-- /qbo-general-grid -->
     </div><!-- /qbo-tab-general -->
 
     <!-- ═══ SCOOTER'S TAB ═══ -->
@@ -4019,10 +4024,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
-  </div><!-- /qbo-tab-deviledegg (missing close) -->
-  </div><!-- /qbo-tab-hteao (missing close) -->
-  </div><!-- /qbo general grid right column (missing close) -->
-  </div><!-- /view-qbo tabs container (missing close) -->
   </div><!-- /view-qbo -->
 
   <!-- ════ W-9 GENERATOR ════ -->
@@ -22834,14 +22835,21 @@ async function qboCall(action, payload = {}, realmId) {
 
 // ── Init — check server status on page load ───────────────────────
 function qboInit() {
-  const today = new Date().toISOString().slice(0, 10);
-  const gjeDateEl = document.getElementById('qbo-gje-date');
-  const expDateEl = document.getElementById('qbo-exp-date');
-  if (gjeDateEl && !gjeDateEl.value) gjeDateEl.value = today;
-  if (expDateEl && !expDateEl.value) expDateEl.value = today;
-  qboNavTab('general');
-  qboRenderActivity();
-  qboCheckServerStatus();
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const gjeDateEl = document.getElementById('qbo-gje-date');
+    const expDateEl = document.getElementById('qbo-exp-date');
+    if (gjeDateEl && !gjeDateEl.value) gjeDateEl.value = today;
+    if (expDateEl && !expDateEl.value) expDateEl.value = today;
+    // Ensure General tab is visible
+    qboNavTab('general');
+    qboRenderActivity();
+    // Show the default workspace
+    const dw = document.getElementById('qbo-default-workspace');
+    if (dw) dw.style.display = '';
+  } catch(e) { console.error('qboInit error:', e); }
+  // Fire server check async (don't block rendering)
+  qboCheckServerStatus().catch(e => console.error('qboCheckServerStatus error:', e));
 }
 
 // ── Check if server has any connected companies ──────────────────
