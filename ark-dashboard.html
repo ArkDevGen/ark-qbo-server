@@ -27307,12 +27307,12 @@ async function sjePushOne(idx) {
 
   if (btn) {
     if (failed === 0) {
-      btn.textContent = '✓ Done';
+      btn.textContent = `✓ ${success} pushed`;
       btn.style.background = 'var(--green)';
       btn.disabled = true;
     } else {
-      btn.textContent = `${failed} failed`;
-      btn.style.background = 'var(--red)';
+      btn.textContent = `${success} pushed · ${failed} failed`;
+      btn.style.background = failed === f.entryCount ? 'var(--red)' : '#f59e0b';
       btn.disabled = false;
     }
   }
