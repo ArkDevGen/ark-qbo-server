@@ -27206,6 +27206,8 @@ async function sjePushAll() {
         };
 
         const result = await qboCall('createJournalEntry', payload, franchise.realmId);
+        // Small delay between entries to avoid QBO rate limiting
+        await new Promise(r => setTimeout(r, 350));
         _sjePushResults.push({
           franchise: franchise.label,
           storeId: franchise.storeId,
@@ -27242,13 +27244,8 @@ async function sjePushAll() {
 async function sjePushOne(idx) {
   const f = _sjeData?.franchises?.[idx];
   if (!f || !f.linked) { showToast('Franchise not linked'); return; }
-  if (!confirm(`Push ${f.entryCount} journal entries for ${f.label} to ${f.qboCompanyName || 'QBO'}?`)) return;
-
   const btn = document.getElementById('sje-push-' + idx);
-  if (btn) { btn.disabled = true; btn.textContent = 'Pushing…'; }
-
-  let success = 0, failed = 0;
-  const errors = [];
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
 
   // Pre-fetch accounts and classes for this realm to resolve names → IDs
   let acctMap = {}, classMap = {};
@@ -27261,7 +27258,36 @@ async function sjePushOne(idx) {
     (classData.classes || []).forEach(c => { classMap[c.name.toLowerCase()] = c.id; });
   } catch(e) { /* classes may not exist */ }
 
-  for (const entry of f.entries) {
+  // Check for existing JEs to skip duplicates
+  let existingDocNums = new Set();
+  try {
+    // Use first entry's journal number prefix (e.g. "03" from "03.01.2026") to find existing
+    const prefix = f.entries[0]?.journalNo?.slice(0, 2) || '';
+    if (prefix) {
+      const existing = await qboCall('findJournalEntries', { docNumberPrefix: prefix }, f.realmId);
+      (existing.entries || []).forEach(e => existingDocNums.add(e.docNumber));
+    }
+  } catch(e) { console.warn('Could not check existing JEs:', e.message); }
+
+  const toSkip = f.entries.filter(e => existingDocNums.has(e.journalNo));
+  const toPush = f.entries.filter(e => !existingDocNums.has(e.journalNo));
+  const skipped = toSkip.length;
+
+  if (toPush.length === 0) {
+    if (btn) { btn.textContent = `✓ All ${f.entryCount} already in QBO`; btn.style.background = 'var(--green)'; btn.disabled = true; }
+    showToast(`${f.label}: All ${f.entryCount} entries already exist in QBO — nothing to push`);
+    return;
+  }
+
+  const pushMsg = skipped > 0 ? `Push ${toPush.length} new entries for ${f.label}? (${skipped} already in QBO will be skipped)` : `Push ${toPush.length} journal entries for ${f.label} to ${f.qboCompanyName || 'QBO'}?`;
+  if (!confirm(pushMsg)) { if (btn) { btn.disabled = false; btn.textContent = 'Push'; } return; }
+
+  if (btn) btn.textContent = 'Pushing…';
+
+  let success = 0, failed = 0;
+  const errors = [];
+
+  for (const entry of toPush) {
     try {
       const lines = entry.lines.map(l => {
         const acctId = acctMap[l.account.toLowerCase()] || null;
@@ -27347,7 +27373,8 @@ async function sjePushOne(idx) {
     }
   }
 
-  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}`);
+  const skipMsg = skipped > 0 ? `, ${skipped} skipped (already in QBO)` : '';
+  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}${skipMsg}`);
 }
 
 function sjeShowConfirm() {

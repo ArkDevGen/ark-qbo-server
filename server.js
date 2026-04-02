@@ -1255,6 +1255,23 @@ app.post('/qbo/api', async (req, res) => {
       res.json({ success: true, bill: data });
     });
 
+  // ── Action: Find existing JEs by DocNumber prefix ──────────────
+  } else if (action === 'findJournalEntries') {
+    const { docNumberPrefix } = payload || {};
+    if (!docNumberPrefix) return res.status(400).json({ error: 'docNumberPrefix required' });
+    const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber LIKE '${docNumberPrefix}%' MAXRESULTS 500`;
+    qbo.query(query, (err, data) => {
+      if (err) {
+        console.error('findJournalEntries error:', err.message);
+        return res.status(500).json({ error: err.message || 'Query failed' });
+      }
+      const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
+        id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
+      }));
+      console.log(`  Found ${entries.length} existing JEs matching "${docNumberPrefix}*"`);
+      res.json({ success: true, entries });
+    });
+
   // ── Action: Switch Active Realm ────────────────────────────────
   } else if (action === 'switchRealm') {
     const rid = payload?.realmId;
