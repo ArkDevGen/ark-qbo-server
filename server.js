@@ -911,10 +911,15 @@ app.post('/qbo/api', async (req, res) => {
   } else if (action === 'createJournalEntry') {
     qbo.createJournalEntry(payload, (err, data) => {
       if (err) {
+        // node-quickbooks wraps errors differently — extract the actual QBO fault
+        const errObj = typeof err === 'object' ? err : {};
+        const fault = errObj.Fault || errObj.fault || errObj.body?.Fault || null;
+        const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || '';
+        const statusCode = errObj.statusCode || errObj.status || 500;
         console.error('createJournalEntry error:', JSON.stringify(err, null, 2));
-        return res.status(500).json({ 
-          error: err.message || 'Failed to create journal entry',
-          detail: err.Fault || err 
+        return res.status(statusCode >= 400 ? statusCode : 500).json({
+          error: faultMsg || errObj.message || 'Failed to create journal entry',
+          detail: fault || err
         });
       }
       console.log(`  ✓ Journal Entry created: ID ${data.Id}`);
