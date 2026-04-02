@@ -27221,7 +27221,7 @@ async function sjePushAll() {
 
       try {
         const lines = entry.lines.map(l => {
-          const acctId = acctMap[l.account.toLowerCase()] || null;
+          const acctId = sjeResolveAcctId(l.account, acctMap);
           const lineDetail = {
             PostingType: l.debit ? 'Debit' : 'Credit',
             AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
@@ -27268,6 +27268,29 @@ async function sjePushAll() {
 
   // Show confirmation
   sjeShowConfirm();
+}
+
+// Resolve account name to ID with fuzzy matching
+function sjeResolveAcctId(name, acctMap) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  // 1. Exact match
+  if (acctMap[lower]) return acctMap[lower];
+  // 2. Try without parent prefix (e.g. "Payroll:E Tips Received" → "E Tips Received")
+  if (lower.includes(':')) {
+    const child = lower.split(':').pop().trim();
+    if (acctMap[child]) return acctMap[child];
+  }
+  // 3. Try adding/removing common parent prefixes
+  for (const [key, id] of Object.entries(acctMap)) {
+    if (key.endsWith(':' + lower) || key.endsWith(': ' + lower)) return id;
+    if (lower.endsWith(':' + key) || lower.endsWith(': ' + key)) return id;
+  }
+  // 4. Partial contains (last resort)
+  for (const [key, id] of Object.entries(acctMap)) {
+    if (key.includes(lower) || lower.includes(key)) return id;
+  }
+  return null;
 }
 
 async function sjePushOne(idx) {
@@ -27319,7 +27342,7 @@ async function sjePushOne(idx) {
   for (const entry of toPush) {
     try {
       const lines = entry.lines.map(l => {
-        const acctId = acctMap[l.account.toLowerCase()] || null;
+        const acctId = sjeResolveAcctId(l.account, acctMap);
         const lineDetail = {
           PostingType: l.debit ? 'Debit' : 'Credit',
           AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
@@ -27344,7 +27367,7 @@ async function sjePushOne(idx) {
       };
 
       // Check for unmapped accounts
-      const unmapped = entry.lines.filter(l => l.account && !acctMap[l.account.toLowerCase()]).map(l => l.account);
+      const unmapped = entry.lines.filter(l => l.account && !sjeResolveAcctId(l.account, acctMap)).map(l => l.account);
       if (unmapped.length) console.warn('Unmapped accounts for', f.label, ':', [...new Set(unmapped)].join(', '));
 
       await qboCall('createJournalEntry', payload, f.realmId);
