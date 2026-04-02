@@ -27039,7 +27039,7 @@ function sjeShowReview() {
     const statusHtml = !linked
       ? '<span style="color:var(--red);font-weight:600;">Not Linked</span>'
       : balanced
-        ? '<span style="color:var(--green);font-weight:600;">✓ Ready</span>'
+        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();sjePushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:#2ca01c;border-color:#2ca01c;color:#fff;" id="sje-push-${i}">Push</button>`
         : '<span style="color:#f5a623;font-weight:600;">⚠ Imbalance</span>';
 
     const tr = document.createElement('tr');
@@ -27210,6 +27210,60 @@ async function sjePushAll() {
 
   // Show confirmation
   sjeShowConfirm();
+}
+
+async function sjePushOne(idx) {
+  const f = _sjeData?.franchises?.[idx];
+  if (!f || !f.linked) { showToast('Franchise not linked'); return; }
+  if (!confirm(`Push ${f.entryCount} journal entries for ${f.label} to ${f.qboCompanyName || 'QBO'}?`)) return;
+
+  const btn = document.getElementById('sje-push-' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = 'Pushing…'; }
+
+  let success = 0, failed = 0;
+  for (const entry of f.entries) {
+    try {
+      const lines = entry.lines.map(l => {
+        const lineDetail = {
+          PostingType: l.debit ? 'Debit' : 'Credit',
+          AccountRef: { name: l.account },
+        };
+        if (l.class) lineDetail.ClassRef = { name: l.class };
+        return {
+          DetailType: 'JournalEntryLineDetail',
+          Amount: l.debit || l.credit || 0,
+          Description: l.description || '',
+          JournalEntryLineDetail: lineDetail,
+        };
+      }).filter(l => l.Amount > 0);
+
+      const payload = {
+        TxnDate: entry.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2'),
+        DocNumber: entry.journalNo,
+        PrivateNote: 'Powered By EchoSync',
+        Line: lines,
+      };
+
+      await qboCall('createJournalEntry', payload, f.realmId);
+      success++;
+    } catch(e) {
+      failed++;
+      console.error(`Push failed for ${f.label} ${entry.date}:`, e.message);
+    }
+  }
+
+  if (btn) {
+    if (failed === 0) {
+      btn.textContent = '✓ Done';
+      btn.style.background = 'var(--green)';
+      btn.disabled = true;
+    } else {
+      btn.textContent = `${failed} failed`;
+      btn.style.background = 'var(--red)';
+      btn.disabled = false;
+    }
+  }
+  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}`);
 }
 
 function sjeShowConfirm() {
