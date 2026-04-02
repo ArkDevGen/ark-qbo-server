@@ -22829,6 +22829,11 @@ async function qboCall(action, payload = {}, realmId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, payload, realmId: rid }),
   });
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    throw new Error(`Server returned ${res.status} (non-JSON). This may be a timeout or server error.`);
+  }
   const data = await res.json();
   if (!res.ok || data.error) {
     const faultDetail = data.detail?.Fault?.Error?.[0]?.Detail || data.detail?.Fault?.Error?.[0]?.Message || '';
