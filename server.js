@@ -4391,7 +4391,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 
           for (const dateKey of dates) {
             const dayRows = storeRows.filter(r => r._date.toISOString().slice(0, 10) === dateKey);
-            const entry = sjeBuildEntry(dayRows[0], franchiseKey, className || storeId, dayRows[0]._date.toISOString(), storeId);
+            const entry = sjeBuildEntry(dayRows[0], franchiseKey, className || '', dayRows[0]._date.toISOString(), storeId);
             entries.push(entry);
             const d = entry.lines.reduce((s, l) => s + (l.debit || 0), 0);
             const c = entry.lines.reduce((s, l) => s + (l.credit || 0), 0);
