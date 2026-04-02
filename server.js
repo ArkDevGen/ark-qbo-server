@@ -3339,6 +3339,7 @@ Generate the meeting prep brief.`;
 const ZOOM_ACCOUNT_ID     = process.env.ZOOM_ACCOUNT_ID;
 const ZOOM_CLIENT_ID      = process.env.ZOOM_CLIENT_ID;
 const ZOOM_CLIENT_SECRET  = process.env.ZOOM_CLIENT_SECRET;
+const ZOOM_USER_ID        = process.env.ZOOM_USER_ID || 'me'; // email or 'me' — S2S apps may need the account owner's email
 
 let zoomTokenCache = { token: null, expiresAt: 0 };
 
@@ -3379,7 +3380,7 @@ app.post('/zoom/create-meeting', async (req, res) => {
   try {
     const token = await getZoomToken();
     const { topic, startTime, duration, agenda } = req.body;
-    const zoomRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+    const zoomRes = await fetch(`https://api.zoom.us/v2/users/${ZOOM_USER_ID}/meetings`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3421,12 +3422,13 @@ app.post('/zoom/create-meeting', async (req, res) => {
 app.get('/zoom/meetings', async (req, res) => {
   try {
     const token = await getZoomToken();
-    const zoomRes = await fetch('https://api.zoom.us/v2/users/me/meetings?type=upcoming&page_size=30', {
+    const zoomRes = await fetch(`https://api.zoom.us/v2/users/${ZOOM_USER_ID}/meetings?type=upcoming&page_size=30`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!zoomRes.ok) {
       const err = await zoomRes.text();
-      return res.status(502).json({ error: `Zoom API error: ${zoomRes.status}` });
+      console.error('Zoom meetings error:', zoomRes.status, err);
+      return res.status(502).json({ error: `Zoom API error: ${zoomRes.status}`, detail: err });
     }
     const data = await zoomRes.json();
     res.json({ success: true, meetings: data.meetings || [] });
