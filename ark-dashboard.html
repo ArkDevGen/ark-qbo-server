@@ -27249,14 +27249,30 @@ async function sjePushOne(idx) {
 
   let success = 0, failed = 0;
   const errors = [];
+
+  // Pre-fetch accounts and classes for this realm to resolve names → IDs
+  let acctMap = {}, classMap = {};
+  try {
+    const acctData = await qboCall('getAccounts', {}, f.realmId);
+    (acctData.accounts || []).forEach(a => { acctMap[a.name.toLowerCase()] = a.id; });
+  } catch(e) { console.warn('Could not fetch accounts for realm', f.realmId, e.message); }
+  try {
+    const classData = await qboCall('getClasses', {}, f.realmId);
+    (classData.classes || []).forEach(c => { classMap[c.name.toLowerCase()] = c.id; });
+  } catch(e) { /* classes may not exist */ }
+
   for (const entry of f.entries) {
     try {
       const lines = entry.lines.map(l => {
+        const acctId = acctMap[l.account.toLowerCase()] || null;
         const lineDetail = {
           PostingType: l.debit ? 'Debit' : 'Credit',
-          AccountRef: { name: l.account },
+          AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
         };
-        if (l.class) lineDetail.ClassRef = { name: l.class };
+        if (l.class) {
+          const clsId = classMap[l.class.toLowerCase()] || null;
+          lineDetail.ClassRef = clsId ? { value: clsId, name: l.class } : { name: l.class };
+        }
         return {
           DetailType: 'JournalEntryLineDetail',
           Amount: l.debit || l.credit || 0,
@@ -27271,6 +27287,10 @@ async function sjePushOne(idx) {
         PrivateNote: 'Powered By EchoSync',
         Line: lines,
       };
+
+      // Check for unmapped accounts
+      const unmapped = entry.lines.filter(l => l.account && !acctMap[l.account.toLowerCase()]).map(l => l.account);
+      if (unmapped.length) console.warn('Unmapped accounts for', f.label, ':', [...new Set(unmapped)].join(', '));
 
       await qboCall('createJournalEntry', payload, f.realmId);
       success++;
