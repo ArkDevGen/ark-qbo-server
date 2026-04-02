@@ -26641,7 +26641,7 @@ function mtgRenderStats() {
     const d = new Date(m.scheduledAt);
     if (!clientLastMtg[m.clientId] || d > clientLastMtg[m.clientId]) clientLastMtg[m.clientId] = d;
   }
-  const stale = (DB.clients || []).filter(c => c.status === 'Active' && (!clientLastMtg[c.id] || clientLastMtg[c.id] < monthAgo));
+  const stale = (DB.clients || []).filter(c => c.status === 'Active' && (!clientLastMtg[c.id] || clientLastMtg[c.id] < monthAgo)).sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
 
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
