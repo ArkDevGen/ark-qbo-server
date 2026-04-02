@@ -9726,8 +9726,8 @@ function renderFranchiseList(franchises) {
     const linked = !!f.qboRealmId;
     return `<div class="franchise-row" data-idx="${idx}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
-        <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Franchise name" style="font-size:12px;font-weight:600;">
-        <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Legal entity name" style="font-size:12px;">
+        <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Franchise city" style="font-size:12px;font-weight:600;">
+        <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Franchise name" style="font-size:12px;">
         <button onclick="removeFranchise(${idx})" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-d)'" title="Remove franchise">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:80px 80px 1fr;gap:8px;align-items:center;margin-bottom:8px;">
