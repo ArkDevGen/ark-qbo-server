@@ -22839,6 +22839,7 @@ function qboInit() {
   const expDateEl = document.getElementById('qbo-exp-date');
   if (gjeDateEl && !gjeDateEl.value) gjeDateEl.value = today;
   if (expDateEl && !expDateEl.value) expDateEl.value = today;
+  qboNavTab('general');
   qboRenderActivity();
   qboCheckServerStatus();
 }
