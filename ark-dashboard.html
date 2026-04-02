@@ -27221,6 +27221,7 @@ async function sjePushOne(idx) {
   if (btn) { btn.disabled = true; btn.textContent = 'Pushing…'; }
 
   let success = 0, failed = 0;
+  const errors = [];
   for (const entry of f.entries) {
     try {
       const lines = entry.lines.map(l => {
@@ -27248,7 +27249,12 @@ async function sjePushOne(idx) {
       success++;
     } catch(e) {
       failed++;
-      console.error(`Push failed for ${f.label} ${entry.date}:`, e.message);
+      const errMsg = e.message || 'Unknown error';
+      // Try to parse QBO error detail
+      let detail = errMsg;
+      try { const parsed = JSON.parse(errMsg); detail = parsed.detail?.Fault?.Error?.[0]?.Detail || parsed.error || errMsg; } catch(_) {}
+      errors.push({ date: entry.date, journalNo: entry.journalNo, error: detail });
+      console.error(`Push failed for ${f.label} ${entry.date}:`, errMsg);
     }
   }
 
@@ -27263,6 +27269,35 @@ async function sjePushOne(idx) {
       btn.disabled = false;
     }
   }
+
+  // Show error log if any failures
+  if (errors.length) {
+    const logHtml = `<div style="margin-top:12px;padding:12px 16px;background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.2);border-radius:var(--radius);max-height:300px;overflow-y:auto;">
+      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Push Errors — ${f.label} (${errors.length} of ${f.entryCount} failed)</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Date</th>
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Journal #</th>
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Error</th>
+        </tr>
+        ${errors.map(e => `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.date}</td>
+          <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.journalNo}</td>
+          <td style="padding:4px 8px;color:var(--red);word-break:break-word;">${e.error}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+    // Insert error log after the franchise's detail row
+    const detailRow = document.getElementById('sje-detail-' + idx);
+    if (detailRow) {
+      detailRow.style.display = '';
+      detailRow.querySelector('td').insertAdjacentHTML('beforeend', logHtml);
+    } else {
+      // Fallback: show as alert
+      alert(`${f.label}: ${failed} failed\n\nFirst error: ${errors[0]?.error}`);
+    }
+  }
+
   showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}`);
 }
 
