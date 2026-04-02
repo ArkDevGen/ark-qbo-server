@@ -27294,6 +27294,8 @@ async function sjePushOne(idx) {
 
       await qboCall('createJournalEntry', payload, f.realmId);
       success++;
+      // Small delay between entries to avoid QBO rate limiting
+      await new Promise(r => setTimeout(r, 350));
     } catch(e) {
       failed++;
       const errMsg = e.message || 'Unknown error';
