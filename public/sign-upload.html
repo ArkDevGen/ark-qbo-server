@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ark Financial — Sign & Return</title>
+<style>
+  :root {
+    --bg: #0d1b2a; --surface: #13243a; --card: #182d45;
+    --border: #243b56; --text: #e8f0f8; --muted: #6b8aaa;
+    --accent: #4da6ff; --green: #4dffa0; --red: #ff5c5c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { max-width: 520px; width: 100%; padding: 24px 16px; }
+  .logo-bar { text-align: center; padding: 0 0 24px; }
+  .logo-bar h1 { font-size: 22px; color: var(--accent); font-weight: 600; }
+  .logo-bar p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin-bottom: 16px; }
+  .card h2 { font-size: 17px; color: var(--accent); margin-bottom: 4px; font-weight: 600; }
+  .card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .btn { display: inline-block; padding: 10px 22px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none; }
+  .btn-primary { background: var(--accent); color: #0d1b2a; }
+  .btn-primary:hover { background: #3d96ef; }
+  .btn-green { background: var(--green); color: #0d1b2a; }
+  .btn-green:hover { background: #3de890; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 40px 20px; text-align: center;
+    cursor: pointer; transition: all .2s; margin: 16px 0;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(77,166,255,.05); }
+  .drop-zone .icon { font-size: 32px; margin-bottom: 8px; opacity: .5; }
+  .drop-zone .label { font-size: 13px; color: var(--muted); }
+  .drop-zone .file-name { font-size: 14px; color: var(--green); font-weight: 600; margin-top: 8px; }
+  .status-msg { text-align: center; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+  .status-msg.success { background: rgba(77,255,160,.1); color: var(--green); }
+  .status-msg.error { background: rgba(255,92,92,.1); color: var(--red); }
+  .status-msg.info { background: rgba(77,166,255,.1); color: var(--accent); }
+  .signed-banner { text-align: center; padding: 32px; }
+  .signed-banner .icon { font-size: 48px; margin-bottom: 12px; }
+  .signed-banner h2 { color: var(--green); font-size: 20px; }
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo-bar">
+    <h1>ARK Financial</h1>
+    <p>Engagement Letter — Sign & Return</p>
+  </div>
+
+  <div id="loading" class="loading">Loading...</div>
+  <div id="content" style="display:none;"></div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const token = params.get('token');
+const API = window.location.origin;
+
+async function init() {
+  const loadingEl = document.getElementById('loading');
+  const contentEl = document.getElementById('content');
+
+  if (!token) {
+    loadingEl.innerHTML = '<div class="status-msg error">No letter token provided. Please use the link sent to you.</div>';
+    return;
+  }
+
+  try {
+    const resp = await fetch(API + '/letters/' + token + '/info');
+    if (!resp.ok) throw new Error('Letter not found or has expired.');
+    const data = await resp.json();
+
+    loadingEl.style.display = 'none';
+    contentEl.style.display = '';
+
+    if (data.expired) {
+      contentEl.innerHTML = '<div class="card"><div class="status-msg error">This engagement letter has expired. Please contact ARK Financial for a new copy.</div></div>';
+      return;
+    }
+
+    if (data.alreadySigned) {
+      contentEl.innerHTML = '<div class="card"><div class="signed-banner"><div class="icon">&#10003;</div><h2>Already Signed</h2><p style="color:var(--muted);margin-top:8px;">This engagement letter has already been signed and returned. Thank you!</p></div></div>';
+      return;
+    }
+
+    const services = (data.services || []).join(', ') || 'Accounting Services';
+    contentEl.innerHTML =
+      '<div class="card">' +
+        '<h2>Engagement Letter</h2>' +
+        '<p>Prepared for <strong style="color:var(--text);">' + escHtml(data.clientName) + '</strong></p>' +
+        '<p style="margin-top:4px;">Services: ' + escHtml(services) + '</p>' +
+        '<div style="margin-top:16px;">' +
+          '<a href="' + API + '/letters/' + token + '" target="_blank" class="btn btn-primary" style="margin-right:8px;">Download Letter (PDF)</a>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>Upload Signed Copy</h2>' +
+        '<p>Print the letter, sign it, then scan or photograph it and upload below.</p>' +
+        '<div id="drop-zone" class="drop-zone">' +
+          '<div class="icon">&#128196;</div>' +
+          '<div class="label">Drag & drop your signed document here, or click to browse</div>' +
+          '<div id="file-name" class="file-name" style="display:none;"></div>' +
+          '<input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">' +
+        '</div>' +
+        '<div style="text-align:center;">' +
+          '<button id="upload-btn" class="btn btn-green" disabled onclick="uploadFile()">Upload Signed Copy</button>' +
+        '</div>' +
+        '<div id="status"></div>' +
+      '</div>';
+
+    setupDropZone();
+  } catch(e) {
+    loadingEl.innerHTML = '<div class="status-msg error">' + escHtml(e.message) + '</div>';
+  }
+}
+
+var selectedFile = null;
+
+function setupDropZone() {
+  var zone = document.getElementById('drop-zone');
+  var input = document.getElementById('file-input');
+
+  zone.addEventListener('click', function() { input.click(); });
+  input.addEventListener('change', function() { if (input.files[0]) selectFile(input.files[0]); });
+
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+  });
+}
+
+function selectFile(file) {
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
+    showStatus('Only PDF, JPG, and PNG files are accepted.', 'error');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showStatus('File is too large. Maximum size is 10 MB.', 'error');
+    return;
+  }
+  selectedFile = file;
+  document.getElementById('file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+  document.getElementById('file-name').style.display = '';
+  document.getElementById('upload-btn').disabled = false;
+  showStatus('', '');
+}
+
+async function uploadFile() {
+  if (!selectedFile) return;
+  var btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+  showStatus('Uploading your signed document...', 'info');
+
+  try {
+    var formData = new FormData();
+    formData.append('file', selectedFile);
+
+    var resp = await fetch(API + '/letters/' + token + '/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    var data = await resp.json();
+
+    if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+    document.getElementById('content').innerHTML =
+      '<div class="card"><div class="signed-banner">' +
+        '<div class="icon">&#10003;</div>' +
+        '<h2>Thank You!</h2>' +
+        '<p style="color:var(--muted);margin-top:8px;">Your signed engagement letter has been received. ARK Financial will be in touch.</p>' +
+      '</div></div>';
+  } catch(e) {
+    showStatus('Upload failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Upload Signed Copy';
+  }
+}
+
+function showStatus(msg, type) {
+  var el = document.getElementById('status');
+  if (!el) return;
+  if (!msg) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="status-msg ' + type + '">' + escHtml(msg) + '</div>';
+}
+
+function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+init();
+</script>
+</body>
+</html>

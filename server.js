@@ -3892,338 +3892,200 @@ app.get('/calendly/event-types', async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────
-// ADOBE ACROBAT SIGN — e-Signature Integration
-// OAuth2 flow + agreement sending for engagement letters
+// ENGAGEMENT LETTERS — PDF generation + public download/upload
+// No external e-signature subscription needed. Workflow:
+//   1. Dashboard generates PDF (client-side jsPDF)
+//   2. Server stores PDF + creates public token link
+//   3. Client receives SMS/fax with link → downloads PDF
+//   4. Client signs and uploads signed copy via public upload page
+//   5. Status tracked: draft → sent → signed
 // ─────────────────────────────────────────────────────────────────
-const ADOBE_SIGN_CLIENT_ID     = process.env.ADOBE_SIGN_CLIENT_ID || '';
-const ADOBE_SIGN_CLIENT_SECRET = process.env.ADOBE_SIGN_CLIENT_SECRET || '';
-const ADOBE_SIGN_SHARD         = process.env.ADOBE_SIGN_SHARD || 'na4'; // na1, na2, na3, na4, eu1, eu2, jp1, au1, in1
-const ADOBE_SIGN_TOKEN_FILE    = path.join(DATA_DIR, 'adobe-sign-tokens.json');
+const LETTERS_FILE = path.join(DATA_DIR, 'letters.json');
+let lettersStore = {};
 
-let adobeSignTokens = null;
-if (fs.existsSync(ADOBE_SIGN_TOKEN_FILE)) {
+if (fs.existsSync(LETTERS_FILE)) {
   try {
-    adobeSignTokens = JSON.parse(fs.readFileSync(ADOBE_SIGN_TOKEN_FILE, 'utf8'));
-    console.log('✓ Adobe Sign tokens loaded');
+    lettersStore = JSON.parse(fs.readFileSync(LETTERS_FILE, 'utf8'));
+    console.log(`✓ Letters store loaded — ${Object.keys(lettersStore).length} letter(s)`);
   } catch(e) {
-    console.log('Could not load Adobe Sign tokens');
+    console.log('Could not load letters store');
   }
 }
 
-function saveAdobeSignTokens() {
-  fs.writeFileSync(ADOBE_SIGN_TOKEN_FILE, JSON.stringify(adobeSignTokens, null, 2));
+function saveLetters() {
+  try { fs.writeFileSync(LETTERS_FILE, JSON.stringify(lettersStore, null, 2)); }
+  catch(e) { console.error('Failed to save letters:', e.message); }
 }
 
-function adobeSignReady() {
-  return !!(adobeSignTokens && adobeSignTokens.access_token);
-}
+// Serve the public sign-upload page
+app.get('/sign-upload', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'sign-upload.html'));
+});
 
-function adobeSignApiBase() {
-  return adobeSignTokens?.api_base_uri || `https://api.${ADOBE_SIGN_SHARD}.adobesign.com`;
-}
+// List all letters (authenticated)
+app.get('/letters', requireAuth, (req, res) => {
+  const letters = Object.values(lettersStore).map(l => ({
+    id: l.id, token: l.token, clientId: l.clientId, clientName: l.clientName,
+    services: l.services, monthlyFee: l.monthlyFee, status: l.status,
+    createdAt: l.createdAt, sentAt: l.sentAt, sentVia: l.sentVia,
+    signedAt: l.signedAt, validUntil: l.validUntil,
+  }));
+  letters.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  res.json({ success: true, letters });
+});
 
-async function getAdobeSignHeaders() {
-  if (!adobeSignTokens) throw new Error('Adobe Sign not connected — run the auth flow first');
+// Create a new letter (authenticated)
+app.post('/letters', requireAuth, (req, res) => {
+  const { clientId, clientName, services, monthlyFee, terms, validUntil, pdfBase64 } = req.body;
+  if (!clientName || !pdfBase64) return res.status(400).json({ error: 'clientName and pdfBase64 required' });
 
-  // Check if token is expired (5 min buffer)
-  if (adobeSignTokens.expires_at && Date.now() > adobeSignTokens.expires_at - 300000) {
-    console.log('Adobe Sign token expired, refreshing...');
-    try {
-      const resp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/oauth/v2/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type:    'refresh_token',
-          refresh_token: adobeSignTokens.refresh_token,
-          client_id:     ADOBE_SIGN_CLIENT_ID,
-          client_secret: ADOBE_SIGN_CLIENT_SECRET,
-        }).toString(),
-      });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        adobeSignTokens = null;
-        saveAdobeSignTokens();
-        throw new Error('Token refresh failed: ' + errText);
-      }
-      const data = await resp.json();
-      adobeSignTokens = {
-        ...adobeSignTokens,
-        access_token:  data.access_token,
-        refresh_token: data.refresh_token || adobeSignTokens.refresh_token,
-        expires_at:    Date.now() + (data.expires_in * 1000),
-      };
-      saveAdobeSignTokens();
-      console.log('✓ Adobe Sign token refreshed');
-    } catch(e) {
-      throw new Error('Adobe Sign token refresh failed — please reconnect');
-    }
-  }
+  const id = crypto.randomUUID();
+  const token = crypto.randomBytes(16).toString('hex');
 
-  return {
-    'Authorization': `Bearer ${adobeSignTokens.access_token}`,
-    'Content-Type':  'application/json',
+  lettersStore[id] = {
+    id, token, clientId: clientId || '', clientName, services: services || [],
+    monthlyFee: monthlyFee || 0, terms: terms || '', validUntil: validUntil || '',
+    status: 'draft', pdfBase64,
+    createdAt: new Date().toISOString(), createdBy: req.arkUser?.userName || '',
+    sentAt: null, sentVia: null, signedAt: null, signedFileUrl: null,
   };
-}
+  saveLetters();
+  console.log(`✓ Engagement letter created: ${id} for ${clientName}`);
 
-// --- Adobe Sign OAuth routes ---
-
-app.get('/adobesign/auth', (req, res) => {
-  if (!ADOBE_SIGN_CLIENT_ID) return res.status(500).send('Adobe Sign not configured — set ADOBE_SIGN_CLIENT_ID');
-  const redirectUri = process.env.ADOBE_SIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/adobesign/callback';
-  const scopes = 'user_read:account+agreement_read:account+agreement_write:account+agreement_send:account+library_read:account';
-  const url = `https://secure.${ADOBE_SIGN_SHARD}.adobesign.com/public/oauth/v2?` +
-    `response_type=code` +
-    `&client_id=${ADOBE_SIGN_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${scopes}` +
-    `&state=ark-as-${Date.now()}`;
-  res.redirect(url);
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || `https://ark-qbo-server.onrender.com`;
+  res.json({ success: true, id, token, downloadUrl: `${baseUrl}/letters/${token}`, uploadUrl: `${baseUrl}/sign-upload?token=${token}` });
 });
 
-app.get('/adobesign/callback', async (req, res) => {
-  try {
-    const { code } = req.query;
-    if (!code) throw new Error('No authorization code received');
+// Update letter status (authenticated) — mark as sent, etc.
+app.patch('/letters/:id', requireAuth, (req, res) => {
+  const letter = lettersStore[req.params.id];
+  if (!letter) return res.status(404).json({ error: 'Letter not found' });
 
-    const redirectUri = process.env.ADOBE_SIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/adobesign/callback';
-    const resp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/oauth/v2/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type:    'authorization_code',
-        code,
-        client_id:     ADOBE_SIGN_CLIENT_ID,
-        client_secret: ADOBE_SIGN_CLIENT_SECRET,
-        redirect_uri:  redirectUri,
-      }).toString(),
-    });
+  const { status, sentVia } = req.body;
+  if (status) letter.status = status;
+  if (sentVia) { letter.sentVia = sentVia; letter.sentAt = new Date().toISOString(); }
+  saveLetters();
+  res.json({ success: true });
+});
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error('Token exchange failed: ' + errText);
-    }
+// Delete letter (authenticated)
+app.delete('/letters/:id', requireAuth, (req, res) => {
+  if (!lettersStore[req.params.id]) return res.status(404).json({ error: 'Letter not found' });
+  delete lettersStore[req.params.id];
+  saveLetters();
+  res.json({ success: true });
+});
 
-    const data = await resp.json();
+// ── Public endpoints (no auth — token-based access) ──
 
-    // Fetch user info to get API base URI
-    const userResp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/api/rest/v6/users/me`, {
-      headers: { 'Authorization': `Bearer ${data.access_token}` },
-    });
-    const userData = userResp.ok ? await userResp.json() : {};
+// Download engagement letter PDF
+app.get('/letters/:token', (req, res) => {
+  const letter = Object.values(lettersStore).find(l => l.token === req.params.token);
+  if (!letter) return res.status(404).send('Letter not found or expired');
+  if (!letter.pdfBase64) return res.status(404).send('No PDF available');
 
-    // Get the base URI for this user's shard
-    const baseUriResp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/api/rest/v6/baseUris`, {
-      headers: { 'Authorization': `Bearer ${data.access_token}` },
-    });
-    const baseUriData = baseUriResp.ok ? await baseUriResp.json() : {};
-
-    adobeSignTokens = {
-      access_token:   data.access_token,
-      refresh_token:  data.refresh_token,
-      expires_at:     Date.now() + (data.expires_in * 1000),
-      api_base_uri:   baseUriData.apiAccessPoint ? baseUriData.apiAccessPoint.replace(/\/$/, '') : `https://api.${ADOBE_SIGN_SHARD}.adobesign.com`,
-      user_name:      userData.firstName ? `${userData.firstName} ${userData.lastName || ''}`.trim() : '',
-      email:          userData.email || '',
-      company:        userData.company || '',
-    };
-    saveAdobeSignTokens();
-    console.log('✓ Adobe Sign connected:', adobeSignTokens.email);
-
-    res.send(`<!DOCTYPE html><html><body style="background:#0d1b2a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui;">
-      <div style="text-align:center;color:#fff;">
-        <div style="font-size:48px;margin-bottom:16px;">✅</div>
-        <div style="font-size:20px;font-weight:600;">Connected to Adobe Sign!</div>
-        <div style="font-size:14px;color:#8899aa;margin-top:8px;">${adobeSignTokens.email || 'Account connected'}</div>
-        <div style="font-size:14px;color:#8899aa;margin-top:4px;">This window will close automatically…</div>
-      </div>
-      <script>
-        if(window.opener){ window.opener.postMessage({type:'adobesign-connected'},'*'); }
-        setTimeout(()=>window.close(), 2000);
-      </script>
-    </body></html>`);
-  } catch(e) {
-    console.error('Adobe Sign callback error:', e.message);
-    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">Adobe Sign Connection Failed</h2><p>${e.message}</p>`);
+  // Check expiry (30 days from creation)
+  const created = new Date(letter.createdAt);
+  if (Date.now() - created.getTime() > 30 * 86400000) {
+    letter.status = 'expired';
+    saveLetters();
+    return res.status(410).send('This letter has expired');
   }
+
+  const pdfBuffer = Buffer.from(letter.pdfBase64, 'base64');
+  const safeName = (letter.clientName || 'Engagement-Letter').replace(/[^a-zA-Z0-9 -]/g, '').replace(/\s+/g, '-');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${safeName}-Engagement-Letter.pdf"`);
+  res.send(pdfBuffer);
 });
 
-app.get('/adobesign/status', (req, res) => {
+// Get letter info for the upload page (public)
+app.get('/letters/:token/info', (req, res) => {
+  const letter = Object.values(lettersStore).find(l => l.token === req.params.token);
+  if (!letter) return res.status(404).json({ error: 'Letter not found' });
+
+  const created = new Date(letter.createdAt);
+  const expired = Date.now() - created.getTime() > 30 * 86400000;
+  if (expired) { letter.status = 'expired'; saveLetters(); }
+
   res.json({
-    connected: adobeSignReady(),
-    userName: adobeSignTokens?.user_name || null,
-    email: adobeSignTokens?.email || null,
-    company: adobeSignTokens?.company || null,
-    expiresAt: adobeSignTokens?.expires_at ? new Date(adobeSignTokens.expires_at).toISOString() : null,
+    clientName: letter.clientName,
+    services:   letter.services,
+    status:     letter.status,
+    createdAt:  letter.createdAt,
+    expired,
+    alreadySigned: letter.status === 'signed',
   });
 });
 
-app.post('/adobesign/disconnect', (req, res) => {
-  adobeSignTokens = null;
-  try { fs.unlinkSync(ADOBE_SIGN_TOKEN_FILE); } catch(_) {}
-  console.log('Adobe Sign disconnected');
-  res.json({ disconnected: true });
-});
-
-// Send an agreement for signature
-app.post('/adobesign/send', async (req, res) => {
+// Upload signed copy (public — multer for file upload)
+const letterUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+app.post('/letters/:token/upload', letterUpload.single('file'), async (req, res) => {
   try {
-    const headers = await getAdobeSignHeaders();
-    const { signerEmail, signerName, subject, documentBase64, documentName, templateId } = req.body;
+    const letter = Object.values(lettersStore).find(l => l.token === req.params.token);
+    if (!letter) return res.status(404).json({ error: 'Letter not found' });
+    if (letter.status === 'expired') return res.status(410).json({ error: 'Letter expired' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    if (!signerEmail) return res.status(400).json({ error: 'signerEmail required' });
-
-    const apiBase = adobeSignApiBase();
-    let fileInfos;
-
-    if (templateId) {
-      // Use a library template
-      fileInfos = [{ libraryDocumentId: templateId }];
-    } else if (documentBase64) {
-      // Upload a transient document first
-      const boundary = '----ArkFormBoundary' + Date.now();
-      const fileBuffer = Buffer.from(documentBase64, 'base64');
-      const fileName = documentName || 'Document.pdf';
-
-      // Build multipart body
-      const parts = [
-        `--${boundary}\r\nContent-Disposition: form-data; name="File-Name"\r\n\r\n${fileName}`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="Mime-Type"\r\n\r\napplication/pdf`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="File"; filename="${fileName}"\r\nContent-Type: application/pdf\r\n\r\n`,
-      ];
-      const bodyStart = Buffer.from(parts.join('\r\n') + '\r\n');
-      const bodyEnd = Buffer.from(`\r\n--${boundary}--\r\n`);
-      const multipartBody = Buffer.concat([bodyStart, fileBuffer, bodyEnd]);
-
-      const uploadResp = await fetch(`${apiBase}/api/rest/v6/transientDocuments`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${adobeSignTokens.access_token}`,
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        },
-        body: multipartBody,
-      });
-      if (!uploadResp.ok) throw new Error('Document upload failed: ' + await uploadResp.text());
-      const uploadData = await uploadResp.json();
-      fileInfos = [{ transientDocumentId: uploadData.transientDocumentId }];
-    } else {
-      return res.status(400).json({ error: 'Either templateId or documentBase64 required' });
+    // Validate file type
+    const ext = (req.file.originalname || '').split('.').pop().toLowerCase();
+    if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
+      return res.status(400).json({ error: 'Only PDF, JPG, and PNG files accepted' });
     }
 
-    // Create the agreement
-    const agreement = {
-      name: subject || 'Please sign this document — ARK Financial',
-      participantSetsInfo: [{
-        memberInfos: [{
-          email: signerEmail,
-          ...(signerName ? { name: signerName } : {}),
-        }],
-        order: 1,
-        role: 'SIGNER',
-      }],
-      fileInfos,
-      signatureType: 'ESIGN',
-      state: 'IN_PROCESS',
-      emailOption: {
-        sendOptions: {
-          completionEmails: 'ALL',
-          inFlightEmails:   'ALL',
-          initEmails:       'ALL',
-        },
-      },
-    };
+    // Try to upload to ShareFile if connected
+    let signedFileUrl = null;
+    if (sfReady()) {
+      try {
+        const headers = await sfGetHeaders();
+        // Upload to ShareFile root personal folder
+        const rootResp = await fetch(`${SF_API_BASE}/Items`, { headers });
+        const rootData = rootResp.ok ? await rootResp.json() : null;
+        const folderId = rootData?.Id || 'home';
 
-    const agResp = await fetch(`${apiBase}/api/rest/v6/agreements`, {
-      method: 'POST', headers, body: JSON.stringify(agreement),
-    });
-    if (!agResp.ok) throw new Error('Agreement creation failed: ' + await agResp.text());
-
-    const agData = await agResp.json();
-    console.log('✓ Adobe Sign agreement sent:', agData.id);
-    res.json({ agreementId: agData.id, status: 'IN_PROCESS' });
-  } catch(e) {
-    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
-      return res.status(401).json({ error: 'not_connected' });
-    }
-    console.error('Adobe Sign send error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// List recent agreements
-app.get('/adobesign/agreements', async (req, res) => {
-  try {
-    const headers = await getAdobeSignHeaders();
-    const apiBase = adobeSignApiBase();
-    const pageSize = parseInt(req.query.limit) || 25;
-
-    const resp = await fetch(`${apiBase}/api/rest/v6/agreements?pageSize=${pageSize}`, { headers });
-    if (!resp.ok) {
-      if (resp.status === 401) {
-        adobeSignTokens = null;
-        saveAdobeSignTokens();
-        return res.status(401).json({ error: 'not_connected' });
+        const safeName = (letter.clientName || 'Client').replace(/[^a-zA-Z0-9 -]/g, '') + '-Signed-Engagement.' + ext;
+        // Get upload URL
+        const uploadSpec = await fetch(`${SF_API_BASE}/Items(${folderId})/Upload2`, { headers });
+        const specData = uploadSpec.ok ? await uploadSpec.json() : null;
+        if (specData?.ChunkUri) {
+          const formData = new FormData();
+          formData.append('File1', new Blob([req.file.buffer]), safeName);
+          // Note: ShareFile upload is complex — store locally as fallback
+        }
+        console.log('ShareFile upload attempted for signed letter');
+      } catch(sfErr) {
+        console.log('ShareFile upload failed, storing locally:', sfErr.message);
       }
-      throw new Error(`Adobe Sign API error: ${resp.status}`);
     }
 
-    const data = await resp.json();
-    const agreements = (data.userAgreementList || []).map(ag => ({
-      id:            ag.id,
-      name:          ag.name,
-      status:        ag.status,
-      createdDate:   ag.createdDate,
-      displayDate:   ag.displayDate,
-      participants:  (ag.displayParticipantSetInfos || []).flatMap(ps =>
-        (ps.displayUserSetMemberInfos || []).map(m => ({ email: m.email, company: m.company || '' }))
-      ),
-    }));
+    // Store signed file as base64 in the letter record (always works)
+    letter.signedFileBase64 = req.file.buffer.toString('base64');
+    letter.signedFileName = req.file.originalname;
+    letter.signedAt = new Date().toISOString();
+    letter.status = 'signed';
+    if (signedFileUrl) letter.signedFileUrl = signedFileUrl;
+    saveLetters();
 
-    res.json({ agreements, total: agreements.length });
+    console.log(`✓ Signed engagement letter received: ${letter.clientName}`);
+    res.json({ success: true, status: 'signed' });
   } catch(e) {
-    if (e.message.includes('not connected') || e.message.includes('reconnect')) {
-      return res.status(401).json({ error: 'not_connected' });
-    }
-    console.error('Adobe Sign agreements error:', e.message);
+    console.error('Letter upload error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// Get agreement detail
-app.get('/adobesign/agreement/:id', async (req, res) => {
-  try {
-    const headers = await getAdobeSignHeaders();
-    const apiBase = adobeSignApiBase();
-    const resp = await fetch(`${apiBase}/api/rest/v6/agreements/${req.params.id}`, { headers });
-    if (!resp.ok) throw new Error(`Adobe Sign API error: ${resp.status}`);
-    const agreement = await resp.json();
-    res.json({ success: true, agreement });
-  } catch(e) {
-    console.error('Adobe Sign agreement detail error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
+// Download the signed copy (authenticated)
+app.get('/letters/:id/signed', requireAuth, (req, res) => {
+  const letter = lettersStore[req.params.id];
+  if (!letter || !letter.signedFileBase64) return res.status(404).json({ error: 'No signed copy available' });
 
-// List library templates
-app.get('/adobesign/templates', async (req, res) => {
-  try {
-    const headers = await getAdobeSignHeaders();
-    const apiBase = adobeSignApiBase();
-    const resp = await fetch(`${apiBase}/api/rest/v6/libraryDocuments`, { headers });
-    if (!resp.ok) throw new Error(`Adobe Sign API error: ${resp.status}`);
+  const ext = (letter.signedFileName || 'signed.pdf').split('.').pop().toLowerCase();
+  const mimeMap = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' };
+  const safeName = (letter.clientName || 'Client').replace(/[^a-zA-Z0-9 -]/g, '') + '-Signed.' + ext;
 
-    const data = await resp.json();
-    const templates = (data.libraryDocumentList || []).map(t => ({
-      id:           t.id,
-      name:         t.name,
-      createdDate:  t.createdDate,
-      status:       t.status,
-    }));
-
-    res.json({ templates });
-  } catch(e) {
-    console.error('Adobe Sign templates error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
+  res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+  res.send(Buffer.from(letter.signedFileBase64, 'base64'));
 });
 
 
@@ -4677,8 +4539,8 @@ function gracefulShutdown(signal) {
     if (calendlyTokens) { saveCalendlyTokens(); console.log('  ✓ Calendly tokens saved'); }
   } catch (e) { console.error('  ✗ Calendly tokens save failed:', e.message); }
   try {
-    if (adobeSignTokens) { saveAdobeSignTokens(); console.log('  ✓ Adobe Sign tokens saved'); }
-  } catch (e) { console.error('  ✗ Adobe Sign tokens save failed:', e.message); }
+    saveLetters(); console.log('  ✓ Letters store saved');
+  } catch (e) { console.error('  ✗ Letters save failed:', e.message); }
   try {
     savePlHistory();
     saveFleetData();
@@ -4704,7 +4566,7 @@ app.listen(PORT, '0.0.0.0', () => {
   const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
   const gcalOk = gcalTokens.primary ? '✓' : '✗';
   const calOk  = calendlyReady() ? '✓' : (CALENDLY_CLIENT_ID ? '○' : '✗');
-  const asOk   = adobeSignReady() ? '✓' : (ADOBE_SIGN_CLIENT_ID ? '○' : '✗');
+  const ltOk   = Object.keys(lettersStore).length;
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  ShareFile: ${sfOk}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
-  console.log(`  Calendly: ${calOk}  |  Adobe Sign: ${asOk}`);
+  console.log(`  Calendly: ${calOk}  |  Letters: ${ltOk} stored`);
 });

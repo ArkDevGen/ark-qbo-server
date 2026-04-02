@@ -29336,6 +29336,338 @@ async function fcNewFolder() {
 }
 
 // ── Stats badge ──
+function intOpenTool(key) {
+  if (key === 'letters') engLettersOpen();
+}
+
+// ══════════════════════════════════════════════
+//  ENGAGEMENT LETTERS
+// ══════════════════════════════════════════════
+
+let _engLetters = [];
+
+async function engLettersOpen() {
+  // Full-screen overlay for managing engagement letters
+  let overlay = document.getElementById('eng-letters-overlay');
+  if (overlay) { overlay.style.display = 'flex'; engLettersLoad(); return; }
+
+  overlay = document.createElement('div');
+  overlay.id = 'eng-letters-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `<div class="card" style="width:900px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+      <span style="font-size:18px;">✍️</span>
+      <span style="font-weight:700;font-size:15px;">Engagement Letters</span>
+      <span id="eng-count" style="font-size:11px;color:var(--muted);margin-left:4px;"></span>
+      <button class="btn btn-sm btn-primary" onclick="engLetterNew()" style="font-size:11px;margin-left:auto;">+ New Letter</button>
+      <button class="btn btn-sm" onclick="document.getElementById('eng-letters-overlay').style.display='none'" style="font-size:11px;">Close</button>
+    </div>
+    <div id="eng-create-form" style="display:none;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px;">Client</label><select id="eng-client" class="input" style="font-size:12px;" onchange="engClientChanged()"></select></div>
+        <div><label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px;">Monthly Fee</label><input type="number" id="eng-fee" class="input" style="font-size:12px;" placeholder="0.00" min="0" step="0.01"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px;">Services</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" id="eng-services">
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="checkbox" value="Bookkeeping" checked> Bookkeeping</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="checkbox" value="Payroll"> Payroll</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="checkbox" value="Advisory"> Advisory</label>
+            <label style="font-size:12px;color:var(--text);cursor:pointer;"><input type="checkbox" value="Tax Prep"> Tax Prep</label>
+          </div>
+        </div>
+        <div><label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px;">Valid Until</label><input type="date" id="eng-valid" class="input" style="font-size:12px;"></div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:4px;">Custom Terms (optional)</label>
+        <textarea id="eng-terms" class="input" style="font-size:12px;height:60px;resize:vertical;" placeholder="Any additional terms or notes for this engagement..."></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-sm" onclick="engLetterNew()">Cancel</button>
+        <button class="btn btn-sm btn-primary" onclick="engLetterCreate()">Generate & Save</button>
+      </div>
+    </div>
+    <div id="eng-table" style="flex:1;overflow-y:auto;padding:0;">
+      <div style="padding:40px;text-align:center;color:var(--muted);font-size:12px;">Loading...</div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+
+  // Set default valid-until to 30 days from now
+  const d = new Date(); d.setDate(d.getDate() + 30);
+  document.getElementById('eng-valid').value = d.toISOString().slice(0,10);
+
+  engPopulateClients();
+  engLettersLoad();
+}
+
+function engPopulateClients() {
+  const sel = document.getElementById('eng-client');
+  if (!sel) return;
+  const clients = (DB.clients || []).filter(c => c.status === 'Active' || c.status === 'Prospect' || c.status === 'Lead').sort((a,b) => (a.biz||'').localeCompare(b.biz||''));
+  sel.innerHTML = '<option value="">Select client…</option>' +
+    clients.map(c => `<option value="${c.id}" data-biz="${c.biz||''}" data-services="${(c.services||[]).join(',')}" data-fee="${c.baseFee||''}">${c.biz||'Unnamed'}</option>`).join('');
+}
+
+function engClientChanged() {
+  const sel = document.getElementById('eng-client');
+  const opt = sel.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  const fee = opt.dataset.fee;
+  if (fee) document.getElementById('eng-fee').value = fee;
+  const svcs = (opt.dataset.services || '').split(',').filter(Boolean);
+  document.querySelectorAll('#eng-services input[type=checkbox]').forEach(cb => {
+    cb.checked = svcs.includes(cb.value);
+  });
+}
+
+async function engLettersLoad() {
+  try {
+    const resp = await authFetch(ARK_SERVER + '/letters');
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    _engLetters = data.letters || [];
+    document.getElementById('eng-count').textContent = _engLetters.length + ' letter' + (_engLetters.length !== 1 ? 's' : '');
+    engLettersRender();
+  } catch(e) {
+    document.getElementById('eng-table').innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
+  }
+}
+
+function engLettersRender() {
+  const tbl = document.getElementById('eng-table');
+  if (!_engLetters.length) {
+    tbl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px;">No engagement letters yet. Click "+ New Letter" to create one.</div>';
+    return;
+  }
+  const statusBadge = s => {
+    const colors = { draft:'#64748b', sent:'#3b82f6', signed:'#22c55e', expired:'#ef4444' };
+    return `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:${colors[s]||'#64748b'}22;color:${colors[s]||'#64748b'};">${s}</span>`;
+  };
+  const baseUrl = ARK_SERVER;
+  tbl.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
+    <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);">
+      <th style="text-align:left;padding:8px 16px;">Client</th><th style="text-align:left;padding:8px 6px;">Services</th>
+      <th style="text-align:right;padding:8px 6px;">Fee</th><th style="text-align:center;padding:8px 6px;">Status</th>
+      <th style="text-align:left;padding:8px 6px;">Created</th><th style="text-align:left;padding:8px 6px;">Sent</th>
+      <th style="text-align:right;padding:8px 16px;">Actions</th>
+    </tr></thead><tbody>` +
+    _engLetters.map(l => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px 16px;font-weight:600;">${l.clientName}</td>
+      <td style="padding:8px 6px;font-size:11px;color:var(--muted);">${(l.services||[]).join(', ')||'—'}</td>
+      <td style="padding:8px 6px;text-align:right;font-family:'DM Mono',monospace;">$${(l.monthlyFee||0).toFixed(2)}</td>
+      <td style="padding:8px 6px;text-align:center;">${statusBadge(l.status)}</td>
+      <td style="padding:8px 6px;font-size:11px;">${l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '—'}</td>
+      <td style="padding:8px 6px;font-size:11px;">${l.sentAt ? new Date(l.sentAt).toLocaleDateString() + ' (' + (l.sentVia||'') + ')' : '—'}</td>
+      <td style="padding:8px 16px;text-align:right;white-space:nowrap;">
+        <a href="${baseUrl}/letters/${l.token}" target="_blank" class="btn btn-sm" style="font-size:10px;padding:2px 8px;text-decoration:none;">PDF</a>
+        ${l.status==='draft'||l.status==='sent'?`<button class="btn btn-sm" onclick="engLetterSendSMS('${l.id}','${l.token}')" style="font-size:10px;padding:2px 8px;">SMS</button>`:''}
+        ${l.status==='signed'?`<a href="${baseUrl}/letters/${l.id}/signed" target="_blank" class="btn btn-sm" style="font-size:10px;padding:2px 8px;text-decoration:none;color:var(--green);">Signed</a>`:''}
+        <button class="btn btn-sm" onclick="engLetterDelete('${l.id}')" style="font-size:10px;padding:2px 8px;color:var(--muted);">Del</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+function engLetterNew() {
+  const form = document.getElementById('eng-create-form');
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+}
+
+async function engLetterCreate() {
+  const clientSel = document.getElementById('eng-client');
+  const clientId = clientSel.value;
+  const clientName = clientSel.selectedOptions[0]?.textContent || '';
+  if (!clientId) { alert('Select a client'); return; }
+
+  const services = [];
+  document.querySelectorAll('#eng-services input:checked').forEach(cb => services.push(cb.value));
+  const monthlyFee = parseFloat(document.getElementById('eng-fee').value) || 0;
+  const validUntil = document.getElementById('eng-valid').value;
+  const terms = document.getElementById('eng-terms').value.trim();
+
+  // Generate PDF using jsPDF
+  const pdfBase64 = await engGeneratePDF({ clientName, services, monthlyFee, validUntil, terms });
+  if (!pdfBase64) return;
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/letters', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, clientName, services, monthlyFee, validUntil, terms, pdfBase64 }),
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    engLetterNew(); // close form
+    engLettersLoad();
+  } catch(e) { alert('Failed to create letter: ' + e.message); }
+}
+
+async function engGeneratePDF(p) {
+  // Load jsPDF if needed
+  if (typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined') {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const jsPDF = window.jsPDF?.jsPDF || window.jspdf?.jsPDF || window.jsPDF;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+
+  const PW = 612, PH = 792, ML = 72, MR = 540;
+  let y = 72;
+  const navy = [31, 78, 121], dark = [30,30,30], gray = [100,100,100], lgray = [200,200,200];
+
+  const setFont = (style, size, color) => { doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(...(color||dark)); };
+  const drawLine = (x1, yy, x2) => { doc.setLineWidth(0.5); doc.setDrawColor(...lgray); doc.line(x1, yy, x2, yy); };
+  const checkY = (needed) => { if (y + needed > PH - 60) { doc.addPage(); y = 72; } };
+
+  // Header
+  setFont('bold', 22, navy);
+  doc.text('ARK Financial', ML, y);
+  y += 14;
+  setFont('normal', 9, gray);
+  doc.text('Bookkeeping  |  Payroll  |  Advisory', ML, y);
+  y += 30;
+  drawLine(ML, y, MR);
+  y += 24;
+
+  // Title
+  setFont('bold', 16, dark);
+  doc.text('Engagement Letter', ML, y);
+  y += 20;
+  setFont('normal', 10, gray);
+  doc.text('Date: ' + new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), ML, y);
+  y += 14;
+  doc.text('Prepared for: ' + p.clientName, ML, y);
+  y += 24;
+
+  // Services
+  setFont('bold', 12, navy);
+  doc.text('Services', ML, y);
+  y += 16;
+  (p.services || []).forEach(svc => {
+    setFont('normal', 10, dark);
+    doc.text('  •  ' + svc, ML, y);
+    y += 14;
+  });
+  y += 12;
+
+  // Fee Schedule
+  drawLine(ML, y, MR); y += 16;
+  setFont('bold', 12, navy);
+  doc.text('Fee Schedule', ML, y);
+  y += 18;
+  setFont('normal', 10, dark);
+  doc.text('Monthly Service Fee:', ML, y);
+  setFont('bold', 10, dark);
+  doc.text('$' + (p.monthlyFee || 0).toFixed(2), MR - 20, y, { align: 'right' });
+  y += 16;
+  setFont('normal', 9, gray);
+  doc.text('Billed monthly. Due upon receipt of invoice.', ML, y);
+  y += 20;
+
+  if (p.validUntil) {
+    setFont('normal', 9, gray);
+    doc.text('This engagement letter is valid until: ' + new Date(p.validUntil).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), ML, y);
+    y += 20;
+  }
+
+  // Terms
+  if (p.terms) {
+    drawLine(ML, y, MR); y += 16;
+    setFont('bold', 12, navy);
+    doc.text('Additional Terms', ML, y);
+    y += 16;
+    setFont('normal', 9, dark);
+    const termLines = doc.splitTextToSize(p.terms, MR - ML);
+    termLines.forEach(line => { checkY(14); doc.text(line, ML, y); y += 13; });
+    y += 10;
+  }
+
+  // Agreement Section
+  checkY(180);
+  drawLine(ML, y, MR); y += 20;
+  setFont('bold', 12, navy);
+  doc.text('Agreement', ML, y);
+  y += 18;
+  setFont('normal', 9, dark);
+  const agreementText = 'By signing below, the Client agrees to engage ARK Financial to provide the services described above under the terms outlined in this letter. Either party may terminate this engagement with 30 days written notice.';
+  const agLines = doc.splitTextToSize(agreementText, MR - ML);
+  agLines.forEach(line => { doc.text(line, ML, y); y += 13; });
+  y += 30;
+
+  // Signature blocks
+  setFont('normal', 9, gray);
+  doc.text('Client Signature:', ML, y);
+  doc.text('Date:', 360, y);
+  y += 4;
+  drawLine(ML, y + 20, 320, y + 20);
+  drawLine(360, y + 20, MR, y + 20);
+  y += 38;
+  doc.text('Print Name:', ML, y);
+  doc.text('Title:', 360, y);
+  y += 4;
+  drawLine(ML, y + 20, 320, y + 20);
+  drawLine(360, y + 20, MR, y + 20);
+  y += 50;
+
+  setFont('normal', 9, gray);
+  doc.text('ARK Financial Representative:', ML, y);
+  doc.text('Date:', 360, y);
+  y += 4;
+  drawLine(ML, y + 20, 320, y + 20);
+  drawLine(360, y + 20, MR, y + 20);
+
+  // Return as base64
+  return doc.output('datauristring').split(',')[1];
+}
+
+async function engLetterSendSMS(id, token) {
+  const letter = _engLetters.find(l => l.id === id);
+  if (!letter) return;
+
+  // Find client phone
+  const client = (DB.clients || []).find(c => c.id === letter.clientId);
+  let phone = '';
+  if (client) {
+    phone = client.phone || (client.owners && client.owners[0] && (client.owners[0].cell || client.owners[0].phone)) || '';
+  }
+
+  const inputPhone = prompt('Send engagement letter to ' + letter.clientName + ' via SMS.\n\nPhone number:', phone);
+  if (!inputPhone) return;
+
+  const baseUrl = ARK_SERVER;
+  const link = baseUrl + '/sign-upload?token=' + token;
+  const msg = 'ARK Financial: Your engagement letter is ready. Download, sign, and upload here: ' + link;
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/sms/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: inputPhone.replace(/\D/g, ''), text: msg }),
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || 'SMS send failed');
+
+    // Update letter status
+    await authFetch(ARK_SERVER + '/letters/' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'sent', sentVia: 'sms' }),
+    });
+    engLettersLoad();
+    alert('SMS sent to ' + inputPhone);
+  } catch(e) { alert('Send failed: ' + e.message); }
+}
+
+async function engLetterDelete(id) {
+  if (!confirm('Delete this engagement letter?')) return;
+  try {
+    await authFetch(ARK_SERVER + '/letters/' + id, { method: 'DELETE' });
+    engLettersLoad();
+  } catch(e) { alert('Delete failed: ' + e.message); }
+}
+
 function fcUpdateStats() {
   const badge = document.getElementById('fc-storage-badge');
   const fileCount = _fcFiles.filter(f => f.type === 'file').length;
@@ -29394,9 +29726,18 @@ const INTEGRATIONS = [
     supportsToken: true,
   },
   {
-    key: 'adobesign', name: 'Adobe Sign', icon: '✍️', color: '#EC1C24',
-    desc: 'Engagement letters, e-signatures, agreement tracking',
-    statusUrl: '/adobesign/status', authUrl: '/adobesign/auth', disconnectUrl: '/adobesign/disconnect',
+    key: 'letters', name: 'Engagement Letters', icon: '✍️', color: '#EC1C24',
+    desc: 'Generate, send, and track engagement letters with client signature upload',
+    statusUrl: '/letters', authUrl: null, disconnectUrl: null,
+    internalTool: true,
+    customStatus: (st) => {
+      const letters = st.letters || [];
+      const signed = letters.filter(l => l.status === 'signed').length;
+      const sent = letters.filter(l => l.status === 'sent').length;
+      const draft = letters.filter(l => l.status === 'draft').length;
+      if (!letters.length) return 'No letters yet';
+      return `${letters.length} total: ${signed} signed, ${sent} sent, ${draft} draft`;
+    },
   },
   {
     key: 'sinch-fax', name: 'Sinch Fax', icon: '📠', color: '#A855F7',
@@ -29468,7 +29809,7 @@ function intRenderCards() {
   grid.innerHTML = INTEGRATIONS.map(svc => {
     const st = _intStatuses[svc.key] || {};
     const connected = !!st.connected;
-    const dot = connected ? '#22c55e' : '#64748b';
+    const dot = svc.internalTool ? '#22c55e' : connected ? '#22c55e' : '#64748b';
     const statusText = connected ? 'Connected' : 'Not connected';
     const expiry = svc.customExpiry ? svc.customExpiry(st) :
                    st.expiresAt ? `Token expires ${new Date(st.expiresAt).toLocaleDateString()}` : '';
@@ -29478,7 +29819,9 @@ function intRenderCards() {
                   st.owner ? 'Authenticated' : '';
 
     let actions = '';
-    if (connected) {
+    if (svc.internalTool) {
+      actions += `<button class="btn btn-sm btn-primary" onclick="intOpenTool('${svc.key}')" style="font-size:12px;">Manage</button>`;
+    } else if (connected) {
       if (svc.hasOwnPage) {
         actions += `<button class="btn btn-sm" onclick="nav('${svc.navPage}')" style="font-size:12px;">Open</button>`;
       }
