@@ -837,8 +837,13 @@ async function getQBOClient(rid) {
   // Access tokens last 60 minutes; refresh tokens last 100 days
   // Must set token BEFORE checking validity so it checks the right realm
   oauthClient.setToken(td);
-  if (!oauthClient.isAccessTokenValid()) {
-    console.log(`Access token expired for realm ${targetRealm}, refreshing...`);
+
+  // Force refresh if: library says expired, OR no expires_at stored, OR token is older than 50 min
+  const tokenAge = td.expires_at ? Date.now() - (td.expires_at - 3600000) : Infinity;
+  const needsRefresh = !oauthClient.isAccessTokenValid() || !td.expires_at || tokenAge > 3000000;
+
+  if (needsRefresh) {
+    console.log(`Access token needs refresh for realm ${targetRealm} (age: ${Math.round(tokenAge/60000)}min)...`);
     try {
       const refreshResponse = await oauthClient.refresh();
       const newTokens = refreshResponse.getJson();
