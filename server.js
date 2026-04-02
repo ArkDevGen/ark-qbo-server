@@ -930,14 +930,15 @@ app.post('/qbo/api', async (req, res) => {
       responded = true;
 
       if (err) {
-        const qboBody = body || err.response?.data || err;
-        const fault = qboBody?.Fault || qboBody?.fault || null;
-        const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || '';
+        // Extract QBO fault from response body (avoid circular refs in err object)
+        const qboBody = body || err.response?.data || null;
+        const fault = qboBody?.Fault || null;
+        const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || err.message || 'Unknown QBO error';
         const statusCode = err.response?.status || 500;
-        console.error('createJournalEntry error:', statusCode, faultMsg || err.message);
+        console.error('createJournalEntry error:', statusCode, faultMsg);
         return res.status(statusCode >= 400 ? statusCode : 500).json({
-          error: faultMsg || err.message || 'Failed to create journal entry',
-          detail: fault || qboBody
+          error: faultMsg,
+          detail: fault || null
         });
       }
       const je = body || response;
