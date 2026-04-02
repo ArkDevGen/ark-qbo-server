@@ -909,25 +909,28 @@ app.post('/qbo/api', async (req, res) => {
 
   // ── Action: Create Journal Entry ─────────────────────────────
   } else if (action === 'createJournalEntry') {
-    qbo.createJournalEntry(payload, (err, data) => {
+    qbo.createJournalEntry(payload, (err, response, body) => {
       if (err) {
-        // node-quickbooks wraps errors differently — extract the actual QBO fault
-        const errObj = typeof err === 'object' ? err : {};
-        const fault = errObj.Fault || errObj.fault || errObj.body?.Fault || null;
+        // node-quickbooks callback: (err, httpResponse, responseBody)
+        // The actual QBO fault is in: body, err.response.data, or err itself
+        const qboBody = body || err.response?.data || err;
+        const fault = qboBody?.Fault || qboBody?.fault || null;
         const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || '';
-        const statusCode = errObj.statusCode || errObj.status || 500;
-        console.error('createJournalEntry error:', JSON.stringify(err, null, 2));
+        const statusCode = err.response?.status || 500;
+        console.error('createJournalEntry error:', statusCode, JSON.stringify(qboBody, null, 2));
         return res.status(statusCode >= 400 ? statusCode : 500).json({
-          error: faultMsg || errObj.message || 'Failed to create journal entry',
-          detail: fault || err
+          error: faultMsg || err.message || 'Failed to create journal entry',
+          detail: fault || qboBody
         });
       }
-      console.log(`  ✓ Journal Entry created: ID ${data.Id}`);
-      res.json({ 
-        success: true, 
-        id:      data.Id, 
-        txnDate: data.TxnDate,
-        docNum:  data.DocNumber,
+      // Success: body has the JE, or fall back to response
+      const je = body || response;
+      console.log(`  ✓ Journal Entry created: ID ${je?.Id || 'unknown'}`);
+      res.json({
+        success: true,
+        id:      je?.Id,
+        txnDate: je?.TxnDate,
+        docNum:  je?.DocNumber,
       });
     });
 
