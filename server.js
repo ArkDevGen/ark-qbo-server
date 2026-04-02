@@ -740,6 +740,30 @@ app.post('/qbo/disconnect', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// ROUTE 3c: Bulk token refresh — attempt to refresh all connected realms
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/refresh-all', async (req, res) => {
+  const results = { refreshed: 0, failed: 0, errors: [] };
+  for (const [rid, entry] of Object.entries(tokenStore)) {
+    if (!entry.tokenData?.refresh_token) continue;
+    try {
+      oauthClient.setToken(entry.tokenData);
+      const refreshResponse = await oauthClient.refresh();
+      const newTokens = refreshResponse.getJson();
+      setTokenData(rid, newTokens);
+      results.refreshed++;
+      console.log(`  ✓ Refreshed realm ${rid} (${entry.companyName || 'unnamed'})`);
+    } catch(e) {
+      results.failed++;
+      results.errors.push({ realmId: rid, companyName: entry.companyName || '', error: e.message });
+      console.log(`  ✗ Failed to refresh realm ${rid}: ${e.message}`);
+    }
+  }
+  console.log(`Token refresh: ${results.refreshed} ok, ${results.failed} failed`);
+  res.json(results);
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ROUTE 3c-pre: Clear all stale linkedClients (keeps QBO connections)
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/clear-links', (req, res) => {
@@ -811,11 +835,11 @@ async function getQBOClient(rid) {
 
   // Check if the access token is still valid
   // Access tokens last 60 minutes; refresh tokens last 100 days
+  // Must set token BEFORE checking validity so it checks the right realm
+  oauthClient.setToken(td);
   if (!oauthClient.isAccessTokenValid()) {
     console.log(`Access token expired for realm ${targetRealm}, refreshing...`);
     try {
-      // Set the token on the oauthClient before refreshing
-      oauthClient.setToken(td);
       const refreshResponse = await oauthClient.refresh();
       const newTokens = refreshResponse.getJson();
       setTokenData(targetRealm, newTokens);
