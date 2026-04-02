@@ -918,43 +918,45 @@ app.post('/qbo/api', async (req, res) => {
 
   // ── Action: Create Journal Entry ─────────────────────────────
   } else if (action === 'createJournalEntry') {
-    // Timeout: if QBO doesn't respond in 25 seconds, return error
-    let responded = false;
-    const timeout = setTimeout(() => {
-      if (!responded) {
-        responded = true;
-        console.error('createJournalEntry TIMEOUT for realm', targetRealm);
-        res.status(504).json({ error: 'QBO API timeout — no response within 25 seconds' });
-      }
-    }, 25000);
-
+    // Use direct QBO API call instead of node-quickbooks to preserve AccountRef IDs
     console.log(`  Sending JE to QBO: DocNumber=${payload.DocNumber}, TxnDate=${payload.TxnDate}, Lines=${payload.Line?.length}`);
-    qbo.createJournalEntry(payload, (err, response, body) => {
-      clearTimeout(timeout);
-      if (responded) return; // Already timed out
-      responded = true;
-
-      if (err) {
-        // Extract QBO fault from response body (avoid circular refs in err object)
-        const qboBody = body || err.response?.data || null;
-        const fault = qboBody?.Fault || null;
-        const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || err.message || 'Unknown QBO error';
-        const statusCode = err.response?.status || 500;
-        console.error('createJournalEntry error:', statusCode, faultMsg);
-        return res.status(statusCode >= 400 ? statusCode : 500).json({
-          error: faultMsg,
-          detail: fault || null
-        });
+    try {
+      // Get fresh token
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
       }
-      const je = body || response;
-      console.log(`  ✓ Journal Entry created: ID ${je?.Id || 'unknown'}`);
-      res.json({
-        success: true,
-        id:      je?.Id,
-        txnDate: je?.TxnDate,
-        docNum:  je?.DocNumber,
+
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+
+      const resp = await fetch(`${baseUrl}/v3/company/${targetRealm}/journalentry?minorversion=65`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
       });
-    });
+
+      const body = await resp.json();
+
+      if (!resp.ok) {
+        const fault = body?.Fault;
+        const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || `QBO error ${resp.status}`;
+        console.error('createJournalEntry error:', resp.status, faultMsg);
+        return res.status(resp.status).json({ error: faultMsg, detail: fault || null });
+      }
+
+      const je = body.JournalEntry || body;
+      console.log(`  ✓ Journal Entry created: ID ${je?.Id || 'unknown'}, DocNum ${je?.DocNumber || ''}`);
+      res.json({ success: true, id: je?.Id, txnDate: je?.TxnDate, docNum: je?.DocNumber });
+    } catch(e) {
+      console.error('createJournalEntry exception:', e.message);
+      res.status(500).json({ error: e.message });
+    }
 
   // ── Action: Create Expense (Purchase) ────────────────────────
   } else if (action === 'createExpense') {
