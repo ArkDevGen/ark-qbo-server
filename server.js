@@ -4217,6 +4217,10 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
   const other = num(row['Other']);
   const recon = num(row['Reconciliation']);
   const rounding = num(row['Rounding']);
+
+  // Use class from data file if present, otherwise fall back to config
+  const rowClass = row['Class'] ? String(row['Class']).trim() : '';
+  if (rowClass) className = rowClass;
   const avgCheck = num(row['Avg Check']);
   const grossFood = num(row['Gross Food %']);
   const trafficCount = num(row['Traffic Count']);
@@ -4310,6 +4314,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
       'Discount %': sjeFindColumn(headers, ['discount %']),
       'Traffic Count': sjeFindColumn(headers, ['traffic count']),
       'Gross Food %': sjeFindColumn(headers, ['gross food %']),
+      'Class': sjeFindColumn(headers, ['class']),
     };
 
     // Normalize rows
