@@ -1030,6 +1030,182 @@ app.post('/qbo/api', async (req, res) => {
     console.log(`  ✓ P&L history batch: ${results.length} ok, ${errors.length} errors`);
     res.json({ success: true, results, errors });
 
+  // ── Action: List Invoices ─────────────────────────────────────
+  } else if (action === 'getInvoices') {
+    const { status, startDate, endDate, customerId } = payload || {};
+    const criteria = { asc: 'TxnDate' };
+    // Build query string for filtering
+    const where = [];
+    if (startDate) where.push(`TxnDate >= '${startDate}'`);
+    if (endDate)   where.push(`TxnDate <= '${endDate}'`);
+    if (customerId) where.push(`CustomerRef = '${customerId}'`);
+    if (where.length) criteria.query = where.join(' AND ');
+    criteria.fetchAll = true;
+
+    qbo.findInvoices(criteria, (err, data) => {
+      if (err) {
+        console.error('getInvoices error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch invoices' });
+      }
+      let invoices = (data.QueryResponse?.Invoice || []).map(inv => {
+        const balance = parseFloat(inv.Balance || 0);
+        const total = parseFloat(inv.TotalAmt || 0);
+        const dueDate = inv.DueDate || '';
+        let invStatus = 'Open';
+        if (balance === 0) invStatus = 'Paid';
+        else if (dueDate && new Date(dueDate) < new Date()) invStatus = 'Overdue';
+        return {
+          id:           inv.Id,
+          docNumber:    inv.DocNumber || '',
+          txnDate:      inv.TxnDate,
+          dueDate,
+          customerName: inv.CustomerRef?.name || '',
+          customerId:   inv.CustomerRef?.value || '',
+          total,
+          balance,
+          status:       invStatus,
+          emailStatus:  inv.EmailStatus || '',
+        };
+      });
+      // Client-side status filter
+      if (status && status !== 'All') {
+        invoices = invoices.filter(i => i.status === status);
+      }
+      console.log(`  Returned ${invoices.length} invoices`);
+      res.json({ success: true, invoices });
+    });
+
+  // ── Action: Get Single Invoice Detail ───────────────────────
+  } else if (action === 'getInvoice') {
+    if (!payload?.id) return res.status(400).json({ error: 'Invoice id required' });
+    qbo.getInvoice(payload.id, (err, data) => {
+      if (err) {
+        console.error('getInvoice error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch invoice' });
+      }
+      res.json({ success: true, invoice: data });
+    });
+
+  // ── Action: Create Invoice ──────────────────────────────────
+  } else if (action === 'createInvoice') {
+    qbo.createInvoice(payload, (err, data) => {
+      if (err) {
+        console.error('createInvoice error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to create invoice', detail: err.Fault || err });
+      }
+      console.log(`  ✓ Invoice created: ID ${data.Id}, Doc# ${data.DocNumber}`);
+      res.json({ success: true, id: data.Id, docNumber: data.DocNumber, txnDate: data.TxnDate });
+    });
+
+  // ── Action: Send Invoice via Email ──────────────────────────
+  } else if (action === 'sendInvoice') {
+    if (!payload?.id) return res.status(400).json({ error: 'Invoice id required' });
+    qbo.sendInvoicePdf(payload.id, payload.sendTo || null, (err, data) => {
+      if (err) {
+        console.error('sendInvoice error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to send invoice' });
+      }
+      console.log(`  ✓ Invoice ${payload.id} sent via email`);
+      res.json({ success: true, id: data.Id, emailStatus: data.EmailStatus });
+    });
+
+  // ── Action: Balance Sheet Report ────────────────────────────
+  } else if (action === 'getBalanceSheet') {
+    const { startDate, endDate } = payload || {};
+    if (!endDate) return res.status(400).json({ error: 'endDate required (startDate optional for comparison)' });
+    const params = { end_date: endDate };
+    if (startDate) params.start_date = startDate;
+
+    qbo.reportBalanceSheet(params, (err, data) => {
+      if (err) {
+        console.error('getBalanceSheet error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch balance sheet', detail: err.Fault || err });
+      }
+      console.log(`  ✓ Balance Sheet returned for ${endDate}`);
+      res.json({ success: true, report: data });
+    });
+
+  // ── Action: Aged Receivables Report ─────────────────────────
+  } else if (action === 'getAgedReceivables') {
+    const params = {};
+    if (payload?.reportDate) params.report_date = payload.reportDate;
+    if (payload?.agingMethod) params.aging_method = payload.agingMethod;
+
+    qbo.reportAgedReceivables(params, (err, data) => {
+      if (err) {
+        console.error('getAgedReceivables error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch AR aging' });
+      }
+      console.log('  ✓ AR Aging report returned');
+      res.json({ success: true, report: data });
+    });
+
+  // ── Action: Aged Payables Report ────────────────────────────
+  } else if (action === 'getAgedPayables') {
+    const params = {};
+    if (payload?.reportDate) params.report_date = payload.reportDate;
+
+    qbo.reportAgedPayables(params, (err, data) => {
+      if (err) {
+        console.error('getAgedPayables error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch AP aging' });
+      }
+      console.log('  ✓ AP Aging report returned');
+      res.json({ success: true, report: data });
+    });
+
+  // ── Action: List Bills ──────────────────────────────────────
+  } else if (action === 'getBills') {
+    const { status, startDate, endDate, vendorId } = payload || {};
+    const criteria = { asc: 'TxnDate', fetchAll: true };
+    const where = [];
+    if (startDate) where.push(`TxnDate >= '${startDate}'`);
+    if (endDate)   where.push(`TxnDate <= '${endDate}'`);
+    if (vendorId)  where.push(`VendorRef = '${vendorId}'`);
+    if (where.length) criteria.query = where.join(' AND ');
+
+    qbo.findBills(criteria, (err, data) => {
+      if (err) {
+        console.error('getBills error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch bills' });
+      }
+      let bills = (data.QueryResponse?.Bill || []).map(bill => {
+        const balance = parseFloat(bill.Balance || 0);
+        const total = parseFloat(bill.TotalAmt || 0);
+        const dueDate = bill.DueDate || '';
+        let billStatus = 'Open';
+        if (balance === 0) billStatus = 'Paid';
+        else if (dueDate && new Date(dueDate) < new Date()) billStatus = 'Overdue';
+        return {
+          id:         bill.Id,
+          docNumber:  bill.DocNumber || '',
+          txnDate:    bill.TxnDate,
+          dueDate,
+          vendorName: bill.VendorRef?.name || '',
+          vendorId:   bill.VendorRef?.value || '',
+          total,
+          balance,
+          status:     billStatus,
+        };
+      });
+      if (status && status !== 'All') {
+        bills = bills.filter(b => b.status === status);
+      }
+      console.log(`  Returned ${bills.length} bills`);
+      res.json({ success: true, bills });
+    });
+
+  // ── Action: Get Single Bill Detail ──────────────────────────
+  } else if (action === 'getBill') {
+    if (!payload?.id) return res.status(400).json({ error: 'Bill id required' });
+    qbo.getBill(payload.id, (err, data) => {
+      if (err) {
+        console.error('getBill error:', JSON.stringify(err, null, 2));
+        return res.status(500).json({ error: err.message || 'Failed to fetch bill' });
+      }
+      res.json({ success: true, bill: data });
+    });
+
   // ── Action: Switch Active Realm ────────────────────────────────
   } else if (action === 'switchRealm') {
     const rid = payload?.realmId;
