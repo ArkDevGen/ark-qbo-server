@@ -4182,6 +4182,14 @@ function sjeGetRoyaltyRate(franchiseKey, storeId) {
 function sjeGetAdFundRate() { return ROYALTY_OVERRIDES.ad_fund_rate || 0.02; }
 
 function sjeFindColumn(headers, possibleNames) {
+  // First pass: exact match (case-insensitive)
+  for (const col of headers) {
+    const lower = String(col).toLowerCase().trim();
+    for (const p of possibleNames) {
+      if (lower === p.toLowerCase()) return col;
+    }
+  }
+  // Second pass: includes match (for partial/fuzzy matching)
   for (const col of headers) {
     const lower = String(col).toLowerCase().trim();
     for (const p of possibleNames) {
@@ -4292,7 +4300,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
       'Tip': sjeFindColumn(headers, ['tip']),
       'Cash': sjeFindColumn(headers, ['cash']),
       'Credit Card': sjeFindColumn(headers, ['credit card']),
-      'Gift Card': sjeFindColumn(headers, ['gift card redeemed', 'gift cards redeemed', 'gc redeemed', 'gift card used', 'redeemed gift card', 'gift redemption', 'gc redemption', 'gift redeemed', 'redeem gc']),
+      'Gift Card': sjeFindColumn(headers, ['gift card', 'gift card redeemed', 'gift cards redeemed', 'gc redeemed', 'gift card used', 'redeemed gift card', 'gift redemption', 'gc redemption', 'gift redeemed', 'redeem gc']),
       'Mobile App': sjeFindColumn(headers, ['mobile app']),
       'Promotion': sjeFindColumn(headers, ['promotion']),
       'Other': sjeFindColumn(headers, ['other']),
