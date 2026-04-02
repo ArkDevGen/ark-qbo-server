@@ -519,19 +519,12 @@
     "use_classes": false
   },
   "Tuff Scooter": {
-    "label": "Tuff Scooter",
+    "label": "Tuff (581 EisCO)",
     "franchise_names": ["Tuff Scooter Pharmer, LLC"],
     "stores": {
-      "345": "345 - Garfield",
-      "581": "581 - Eisenhower"
+      "581": ""
     },
-    "use_classes": true,
-    "grouping": [
-      {
-        "stores": ["345", "581"],
-        "label": "Tuff (345 Gar & 581 Eis)"
-      }
-    ]
+    "use_classes": false
   },
   "VI Coffee": {
     "label": "VICof (2226 PhoAZ)",
