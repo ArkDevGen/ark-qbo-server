@@ -29684,22 +29684,19 @@ const INTEGRATIONS = [
   {
     key: 'qbo', name: 'QuickBooks Online', icon: '💼', color: '#2CA01C',
     desc: 'Accounting, invoices, P&L reports, journal entries',
-    statusUrl: '/qbo/status', authUrl: '/qbo/auth', disconnectUrl: '/qbo/disconnect',
+    statusUrl: '/qbo/status', authUrl: null, disconnectUrl: null,
     hasOwnPage: true, navPage: 'qbo',
+    customConnected: (st) => {
+      const companies = st.companies || {};
+      return Object.values(companies).some(c => c.connected);
+    },
     customStatus: (st) => {
       const companies = st.companies || {};
       const count = Object.values(companies).filter(c => c.connected).length;
-      const names = Object.values(companies).filter(c => c.connected && c.companyName).map(c => c.companyName);
-      return count > 0 ? `${count} company${count>1?'ies':''} connected` + (names.length ? ': ' + names.join(', ') : '') : '';
+      return count > 0 ? `${count} ${count === 1 ? 'company' : 'companies'} connected` : '';
     },
     customExpiry: (st) => {
-      if (!st.expiresAt) return st.refreshTokenAge || '';
-      const exp = new Date(st.expiresAt);
-      const now = new Date();
-      const diffMin = Math.round((exp - now) / 60000);
-      if (diffMin < 0) return 'Access token expired — auto-refreshes on next API call';
-      if (diffMin < 60) return `Access token refreshes in ${diffMin}m (auto-refresh on API calls)`;
-      return st.refreshTokenAge || 'Token active';
+      return 'Tokens auto-refresh on each API call';
     },
   },
   {
@@ -29803,12 +29800,16 @@ async function intFetchAllStatuses() {
 function intRenderCards() {
   const grid = document.getElementById('int-grid');
   const summary = document.getElementById('int-summary');
-  const connectedCount = INTEGRATIONS.filter(s => _intStatuses[s.key]?.connected).length;
+  const connectedCount = INTEGRATIONS.filter(s => {
+    if (s.internalTool) return true;
+    if (s.customConnected) return s.customConnected(_intStatuses[s.key] || {});
+    return _intStatuses[s.key]?.connected;
+  }).length;
   summary.textContent = `${connectedCount} of ${INTEGRATIONS.length} connected`;
 
   grid.innerHTML = INTEGRATIONS.map(svc => {
     const st = _intStatuses[svc.key] || {};
-    const connected = !!st.connected;
+    const connected = svc.customConnected ? svc.customConnected(st) : !!st.connected;
     const dot = svc.internalTool ? '#22c55e' : connected ? '#22c55e' : '#64748b';
     const statusText = connected ? 'Connected' : 'Not connected';
     const expiry = svc.customExpiry ? svc.customExpiry(st) :
