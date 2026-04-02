@@ -3237,81 +3237,32 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
-    <!-- Tool grid -->
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-d);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-      <span>Integration Tools</span>
-      <span style="font-size:10px;font-weight:400;font-family:'DM Mono',monospace;color:var(--text-d);">10 active</span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;">
+    <!-- Tool toolbar — grouped by category -->
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
 
-      <div onclick="qboOpenTool('gje')" id="qbo-tool-gje" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,32,64,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📒</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Journal Entry Builder</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Create and push General Journal Entries to QBO with multi-line debit/credit account mapping.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
+      <!-- Transactions group -->
+      <div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);padding:0 10px;">Transactions</span>
+        <button onclick="qboOpenTool('gje')" id="qbo-tool-gje" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📒 Journal Entry</button>
+        <button onclick="qboOpenTool('expense')" id="qbo-tool-expense" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">💳 Expense</button>
+        <button onclick="qboOpenTool('invoices')" id="qbo-tool-invoices" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">🧾 Invoices</button>
+        <button onclick="qboOpenTool('billsap')" id="qbo-tool-billsap" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📑 Bills &amp; AP</button>
       </div>
 
-      <div onclick="qboOpenTool('expense')" id="qbo-tool-expense" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,10,26,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">💳</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Expense Push</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Push expense transactions to QBO with vendor, category, and payment method mapping.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
+      <!-- Reports group -->
+      <div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);padding:0 10px;">Reports</span>
+        <button onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 P&amp;L Digest</button>
+        <button onclick="qboOpenTool('balsheet')" id="qbo-tool-balsheet" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 Balance Sheet</button>
+        <button onclick="qboOpenTool('araging')" id="qbo-tool-araging" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">⏳ AR Aging</button>
       </div>
 
-      <div onclick="qboOpenTool('batch')" id="qbo-tool-batch" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,32,64,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🔗</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Batch Connect</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Link CRM clients to QBO companies in bulk — assembly-line OAuth or quick-link to existing.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('coasync')" id="qbo-tool-coasync" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(10,26,16,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📋</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">COA Sync</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Pull and sync Chart of Accounts from QBO for real-time account mapping.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(26,10,10,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📊</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">P&amp;L Digester</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">AI-powered P&amp;L analysis — flags errors, misclassifications, and anomalies with suggested fixes.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('entitysync')" id="qbo-tool-entitysync" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(14,26,48,.4);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🔄</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Entity Sync</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Sync customers, vendors, and classes between the CRM and QBO.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('invoices')" id="qbo-tool-invoices" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(44,160,28,.15);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">🧾</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Invoices</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">List, view, create, and send invoices. Track open, paid, and overdue status.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('balsheet')" id="qbo-tool-balsheet" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(66,133,244,.15);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📊</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Balance Sheet</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Assets, liabilities, and equity at a glance with expandable drill-down sections.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('araging')" id="qbo-tool-araging" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(234,179,8,.15);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">⏳</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">AR Aging</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Aged receivables by customer — current, 30, 60, 90+ day buckets with totals.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
-      </div>
-
-      <div onclick="qboOpenTool('billsap')" id="qbo-tool-billsap" style="background:var(--surface2);border:1px solid #2ca01c;border-top:3px solid #2ca01c;border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-        <div style="width:38px;height:38px;border-radius:8px;background:rgba(168,85,247,.15);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;">📑</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Bills &amp; AP</div>
-        <div style="font-size:11px;color:var(--text-d);line-height:1.5;margin-bottom:8px;">Vendor bills, payment tracking, and accounts payable aging report.</div>
-        <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>Ready</div>
+      <!-- Sync & Setup group -->
+      <div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);padding:0 10px;">Sync</span>
+        <button onclick="qboOpenTool('coasync')" id="qbo-tool-coasync" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📋 COA</button>
+        <button onclick="qboOpenTool('entitysync')" id="qbo-tool-entitysync" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">🔄 Entities</button>
+        <button onclick="qboOpenTool('batch')" id="qbo-tool-batch" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">🔗 Batch Connect</button>
       </div>
 
     </div>
@@ -23404,7 +23355,7 @@ async function qboInvLoad() {
     _qboInvoices = data.invoices || [];
     countEl.textContent = `${_qboInvoices.length} invoice${_qboInvoices.length!==1?'s':''}`;
     qboInvRender();
-    qboLogActivity('Loaded ' + _qboInvoices.length + ' invoices');
+    qboLog('info','Loaded ' + _qboInvoices.length + ' invoices');
   } catch(e) {
     tbl.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
   }
@@ -23486,7 +23437,7 @@ async function qboInvSend(id) {
     });
     const data = await resp.json();
     if (!data.success) throw new Error(data.error);
-    qboLogActivity('Invoice ' + id + ' sent via email');
+    qboLog('info','Invoice ' + id + ' sent via email');
     qboInvLoad();
   } catch(e) { alert('Send failed: ' + e.message); }
 }
@@ -23569,7 +23520,7 @@ async function qboInvCreate() {
     });
     const data = await resp.json();
     if (!data.success) throw new Error(data.error || data.detail?.Fault?.Error?.[0]?.Detail || 'Failed');
-    qboLogActivity('Invoice #' + (data.docNumber||data.id) + ' created');
+    qboLog('info','Invoice #' + (data.docNumber||data.id) + ' created');
     qboInvToggleCreate();
     qboInvLoad();
   } catch(e) { alert('Create invoice failed: ' + e.message); }
@@ -23594,7 +23545,7 @@ async function qboBSRun() {
     if (!data.success) throw new Error(data.error);
     statusEl.textContent = 'As of ' + endDate;
     qboBSRender(data.report, output);
-    qboLogActivity('Balance Sheet loaded for ' + endDate);
+    qboLog('info','Balance Sheet loaded for ' + endDate);
   } catch(e) {
     output.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
     statusEl.textContent = 'Error';
@@ -23680,7 +23631,7 @@ async function qboARRun() {
     if (!data.success) throw new Error(data.error);
     statusEl.textContent = 'As of ' + (reportDate || 'today');
     qboAgingRender(data.report, buckets, tbl);
-    qboLogActivity('AR Aging loaded');
+    qboLog('info','AR Aging loaded');
   } catch(e) {
     tbl.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
     statusEl.textContent = 'Error';
@@ -23794,7 +23745,7 @@ async function qboBillLoad() {
     _qboBills = data.bills || [];
     countEl.textContent = `${_qboBills.length} bill${_qboBills.length!==1?'s':''}`;
     qboBillRender();
-    qboLogActivity('Loaded ' + _qboBills.length + ' bills');
+    qboLog('info','Loaded ' + _qboBills.length + ' bills');
   } catch(e) {
     tbl.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
   }
@@ -23883,7 +23834,7 @@ async function qboAPRun() {
     if (!data.success) throw new Error(data.error);
     statusEl.textContent = 'As of ' + (reportDate || 'today');
     qboAgingRender(data.report, buckets, tbl);
-    qboLogActivity('AP Aging loaded');
+    qboLog('info','AP Aging loaded');
   } catch(e) {
     tbl.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
     statusEl.textContent = 'Error';
