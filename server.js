@@ -3892,106 +3892,109 @@ app.get('/calendly/event-types', async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────
-// DOCUSIGN — e-Signature Integration
-// OAuth2 flow + envelope sending for engagement letters
+// ADOBE ACROBAT SIGN — e-Signature Integration
+// OAuth2 flow + agreement sending for engagement letters
 // ─────────────────────────────────────────────────────────────────
-const DOCUSIGN_CLIENT_ID      = process.env.DOCUSIGN_CLIENT_ID || '';
-const DOCUSIGN_CLIENT_SECRET  = process.env.DOCUSIGN_CLIENT_SECRET || '';
-const DOCUSIGN_BASE_URL       = process.env.DOCUSIGN_BASE_URL || 'https://account-d.docusign.com'; // -d for demo, account.docusign.com for prod
-const DOCUSIGN_API_BASE       = process.env.DOCUSIGN_API_BASE || 'https://demo.docusign.net/restapi'; // na1.docusign.net for prod
-const DOCUSIGN_TOKEN_FILE     = path.join(DATA_DIR, 'docusign-tokens.json');
+const ADOBE_SIGN_CLIENT_ID     = process.env.ADOBE_SIGN_CLIENT_ID || '';
+const ADOBE_SIGN_CLIENT_SECRET = process.env.ADOBE_SIGN_CLIENT_SECRET || '';
+const ADOBE_SIGN_SHARD         = process.env.ADOBE_SIGN_SHARD || 'na4'; // na1, na2, na3, na4, eu1, eu2, jp1, au1, in1
+const ADOBE_SIGN_TOKEN_FILE    = path.join(DATA_DIR, 'adobe-sign-tokens.json');
 
-let docusignTokens = null;
-if (fs.existsSync(DOCUSIGN_TOKEN_FILE)) {
+let adobeSignTokens = null;
+if (fs.existsSync(ADOBE_SIGN_TOKEN_FILE)) {
   try {
-    docusignTokens = JSON.parse(fs.readFileSync(DOCUSIGN_TOKEN_FILE, 'utf8'));
-    console.log('✓ DocuSign tokens loaded');
+    adobeSignTokens = JSON.parse(fs.readFileSync(ADOBE_SIGN_TOKEN_FILE, 'utf8'));
+    console.log('✓ Adobe Sign tokens loaded');
   } catch(e) {
-    console.log('Could not load DocuSign tokens');
+    console.log('Could not load Adobe Sign tokens');
   }
 }
 
-function saveDocusignTokens() {
-  fs.writeFileSync(DOCUSIGN_TOKEN_FILE, JSON.stringify(docusignTokens, null, 2));
+function saveAdobeSignTokens() {
+  fs.writeFileSync(ADOBE_SIGN_TOKEN_FILE, JSON.stringify(adobeSignTokens, null, 2));
 }
 
-function docusignReady() {
-  return !!(docusignTokens && docusignTokens.access_token && docusignTokens.account_id);
+function adobeSignReady() {
+  return !!(adobeSignTokens && adobeSignTokens.access_token);
 }
 
-async function getDocusignHeaders() {
-  if (!docusignTokens) throw new Error('DocuSign not connected — run the auth flow first');
+function adobeSignApiBase() {
+  return adobeSignTokens?.api_base_uri || `https://api.${ADOBE_SIGN_SHARD}.adobesign.com`;
+}
+
+async function getAdobeSignHeaders() {
+  if (!adobeSignTokens) throw new Error('Adobe Sign not connected — run the auth flow first');
 
   // Check if token is expired (5 min buffer)
-  if (docusignTokens.expires_at && Date.now() > docusignTokens.expires_at - 300000) {
-    console.log('DocuSign token expired, refreshing...');
+  if (adobeSignTokens.expires_at && Date.now() > adobeSignTokens.expires_at - 300000) {
+    console.log('Adobe Sign token expired, refreshing...');
     try {
-      const resp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/token`, {
+      const resp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/oauth/v2/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type:    'refresh_token',
-          refresh_token: docusignTokens.refresh_token,
-          client_id:     DOCUSIGN_CLIENT_ID,
-          client_secret: DOCUSIGN_CLIENT_SECRET,
+          refresh_token: adobeSignTokens.refresh_token,
+          client_id:     ADOBE_SIGN_CLIENT_ID,
+          client_secret: ADOBE_SIGN_CLIENT_SECRET,
         }).toString(),
       });
       if (!resp.ok) {
         const errText = await resp.text();
-        docusignTokens = null;
-        saveDocusignTokens();
+        adobeSignTokens = null;
+        saveAdobeSignTokens();
         throw new Error('Token refresh failed: ' + errText);
       }
       const data = await resp.json();
-      docusignTokens = {
-        ...docusignTokens,
+      adobeSignTokens = {
+        ...adobeSignTokens,
         access_token:  data.access_token,
-        refresh_token: data.refresh_token || docusignTokens.refresh_token,
+        refresh_token: data.refresh_token || adobeSignTokens.refresh_token,
         expires_at:    Date.now() + (data.expires_in * 1000),
       };
-      saveDocusignTokens();
-      console.log('✓ DocuSign token refreshed');
+      saveAdobeSignTokens();
+      console.log('✓ Adobe Sign token refreshed');
     } catch(e) {
-      throw new Error('DocuSign token refresh failed — please reconnect');
+      throw new Error('Adobe Sign token refresh failed — please reconnect');
     }
   }
 
   return {
-    'Authorization': `Bearer ${docusignTokens.access_token}`,
+    'Authorization': `Bearer ${adobeSignTokens.access_token}`,
     'Content-Type':  'application/json',
   };
 }
 
-// --- DocuSign OAuth routes ---
+// --- Adobe Sign OAuth routes ---
 
-app.get('/docusign/auth', (req, res) => {
-  if (!DOCUSIGN_CLIENT_ID) return res.status(500).send('DocuSign not configured — set DOCUSIGN_CLIENT_ID');
-  const redirectUri = process.env.DOCUSIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/docusign/callback';
-  const url = `${DOCUSIGN_BASE_URL}/oauth/auth?` +
+app.get('/adobesign/auth', (req, res) => {
+  if (!ADOBE_SIGN_CLIENT_ID) return res.status(500).send('Adobe Sign not configured — set ADOBE_SIGN_CLIENT_ID');
+  const redirectUri = process.env.ADOBE_SIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/adobesign/callback';
+  const scopes = 'user_read:account+agreement_read:account+agreement_write:account+agreement_send:account+library_read:account';
+  const url = `https://secure.${ADOBE_SIGN_SHARD}.adobesign.com/public/oauth/v2?` +
     `response_type=code` +
-    `&scope=signature` +
-    `&client_id=${DOCUSIGN_CLIENT_ID}` +
+    `&client_id=${ADOBE_SIGN_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&state=ark-ds-${Date.now()}`;
+    `&scope=${scopes}` +
+    `&state=ark-as-${Date.now()}`;
   res.redirect(url);
 });
 
-app.get('/docusign/callback', async (req, res) => {
+app.get('/adobesign/callback', async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) throw new Error('No authorization code received');
 
-    const redirectUri = process.env.DOCUSIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/docusign/callback';
-    const resp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/token`, {
+    const redirectUri = process.env.ADOBE_SIGN_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/adobesign/callback';
+    const resp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/oauth/v2/token`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + Buffer.from(`${DOCUSIGN_CLIENT_ID}:${DOCUSIGN_CLIENT_SECRET}`).toString('base64'),
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        grant_type: 'authorization_code',
+        grant_type:    'authorization_code',
         code,
-        redirect_uri: redirectUri,
+        client_id:     ADOBE_SIGN_CLIENT_ID,
+        client_secret: ADOBE_SIGN_CLIENT_SECRET,
+        redirect_uri:  redirectUri,
       }).toString(),
     });
 
@@ -4002,220 +4005,223 @@ app.get('/docusign/callback', async (req, res) => {
 
     const data = await resp.json();
 
-    // Fetch user info to get account ID and base URI
-    const userResp = await fetch(`${DOCUSIGN_BASE_URL}/oauth/userinfo`, {
+    // Fetch user info to get API base URI
+    const userResp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/api/rest/v6/users/me`, {
       headers: { 'Authorization': `Bearer ${data.access_token}` },
     });
     const userData = userResp.ok ? await userResp.json() : {};
-    const defaultAccount = (userData.accounts || []).find(a => a.is_default) || userData.accounts?.[0];
 
-    docusignTokens = {
+    // Get the base URI for this user's shard
+    const baseUriResp = await fetch(`https://api.${ADOBE_SIGN_SHARD}.adobesign.com/api/rest/v6/baseUris`, {
+      headers: { 'Authorization': `Bearer ${data.access_token}` },
+    });
+    const baseUriData = baseUriResp.ok ? await baseUriResp.json() : {};
+
+    adobeSignTokens = {
       access_token:   data.access_token,
       refresh_token:  data.refresh_token,
       expires_at:     Date.now() + (data.expires_in * 1000),
-      account_id:     defaultAccount?.account_id || '',
-      base_uri:       defaultAccount?.base_uri || DOCUSIGN_API_BASE,
-      account_name:   defaultAccount?.account_name || '',
-      user_name:      userData.name || '',
+      api_base_uri:   baseUriData.apiAccessPoint ? baseUriData.apiAccessPoint.replace(/\/$/, '') : `https://api.${ADOBE_SIGN_SHARD}.adobesign.com`,
+      user_name:      userData.firstName ? `${userData.firstName} ${userData.lastName || ''}`.trim() : '',
       email:          userData.email || '',
+      company:        userData.company || '',
     };
-    saveDocusignTokens();
-    console.log('✓ DocuSign connected:', docusignTokens.account_name);
+    saveAdobeSignTokens();
+    console.log('✓ Adobe Sign connected:', adobeSignTokens.email);
 
     res.send(`<!DOCTYPE html><html><body style="background:#0d1b2a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui;">
       <div style="text-align:center;color:#fff;">
         <div style="font-size:48px;margin-bottom:16px;">✅</div>
-        <div style="font-size:20px;font-weight:600;">Connected to DocuSign!</div>
-        <div style="font-size:14px;color:#8899aa;margin-top:8px;">${docusignTokens.account_name || 'Account connected'}</div>
+        <div style="font-size:20px;font-weight:600;">Connected to Adobe Sign!</div>
+        <div style="font-size:14px;color:#8899aa;margin-top:8px;">${adobeSignTokens.email || 'Account connected'}</div>
         <div style="font-size:14px;color:#8899aa;margin-top:4px;">This window will close automatically…</div>
       </div>
       <script>
-        if(window.opener){ window.opener.postMessage({type:'docusign-connected'},'*'); }
+        if(window.opener){ window.opener.postMessage({type:'adobesign-connected'},'*'); }
         setTimeout(()=>window.close(), 2000);
       </script>
     </body></html>`);
   } catch(e) {
-    console.error('DocuSign callback error:', e.message);
-    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">DocuSign Connection Failed</h2><p>${e.message}</p>`);
+    console.error('Adobe Sign callback error:', e.message);
+    res.status(500).send(`<h2 style="color:red;font-family:sans-serif;">Adobe Sign Connection Failed</h2><p>${e.message}</p>`);
   }
 });
 
-app.get('/docusign/status', (req, res) => {
+app.get('/adobesign/status', (req, res) => {
   res.json({
-    connected: docusignReady(),
-    accountName: docusignTokens?.account_name || null,
-    userName: docusignTokens?.user_name || null,
-    email: docusignTokens?.email || null,
-    expiresAt: docusignTokens?.expires_at ? new Date(docusignTokens.expires_at).toISOString() : null,
+    connected: adobeSignReady(),
+    userName: adobeSignTokens?.user_name || null,
+    email: adobeSignTokens?.email || null,
+    company: adobeSignTokens?.company || null,
+    expiresAt: adobeSignTokens?.expires_at ? new Date(adobeSignTokens.expires_at).toISOString() : null,
   });
 });
 
-app.post('/docusign/disconnect', (req, res) => {
-  docusignTokens = null;
-  try { fs.unlinkSync(DOCUSIGN_TOKEN_FILE); } catch(_) {}
-  console.log('DocuSign disconnected');
+app.post('/adobesign/disconnect', (req, res) => {
+  adobeSignTokens = null;
+  try { fs.unlinkSync(ADOBE_SIGN_TOKEN_FILE); } catch(_) {}
+  console.log('Adobe Sign disconnected');
   res.json({ disconnected: true });
 });
 
-// Send an envelope for signature
-app.post('/docusign/send-envelope', async (req, res) => {
+// Send an agreement for signature
+app.post('/adobesign/send', async (req, res) => {
   try {
-    const headers = await getDocusignHeaders();
+    const headers = await getAdobeSignHeaders();
     const { signerEmail, signerName, subject, documentBase64, documentName, templateId } = req.body;
 
-    if (!signerEmail || !signerName) {
-      return res.status(400).json({ error: 'signerEmail and signerName required' });
-    }
+    if (!signerEmail) return res.status(400).json({ error: 'signerEmail required' });
 
-    let envelopeBody;
+    const apiBase = adobeSignApiBase();
+    let fileInfos;
 
     if (templateId) {
-      // Send from a DocuSign template
-      envelopeBody = {
-        templateId,
-        templateRoles: [{
-          email: signerEmail,
-          name:  signerName,
-          roleName: 'Client',
-        }],
-        status: 'sent',
-        emailSubject: subject || 'Please sign this document — ARK Financial',
-      };
+      // Use a library template
+      fileInfos = [{ libraryDocumentId: templateId }];
     } else if (documentBase64) {
-      // Send with an attached document
-      envelopeBody = {
-        emailSubject: subject || 'Please sign this document — ARK Financial',
-        documents: [{
-          documentBase64,
-          name:       documentName || 'Document.pdf',
-          fileExtension: 'pdf',
-          documentId: '1',
-        }],
-        recipients: {
-          signers: [{
-            email:       signerEmail,
-            name:        signerName,
-            recipientId: '1',
-            routingOrder: '1',
-            tabs: {
-              signHereTabs: [{
-                anchorString:  '/sig/',
-                anchorUnits:   'pixels',
-                anchorXOffset: '0',
-                anchorYOffset: '0',
-              }],
-              dateSignedTabs: [{
-                anchorString:  '/date/',
-                anchorUnits:   'pixels',
-                anchorXOffset: '0',
-                anchorYOffset: '0',
-              }],
-            },
-          }],
+      // Upload a transient document first
+      const boundary = '----ArkFormBoundary' + Date.now();
+      const fileBuffer = Buffer.from(documentBase64, 'base64');
+      const fileName = documentName || 'Document.pdf';
+
+      // Build multipart body
+      const parts = [
+        `--${boundary}\r\nContent-Disposition: form-data; name="File-Name"\r\n\r\n${fileName}`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="Mime-Type"\r\n\r\napplication/pdf`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="File"; filename="${fileName}"\r\nContent-Type: application/pdf\r\n\r\n`,
+      ];
+      const bodyStart = Buffer.from(parts.join('\r\n') + '\r\n');
+      const bodyEnd = Buffer.from(`\r\n--${boundary}--\r\n`);
+      const multipartBody = Buffer.concat([bodyStart, fileBuffer, bodyEnd]);
+
+      const uploadResp = await fetch(`${apiBase}/api/rest/v6/transientDocuments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adobeSignTokens.access_token}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
         },
-        status: 'sent',
-      };
+        body: multipartBody,
+      });
+      if (!uploadResp.ok) throw new Error('Document upload failed: ' + await uploadResp.text());
+      const uploadData = await uploadResp.json();
+      fileInfos = [{ transientDocumentId: uploadData.transientDocumentId }];
     } else {
       return res.status(400).json({ error: 'Either templateId or documentBase64 required' });
     }
 
-    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
-    const envResp = await fetch(
-      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/envelopes`,
-      { method: 'POST', headers, body: JSON.stringify(envelopeBody) }
-    );
+    // Create the agreement
+    const agreement = {
+      name: subject || 'Please sign this document — ARK Financial',
+      participantSetsInfo: [{
+        memberInfos: [{
+          email: signerEmail,
+          ...(signerName ? { name: signerName } : {}),
+        }],
+        order: 1,
+        role: 'SIGNER',
+      }],
+      fileInfos,
+      signatureType: 'ESIGN',
+      state: 'IN_PROCESS',
+      emailOption: {
+        sendOptions: {
+          completionEmails: 'ALL',
+          inFlightEmails:   'ALL',
+          initEmails:       'ALL',
+        },
+      },
+    };
 
-    if (!envResp.ok) {
-      const errText = await envResp.text();
-      throw new Error(`Envelope send failed: ${errText}`);
-    }
+    const agResp = await fetch(`${apiBase}/api/rest/v6/agreements`, {
+      method: 'POST', headers, body: JSON.stringify(agreement),
+    });
+    if (!agResp.ok) throw new Error('Agreement creation failed: ' + await agResp.text());
 
-    const envData = await envResp.json();
-    console.log('✓ DocuSign envelope sent:', envData.envelopeId);
-    res.json({ envelopeId: envData.envelopeId, status: envData.status, uri: envData.uri });
+    const agData = await agResp.json();
+    console.log('✓ Adobe Sign agreement sent:', agData.id);
+    res.json({ agreementId: agData.id, status: 'IN_PROCESS' });
   } catch(e) {
     if (e.message.includes('not connected') || e.message.includes('reconnect')) {
       return res.status(401).json({ error: 'not_connected' });
     }
-    console.error('DocuSign send error:', e.message);
+    console.error('Adobe Sign send error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// List recent envelopes
-app.get('/docusign/envelopes', async (req, res) => {
+// List recent agreements
+app.get('/adobesign/agreements', async (req, res) => {
   try {
-    const headers = await getDocusignHeaders();
-    const days = parseInt(req.query.days) || 30;
-    const fromDate = new Date(Date.now() - days * 86400000).toISOString();
-    const status = req.query.status || 'completed,delivered,sent,created';
+    const headers = await getAdobeSignHeaders();
+    const apiBase = adobeSignApiBase();
+    const pageSize = parseInt(req.query.limit) || 25;
 
-    const params = new URLSearchParams({
-      from_date: fromDate,
-      status,
-      order_by: 'last_modified',
-      order:    'desc',
-      count:    '25',
-    });
-
-    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
-    const resp = await fetch(
-      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/envelopes?${params}`,
-      { headers }
-    );
-
+    const resp = await fetch(`${apiBase}/api/rest/v6/agreements?pageSize=${pageSize}`, { headers });
     if (!resp.ok) {
       if (resp.status === 401) {
-        docusignTokens = null;
-        saveDocusignTokens();
+        adobeSignTokens = null;
+        saveAdobeSignTokens();
         return res.status(401).json({ error: 'not_connected' });
       }
-      throw new Error(`DocuSign API error: ${resp.status}`);
+      throw new Error(`Adobe Sign API error: ${resp.status}`);
     }
 
     const data = await resp.json();
-    const envelopes = (data.envelopes || []).map(env => ({
-      envelopeId:    env.envelopeId,
-      status:        env.status,
-      subject:       env.emailSubject,
-      sentDate:      env.sentDateTime,
-      completedDate: env.completedDateTime,
-      recipients:    env.recipients?.signers?.map(s => ({ name: s.name, email: s.email, status: s.status })) || [],
+    const agreements = (data.userAgreementList || []).map(ag => ({
+      id:            ag.id,
+      name:          ag.name,
+      status:        ag.status,
+      createdDate:   ag.createdDate,
+      displayDate:   ag.displayDate,
+      participants:  (ag.displayParticipantSetInfos || []).flatMap(ps =>
+        (ps.displayUserSetMemberInfos || []).map(m => ({ email: m.email, company: m.company || '' }))
+      ),
     }));
 
-    res.json({ envelopes, total: data.resultSetSize || envelopes.length });
+    res.json({ agreements, total: agreements.length });
   } catch(e) {
     if (e.message.includes('not connected') || e.message.includes('reconnect')) {
       return res.status(401).json({ error: 'not_connected' });
     }
-    console.error('DocuSign envelopes error:', e.message);
+    console.error('Adobe Sign agreements error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// List templates
-app.get('/docusign/templates', async (req, res) => {
+// Get agreement detail
+app.get('/adobesign/agreement/:id', async (req, res) => {
   try {
-    const headers = await getDocusignHeaders();
-    const apiBase = docusignTokens.base_uri || DOCUSIGN_API_BASE;
-    const resp = await fetch(
-      `${apiBase}/restapi/v2.1/accounts/${docusignTokens.account_id}/templates`,
-      { headers }
-    );
+    const headers = await getAdobeSignHeaders();
+    const apiBase = adobeSignApiBase();
+    const resp = await fetch(`${apiBase}/api/rest/v6/agreements/${req.params.id}`, { headers });
+    if (!resp.ok) throw new Error(`Adobe Sign API error: ${resp.status}`);
+    const agreement = await resp.json();
+    res.json({ success: true, agreement });
+  } catch(e) {
+    console.error('Adobe Sign agreement detail error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    if (!resp.ok) throw new Error(`DocuSign API error: ${resp.status}`);
+// List library templates
+app.get('/adobesign/templates', async (req, res) => {
+  try {
+    const headers = await getAdobeSignHeaders();
+    const apiBase = adobeSignApiBase();
+    const resp = await fetch(`${apiBase}/api/rest/v6/libraryDocuments`, { headers });
+    if (!resp.ok) throw new Error(`Adobe Sign API error: ${resp.status}`);
 
     const data = await resp.json();
-    const templates = (data.envelopeTemplates || []).map(t => ({
-      templateId: t.templateId,
-      name:       t.name,
-      description: t.description || '',
-      lastModified: t.lastModified,
+    const templates = (data.libraryDocumentList || []).map(t => ({
+      id:           t.id,
+      name:         t.name,
+      createdDate:  t.createdDate,
+      status:       t.status,
     }));
 
     res.json({ templates });
   } catch(e) {
-    console.error('DocuSign templates error:', e.message);
+    console.error('Adobe Sign templates error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -4671,8 +4677,8 @@ function gracefulShutdown(signal) {
     if (calendlyTokens) { saveCalendlyTokens(); console.log('  ✓ Calendly tokens saved'); }
   } catch (e) { console.error('  ✗ Calendly tokens save failed:', e.message); }
   try {
-    if (docusignTokens) { saveDocusignTokens(); console.log('  ✓ DocuSign tokens saved'); }
-  } catch (e) { console.error('  ✗ DocuSign tokens save failed:', e.message); }
+    if (adobeSignTokens) { saveAdobeSignTokens(); console.log('  ✓ Adobe Sign tokens saved'); }
+  } catch (e) { console.error('  ✗ Adobe Sign tokens save failed:', e.message); }
   try {
     savePlHistory();
     saveFleetData();
@@ -4698,7 +4704,7 @@ app.listen(PORT, '0.0.0.0', () => {
   const aiOk  = process.env.ANTHROPIC_API_KEY ? '✓' : '✗';
   const gcalOk = gcalTokens.primary ? '✓' : '✗';
   const calOk  = calendlyReady() ? '✓' : (CALENDLY_CLIENT_ID ? '○' : '✗');
-  const dsOk   = docusignReady() ? '✓' : (DOCUSIGN_CLIENT_ID ? '○' : '✗');
+  const asOk   = adobeSignReady() ? '✓' : (ADOBE_SIGN_CLIENT_ID ? '○' : '✗');
   console.log(`  Sinch Fax: ${faxOk}  |  Sinch SMS: ${smsOk}  |  ShareFile: ${sfOk}  |  AI: ${aiOk}  |  GCal: ${gcalOk}`);
-  console.log(`  Calendly: ${calOk}  |  DocuSign: ${dsOk}`);
+  console.log(`  Calendly: ${calOk}  |  Adobe Sign: ${asOk}`);
 });
