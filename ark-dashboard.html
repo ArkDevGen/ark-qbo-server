@@ -6150,6 +6150,7 @@ function _buildDBPayload() {
     proposals:      DB.proposals||[],
     leads:          DB.leads||[],
     tasks:          DB.tasks||[],
+    meetings:       DB.meetings||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -6182,6 +6183,7 @@ function _applyDBPayload(saved) {
     proposals:      saved.proposals      || [],
     leads:          saved.leads          || [],
     tasks:          saved.tasks          || [],
+    meetings:       saved.meetings       || [],
   });
 }
 
@@ -26388,13 +26390,107 @@ async function plGenerateMeetingPDF() {
 if (!DB.meetings) DB.meetings = [];
 let _mtgZoomConfigured = false;
 
-function mtgInit() {
+async function mtgInit() {
   mtgCheckZoom();
   mtgPopulateLogFilter();
+  await mtgSyncExternal();
   mtgRenderToday();
   mtgRenderUpcoming();
   mtgRenderLog();
   mtgRenderStats();
+}
+
+// Sync meetings from Zoom + Google Calendar into DB.meetings
+async function mtgSyncExternal() {
+  let synced = 0;
+
+  // ── Zoom meetings ──
+  try {
+    const resp = await authFetch(ARK_SERVER + '/zoom/meetings');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.success && data.meetings) {
+        for (const zm of data.meetings) {
+          const extId = 'zoom-' + zm.id;
+          // Skip if already in DB.meetings
+          if ((DB.meetings || []).some(m => m.externalId === extId)) continue;
+          // Skip instant PMI / recurring with no start time
+          if (!zm.start_time) continue;
+          DB.meetings.push({
+            id: extId,
+            externalId: extId,
+            source: 'zoom',
+            title: zm.topic || 'Zoom Meeting',
+            scheduledAt: zm.start_time,
+            duration: zm.duration || 60,
+            zoomLink: zm.join_url || '',
+            zoomMeetingId: zm.id,
+            clientId: '',
+            clientName: '',
+            amId: '',
+            status: 'scheduled',
+            notes: '',
+            actionItems: [],
+          });
+          synced++;
+        }
+      }
+    }
+  } catch(e) { console.log('Zoom sync skipped:', e.message); }
+
+  // ── Google Calendar events ──
+  try {
+    const resp = await authFetch(ARK_SERVER + '/gcal/events?days=14');
+    if (resp.ok) {
+      const data = await resp.json();
+      const allEvents = [];
+      // GCal returns grouped by date
+      if (data.days) {
+        for (const day of data.days) {
+          for (const ev of (day.events || [])) {
+            allEvents.push(ev);
+          }
+        }
+      } else if (data.events) {
+        allEvents.push(...data.events);
+      }
+      for (const ev of allEvents) {
+        const extId = 'gcal-' + (ev.id || ev.summary + ev.start);
+        if ((DB.meetings || []).some(m => m.externalId === extId)) continue;
+        const startIso = ev.start || ev.startTime || '';
+        if (!startIso) continue;
+        DB.meetings.push({
+          id: extId,
+          externalId: extId,
+          source: 'gcal',
+          title: ev.summary || ev.title || 'Calendar Event',
+          scheduledAt: startIso,
+          duration: ev.duration || 30,
+          zoomLink: ev.zoomLink || ev.meetLink || '',
+          clientId: '',
+          clientName: '',
+          amId: '',
+          status: 'scheduled',
+          notes: '',
+          actionItems: [],
+        });
+        synced++;
+      }
+    }
+  } catch(e) { console.log('GCal sync skipped:', e.message); }
+
+  // Clean up past external meetings older than 30 days (that were never completed)
+  const cutoff = Date.now() - 30 * 86400000;
+  DB.meetings = (DB.meetings || []).filter(m => {
+    if (!m.externalId) return true; // keep manual meetings always
+    if (m.status === 'completed') return true; // keep completed
+    return new Date(m.scheduledAt).getTime() > cutoff;
+  });
+
+  if (synced > 0) {
+    console.log(`✓ Synced ${synced} external meetings`);
+    saveDB();
+  }
 }
 
 async function mtgCheckZoom() {
