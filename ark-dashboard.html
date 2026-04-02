@@ -27071,6 +27071,7 @@ function sjeShowReview() {
           <tr style="background:var(--surface2);">
             <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Date</th>
             <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Journal #</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Class</th>
             <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Debits</th>
             <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Credits</th>
             <th style="padding:4px 8px;text-align:center;font-size:9px;color:var(--text-d);">Lines</th>
@@ -27078,9 +27079,11 @@ function sjeShowReview() {
           ${(f.entries||[]).map(e => {
             const d = e.lines.reduce((s,l) => s + (l.debit||0), 0);
             const c = e.lines.reduce((s,l) => s + (l.credit||0), 0);
+            const cls = e.lines.find(l => l.class)?.class || '—';
             return `<tr style="border-bottom:1px solid var(--border);">
               <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.date}</td>
               <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.journalNo}</td>
+              <td style="padding:4px 8px;font-size:10px;color:var(--text-d);">${cls}</td>
               <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${d.toFixed(2)}</td>
               <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${c.toFixed(2)}</td>
               <td style="padding:4px 8px;text-align:center;">${e.lines.length}</td>
