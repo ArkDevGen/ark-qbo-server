@@ -913,21 +913,33 @@ app.post('/qbo/api', async (req, res) => {
 
   // ── Action: Create Journal Entry ─────────────────────────────
   } else if (action === 'createJournalEntry') {
+    // Timeout: if QBO doesn't respond in 25 seconds, return error
+    let responded = false;
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        console.error('createJournalEntry TIMEOUT for realm', targetRealm);
+        res.status(504).json({ error: 'QBO API timeout — no response within 25 seconds' });
+      }
+    }, 25000);
+
+    console.log(`  Sending JE to QBO: DocNumber=${payload.DocNumber}, TxnDate=${payload.TxnDate}, Lines=${payload.Line?.length}`);
     qbo.createJournalEntry(payload, (err, response, body) => {
+      clearTimeout(timeout);
+      if (responded) return; // Already timed out
+      responded = true;
+
       if (err) {
-        // node-quickbooks callback: (err, httpResponse, responseBody)
-        // The actual QBO fault is in: body, err.response.data, or err itself
         const qboBody = body || err.response?.data || err;
         const fault = qboBody?.Fault || qboBody?.fault || null;
         const faultMsg = fault?.Error?.[0]?.Detail || fault?.Error?.[0]?.Message || '';
         const statusCode = err.response?.status || 500;
-        console.error('createJournalEntry error:', statusCode, JSON.stringify(qboBody, null, 2));
+        console.error('createJournalEntry error:', statusCode, faultMsg || err.message);
         return res.status(statusCode >= 400 ? statusCode : 500).json({
           error: faultMsg || err.message || 'Failed to create journal entry',
           detail: fault || qboBody
         });
       }
-      // Success: body has the JE, or fall back to response
       const je = body || response;
       console.log(`  ✓ Journal Entry created: ID ${je?.Id || 'unknown'}`);
       res.json({
