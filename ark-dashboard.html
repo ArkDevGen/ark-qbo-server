@@ -19068,15 +19068,15 @@ let _tdParsed = [];  // staged tasks waiting to import
 
 function tdImportOpen(){
   tdResetImport();
-  // Populate AM dropdown
+  // Populate AM dropdown from server users (fallback to DB.accountManagers)
   const sel = document.getElementById('td-am-sel');
   if(sel){
-    sel.innerHTML = '<option value="">— Assign AM —</option>' +
-      (DB.accountManagers||[]).filter(a=>a.status==='Active').map(a=>
-        `<option value="${a.id}">${a.fname} ${a.lname||''}</option>`).join('');
-    if(currentUser && currentUser.role !== 'admin'){
-      sel.value = currentUser.id;
-    }
+    const teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+    sel.innerHTML = '<option value="">— Assign Team Member —</option>' +
+      teamList.map(a=>
+        `<option value="${a.id}">${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
+    // Auto-select current user
+    if(currentUser) sel.value = currentUser.id;
   }
   openModal('modal-td-import');
 }
