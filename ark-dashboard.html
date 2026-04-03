@@ -27363,10 +27363,26 @@ async function sjePushAll() {
       }
     } catch(e) { /* continue without duplicate check */ }
 
+    let consecutiveFails = 0;
     for (const entry of franchise.entries) {
       processed++;
       progressCount.textContent = `${processed}/${totalEntries}`;
       progressBar.style.width = Math.round((processed / totalEntries) * 100) + '%';
+
+      // Fast-fail: if 3+ consecutive failures for this franchise, skip remaining entries
+      if (consecutiveFails >= 3) {
+        liveFailed++;
+        liveFailedEntries.push({ franchise: franchise.label, journalNo: entry.journalNo, error: 'Skipped (3+ consecutive failures)' });
+        _sjePushResults.push({
+          franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
+          className: franchise.className, date: entry.date, journalNo: entry.journalNo,
+          status: 'failed', error: 'Skipped (3+ consecutive failures)',
+          debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
+          credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
+        });
+        pushLiveUpdate('sje', totalEntries, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
+        continue;
+      }
 
       // Skip if already exists
       if (existingDocNums.has(entry.journalNo)) {
@@ -27413,6 +27429,7 @@ async function sjePushAll() {
 
         const result = await qboCall('createJournalEntry', payload, franchise.realmId);
         await new Promise(r => setTimeout(r, 350));
+        consecutiveFails = 0; // Reset on success
         liveSuccess++;
         _sjePushResults.push({
           franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
@@ -27423,6 +27440,7 @@ async function sjePushAll() {
         });
         pushLiveUpdate('sje', totalEntries, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
       } catch (e) {
+        consecutiveFails++;
         liveFailed++;
         liveFailedEntries.push({ franchise: franchise.label, journalNo: entry.journalNo, error: e.message });
         _sjePushResults.push({
@@ -27920,10 +27938,20 @@ async function cogsPushAll() {
       }
     } catch(e) {}
 
+    let consecutiveFails = 0;
     for (const entry of franchise.entries) {
       processed++;
       progressCount.textContent = `${processed}/${total}`;
       progressBar.style.width = Math.round((processed / total) * 100) + '%';
+
+      // Fast-fail: if 3+ consecutive failures, skip remaining entries for this store
+      if (consecutiveFails >= 3) {
+        liveFailed++;
+        liveFailedEntries.push({ store: franchise.label, journalNo: entry.journalNo, error: 'Skipped (3+ consecutive failures)' });
+        _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'failed', error: 'Skipped (3+ consecutive failures)' });
+        pushLiveUpdate('cogs', total, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
+        continue;
+      }
 
       if (existingDocNums.has(entry.journalNo)) {
         totalSkipped++; liveSkipped++;
@@ -27945,10 +27973,12 @@ async function cogsPushAll() {
         const payload = { TxnDate: entry.date, DocNumber: entry.journalNo, PrivateNote: entry.memo || 'Powered By EchoSync', Line: lines };
         await qboCall('createJournalEntry', payload, franchise.realmId);
         await new Promise(r => setTimeout(r, 350));
+        consecutiveFails = 0;
         liveSuccess++;
         _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'success' });
         pushLiveUpdate('cogs', total, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
       } catch(e) {
+        consecutiveFails++;
         liveFailed++;
         liveFailedEntries.push({ store: franchise.label, journalNo: entry.journalNo, error: e.message });
         _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'failed', error: e.message });
