@@ -454,6 +454,55 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
 .view{display:none;}
 .view.active{display:block;}
+/* ── Production View Toggle ── */
+.tc-vtoggle{padding:7px 16px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text-d);cursor:pointer;transition:all .15s;}
+.tc-vtoggle:first-child{border-radius:var(--radius) 0 0 var(--radius);}
+.tc-vtoggle:last-child{border-radius:0 var(--radius) var(--radius) 0;}
+.tc-vtoggle:not(:first-child){border-left:none;}
+.tc-vtoggle.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.tc-vtoggle:hover:not(.active){background:var(--surface2);}
+
+/* ── Board View ── */
+.tc-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;}
+.tc-board-col{min-width:280px;max-width:320px;flex-shrink:0;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);}
+.tc-board-col-header{padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-d);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;border-bottom:1px solid var(--border);}
+.tc-board-col-header .count{font-size:10px;font-weight:400;opacity:.6;}
+.tc-board-col-header.overdue{color:#b03a3a;background:rgba(176,58,58,.06);}
+.tc-board-col-header.today{color:var(--gold);background:rgba(184,146,42,.06);}
+.tc-board-col-body{padding:8px;display:flex;flex-direction:column;gap:6px;max-height:65vh;overflow-y:auto;}
+.tc-bcard{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;}
+.tc-bcard:hover{box-shadow:0 4px 12px rgba(0,0,0,.08);transform:translateY(-1px);}
+.tc-bcard.completed{opacity:.5;}
+.tc-bcard-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;line-height:1.3;}
+.tc-bcard-title.done{text-decoration:line-through;color:var(--text-d);}
+.tc-bcard-desc{font-size:11px;color:var(--text-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;}
+.tc-bcard-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.tc-bcard-meta .pri-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.tc-bcard-meta .cat-tag{font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em;}
+.tc-bcard-meta .due-label{font-size:10px;font-weight:600;}
+.tc-bcard-meta .am-avatar{width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-left:auto;flex-shrink:0;}
+.tc-board-add{padding:8px 14px;text-align:center;font-size:12px;color:var(--text-d);cursor:pointer;border-top:1px dashed var(--border);transition:color .15s;}
+.tc-board-add:hover{color:var(--navy);}
+
+/* ── Calendar View ── */
+.tc-cal-nav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;}
+.tc-cal-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;cursor:pointer;color:var(--text-d);font-size:14px;transition:all .15s;}
+.tc-cal-nav button:hover{background:var(--surface2);color:var(--navy);}
+.tc-cal-nav .month-title{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--navy);min-width:200px;text-align:center;}
+.tc-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.tc-cal-hcell{padding:8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-d);background:var(--surface2);border-bottom:1px solid var(--border);}
+.tc-cal-cell{min-height:90px;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-top:none;border-left:none;vertical-align:top;position:relative;}
+.tc-cal-cell:nth-child(7n+1){border-left:none;}
+.tc-cal-cell .day-num{font-size:12px;font-weight:600;color:var(--text-d);margin-bottom:4px;}
+.tc-cal-cell.today{background:rgba(184,146,42,.06);}
+.tc-cal-cell.today .day-num{color:var(--gold);font-weight:700;}
+.tc-cal-cell.other-month{opacity:.35;}
+.tc-cal-task{display:flex;align-items:center;gap:4px;padding:2px 4px;border-radius:4px;margin-bottom:2px;cursor:pointer;font-size:10px;color:var(--text);background:var(--surface2);transition:background .15s;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.tc-cal-task:hover{background:var(--border);}
+.tc-cal-task .pri-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.tc-cal-more{font-size:9px;color:var(--gold);cursor:pointer;padding:2px 4px;}
+.tc-cal-more:hover{text-decoration:underline;}
+
 /* Payroll Center: embedded iframe, no animation needed */
 #view-payrollcenter,#view-payrollcenter>*{animation:none!important;opacity:1!important;transform:none!important;}
 
@@ -2341,11 +2390,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </select>
     </div>
 
-    <!-- Smart overdue banner -->
-    <div id="tc-smart-banner" style="margin-bottom:12px;"></div>
+    <!-- View toggle -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;gap:0;">
+        <button class="tc-vtoggle active" data-view="list" onclick="tcSwitchView('list')">☰ List</button>
+        <button class="tc-vtoggle" data-view="board" onclick="tcSwitchView('board')">▦ Board</button>
+        <button class="tc-vtoggle" data-view="calendar" onclick="tcSwitchView('calendar')">📅 Calendar</button>
+      </div>
+      <div id="tc-smart-banner"></div>
+    </div>
 
-    <!-- Task list -->
-    <div id="tc-list"></div>
+    <!-- View containers -->
+    <div id="tc-view-list"></div>
+    <div id="tc-view-board" style="display:none;"></div>
+    <div id="tc-view-calendar" style="display:none;"></div>
 
   </div>
 
@@ -7719,7 +7777,13 @@ function nav(page){
     }
   }
   if(page==='filecenter'){ fcInit(); }
-  if(page==='tasks'){ tcRender(); }
+  if(page==='tasks'){
+    const savedView = sessionStorage.getItem('tc_view_mode') || 'list';
+    document.querySelectorAll('.tc-vtoggle').forEach(b => b.classList.toggle('active', b.dataset.view === savedView));
+    ['list','board','calendar'].forEach(v => { const el = document.getElementById('tc-view-'+v); if(el) el.style.display = (v===savedView)?'':'none'; });
+    _tcCalYear = new Date().getFullYear(); _tcCalMonth = new Date().getMonth();
+    tcRender();
+  }
   if(page==='proposals'){
     if(!canDo('canViewProposals')){ nav('dashboard'); return; }
     lcInit();
@@ -18500,14 +18564,7 @@ function tcRender(){
   const subtitle = document.getElementById('tc-subtitle');
   if(subtitle) subtitle.textContent = list.length + ' task' + (list.length!==1?'s':'') + (fStat!=='all'?' · '+fStat:'');
 
-  const container = document.getElementById('tc-list');
-  if(!container) return;
-  if(!list.length){
-    container.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">No tasks match this filter. <a href="#" onclick="tcSetFilter(\'all\');return false;" style="color:var(--accent);">Show all →</a></div>';
-    return;
-  }
-
-  // Group
+  // Group tasks
   const groups = {};
   list.forEach(t => {
     let key = 'Tasks';
@@ -18525,18 +18582,38 @@ function tcRender(){
       else if(t.dueDate === todayStr) key = '🟡 Due Today';
       else {
         const d = new Date(t.dueDate+'T12:00:00');
-        key = '📅 ' + d.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+        const tmrw = new Date(today); tmrw.setDate(tmrw.getDate()+1);
+        if(t.dueDate === tmrw.toISOString().slice(0,10)) key = '📅 Tomorrow';
+        else key = '📅 ' + d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
       }
     }
     if(!groups[key]) groups[key] = [];
     groups[key].push(t);
   });
 
-  container.innerHTML = Object.entries(groups).map(([groupName, items]) => `
-    <div style="margin-bottom:24px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">${groupName} <span style="font-weight:400;opacity:.6;">(${items.length})</span></div>
-      ${items.map(t => tcTaskCard(t, today, todayStr)).join('')}
-    </div>`).join('');
+  // Dispatch to active view
+  const viewMode = sessionStorage.getItem('tc_view_mode') || 'list';
+  const emptyHtml = '<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">No tasks match this filter. <a href="#" onclick="tcSetFilter(\'all\');return false;" style="color:var(--gold);">Show all →</a></div>';
+
+  if (viewMode === 'board') {
+    const el = document.getElementById('tc-view-board');
+    if (el) el.innerHTML = list.length ? tcRenderBoard(list, groups, today, todayStr) : emptyHtml;
+  } else if (viewMode === 'calendar') {
+    const el = document.getElementById('tc-view-calendar');
+    if (el) tcRenderCalendar(el, list, today, todayStr);
+  } else {
+    const el = document.getElementById('tc-view-list');
+    if (el) {
+      if (!list.length) { el.innerHTML = emptyHtml; }
+      else {
+        el.innerHTML = Object.entries(groups).map(([groupName, items]) => `
+          <div style="margin-bottom:24px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">${groupName} <span style="font-weight:400;opacity:.6;">(${items.length})</span></div>
+            ${items.map(t => tcTaskCard(t, today, todayStr)).join('')}
+          </div>`).join('');
+      }
+    }
+  }
   if(typeof tcRenderSmartBanner === 'function') tcRenderSmartBanner();
 }
 
@@ -18649,6 +18726,188 @@ function tcRenderHistory(t){
       <div style="font-size:12px;color:var(--text);">${entry.text}</div>
     </div>`;
   }).join('');
+}
+
+// ── View Switching ──────────────────────────────────────────────
+function tcSwitchView(view) {
+  sessionStorage.setItem('tc_view_mode', view);
+  document.querySelectorAll('.tc-vtoggle').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  ['list','board','calendar'].forEach(v => {
+    const el = document.getElementById('tc-view-' + v);
+    if (el) el.style.display = (v === view) ? '' : 'none';
+  });
+  tcRender();
+}
+
+// ── Board View ──────────────────────────────────────────────────
+function tcRenderBoard(list, groups, today, todayStr) {
+  return `<div class="tc-board">${Object.entries(groups).map(([groupName, items]) => {
+    const isOverdue = groupName.includes('Overdue');
+    const isToday = groupName.includes('Due Today') || groupName.includes('Today');
+    const headerClass = isOverdue ? ' overdue' : isToday ? ' today' : '';
+    return `<div class="tc-board-col">
+      <div class="tc-board-col-header${headerClass}">${groupName} <span class="count">${items.length}</span></div>
+      <div class="tc-board-col-body">${items.map(t => tcBoardCard(t, today, todayStr)).join('')}</div>
+      <div class="tc-board-add" onclick="tcOpenNew()">+ Add task</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function tcBoardCard(t, today, todayStr) {
+  const client = (DB.clients||[]).find(c=>c.id===t.clientId);
+  const clientName = client ? client.biz : (t.clientName||'');
+  const am = (DB.accountManagers||[]).find(a=>a.id===t.amId);
+  const amInitials = am ? (am.fname?.[0]||'')+(am.lname?.[0]||'') : '';
+  const isCompleted = t.status === 'completed';
+  const priColor = TC_PRI_COLOR[t.priority] || '#999';
+  const catColor = TC_CAT_COLOR[t.category] || '#555';
+  const isOverdue = !isCompleted && t.dueDate < todayStr;
+
+  let dueLabel = '';
+  if (isCompleted) dueLabel = '<span style="color:#2e7d5e;">✓</span>';
+  else if (isOverdue) dueLabel = `<span class="due-label" style="color:#b03a3a;">⚠ ${t.dueDate}</span>`;
+  else if (t.dueDate === todayStr) dueLabel = '<span class="due-label" style="color:var(--gold);">Today</span>';
+  else dueLabel = `<span class="due-label" style="color:var(--text-d);">${t.dueDate}</span>`;
+
+  return `<div class="tc-bcard${isCompleted?' completed':''}" onclick="twfOpen('${t.id}')">
+    <div style="display:flex;align-items:flex-start;gap:8px;">
+      <input type="checkbox" ${isCompleted?'checked':''} onclick="event.stopPropagation();tcToggleComplete('${t.id}')" style="margin-top:2px;accent-color:var(--navy);cursor:pointer;">
+      <div style="flex:1;min-width:0;">
+        <div class="tc-bcard-title${isCompleted?' done':''}">${t.name}</div>
+        ${clientName?`<div class="tc-bcard-desc">${clientName}</div>`:''}
+        <div class="tc-bcard-meta">
+          <span class="pri-dot" style="background:${priColor};"></span>
+          <span class="cat-tag" style="background:${catColor}22;color:${catColor};">${t.category||'Other'}</span>
+          ${dueLabel}
+          ${amInitials?`<span class="am-avatar">${amInitials}</span>`:''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Calendar View ───────────────────────────────────────────────
+let _tcCalYear = new Date().getFullYear();
+let _tcCalMonth = new Date().getMonth();
+
+function tcRenderCalendar(container, list, today, todayStr) {
+  const year = _tcCalYear;
+  const month = _tcCalMonth;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Build tasks by date
+  const tasksByDate = {};
+  list.forEach(t => {
+    if (!t.dueDate) return;
+    if (!tasksByDate[t.dueDate]) tasksByDate[t.dueDate] = [];
+    tasksByDate[t.dueDate].push(t);
+  });
+
+  // Calendar math
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+
+  let html = `<div class="tc-cal-nav">
+    <button onclick="_tcCalMonth--;if(_tcCalMonth<0){_tcCalMonth=11;_tcCalYear--;}tcRender();">◀</button>
+    <span class="month-title">${monthNames[month]} ${year}</span>
+    <button onclick="_tcCalMonth++;if(_tcCalMonth>11){_tcCalMonth=0;_tcCalYear++;}tcRender();">▶</button>
+    <button onclick="_tcCalYear=new Date().getFullYear();_tcCalMonth=new Date().getMonth();tcRender();" style="font-size:11px;">Today</button>
+  </div>`;
+
+  html += '<div class="tc-cal-grid">';
+  // Header row
+  dayNames.forEach(d => { html += `<div class="tc-cal-hcell">${d}</div>`; });
+
+  // Day cells
+  let dayNum = 1;
+  let started = false;
+  let nextMonthDay = 1;
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 7; col++) {
+      const cellIdx = row * 7 + col;
+      let dateStr, displayNum, otherMonth = false;
+
+      if (cellIdx < firstDay) {
+        // Previous month
+        displayNum = daysInPrev - firstDay + cellIdx + 1;
+        const pm = month === 0 ? 11 : month - 1;
+        const py = month === 0 ? year - 1 : year;
+        dateStr = `${py}-${String(pm+1).padStart(2,'0')}-${String(displayNum).padStart(2,'0')}`;
+        otherMonth = true;
+      } else if (dayNum <= daysInMonth) {
+        displayNum = dayNum;
+        dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+        dayNum++;
+      } else {
+        displayNum = nextMonthDay;
+        const nm = month === 11 ? 0 : month + 1;
+        const ny = month === 11 ? year + 1 : year;
+        dateStr = `${ny}-${String(nm+1).padStart(2,'0')}-${String(nextMonthDay).padStart(2,'0')}`;
+        nextMonthDay++;
+        otherMonth = true;
+      }
+
+      const isToday = dateStr === todayStr;
+      const tasks = tasksByDate[dateStr] || [];
+      const cellClass = `tc-cal-cell${isToday?' today':''}${otherMonth?' other-month':''}`;
+
+      html += `<div class="${cellClass}">
+        <div class="day-num">${displayNum}</div>`;
+
+      tasks.slice(0, 3).forEach(t => {
+        const priColor = TC_PRI_COLOR[t.priority] || '#999';
+        html += `<div class="tc-cal-task" onclick="twfOpen('${t.id}')" title="${t.name}">
+          <span class="pri-dot" style="background:${priColor};"></span>
+          ${t.name.length > 18 ? t.name.substring(0,18)+'…' : t.name}
+        </div>`;
+      });
+      if (tasks.length > 3) {
+        html += `<div class="tc-cal-more" onclick="tcCalShowDay('${dateStr}')">+${tasks.length - 3} more</div>`;
+      }
+
+      html += '</div>';
+    }
+    // Stop rendering rows if we've passed the month
+    if (dayNum > daysInMonth && nextMonthDay > 7) break;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function tcCalShowDay(dateStr) {
+  // Show overlay with all tasks for a specific day
+  const tasks = (DB.tasks||[]).filter(t => t.dueDate === dateStr && t.status !== 'completed');
+  if (!tasks.length) return;
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="card" style="width:400px;max-height:70vh;overflow-y:auto;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-weight:700;font-size:14px;">${label}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
+    </div>
+    <div style="padding:12px 20px;">
+      ${tasks.map(t => {
+        const priColor = TC_PRI_COLOR[t.priority] || '#999';
+        const catColor = TC_CAT_COLOR[t.category] || '#555';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="this.closest('[style*=fixed]').remove();twfOpen('${t.id}')">
+          <span style="width:8px;height:8px;border-radius:50%;background:${priColor};flex-shrink:0;"></span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);">${t.name}</div>
+            <div style="font-size:11px;color:var(--text-d);">${t.clientName||''} · ${t.category||''}</div>
+          </div>
+          <span style="font-size:9px;padding:1px 6px;border-radius:8px;background:${catColor}22;color:${catColor};">${t.category||''}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 function tcAddNote(){
