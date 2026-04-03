@@ -3912,8 +3912,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
       <!-- Step indicator -->
       <div id="sje-steps" style="display:flex;gap:0;margin-bottom:24px;">
-        <div class="sje-step active" id="sje-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);">1 · Upload</div>
-        <div class="sje-step" id="sje-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;">2 · Review</div>
+        <div id="sje-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);transition:all .2s;">1 · Upload</div>
+        <div id="sje-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;transition:all .2s;">2 · Review</div>
         <div class="sje-step" id="sje-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;">3 · Confirm</div>
       </div>
 
@@ -27170,10 +27170,15 @@ async function sjeHandleFile(file) {
 function sjeShowReview() {
   if (!_sjeData) return;
 
-  // Update step indicators
-  document.getElementById('sje-step-1').style.background = 'var(--green)';
+  // Update step indicators: Upload=done, Review=active, Confirm=pending
+  document.getElementById('sje-step-1').style.background = '#22c55e';
+  document.getElementById('sje-step-1').style.color = '#fff';
+  document.getElementById('sje-step-1').textContent = '✓ Upload';
   document.getElementById('sje-step-2').style.background = 'var(--accent)';
   document.getElementById('sje-step-2').style.color = '#fff';
+  document.getElementById('sje-step-3').style.background = 'var(--surface2)';
+  document.getElementById('sje-step-3').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-3').textContent = '3 · Confirm';
 
   // Hide upload, show review
   document.getElementById('sje-upload').style.display = 'none';
@@ -27285,8 +27290,13 @@ function sjeBackToUpload() {
   // Reset step indicators
   document.getElementById('sje-step-1').style.background = 'var(--accent)';
   document.getElementById('sje-step-1').style.color = '#fff';
+  document.getElementById('sje-step-1').textContent = '1 · Upload';
   document.getElementById('sje-step-2').style.background = 'var(--surface2)';
   document.getElementById('sje-step-2').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-2').textContent = '2 · Review';
+  document.getElementById('sje-step-3').style.background = 'var(--surface2)';
+  document.getElementById('sje-step-3').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-3').textContent = '3 · Confirm';
   document.getElementById('sje-step-3').style.background = 'var(--surface2)';
   document.getElementById('sje-step-3').style.color = 'var(--text-d)';
 }
@@ -27597,8 +27607,12 @@ async function sjePushOne(idx) {
 }
 
 function sjeShowConfirm() {
-  document.getElementById('sje-step-3').style.background = 'var(--green)';
+  // Upload=done, Review=done, Confirm=active
+  document.getElementById('sje-step-2').style.background = '#22c55e';
+  document.getElementById('sje-step-2').textContent = '✓ Review';
+  document.getElementById('sje-step-3').style.background = 'var(--accent)';
   document.getElementById('sje-step-3').style.color = '#fff';
+  document.getElementById('sje-step-3').textContent = '3 · Confirm';
 
   document.getElementById('sje-review').style.display = 'none';
   document.getElementById('sje-confirm').style.display = '';
