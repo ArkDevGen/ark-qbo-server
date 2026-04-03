@@ -18655,10 +18655,10 @@ function tcTaskCard(t, today, todayStr){
 
   // Visual state
   let bgColor, borderColor, checkBg, checkBorder;
-  if(isCompleted)    { bgColor='#0a140a';           borderColor='#1a3a1a'; checkBg='#2e7d5e'; checkBorder='#2e7d5e'; }
-  else if(isReview)  { bgColor='#0e1a2e';           borderColor='#2e5fa1'; checkBg='transparent'; checkBorder='#2e5fa1'; }
-  else if(t.isNotifyTask){ bgColor='#0a0a1a';        borderColor='#3a2a6b'; checkBg='transparent'; checkBorder='var(--border)'; }
-  else if(isOverdue) { bgColor='#1a0a0a';           borderColor='#3a1a1a'; checkBg='transparent'; checkBorder='var(--border)'; }
+  if(isCompleted)    { bgColor='rgba(46,125,94,.06)'; borderColor='rgba(46,125,94,.25)'; checkBg='#2e7d5e'; checkBorder='#2e7d5e'; }
+  else if(isReview)  { bgColor='rgba(46,95,161,.06)'; borderColor='rgba(46,95,161,.25)'; checkBg='transparent'; checkBorder='#2e5fa1'; }
+  else if(t.isNotifyTask){ bgColor='rgba(107,63,160,.06)'; borderColor='rgba(107,63,160,.25)'; checkBg='transparent'; checkBorder='var(--border)'; }
+  else if(isOverdue) { bgColor='rgba(176,58,58,.06)'; borderColor='rgba(176,58,58,.25)'; checkBg='transparent'; checkBorder='var(--border)'; }
   else               { bgColor='var(--surface2)';   borderColor='var(--border)'; checkBg='transparent'; checkBorder='var(--border)'; }
 
   const reviewer = t.reviewerId ? (DB.accountManagers||[]).find(a=>a.id===t.reviewerId) : null;
@@ -19162,7 +19162,120 @@ function tdParseMultiFiles() {
     if (iName < 0) continue;
 
     function mapPri(p) { const n=parseInt(p); return n===4?'high':n===3?'medium':n===2?'low':'medium'; }
-    function parseDate(raw) { if(!raw||!raw.trim()) return ''; const d=new Date(raw.trim()); return !isNaN(d.getTime())?d.toISOString().slice(0,10):''; }
+
+    const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const monthShort = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+    function parseTodoistDate(raw) {
+      if (!raw || !raw.trim()) return { dueDate: '', recurring: false, recurFreq: null };
+      const s = raw.trim().toLowerCase();
+
+      // Detect recurring patterns
+      if (s.startsWith('every ')) {
+        const recur = s.slice(6).trim();
+        let recurFreq = 'custom', dueDate = '';
+        const today = new Date();
+
+        // "every tuesday", "every wednesday", etc.
+        const dayIdx = dayNames.indexOf(recur);
+        if (dayIdx >= 0) {
+          recurFreq = 'weekly';
+          // Find next occurrence of this day
+          const d = new Date(today);
+          while (d.getDay() !== dayIdx) d.setDate(d.getDate() + 1);
+          dueDate = d.toISOString().slice(0, 10);
+          return { dueDate, recurring: true, recurFreq };
+        }
+
+        // "every 7th", "every 15th", "every 1st"
+        const dayOfMonth = recur.match(/^(\d{1,2})(st|nd|rd|th)?$/);
+        if (dayOfMonth) {
+          recurFreq = 'monthly';
+          const dom = parseInt(dayOfMonth[1]);
+          const d = new Date(today.getFullYear(), today.getMonth(), dom);
+          if (d <= today) d.setMonth(d.getMonth() + 1);
+          dueDate = d.toISOString().slice(0, 10);
+          return { dueDate, recurring: true, recurFreq };
+        }
+
+        // "every 3 months", "every 4 weeks", "every 2 days"
+        const interval = recur.match(/^(\d+)\s+(day|week|month|year)s?$/);
+        if (interval) {
+          const n = parseInt(interval[1]);
+          const unit = interval[2];
+          if (unit === 'week') recurFreq = n === 1 ? 'weekly' : n === 2 ? 'biweekly' : 'custom';
+          else if (unit === 'month') recurFreq = n === 1 ? 'monthly' : n === 3 ? 'quarterly' : 'custom';
+          else if (unit === 'year') recurFreq = 'annually';
+          else recurFreq = 'custom';
+          const d = new Date(today);
+          if (unit === 'day') d.setDate(d.getDate() + n);
+          else if (unit === 'week') d.setDate(d.getDate() + n * 7);
+          else if (unit === 'month') d.setMonth(d.getMonth() + n);
+          else if (unit === 'year') d.setFullYear(d.getFullYear() + n);
+          dueDate = d.toISOString().slice(0, 10);
+          return { dueDate, recurring: true, recurFreq };
+        }
+
+        // "every december 28th", "every march 15"
+        const monthDay = recur.match(/^(\w+)\s+(\d{1,2})(st|nd|rd|th)?$/);
+        if (monthDay) {
+          const mIdx = monthNames.indexOf(monthDay[1]) >= 0 ? monthNames.indexOf(monthDay[1]) : monthShort.indexOf(monthDay[1].slice(0,3));
+          if (mIdx >= 0) {
+            recurFreq = 'annually';
+            const dom = parseInt(monthDay[2]);
+            const d = new Date(today.getFullYear(), mIdx, dom);
+            if (d <= today) d.setFullYear(d.getFullYear() + 1);
+            dueDate = d.toISOString().slice(0, 10);
+            return { dueDate, recurring: true, recurFreq };
+          }
+        }
+
+        // Fallback recurring — use tomorrow
+        const d = new Date(today); d.setDate(d.getDate() + 1);
+        return { dueDate: d.toISOString().slice(0, 10), recurring: true, recurFreq: 'custom' };
+      }
+
+      // Non-recurring date parsing
+      // "Apr 3 2026", "Jul 1 2026", "2026-04-03"
+      const today = new Date();
+
+      // Try ISO format first
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        return { dueDate: s.slice(0, 10), recurring: false, recurFreq: null };
+      }
+
+      // "Jul 1" or "Jul 1 2026" or "July 1" or "July 1 2026"
+      const mdMatch = raw.trim().match(/^(\w+)\s+(\d{1,2})(?:\s+(\d{4}))?$/);
+      if (mdMatch) {
+        const mStr = mdMatch[1].toLowerCase().slice(0, 3);
+        const mIdx = monthShort.indexOf(mStr);
+        if (mIdx >= 0) {
+          const day = parseInt(mdMatch[2]);
+          let year = mdMatch[3] ? parseInt(mdMatch[3]) : today.getFullYear();
+          // If no year and date has passed, use next year
+          if (!mdMatch[3]) {
+            const candidate = new Date(year, mIdx, day);
+            if (candidate < today) year++;
+          }
+          const d = new Date(year, mIdx, day);
+          if (!isNaN(d.getTime())) return { dueDate: d.toISOString().slice(0, 10), recurring: false, recurFreq: null };
+        }
+      }
+
+      // Generic Date.parse fallback — but add year context
+      const d = new Date(raw.trim());
+      if (!isNaN(d.getTime())) {
+        // If year is before 2020, it's probably a bad parse — re-try with current year
+        if (d.getFullYear() < 2020) {
+          const retry = new Date(raw.trim() + ' ' + today.getFullYear());
+          if (!isNaN(retry.getTime())) return { dueDate: retry.toISOString().slice(0, 10), recurring: false, recurFreq: null };
+        }
+        return { dueDate: d.toISOString().slice(0, 10), recurring: false, recurFreq: null };
+      }
+
+      return { dueDate: '', recurring: false, recurFreq: null };
+    }
 
     let sectionName = '';
     for (let i = 1; i < lines.length; i++) {
@@ -19176,17 +19289,21 @@ function tdParseMultiFiles() {
 
       const desc = iDesc >= 0 ? cols[iDesc] : '';
       const priority = iPri >= 0 ? mapPri(cols[iPri]) : 'medium';
-      const dateRaw = iDate >= 0 ? cols[iDate] : '';
-      const deadRaw = iDeadline >= 0 ? cols[iDeadline] : '';
-      const dueDate = parseDate(dateRaw) || parseDate(deadRaw);
+      const dateRaw = iDate >= 0 ? (cols[iDate] || '').trim() : '';
+      const deadRaw = iDeadline >= 0 ? (cols[iDeadline] || '').trim() : '';
+      const dateInfo = parseTodoistDate(dateRaw) || {};
+      const deadInfo = parseTodoistDate(deadRaw) || {};
+      const dueDate = dateInfo.dueDate || deadInfo.dueDate || '';
+      const isRecurring = dateInfo.recurring || deadInfo.recurring || false;
+      const recurFreq = dateInfo.recurFreq || deadInfo.recurFreq || null;
 
       allTasks.push({
         _import: true, _checked: true, _row: i, _project: file.name,
         id: uid(), name: name.trim(),
-        notes: [desc, sectionName ? `[${sectionName}]` : ''].filter(Boolean).join(' · '),
+        notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
         priority, dueDate: dueDate || new Date().toISOString().slice(0, 10),
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
-        recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
+        recurring: isRecurring, recurFreq: recurFreq, showDaysAdvance: 3, status: 'open',
         noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'Import',
       });
