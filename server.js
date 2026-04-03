@@ -4294,22 +4294,21 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     }
 
     // Look up store number from CRM client franchise records by matching store name
+    const normalize = (s) => String(s || '').toLowerCase().replace(/[''`]/g, '').replace(/\s+/g, ' ').trim();
     function findStoreNumFromCRM(storeName) {
-      const lower = String(storeName).toLowerCase();
+      const csvNorm = normalize(storeName);
       for (const client of crmClients) {
         if (!client.franchises?.length) continue;
-        // Check if the store name contains the client business name or legal name
-        const bizLower = (client.biz || '').toLowerCase();
-        const legalLower = (client.legalName || '').toLowerCase();
+        const bizNorm = normalize(client.biz);
+        const legalNorm = normalize(client.legalName);
         for (const f of client.franchises) {
-          const fNameLower = (f.legalName || f.name || '').toLowerCase();
-          // Match if CSV store name contains the franchise name or client biz name
+          const fNameNorm = normalize(f.legalName || f.name);
           if (f.storeNumber && (
-            (fNameLower && lower.includes(fNameLower)) ||
-            (bizLower && lower.includes(bizLower)) ||
-            (legalLower && lower.includes(legalLower)) ||
-            // Also try: store name from CSV contains the store number
-            lower.includes('store ' + f.storeNumber)
+            (fNameNorm && csvNorm.includes(fNameNorm)) ||
+            (fNameNorm && fNameNorm.includes(csvNorm.replace(/\s*(llc|inc|corp|store\s*\d+)\s*/gi, '').trim())) ||
+            (bizNorm && csvNorm.includes(bizNorm)) ||
+            (legalNorm && csvNorm.includes(legalNorm)) ||
+            csvNorm.includes('store ' + f.storeNumber)
           )) {
             return f.storeNumber;
           }
@@ -4320,10 +4319,11 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
 
     // Fallback: match against franchise config
     function findStoreNumFromConfig(storeName) {
-      const lower = String(storeName).toLowerCase();
+      const csvNorm = normalize(storeName);
       for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
         for (const fname of (info.franchise_names || [])) {
-          if (lower.includes(fname.toLowerCase()) || fname.toLowerCase().includes(lower.replace(/\s*(llc|inc|corp)\s*/gi, '').trim())) {
+          const fnameNorm = normalize(fname);
+          if (csvNorm.includes(fnameNorm) || fnameNorm.includes(csvNorm.replace(/\s*(llc|inc|corp|store\s*\d+)\s*/gi, '').trim())) {
             const storeIds = Object.keys(info.stores || {});
             if (storeIds.length === 1) return storeIds[0];
           }
