@@ -4293,8 +4293,33 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       storeGroups[storeName].push(row);
     }
 
-    // Build a reverse lookup: franchise name → store numbers
-    function findStoreNumByName(storeName) {
+    // Look up store number from CRM client franchise records by matching store name
+    function findStoreNumFromCRM(storeName) {
+      const lower = String(storeName).toLowerCase();
+      for (const client of crmClients) {
+        if (!client.franchises?.length) continue;
+        // Check if the store name contains the client business name or legal name
+        const bizLower = (client.biz || '').toLowerCase();
+        const legalLower = (client.legalName || '').toLowerCase();
+        for (const f of client.franchises) {
+          const fNameLower = (f.legalName || f.name || '').toLowerCase();
+          // Match if CSV store name contains the franchise name or client biz name
+          if (f.storeNumber && (
+            (fNameLower && lower.includes(fNameLower)) ||
+            (bizLower && lower.includes(bizLower)) ||
+            (legalLower && lower.includes(legalLower)) ||
+            // Also try: store name from CSV contains the store number
+            lower.includes('store ' + f.storeNumber)
+          )) {
+            return f.storeNumber;
+          }
+        }
+      }
+      return null;
+    }
+
+    // Fallback: match against franchise config
+    function findStoreNumFromConfig(storeName) {
       const lower = String(storeName).toLowerCase();
       for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
         for (const fname of (info.franchise_names || [])) {
@@ -4312,9 +4337,10 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     let totalDebits = 0, totalCredits = 0, totalEntries = 0;
 
     for (const [storeName, rows] of Object.entries(storeGroups)) {
-      let storeNum = extractStoreNum(storeName);
-      // Fallback: try matching store name to franchise config
-      if (!storeNum) storeNum = findStoreNumByName(storeName);
+      // Priority: 1) CRM client records, 2) CSV store name extraction, 3) franchise config
+      let storeNum = findStoreNumFromCRM(storeName);
+      if (!storeNum) storeNum = extractStoreNum(storeName);
+      if (!storeNum) storeNum = findStoreNumFromConfig(storeName);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
       const entries = [];
       let fDebits = 0, fCredits = 0;
