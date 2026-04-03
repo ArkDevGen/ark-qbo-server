@@ -1303,20 +1303,47 @@ app.post('/qbo/api', async (req, res) => {
 
   // ── Action: Find existing JEs by DocNumber prefix ──────────────
   } else if (action === 'findJournalEntries') {
-    const { docNumberPrefix } = payload || {};
-    if (!docNumberPrefix) return res.status(400).json({ error: 'docNumberPrefix required' });
-    const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber LIKE '${docNumberPrefix}%' MAXRESULTS 500`;
-    qbo.query(query, (err, data) => {
-      if (err) {
-        console.error('findJournalEntries error:', err.message);
-        return res.status(500).json({ error: err.message || 'Query failed' });
+    const { docNumberPrefix, docNumbers } = payload || {};
+    if (!docNumberPrefix && !docNumbers?.length) return res.status(400).json({ error: 'docNumberPrefix or docNumbers required' });
+
+    if (docNumbers && docNumbers.length) {
+      // Batch exact match — query for specific DocNumbers
+      // QBO supports IN clause: WHERE DocNumber IN ('INV-1', 'INV-2', ...)
+      // Process in chunks of 50 to avoid query length limits
+      const allEntries = [];
+      for (let i = 0; i < docNumbers.length; i += 50) {
+        const chunk = docNumbers.slice(i, i + 50);
+        const inList = chunk.map(d => `'${String(d).replace(/'/g, "''")}'`).join(',');
+        const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber IN (${inList}) MAXRESULTS 1000`;
+        try {
+          const data = await new Promise((resolve, reject) => {
+            qbo.query(query, (err, d) => err ? reject(err) : resolve(d));
+          });
+          const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
+            id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
+          }));
+          allEntries.push(...entries);
+        } catch(e) {
+          console.error('findJournalEntries chunk error:', e.message);
+        }
       }
-      const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
-        id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
-      }));
-      console.log(`  Found ${entries.length} existing JEs matching "${docNumberPrefix}*"`);
-      res.json({ success: true, entries });
-    });
+      console.log(`  Found ${allEntries.length} existing JEs from ${docNumbers.length} DocNumbers`);
+      res.json({ success: true, entries: allEntries });
+    } else {
+      // Legacy prefix search
+      const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber LIKE '${docNumberPrefix}%' MAXRESULTS 1000`;
+      qbo.query(query, (err, data) => {
+        if (err) {
+          console.error('findJournalEntries error:', err.message);
+          return res.status(500).json({ error: err.message || 'Query failed' });
+        }
+        const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
+          id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
+        }));
+        console.log(`  Found ${entries.length} existing JEs matching "${docNumberPrefix}*"`);
+        res.json({ success: true, entries });
+      });
+    }
 
   // ── Action: Switch Active Realm ────────────────────────────────
   } else if (action === 'switchRealm') {

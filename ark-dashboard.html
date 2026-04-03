@@ -27353,12 +27353,12 @@ async function sjePushAll() {
       (classData.classes || []).forEach(c => { classMap[c.name.toLowerCase()] = c.id; });
     } catch(e) { /* classes may not exist */ }
 
-    // Check for existing JEs to skip duplicates
+    // Check for existing JEs to skip duplicates — exact DocNumber matching
     let existingDocNums = new Set();
     try {
-      const prefix = franchise.entries[0]?.journalNo?.slice(0, 2) || '';
-      if (prefix) {
-        const existing = await qboCall('findJournalEntries', { docNumberPrefix: prefix }, franchise.realmId);
+      const docNums = franchise.entries.map(e => e.journalNo).filter(Boolean);
+      if (docNums.length) {
+        const existing = await qboCall('findJournalEntries', { docNumbers: docNums }, franchise.realmId);
         (existing.entries || []).forEach(e => existingDocNums.add(e.docNumber));
       }
     } catch(e) { /* continue without duplicate check */ }
@@ -27502,11 +27502,10 @@ async function sjePushOne(idx) {
   // Check for existing JEs to skip duplicates
   let existingDocNums = new Set();
   try {
-    // Use first entry's journal number prefix (e.g. "03" from "03.01.2026") to find existing
-    const prefix = f.entries[0]?.journalNo?.slice(0, 2) || '';
-    if (prefix) {
-      const existing = await qboCall('findJournalEntries', { docNumberPrefix: prefix }, f.realmId);
-      (existing.entries || []).forEach(e => existingDocNums.add(e.docNumber));
+    const docNums = f.entries.map(e => e.journalNo).filter(Boolean);
+    if (docNums.length) {
+      const existing = await qboCall('findJournalEntries', { docNumbers: docNums }, f.realmId);
+      (existing.entries||[]).forEach(e => existingDocNums.add(e.docNumber));
     }
   } catch(e) { console.warn('Could not check existing JEs:', e.message); }
 
@@ -27909,15 +27908,15 @@ async function cogsPushOne(idx) {
   try { const d = await qboCall('getAccounts', {}, f.realmId); (d.accounts||[]).forEach(a => { acctMap[a.name.toLowerCase()] = a.id; }); } catch(e) {}
   try { const d = await qboCall('getClasses', {}, f.realmId); (d.classes||[]).forEach(c => { classMap[c.name.toLowerCase()] = c.id; }); } catch(e) {}
 
-  // Check for existing JEs
+  // Check for existing JEs using exact DocNumber matching
   let existingDocNums = new Set();
   try {
-    const first = f.entries[0]?.journalNo || '';
-    if (first) {
-      const existing = await qboCall('findJournalEntries', { docNumberPrefix: first.slice(0,3) }, f.realmId);
+    const docNums = f.entries.map(e => e.journalNo).filter(Boolean);
+    if (docNums.length) {
+      const existing = await qboCall('findJournalEntries', { docNumbers: docNums }, f.realmId);
       (existing.entries||[]).forEach(e => existingDocNums.add(e.docNumber));
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Duplicate check failed:', e.message); }
 
   const toPush = f.entries.filter(e => !existingDocNums.has(e.journalNo));
   const skipped = f.entries.length - toPush.length;
@@ -27985,9 +27984,9 @@ async function cogsPushAll() {
 
     let existingDocNums = new Set();
     try {
-      const first = franchise.entries[0]?.journalNo || '';
-      if (first) {
-        const existing = await qboCall('findJournalEntries', { docNumberPrefix: first.slice(0,3) }, franchise.realmId);
+      const docNums = franchise.entries.map(e => e.journalNo).filter(Boolean);
+      if (docNums.length) {
+        const existing = await qboCall('findJournalEntries', { docNumbers: docNums }, franchise.realmId);
         (existing.entries||[]).forEach(e => existingDocNums.add(e.docNumber));
       }
     } catch(e) {}
