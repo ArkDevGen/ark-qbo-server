@@ -2258,7 +2258,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <option>Proposal Sent</option><option>Negotiating</option><option>Won</option><option>Lost</option>
         </select>
         <select id="lc-filter-am" class="field-input" style="width:140px;margin:0;" onchange="lcRenderList()">
-          <option value="">All AMs</option>
+          <option value="">All Team</option>
         </select>
         <select id="lc-sort" class="field-input" style="width:160px;margin:0;" onchange="lcRenderList()">
           <option value="followup">By Follow-up Date</option>
@@ -2379,7 +2379,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <option value="">All Clients</option>
       </select>
       <select id="tc-filter-am" class="field-input" style="width:140px;margin:0;" onchange="tcRender()">
-        <option value="">All AMs</option>
+        <option value="">All Team</option>
       </select>
       <select id="tc-group-by" class="field-input" style="width:140px;margin:0;" onchange="tcRender()">
         <option value="due">Group by Due Date</option>
@@ -17910,7 +17910,7 @@ function tcPopulateFilters(){
   const aVal = amSel.value;
   // Use DB.accountManagers, fall back to all server users
   const amList = (DB.accountManagers||[]).length ? DB.accountManagers : (_cachedServerUsers||[]);
-  amSel.innerHTML = '<option value="">All AMs</option>' +
+  amSel.innerHTML = '<option value="">All Team</option>' +
     amList.map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
   // Auto-filter to current user's tasks on first load
   if (!_tcFilterInitialized && currentUser) {
@@ -21630,7 +21630,7 @@ function lcRenderKanban(){
 function lcPopulateAMFilter(){
   const sel = document.getElementById('lc-filter-am'); if(!sel) return;
   const cur = sel.value;
-  sel.innerHTML = '<option value="">All AMs</option>' +
+  sel.innerHTML = '<option value="">All Team</option>' +
     (DB.accountManagers||[]).map(a=>`<option value="${a.id}" ${a.id===cur?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
 }
 
