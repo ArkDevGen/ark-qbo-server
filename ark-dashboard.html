@@ -19090,14 +19090,120 @@ function tdResetImport(){
   _tdParsed = [];
 }
 
-function tdReadFile(e){
-  const file = e.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const ta = document.getElementById('td-csv-paste');
-    if(ta) ta.value = ev.target.result;
-  };
-  reader.readAsText(file);
+let _tdFiles = []; // Store loaded files with project names
+
+function tdReadFiles(e){
+  const files = e.target.files;
+  if (!files || !files.length) return;
+
+  if (files.length === 1) {
+    // Single file — put in textarea like before
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const ta = document.getElementById('td-csv-paste');
+      if(ta) ta.value = ev.target.result;
+    };
+    reader.readAsText(files[0]);
+    return;
+  }
+
+  // Multiple files — read all and extract project names from filenames
+  _tdFiles = [];
+  let loaded = 0;
+  const ta = document.getElementById('td-csv-paste');
+
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      // Extract project name: "Ashland Oak (HFT) [hash].csv" → "Ashland Oak (HFT)"
+      let projectName = file.name.replace(/\.csv$/i, '').replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+      _tdFiles.push({ name: projectName, content: ev.target.result });
+      loaded++;
+      if (loaded === files.length) {
+        // All files loaded — combine with project tagging
+        ta.value = ''; // Clear textarea
+        tdParseMultiFiles();
+      }
+    };
+    reader.readAsText(file);
+  }
+}
+
+function tdParseMultiFiles() {
+  // Parse each file separately, tag tasks with project name
+  const allTasks = [];
+  const warnings = [];
+  const defaultAM = document.getElementById('td-am-sel')?.value || '';
+  const defaultCat = document.getElementById('td-cat-sel')?.value || 'Other';
+
+  for (const file of _tdFiles) {
+    const lines = file.content.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) continue;
+
+    const sep = lines[0].indexOf(';') > 0 && lines[0].indexOf(';') < (lines[0].indexOf(',') || 9999) ? ';' : ',';
+    function parseRow(line) {
+      const result = []; let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') inQ = !inQ;
+        else if (c === sep && !inQ) { result.push(cur); cur = ''; }
+        else cur += c;
+      }
+      result.push(cur);
+      return result.map(v => v.trim());
+    }
+
+    // Remove BOM if present
+    const headerLine = lines[0].replace(/^\uFEFF/, '');
+    const headers = parseRow(headerLine).map(h => h.toUpperCase().trim());
+    const idx = h => headers.indexOf(h);
+    const iType = idx('TYPE'), iName = idx('CONTENT'), iDesc = idx('DESCRIPTION');
+    const iPri = idx('PRIORITY'), iDate = idx('DATE'), iDeadline = idx('DEADLINE');
+    if (iName < 0) continue;
+
+    function mapPri(p) { const n=parseInt(p); return n===4?'high':n===3?'medium':n===2?'low':'medium'; }
+    function parseDate(raw) { if(!raw||!raw.trim()) return ''; const d=new Date(raw.trim()); return !isNaN(d.getTime())?d.toISOString().slice(0,10):''; }
+
+    let sectionName = '';
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseRow(lines[i]);
+      const type = iType >= 0 ? (cols[iType] || '').toLowerCase().trim() : 'task';
+      if (type === 'section') { sectionName = iName >= 0 ? cols[iName] : ''; continue; }
+      if (type === 'meta' || (type !== 'task' && type !== '')) continue;
+
+      const name = iName >= 0 ? cols[iName] : '';
+      if (!name.trim()) continue;
+
+      const desc = iDesc >= 0 ? cols[iDesc] : '';
+      const priority = iPri >= 0 ? mapPri(cols[iPri]) : 'medium';
+      const dateRaw = iDate >= 0 ? cols[iDate] : '';
+      const deadRaw = iDeadline >= 0 ? cols[iDeadline] : '';
+      const dueDate = parseDate(dateRaw) || parseDate(deadRaw);
+
+      allTasks.push({
+        _import: true, _checked: true, _row: i, _project: file.name,
+        id: uid(), name: name.trim(),
+        notes: [desc, sectionName ? `[${sectionName}]` : ''].filter(Boolean).join(' · '),
+        priority, dueDate: dueDate || new Date().toISOString().slice(0, 10),
+        clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
+        recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
+        noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'Import',
+      });
+    }
+  }
+
+  if (!allTasks.length) { alert('No tasks found in the uploaded files.'); return; }
+
+  _tdParsed = allTasks;
+  const projects = [...new Set(allTasks.map(t => t._project).filter(Boolean))];
+
+  document.getElementById('td-step-paste').style.display = 'none';
+  if (projects.length > 1) {
+    tdShowProjectMapping(projects);
+  } else {
+    tdShowPreview();
+  }
 }
 
 // ── Client search for import ──
@@ -31997,11 +32103,12 @@ async function intConnectWithToken() {
       <div style="background:var(--blue-bg);border:1px solid rgba(44,95,161,.2);border-radius:var(--radius);padding:12px 16px;">
         <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:6px;">How to export from Todoist</div>
         <ol style="font-size:12px;color:var(--text-m);margin:0;padding-left:18px;line-height:1.8;">
-          <li>In Todoist, open the project you want to import</li>
-          <li>Click the <strong>···</strong> menu (top right of the project)</li>
-          <li>Select <strong>Export as CSV</strong></li>
-          <li>Open the downloaded file in a text editor, select all, copy, and paste below</li>
+          <li>In Todoist, go to <strong>Settings → Backups → Create backup</strong></li>
+          <li>Download and extract the ZIP file</li>
+          <li>Click <strong>"Or upload file"</strong> and select all the CSV files from the backup folder</li>
+          <li>Map each project to a client, then preview and import</li>
         </ol>
+        <div style="font-size:11px;color:var(--text-d);margin-top:4px;">Or paste a single project CSV below for quick import.</div>
       </div>
 
       <!-- Step 2: Paste zone -->
@@ -32010,7 +32117,7 @@ async function intConnectWithToken() {
           <label style="font-size:12px;font-weight:700;color:var(--text-m);text-transform:uppercase;letter-spacing:.8px;">Paste CSV Content</label>
           <div style="display:flex;gap:8px;align-items:center;">
             <label style="font-size:12px;color:var(--text-d);">Or upload file:</label>
-            <input type="file" id="td-csv-file" accept=".csv,.txt" onchange="tdReadFile(event)"
+            <input type="file" id="td-csv-file" accept=".csv,.txt" multiple onchange="tdReadFiles(event)"
               style="font-size:12px;color:var(--text-m);">
           </div>
         </div>
