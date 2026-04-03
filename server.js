@@ -4337,10 +4337,19 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     let totalDebits = 0, totalCredits = 0, totalEntries = 0;
 
     for (const [storeName, rows] of Object.entries(storeGroups)) {
-      // Priority: 1) CRM client records, 2) CSV store name extraction, 3) franchise config
-      let storeNum = findStoreNumFromCRM(storeName);
-      let storeNumSource = storeNum ? 'CRM' : '';
-      if (!storeNum) { storeNum = extractStoreNum(storeName); storeNumSource = storeNum ? 'CSV' : ''; }
+      // Priority: 1) CSV "Store XXXX" pattern (most specific), 2) CRM client records, 3) CSV number extraction, 4) franchise config
+      let storeNum = extractStoreNum(storeName);
+      let storeNumSource = storeNum ? 'CSV' : '';
+      // Verify the CSV-extracted number exists in CRM or franchise config
+      if (storeNum && !findRealmForStore(storeNum)) {
+        // Check franchise config
+        let found = false;
+        for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
+          if (info.stores?.[storeNum] !== undefined) { found = true; break; }
+        }
+        if (!found) { storeNum = null; storeNumSource = ''; }
+      }
+      if (!storeNum) { storeNum = findStoreNumFromCRM(storeName); storeNumSource = storeNum ? 'CRM' : ''; }
       if (!storeNum) { storeNum = findStoreNumFromConfig(storeName); storeNumSource = storeNum ? 'config' : ''; }
       console.log(`  Store "${storeName}" → #${storeNum || 'NONE'} (source: ${storeNumSource || 'not found'})`);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
