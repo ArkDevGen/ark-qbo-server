@@ -19301,7 +19301,7 @@ function tdParseMultiFiles() {
         _import: true, _checked: true, _row: i, _project: file.name,
         id: uid(), name: name.trim(),
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
-        priority, dueDate: dueDate || new Date().toISOString().slice(0, 10),
+        priority, dueDate: dueDate || new Date().toISOString().slice(0, 10), _noDate: !dueDate,
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
         recurring: isRecurring, recurFreq: recurFreq, showDaysAdvance: 3, status: 'open',
         noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -19533,10 +19533,14 @@ function tdApplyProjectMapping() {
     projectMap[proj] = { clientId, clientName, category, skip };
   });
 
+  const skipNoDate = document.getElementById('td-skip-no-date')?.checked || false;
+
   // Apply mappings to parsed tasks
   _tdParsed = _tdParsed.filter(t => {
     const mapping = projectMap[t._project];
     if (mapping?.skip) return false;
+    // Skip tasks with no real due date (just got today as fallback)
+    if (skipNoDate && t._noDate) return false;
     if (mapping) {
       t.clientId = mapping.clientId;
       t.clientName = mapping.clientName;
@@ -32280,8 +32284,12 @@ async function intConnectWithToken() {
           <button class="btn btn-ghost btn-sm" onclick="tdResetImport()">← Start Over</button>
         </div>
         <div id="td-project-list" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
-        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-primary" onclick="tdApplyProjectMapping()">Continue to Preview →</button>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+          <label style="font-size:12px;color:var(--text-d);display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="td-skip-no-date" checked style="accent-color:var(--navy);">
+            Skip tasks without due dates (notes, reference items)
+          </label>
+          <button class="btn btn-primary" onclick="tdApplyProjectMapping()" style="margin-left:auto;">Continue to Preview →</button>
         </div>
       </div>
 
