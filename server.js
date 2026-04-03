@@ -4268,10 +4268,20 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       return null;
     }
 
-    // Extract store number from Store_Name (e.g., "1082 - 721 E. Main St" → "1082")
+    // Extract store number from Store_Name
+    // Prefers "Store XXXX" pattern, falls back to last 3-4 digit number
     function extractStoreNum(storeName) {
-      const match = String(storeName || '').match(/(\d{3,4})/);
-      return match ? match[1] : null;
+      const s = String(storeName || '');
+      // First: look for "Store 1103" or "Store 660" pattern
+      const storeMatch = s.match(/Store\s+(\d{3,4})/i);
+      if (storeMatch) return storeMatch[1];
+      // Second: look for standalone 3-4 digit number at end of string
+      const endMatch = s.match(/(\d{3,4})\s*$/);
+      if (endMatch) return endMatch[1];
+      // Third: look for any 3-4 digit number (last one to avoid matching company names like "555")
+      const allNums = s.match(/\d{3,4}/g);
+      if (allNums && allNums.length) return allNums[allNums.length - 1];
+      return null;
     }
 
     // Group rows by store
@@ -4283,12 +4293,28 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       storeGroups[storeName].push(row);
     }
 
+    // Build a reverse lookup: franchise name → store numbers
+    function findStoreNumByName(storeName) {
+      const lower = String(storeName).toLowerCase();
+      for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
+        for (const fname of (info.franchise_names || [])) {
+          if (lower.includes(fname.toLowerCase()) || fname.toLowerCase().includes(lower.replace(/\s*(llc|inc|corp)\s*/gi, '').trim())) {
+            const storeIds = Object.keys(info.stores || {});
+            if (storeIds.length === 1) return storeIds[0];
+          }
+        }
+      }
+      return null;
+    }
+
     const franchises = [];
     const warnings = [];
     let totalDebits = 0, totalCredits = 0, totalEntries = 0;
 
     for (const [storeName, rows] of Object.entries(storeGroups)) {
-      const storeNum = extractStoreNum(storeName);
+      let storeNum = extractStoreNum(storeName);
+      // Fallback: try matching store name to franchise config
+      if (!storeNum) storeNum = findStoreNumByName(storeName);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
       const entries = [];
       let fDebits = 0, fCredits = 0;
