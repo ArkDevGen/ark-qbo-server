@@ -4210,6 +4210,209 @@ app.get('/letters/:id/signed', requireAuth, (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// SCOOTER'S COGS — Harvest Invoice CSV Parser
+// Parses HarvestInvoiceBreakdown CSVs into COGS journal entries
+// ─────────────────────────────────────────────────────────────────
+const COGS_PRESETS = JSON.parse(fs.readFileSync(path.join(__dirname, 'config', 'cogs_account_presets.json'), 'utf8'));
+
+function cogsGetAccount(key) {
+  return COGS_PRESETS.default?.[key] || key;
+}
+
+app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const wb = require('xlsx').read(req.file.buffer, { cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rawData = require('xlsx').utils.sheet_to_json(ws);
+
+    if (!rawData.length) return res.status(400).json({ error: 'File is empty' });
+
+    console.log(`Harvest COGS parse: ${rawData.length} rows`);
+
+    // COA columns to extract
+    const coaCols = [
+      { key: 'advertising',     csv: 'COA_Advertising___Marketing' },
+      { key: 'consumable_cogs', csv: 'COA_Cost_of_Goods_Sold_Consumable_COGS' },
+      { key: 'dairy_cogs',      csv: 'COA_Cost_of_Goods_Sold_Dairy_COGS' },
+      { key: 'supplies_cogs',   csv: 'COA_Cost_of_Goods_Sold_Supplies_COGS' },
+      { key: 'repairs',         csv: 'COA_Repairs___Maintenance' },
+      { key: 'shipping',        csv: 'COA_Shipping_Expense' },
+      { key: 'store_supplies',  csv: 'COA_Store_Supplies' },
+      { key: 'uniforms',        csv: 'COA_Uniforms' },
+      { key: 'tax',             csv: 'Sales_Tax' },
+    ];
+
+    // Load CRM clients for realm lookup
+    let crmClients = [];
+    try {
+      if (fs.existsSync(ARK_DB_FILE)) {
+        const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+        crmClients = db.clients || [];
+      }
+    } catch(e) { console.log('Could not load CRM clients for Harvest parse'); }
+
+    function findRealmForStore(storeNum) {
+      for (const client of crmClients) {
+        if (!client.franchises?.length) continue;
+        for (const f of client.franchises) {
+          if (f.storeNumber === storeNum && f.qboRealmId) {
+            return { realmId: f.qboRealmId, qboName: f.qboName || '', clientName: client.biz };
+          }
+        }
+      }
+      return null;
+    }
+
+    // Extract store number from Store_Name (e.g., "1082 - 721 E. Main St" → "1082")
+    function extractStoreNum(storeName) {
+      const match = String(storeName || '').match(/(\d{3,4})/);
+      return match ? match[1] : null;
+    }
+
+    // Group rows by store
+    const storeGroups = {};
+    for (const row of rawData) {
+      const storeName = String(row['Store_Name'] || row['store_name'] || '').trim();
+      if (!storeName) continue;
+      if (!storeGroups[storeName]) storeGroups[storeName] = [];
+      storeGroups[storeName].push(row);
+    }
+
+    const franchises = [];
+    const warnings = [];
+    let totalDebits = 0, totalCredits = 0, totalEntries = 0;
+
+    for (const [storeName, rows] of Object.entries(storeGroups)) {
+      const storeNum = extractStoreNum(storeName);
+      const realm = storeNum ? findRealmForStore(storeNum) : null;
+      const entries = [];
+      let fDebits = 0, fCredits = 0;
+
+      for (const row of rows) {
+        const invoiceNum = String(row['Invoice_Number'] || row['invoice_number'] || '').trim();
+        const orderNum = String(row['Order_Number'] || row['order_number'] || '').trim();
+        let invoiceDate = row['Invoice_Date'] || row['invoice_date'] || '';
+        if (invoiceDate instanceof Date) invoiceDate = invoiceDate.toISOString().slice(0, 10);
+        else invoiceDate = String(invoiceDate).trim();
+
+        if (!invoiceNum) continue;
+
+        const r = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
+        const lines = [];
+
+        // Build debit lines from COA columns
+        let debitTotal = 0;
+        for (const col of coaCols) {
+          const amount = r(row[col.csv]);
+          if (amount !== 0) {
+            lines.push({
+              account: cogsGetAccount(col.key),
+              debit: amount > 0 ? amount : null,
+              credit: amount < 0 ? Math.abs(amount) : null,
+              description: '',
+              class: '',
+            });
+            debitTotal += amount;
+          }
+        }
+
+        if (lines.length === 0) continue;
+
+        // Check if shipping-only
+        const isShippingOnly = r(row['COA_Shipping_Expense']) !== 0 &&
+          coaCols.filter(c => c.key !== 'shipping').every(c => r(row[c.csv]) === 0);
+        const description = isShippingOnly ? 'Monthly Delivery Fee' : orderNum;
+
+        // Set description on first line only
+        if (lines.length > 0) lines[0].description = description;
+
+        // Credit line: Harvest Payable
+        lines.push({
+          account: cogsGetAccount('harvest_payable'),
+          debit: null,
+          credit: r(debitTotal),
+          description: '',
+          class: '',
+        });
+
+        const entryDebits = lines.reduce((s, l) => s + (l.debit || 0), 0);
+        const entryCredits = lines.reduce((s, l) => s + (l.credit || 0), 0);
+        fDebits += entryDebits;
+        fCredits += entryCredits;
+
+        entries.push({
+          date: invoiceDate,
+          journalNo: invoiceNum,
+          memo: `${storeName} - Powered By EchoSync`,
+          lines,
+        });
+      }
+
+      if (!entries.length) continue;
+
+      totalDebits += fDebits;
+      totalCredits += fCredits;
+      totalEntries += entries.length;
+
+      // Look up class from franchise config
+      let className = '';
+      if (storeNum) {
+        for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
+          if (info.stores?.[storeNum]) {
+            className = info.stores[storeNum] || '';
+            break;
+          }
+        }
+      }
+      // Apply class to all lines if present
+      if (className) {
+        for (const entry of entries) {
+          for (const line of entry.lines) {
+            line.class = className;
+          }
+        }
+      }
+
+      franchises.push({
+        key: storeName,
+        label: storeName,
+        storeId: storeNum || '',
+        realmId: realm?.realmId || null,
+        qboCompanyName: realm?.qboName || realm?.clientName || '',
+        linked: !!realm?.realmId,
+        className: className || '',
+        dateRange: entries.length ? `${entries[0].date} - ${entries[entries.length - 1].date}` : '',
+        entryCount: entries.length,
+        entries,
+        totalDebits: r(fDebits),
+        totalCredits: r(fCredits),
+        balanced: Math.abs(fDebits - fCredits) < 0.02,
+      });
+    }
+
+    // Sort by label
+    franchises.sort((a, b) => a.label.localeCompare(b.label));
+
+    console.log(`  Generated ${franchises.length} store groups, ${totalEntries} entries`);
+    res.json({
+      success: true,
+      franchises,
+      warnings,
+      totalDebits: Math.round(totalDebits * 100) / 100,
+      totalCredits: Math.round(totalCredits * 100) / 100,
+      totalEntries,
+    });
+  } catch(e) {
+    console.error('Harvest parse error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────────
 // DATABASE: Server-side persistent storage for dashboard data
 // Both users share the same ark-db.json on disk
 // ─────────────────────────────────────────────────────────────────

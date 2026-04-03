@@ -1,0 +1,14 @@
+{
+  "default": {
+    "advertising":       "Advertising & Marketing",
+    "consumable_cogs":   "Cost of Goods Sold:Consumable COGS",
+    "dairy_cogs":        "Cost of Goods Sold:Dairy COGS",
+    "supplies_cogs":     "Cost of Goods Sold:Supplies COGS",
+    "repairs":           "Repairs & Maintenance",
+    "shipping":          "Shipping Expense",
+    "store_supplies":    "Store Supplies",
+    "uniforms":          "Uniforms",
+    "tax":               "Tax Expense",
+    "harvest_payable":   "Harvest Payable"
+  }
+}

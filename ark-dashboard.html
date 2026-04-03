@@ -3895,13 +3895,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- ═══ SCOOTER'S TAB ═══ -->
     <div id="qbo-tab-scooters" style="display:none;">
 
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         <div style="width:36px;height:36px;border-radius:8px;background:#c8102e;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:700;">☕</div>
-        <div>
-          <div style="font-size:16px;font-weight:700;color:var(--text);">Scooter's Coffee — Sales Journal Entries</div>
-          <div style="font-size:11px;color:var(--text-d);">Upload Power BI sales data → preview → push to QBO</div>
+        <div style="flex:1;">
+          <div style="font-size:16px;font-weight:700;color:var(--text);">Scooter's Coffee — Journal Entries</div>
+          <div style="font-size:11px;color:var(--text-d);">Upload data → preview → push to QBO</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm" id="sje-mode-sales" onclick="sjeMode('sales')" style="font-size:12px;font-weight:600;background:var(--accent);color:#fff;border-color:var(--accent);">Sales JE</button>
+          <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;">COGS JE</button>
         </div>
       </div>
+
+      <!-- ═══ SALES JE PANEL ═══ -->
+      <div id="sje-sales-panel">
 
       <!-- Step indicator -->
       <div id="sje-steps" style="display:flex;gap:0;margin-bottom:24px;">
@@ -3979,13 +3986,27 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
         <!-- Push progress -->
-        <div id="sje-progress" style="display:none;margin-top:16px;">
+        <div id="sje-progress" style="display:none;margin-top:16px;padding:16px;background:var(--surface2);border-radius:var(--radius);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-size:12px;font-weight:600;color:var(--text);" id="sje-progress-label">Pushing entries...</span>
             <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text-d);" id="sje-progress-count">0/0</span>
           </div>
-          <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
-            <div id="sje-progress-bar" style="height:100%;background:var(--green);border-radius:3px;width:0%;transition:width .3s;"></div>
+          <div style="height:6px;background:var(--surface);border-radius:3px;overflow:hidden;margin-bottom:12px;">
+            <div id="sje-progress-bar" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .3s;"></div>
+          </div>
+          <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:600;color:var(--green);" id="sje-live-success">✓ 0 pushed</span>
+            <span style="font-size:12px;font-weight:600;color:var(--red);cursor:pointer;" id="sje-live-failed" onclick="document.getElementById('sje-live-errors').style.display=document.getElementById('sje-live-errors').style.display==='none'?'':'none'">⚠ 0 failed</span>
+            <span style="font-size:12px;color:var(--text-d);" id="sje-live-skipped">⊘ 0 skipped</span>
+          </div>
+          <div style="display:flex;gap:4px;height:4px;margin-bottom:4px;">
+            <div id="sje-bar-success" style="height:100%;background:var(--green);border-radius:2px;width:0%;transition:width .3s;"></div>
+            <div id="sje-bar-failed" style="height:100%;background:var(--red);border-radius:2px;width:0%;transition:width .3s;"></div>
+            <div id="sje-bar-skipped" style="height:100%;background:#64748b;border-radius:2px;width:0%;transition:width .3s;"></div>
+          </div>
+          <div id="sje-live-errors" style="display:none;margin-top:10px;max-height:200px;overflow-y:auto;background:rgba(255,92,92,.06);border:1px solid rgba(255,92,92,.15);border-radius:6px;padding:8px;">
+            <div style="font-size:9px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Failed Entries</div>
+            <table style="width:100%;font-size:11px;border-collapse:collapse;" id="sje-live-errors-table"></table>
           </div>
         </div>
       </div>
@@ -4004,6 +4025,123 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <div id="sje-confirm-body"></div>
       </div>
+
+      </div><!-- /sje-sales-panel -->
+
+      <!-- ═══ COGS JE PANEL ═══ -->
+      <div id="sje-cogs-panel" style="display:none;">
+
+        <!-- COGS Step indicator -->
+        <div id="cogs-steps" style="display:flex;gap:0;margin-bottom:24px;">
+          <div class="sje-step active" id="cogs-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);">1 · Upload</div>
+          <div class="sje-step" id="cogs-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;">2 · Review</div>
+          <div class="sje-step" id="cogs-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;">3 · Confirm</div>
+        </div>
+
+        <!-- COGS Step 1: Upload -->
+        <div id="cogs-upload">
+          <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;" onclick="document.getElementById('cogs-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';cogsHandleDrop(event)">
+            <div style="font-size:36px;opacity:.4;margin-bottom:12px;">📦</div>
+            <div style="font-size:13px;color:var(--text-d);margin-bottom:8px;">Drop a Harvest Invoice Breakdown CSV here</div>
+            <div style="font-size:11px;color:var(--text-d);">or click to browse · HarvestInvoiceBreakdown_*.csv</div>
+            <input type="file" id="cogs-file-input" accept=".csv,.xlsx,.xls" style="display:none;" onchange="cogsHandleFile(this.files[0])">
+          </div>
+          <div id="cogs-upload-status" style="text-align:center;margin-top:12px;font-size:12px;"></div>
+        </div>
+
+        <!-- COGS Step 2: Review -->
+        <div id="cogs-review" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--text);">Review COGS Entries</div>
+              <div style="font-size:11px;color:var(--text-d);">Verify each store maps to the correct QBO company</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="cogsBack()">← Back</button>
+              <button class="btn btn-primary btn-sm" id="cogs-push-btn" onclick="cogsPushAll()" style="background:#2ca01c;border-color:#2ca01c;">Push All to QBO →</button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Stores</div>
+              <div style="font-size:22px;font-weight:700;color:var(--accent);font-family:'Cormorant Garamond',serif;" id="cogs-stat-stores">0</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Journal Entries</div>
+              <div style="font-size:22px;font-weight:700;color:var(--accent);font-family:'Cormorant Garamond',serif;" id="cogs-stat-entries">0</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Total Debits</div>
+              <div style="font-size:16px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;" id="cogs-stat-debits">$0.00</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Total Credits</div>
+              <div style="font-size:16px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace;" id="cogs-stat-credits">$0.00</div>
+            </div>
+          </div>
+
+          <!-- Store table -->
+          <div class="card" style="overflow:visible;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Store</th>
+                  <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Store #</th>
+                  <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">QBO Company</th>
+                  <th style="text-align:left;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Class</th>
+                  <th style="text-align:center;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Dates</th>
+                  <th style="text-align:center;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">JEs</th>
+                  <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Debits</th>
+                  <th style="text-align:right;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Credits</th>
+                  <th style="text-align:center;padding:10px 14px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="cogs-franchise-body"></tbody>
+            </table>
+          </div>
+
+          <!-- Push progress -->
+          <div id="cogs-progress" style="display:none;margin-top:16px;padding:16px;background:var(--surface2);border-radius:var(--radius);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="font-size:12px;font-weight:600;color:var(--text);" id="cogs-progress-label">Pushing entries...</span>
+              <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text-d);" id="cogs-progress-count">0/0</span>
+            </div>
+            <div style="height:6px;background:var(--surface);border-radius:3px;overflow:hidden;margin-bottom:12px;">
+              <div id="cogs-progress-bar" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .3s;"></div>
+            </div>
+            <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;">
+              <span style="font-size:12px;font-weight:600;color:var(--green);" id="cogs-live-success">✓ 0 pushed</span>
+              <span style="font-size:12px;font-weight:600;color:var(--red);cursor:pointer;" id="cogs-live-failed" onclick="document.getElementById('cogs-live-errors').style.display=document.getElementById('cogs-live-errors').style.display==='none'?'':'none'">⚠ 0 failed</span>
+              <span style="font-size:12px;color:var(--text-d);" id="cogs-live-skipped">⊘ 0 skipped</span>
+            </div>
+            <div style="display:flex;gap:4px;height:4px;margin-bottom:4px;">
+              <div id="cogs-bar-success" style="height:100%;background:var(--green);border-radius:2px;width:0%;transition:width .3s;"></div>
+              <div id="cogs-bar-failed" style="height:100%;background:var(--red);border-radius:2px;width:0%;transition:width .3s;"></div>
+              <div id="cogs-bar-skipped" style="height:100%;background:#64748b;border-radius:2px;width:0%;transition:width .3s;"></div>
+            </div>
+            <div id="cogs-live-errors" style="display:none;margin-top:10px;max-height:200px;overflow-y:auto;background:rgba(255,92,92,.06);border:1px solid rgba(255,92,92,.15);border-radius:6px;padding:8px;">
+              <div style="font-size:9px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Failed Entries</div>
+              <table style="width:100%;font-size:11px;border-collapse:collapse;" id="cogs-live-errors-table"></table>
+            </div>
+          </div>
+        </div>
+
+        <!-- COGS Step 3: Confirmation -->
+        <div id="cogs-confirm" style="display:none;">
+          <div class="card" style="text-align:center;padding:48px;">
+            <div style="font-size:36px;margin-bottom:12px;">✅</div>
+            <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px;">COGS Push Complete</div>
+            <div id="cogs-confirm-body" style="font-size:13px;color:var(--text-d);margin-bottom:20px;"></div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+              <button class="btn btn-sm btn-primary" onclick="cogsDownloadReport()">Download Report</button>
+              <button class="btn btn-ghost btn-sm" onclick="cogsReset()">Upload New File</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /sje-cogs-panel -->
 
     </div><!-- /qbo-tab-scooters -->
 
@@ -27153,6 +27291,27 @@ function sjeBackToUpload() {
   document.getElementById('sje-step-3').style.color = 'var(--text-d)';
 }
 
+// Live push status updater (shared by sales + COGS)
+function pushLiveUpdate(prefix, total, successCount, failedCount, skippedCount, failedEntries) {
+  const pct = (n) => total > 0 ? Math.round((n / total) * 100) + '%' : '0%';
+  const el = (id) => document.getElementById(id);
+  if (el(prefix + '-live-success')) el(prefix + '-live-success').textContent = `✓ ${successCount} pushed`;
+  if (el(prefix + '-live-failed')) el(prefix + '-live-failed').textContent = `⚠ ${failedCount} failed`;
+  if (el(prefix + '-live-skipped')) el(prefix + '-live-skipped').textContent = `⊘ ${skippedCount} skipped`;
+  if (el(prefix + '-bar-success')) el(prefix + '-bar-success').style.width = pct(successCount);
+  if (el(prefix + '-bar-failed')) el(prefix + '-bar-failed').style.width = pct(failedCount);
+  if (el(prefix + '-bar-skipped')) el(prefix + '-bar-skipped').style.width = pct(skippedCount);
+  // Update errors table
+  const errTable = el(prefix + '-live-errors-table');
+  if (errTable && failedEntries.length) {
+    errTable.innerHTML = failedEntries.map(e =>
+      `<tr style="border-bottom:1px solid var(--border);"><td style="padding:3px 6px;">${e.franchise || e.store || ''}</td><td style="padding:3px 6px;font-family:'DM Mono',monospace;">${e.journalNo || ''}</td><td style="padding:3px 6px;color:var(--red);word-break:break-word;">${e.error || ''}</td></tr>`
+    ).join('');
+    // Auto-show errors panel
+    if (el(prefix + '-live-errors')) el(prefix + '-live-errors').style.display = '';
+  }
+}
+
 async function sjePushAll() {
   if (!_sjeData?.franchises?.length) return;
 
@@ -27174,6 +27333,8 @@ async function sjePushAll() {
 
   _sjePushResults = [];
   let processed = 0, totalSkipped = 0;
+  let liveSuccess = 0, liveFailed = 0, liveSkipped = 0;
+  const liveFailedEntries = [];
 
   for (const franchise of linked) {
     // Pre-fetch accounts and classes for this realm
@@ -27205,7 +27366,7 @@ async function sjePushAll() {
 
       // Skip if already exists
       if (existingDocNums.has(entry.journalNo)) {
-        totalSkipped++;
+        totalSkipped++; liveSkipped++;
         progressLabel.textContent = `Skipping ${franchise.label} — ${entry.date} (exists)`;
         _sjePushResults.push({
           franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
@@ -27214,6 +27375,7 @@ async function sjePushAll() {
           debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
           credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
         });
+        pushLiveUpdate('sje', totalEntries, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
         continue;
       }
 
@@ -27247,6 +27409,7 @@ async function sjePushAll() {
 
         const result = await qboCall('createJournalEntry', payload, franchise.realmId);
         await new Promise(r => setTimeout(r, 350));
+        liveSuccess++;
         _sjePushResults.push({
           franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
           className: franchise.className, date: entry.date, journalNo: entry.journalNo,
@@ -27254,7 +27417,10 @@ async function sjePushAll() {
           debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
           credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
         });
+        pushLiveUpdate('sje', totalEntries, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
       } catch (e) {
+        liveFailed++;
+        liveFailedEntries.push({ franchise: franchise.label, journalNo: entry.journalNo, error: e.message });
         _sjePushResults.push({
           franchise: franchise.label, storeId: franchise.storeId, qboCompany: franchise.qboCompanyName,
           className: franchise.className, date: entry.date, journalNo: entry.journalNo,
@@ -27262,6 +27428,7 @@ async function sjePushAll() {
           debits: entry.lines.reduce((s, l) => s + (l.debit || 0), 0),
           credits: entry.lines.reduce((s, l) => s + (l.credit || 0), 0),
         });
+        pushLiveUpdate('sje', totalEntries, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
       }
     }
   }
@@ -27501,6 +27668,318 @@ function sjeReset() {
   _sjeData = null;
   _sjePushResults = [];
   sjeBackToUpload();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SCOOTER'S COGS JOURNAL ENTRIES (Harvest)
+// ══════════════════════════════════════════════════════════════════
+
+let _cogsData = null;
+let _cogsPushResults = [];
+
+function sjeMode(mode) {
+  document.getElementById('sje-sales-panel').style.display = mode === 'sales' ? '' : 'none';
+  document.getElementById('sje-cogs-panel').style.display = mode === 'cogs' ? '' : 'none';
+  const salesBtn = document.getElementById('sje-mode-sales');
+  const cogsBtn = document.getElementById('sje-mode-cogs');
+  if (mode === 'sales') {
+    salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
+    cogsBtn.style.background = ''; cogsBtn.style.color = ''; cogsBtn.style.borderColor = ''; cogsBtn.style.fontWeight = '';
+  } else {
+    cogsBtn.style.background = 'var(--accent)'; cogsBtn.style.color = '#fff'; cogsBtn.style.borderColor = 'var(--accent)'; cogsBtn.style.fontWeight = '600';
+    salesBtn.style.background = ''; salesBtn.style.color = ''; salesBtn.style.borderColor = ''; salesBtn.style.fontWeight = '';
+  }
+}
+
+function cogsHandleDrop(e) {
+  const file = e.dataTransfer?.files?.[0];
+  if (file) cogsHandleFile(file);
+}
+
+async function cogsHandleFile(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('cogs-upload-status');
+  statusEl.innerHTML = '<span style="color:var(--accent);">Uploading & parsing...</span>';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/scooters/parse-harvest', { method: 'POST', body: formData });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || 'Parse failed');
+
+    _cogsData = data;
+    statusEl.innerHTML = `<span style="color:var(--green);">✓ Parsed ${data.totalEntries} entries across ${data.franchises.length} stores</span>`;
+    cogsShowReview();
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
+  }
+}
+
+function cogsShowReview() {
+  document.getElementById('cogs-upload').style.display = 'none';
+  document.getElementById('cogs-review').style.display = '';
+  document.getElementById('cogs-step-1').style.background = 'var(--green)';
+  document.getElementById('cogs-step-2').style.background = 'var(--accent)';
+  document.getElementById('cogs-step-2').style.color = '#fff';
+
+  document.getElementById('cogs-stat-stores').textContent = _cogsData.franchises.length;
+  document.getElementById('cogs-stat-entries').textContent = _cogsData.totalEntries;
+  document.getElementById('cogs-stat-debits').textContent = '$' + _cogsData.totalDebits.toLocaleString('en-US', { minimumFractionDigits: 2 });
+  document.getElementById('cogs-stat-credits').textContent = '$' + _cogsData.totalCredits.toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+  const tbody = document.getElementById('cogs-franchise-body');
+  tbody.innerHTML = '';
+
+  (_cogsData.franchises || []).forEach((f, i) => {
+    const linked = f.linked;
+    const balanced = f.balanced;
+    const statusHtml = !linked
+      ? '<span style="color:var(--red);font-weight:600;">Not Linked</span>'
+      : balanced
+        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();cogsPushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:#2ca01c;border-color:#2ca01c;color:#fff;" id="cogs-push-${i}">Push</button>`
+        : '<span style="color:#f5a623;font-weight:600;">⚠ Imbalance</span>';
+
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;';
+    tr.onmouseover = () => tr.style.background = 'rgba(26,36,64,.15)';
+    tr.onmouseout = () => tr.style.background = '';
+    tr.onclick = () => cogsToggleDetail(i);
+    tr.innerHTML = `
+      <td style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text);">${f.label}</td>
+      <td style="padding:10px 14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-d);">${f.storeId || '—'}</td>
+      <td style="padding:10px 14px;font-size:11px;color:${linked ? 'var(--green)' : 'var(--red)'};">${f.qboCompanyName || (linked ? f.realmId?.slice(0,12)+'…' : 'Not linked')}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--text-d);">${f.className || '—'}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--text-d);text-align:center;">${f.dateRange || '—'}</td>
+      <td style="padding:10px 14px;font-size:12px;font-weight:600;text-align:center;color:var(--accent);">${f.entryCount}</td>
+      <td style="padding:10px 14px;font-size:11px;font-family:'DM Mono',monospace;text-align:right;">$${(f.totalDebits||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+      <td style="padding:10px 14px;font-size:11px;font-family:'DM Mono',monospace;text-align:right;">$${(f.totalCredits||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+      <td style="padding:10px 14px;text-align:center;">${statusHtml}</td>
+    `;
+    tbody.appendChild(tr);
+
+    // Hidden detail row
+    const detailTr = document.createElement('tr');
+    detailTr.id = 'cogs-detail-' + i;
+    detailTr.style.display = 'none';
+    detailTr.innerHTML = `<td colspan="9" style="padding:12px 24px;background:var(--surface);font-size:11px;">
+      <div style="max-height:200px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr style="background:var(--surface2);">
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Date</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Invoice #</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--text-d);">Class</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Debits</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--text-d);">Credits</th>
+          </tr>
+          ${(f.entries||[]).map(e => {
+            const d = e.lines.reduce((s,l) => s + (l.debit||0), 0);
+            const c = e.lines.reduce((s,l) => s + (l.credit||0), 0);
+            const cls = e.lines.find(l => l.class)?.class || '—';
+            return `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.date}</td>
+              <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${e.journalNo}</td>
+              <td style="padding:4px 8px;font-size:10px;color:var(--text-d);">${cls}</td>
+              <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${d.toFixed(2)}</td>
+              <td style="padding:4px 8px;text-align:right;font-family:'DM Mono',monospace;">$${c.toFixed(2)}</td>
+            </tr>`;
+          }).join('')}
+        </table>
+      </div>
+    </td>`;
+    tbody.appendChild(detailTr);
+  });
+}
+
+function cogsToggleDetail(i) {
+  const el = document.getElementById('cogs-detail-' + i);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function cogsBack() {
+  document.getElementById('cogs-review').style.display = 'none';
+  document.getElementById('cogs-upload').style.display = '';
+  document.getElementById('cogs-step-1').style.background = 'var(--accent)';
+  document.getElementById('cogs-step-2').style.background = 'var(--surface2)';
+  document.getElementById('cogs-step-2').style.color = 'var(--text-d)';
+}
+
+function cogsReset() {
+  _cogsData = null;
+  _cogsPushResults = [];
+  document.getElementById('cogs-confirm').style.display = 'none';
+  document.getElementById('cogs-review').style.display = 'none';
+  document.getElementById('cogs-upload').style.display = '';
+  document.getElementById('cogs-upload-status').innerHTML = '';
+  document.getElementById('cogs-step-1').style.background = 'var(--accent)'; document.getElementById('cogs-step-1').style.color = '#fff';
+  document.getElementById('cogs-step-2').style.background = 'var(--surface2)'; document.getElementById('cogs-step-2').style.color = 'var(--text-d)';
+  document.getElementById('cogs-step-3').style.background = 'var(--surface2)'; document.getElementById('cogs-step-3').style.color = 'var(--text-d)';
+}
+
+async function cogsPushOne(idx) {
+  const f = _cogsData?.franchises?.[idx];
+  if (!f || !f.linked) { showToast('Store not linked'); return; }
+
+  const btn = document.getElementById('cogs-push-' + idx);
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+  // Pre-fetch accounts + classes
+  let acctMap = {}, classMap = {};
+  try { const d = await qboCall('getAccounts', {}, f.realmId); (d.accounts||[]).forEach(a => { acctMap[a.name.toLowerCase()] = a.id; }); } catch(e) {}
+  try { const d = await qboCall('getClasses', {}, f.realmId); (d.classes||[]).forEach(c => { classMap[c.name.toLowerCase()] = c.id; }); } catch(e) {}
+
+  // Check for existing JEs
+  let existingDocNums = new Set();
+  try {
+    const first = f.entries[0]?.journalNo || '';
+    if (first) {
+      const existing = await qboCall('findJournalEntries', { docNumberPrefix: first.slice(0,3) }, f.realmId);
+      (existing.entries||[]).forEach(e => existingDocNums.add(e.docNumber));
+    }
+  } catch(e) {}
+
+  const toPush = f.entries.filter(e => !existingDocNums.has(e.journalNo));
+  const skipped = f.entries.length - toPush.length;
+
+  if (!toPush.length) {
+    if (btn) { btn.textContent = `✓ All in QBO`; btn.style.background = 'var(--green)'; btn.disabled = true; }
+    showToast(`${f.label}: All ${f.entryCount} entries already exist`);
+    return;
+  }
+
+  const msg = skipped > 0 ? `Push ${toPush.length} new COGS entries? (${skipped} already in QBO)` : `Push ${toPush.length} COGS entries for ${f.label}?`;
+  if (!confirm(msg)) { if (btn) { btn.disabled = false; btn.textContent = 'Push'; } return; }
+  if (btn) btn.textContent = 'Pushing…';
+
+  let success = 0, failed = 0;
+  for (const entry of toPush) {
+    try {
+      const lines = entry.lines.map(l => {
+        const acctId = sjeResolveAcctId(l.account, acctMap);
+        const lineDetail = { PostingType: l.debit ? 'Debit' : 'Credit', AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account } };
+        if (l.class) { const clsId = classMap[l.class.toLowerCase()] || null; lineDetail.ClassRef = clsId ? { value: clsId, name: l.class } : { name: l.class }; }
+        return { DetailType: 'JournalEntryLineDetail', Amount: l.debit || l.credit || 0, Description: l.description || '', JournalEntryLineDetail: lineDetail };
+      }).filter(l => l.Amount > 0);
+
+      const payload = { TxnDate: entry.date, DocNumber: entry.journalNo, PrivateNote: entry.memo || 'Powered By EchoSync', Line: lines };
+      await qboCall('createJournalEntry', payload, f.realmId);
+      success++;
+      await new Promise(r => setTimeout(r, 350));
+    } catch(e) { failed++; }
+  }
+
+  if (btn) {
+    if (failed === 0) { btn.textContent = `✓ ${success} pushed`; btn.style.background = 'var(--green)'; btn.disabled = true; }
+    else { btn.textContent = `${success} pushed · ${failed} failed`; btn.style.background = '#f59e0b'; }
+  }
+  const skipMsg = skipped > 0 ? `, ${skipped} skipped` : '';
+  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}${skipMsg}`);
+}
+
+async function cogsPushAll() {
+  if (!_cogsData?.franchises?.length) return;
+  const linked = _cogsData.franchises.filter(f => f.linked);
+  if (!linked.length) { showToast('No linked stores'); return; }
+  const total = linked.reduce((s, f) => s + f.entries.length, 0);
+  if (!confirm(`Push up to ${total} COGS entries across ${linked.length} stores?\n\nExisting entries will be skipped.`)) return;
+
+  const pushBtn = document.getElementById('cogs-push-btn');
+  pushBtn.disabled = true; pushBtn.textContent = 'Pushing...';
+  const progressEl = document.getElementById('cogs-progress');
+  const progressBar = document.getElementById('cogs-progress-bar');
+  const progressLabel = document.getElementById('cogs-progress-label');
+  const progressCount = document.getElementById('cogs-progress-count');
+  progressEl.style.display = '';
+
+  _cogsPushResults = [];
+  let processed = 0, totalSkipped = 0;
+  let liveSuccess = 0, liveFailed = 0, liveSkipped = 0;
+  const liveFailedEntries = [];
+
+  for (const franchise of linked) {
+    let acctMap = {}, classMap = {};
+    progressLabel.textContent = `Loading accounts for ${franchise.label}…`;
+    try { const d = await qboCall('getAccounts', {}, franchise.realmId); (d.accounts||[]).forEach(a => { acctMap[a.name.toLowerCase()] = a.id; }); } catch(e) {}
+    try { const d = await qboCall('getClasses', {}, franchise.realmId); (d.classes||[]).forEach(c => { classMap[c.name.toLowerCase()] = c.id; }); } catch(e) {}
+
+    let existingDocNums = new Set();
+    try {
+      const first = franchise.entries[0]?.journalNo || '';
+      if (first) {
+        const existing = await qboCall('findJournalEntries', { docNumberPrefix: first.slice(0,3) }, franchise.realmId);
+        (existing.entries||[]).forEach(e => existingDocNums.add(e.docNumber));
+      }
+    } catch(e) {}
+
+    for (const entry of franchise.entries) {
+      processed++;
+      progressCount.textContent = `${processed}/${total}`;
+      progressBar.style.width = Math.round((processed / total) * 100) + '%';
+
+      if (existingDocNums.has(entry.journalNo)) {
+        totalSkipped++; liveSkipped++;
+        progressLabel.textContent = `Skipping ${franchise.label} — ${entry.journalNo} (exists)`;
+        _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'skipped' });
+        pushLiveUpdate('cogs', total, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
+        continue;
+      }
+
+      progressLabel.textContent = `Pushing ${franchise.label} — ${entry.journalNo}`;
+      try {
+        const lines = entry.lines.map(l => {
+          const acctId = sjeResolveAcctId(l.account, acctMap);
+          const lineDetail = { PostingType: l.debit ? 'Debit' : 'Credit', AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account } };
+          if (l.class) { const clsId = classMap[l.class.toLowerCase()] || null; lineDetail.ClassRef = clsId ? { value: clsId, name: l.class } : { name: l.class }; }
+          return { DetailType: 'JournalEntryLineDetail', Amount: l.debit || l.credit || 0, Description: l.description || '', JournalEntryLineDetail: lineDetail };
+        }).filter(l => l.Amount > 0);
+
+        const payload = { TxnDate: entry.date, DocNumber: entry.journalNo, PrivateNote: entry.memo || 'Powered By EchoSync', Line: lines };
+        await qboCall('createJournalEntry', payload, franchise.realmId);
+        await new Promise(r => setTimeout(r, 350));
+        liveSuccess++;
+        _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'success' });
+        pushLiveUpdate('cogs', total, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
+      } catch(e) {
+        liveFailed++;
+        liveFailedEntries.push({ store: franchise.label, journalNo: entry.journalNo, error: e.message });
+        _cogsPushResults.push({ store: franchise.label, date: entry.date, journalNo: entry.journalNo, status: 'failed', error: e.message });
+        pushLiveUpdate('cogs', total, liveSuccess, liveFailed, liveSkipped, liveFailedEntries);
+      }
+    }
+  }
+
+  // Show confirmation
+  const success = _cogsPushResults.filter(r => r.status === 'success').length;
+  const failed = _cogsPushResults.filter(r => r.status === 'failed').length;
+  const skipped = _cogsPushResults.filter(r => r.status === 'skipped').length;
+
+  document.getElementById('cogs-review').style.display = 'none';
+  document.getElementById('cogs-confirm').style.display = '';
+  document.getElementById('cogs-step-2').style.background = 'var(--green)';
+  document.getElementById('cogs-step-3').style.background = 'var(--accent)';
+  document.getElementById('cogs-step-3').style.color = '#fff';
+  document.getElementById('cogs-confirm-body').innerHTML =
+    `<strong style="color:var(--green);">${success} pushed</strong>` +
+    (failed ? ` · <strong style="color:var(--red);">${failed} failed</strong>` : '') +
+    (skipped ? ` · <strong style="color:var(--text-d);">${skipped} skipped</strong>` : '');
+}
+
+
+function cogsDownloadReport() {
+  if (!_cogsPushResults.length) return;
+  const headers = ['Store','Date','Invoice #','Status','Error'];
+  const rows = _cogsPushResults.map(r => [
+    r.store || '', r.date || '', r.journalNo || '', r.status || '', r.error || '',
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `COGS-Push-Report-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 
