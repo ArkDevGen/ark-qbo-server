@@ -4284,6 +4284,9 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       return null;
     }
 
+    // Normalize strings for matching (strip apostrophes, extra spaces)
+    const normalize = (s) => String(s || '').toLowerCase().replace(/[''`]/g, '').replace(/\s+/g, ' ').trim();
+
     // Group rows by resolved store number (not raw Store_Name)
     // This merges rows with different names but same store (e.g., "Jessica and Ty O'Toole Store 660" + "Waterman")
     const storeGroups = {};
@@ -4302,9 +4305,6 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       }
       storeGroups[groupKey].push(row);
     }
-
-    // Look up store number from CRM client franchise records by matching store name
-    const normalize = (s) => String(s || '').toLowerCase().replace(/[''`]/g, '').replace(/\s+/g, ' ').trim();
     function findStoreNumFromCRM(storeName) {
       const csvNorm = normalize(storeName);
       for (const client of crmClients) {
