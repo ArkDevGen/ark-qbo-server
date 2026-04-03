@@ -4339,8 +4339,10 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     for (const [storeName, rows] of Object.entries(storeGroups)) {
       // Priority: 1) CRM client records, 2) CSV store name extraction, 3) franchise config
       let storeNum = findStoreNumFromCRM(storeName);
-      if (!storeNum) storeNum = extractStoreNum(storeName);
-      if (!storeNum) storeNum = findStoreNumFromConfig(storeName);
+      let storeNumSource = storeNum ? 'CRM' : '';
+      if (!storeNum) { storeNum = extractStoreNum(storeName); storeNumSource = storeNum ? 'CSV' : ''; }
+      if (!storeNum) { storeNum = findStoreNumFromConfig(storeName); storeNumSource = storeNum ? 'config' : ''; }
+      console.log(`  Store "${storeName}" → #${storeNum || 'NONE'} (source: ${storeNumSource || 'not found'})`);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
       const entries = [];
       let fDebits = 0, fCredits = 0;
@@ -4415,7 +4417,7 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       let className = '';
       if (storeNum) {
         for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
-          if (info.stores?.[storeNum]) {
+          if (info.stores?.[storeNum] !== undefined) {
             className = info.stores[storeNum] || '';
             break;
           }
