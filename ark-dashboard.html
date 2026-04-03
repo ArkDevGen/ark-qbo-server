@@ -19083,6 +19083,7 @@ function tdResetImport(){
   const cs = document.getElementById('td-client-search'); if(cs) cs.value='';
   const csel = document.getElementById('td-client-selected'); if(csel) csel.style.display='none';
   document.getElementById('td-step-paste').style.display='flex';
+  document.getElementById('td-step-mapping').style.display='none';
   document.getElementById('td-step-preview').style.display='none';
   document.getElementById('td-import-btn').style.display='none';
   document.getElementById('td-import-result').textContent='';
@@ -19166,6 +19167,8 @@ function tdParseCSV(){
 
   if(iName < 0){ alert('Could not find CONTENT column. Make sure you\'re pasting a Todoist CSV export.'); return; }
 
+  const iProject = idx('PROJECT');
+
   const defaultClientId   = document.getElementById('td-client-id')?.value || '';
   const defaultClientName = defaultClientId ? ((DB.clients||[]).find(c=>c.id===defaultClientId)?.biz||'') : '';
   const defaultAM  = document.getElementById('td-am-sel')?.value || '';
@@ -19213,10 +19216,13 @@ function tdParseCSV(){
 
     if(!dueDate) warnings.push(`Row ${i+1}: "${name}" — no due date, will use today's date`);
 
+    const project = iProject >= 0 ? (cols[iProject] || '').trim() : '';
+
     tasks.push({
       _import: true,
       _checked: true,
       _row: i,
+      _project: project,
       id:        uid(),
       name:      name.trim(),
       notes:     [desc, sectionName ? `[Section: ${sectionName}]` : ''].filter(Boolean).join(' · '),
@@ -19241,33 +19247,105 @@ function tdParseCSV(){
 
   _tdParsed = tasks;
 
-  // Show preview
+  // Check for multi-project — show mapping step if needed
+  const projects = [...new Set(tasks.map(t => t._project).filter(Boolean))];
+  if (projects.length > 1) {
+    tdShowProjectMapping(projects);
+    return;
+  }
+
+  // Single project — go directly to preview
   document.getElementById('td-step-paste').style.display = 'none';
+  tdShowPreview();
+}
+
+function tdShowProjectMapping(projects) {
+  document.getElementById('td-step-paste').style.display = 'none';
+  document.getElementById('td-step-mapping').style.display = 'block';
+
+  const clientOpts = '<option value="">— No Client —</option>' +
+    (DB.clients||[]).sort((a,b)=>(a.biz||'').localeCompare(b.biz||''))
+      .map(c => `<option value="${c.id}">${c.biz}</option>`).join('');
+  const catOpts = ['Bookkeeping','Monthly Close','Banking','Payroll','Tax','Sales Tax','Compliance','Advisory','Onboarding','Other']
+    .map(c => `<option value="${c}" ${c==='Other'?'selected':''}>${c}</option>`).join('');
+
+  const taskCounts = {};
+  _tdParsed.forEach(t => { taskCounts[t._project] = (taskCounts[t._project]||0) + 1; });
+
+  document.getElementById('td-project-list').innerHTML = projects.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${p}</div>
+        <div style="font-size:11px;color:var(--text-d);">${taskCounts[p]||0} task${(taskCounts[p]||0)!==1?'s':''}</div>
+      </div>
+      <select id="td-proj-client-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-client" style="width:200px;font-size:12px;margin:0;">
+        ${clientOpts}
+      </select>
+      <select id="td-proj-cat-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-cat" style="width:140px;font-size:12px;margin:0;">
+        ${catOpts}
+      </select>
+      <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;white-space:nowrap;">
+        <input type="checkbox" class="td-proj-skip" data-project="${p.replace(/"/g,'&quot;')}" style="accent-color:var(--navy);">
+        Skip
+      </label>
+    </div>
+  `).join('');
+}
+
+function tdApplyProjectMapping() {
+  const defaultAM = document.getElementById('td-am-sel')?.value || '';
+
+  // Read mappings
+  const clientSels = document.querySelectorAll('.td-proj-client');
+  const catSels = document.querySelectorAll('.td-proj-cat');
+  const skipChecks = document.querySelectorAll('.td-proj-skip');
+
+  const projectMap = {};
+  clientSels.forEach((sel, i) => {
+    const proj = sel.dataset.project;
+    const clientId = sel.value;
+    const clientName = clientId ? ((DB.clients||[]).find(c=>c.id===clientId)?.biz||'') : '';
+    const category = catSels[i]?.value || 'Other';
+    const skip = skipChecks[i]?.checked || false;
+    projectMap[proj] = { clientId, clientName, category, skip };
+  });
+
+  // Apply mappings to parsed tasks
+  _tdParsed = _tdParsed.filter(t => {
+    const mapping = projectMap[t._project];
+    if (mapping?.skip) return false;
+    if (mapping) {
+      t.clientId = mapping.clientId;
+      t.clientName = mapping.clientName;
+      t.category = mapping.category;
+    }
+    t.amId = defaultAM;
+    return true;
+  });
+
+  if (!_tdParsed.length) { alert('All projects are set to skip. Uncheck "Skip" on at least one project.'); return; }
+
+  // Hide mapping, show preview
+  document.getElementById('td-step-mapping').style.display = 'none';
+  tdShowPreview();
+}
+
+function tdShowPreview() {
   document.getElementById('td-step-preview').style.display = 'block';
   document.getElementById('td-import-btn').style.display = '';
-  document.getElementById('td-preview-title').textContent = `Preview — ${tasks.length} task${tasks.length!==1?'s':''} found`;
-  document.getElementById('td-preview-sub').textContent = defaultClientName
-    ? `Will be assigned to ${defaultClientName}`
-    : '⚠ No client selected — you can still import and assign clients later';
-
-  const errEl = document.getElementById('td-preview-errors');
-  if(warnings.length){
-    errEl.textContent = warnings.join('\n');
-    errEl.style.display = 'block';
-  } else {
-    errEl.style.display = 'none';
-  }
+  document.getElementById('td-preview-title').textContent = `Preview — ${_tdParsed.length} task${_tdParsed.length!==1?'s':''} found`;
+  document.getElementById('td-preview-sub').textContent = '';
 
   const priColor = { high:'#b03a3a', medium:'#2c5fa1', low:'#6b3fa0' };
   document.getElementById('td-check-all').checked = true;
-  document.getElementById('td-preview-tbody').innerHTML = tasks.map((t,i)=>`
+  document.getElementById('td-preview-tbody').innerHTML = _tdParsed.map((t,i)=>`
     <tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px 12px;"><input type="checkbox" class="td-row-check" data-idx="${i}" checked style="accent-color:var(--navy);"></td>
       <td style="padding:8px 12px;font-size:12px;font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.name}</td>
       <td style="padding:8px 12px;font-size:11px;color:var(--text-d);">${t.dueDate||'—'}</td>
       <td style="padding:8px 12px;"><span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:${priColor[t.priority]}22;color:${priColor[t.priority]};">${t.priority.toUpperCase()}</span></td>
-      <td style="padding:8px 12px;font-size:11px;color:var(--text-d);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.notes}">${t.notes||'—'}</td>
-      <td style="padding:8px 12px;"><span style="font-size:11px;font-weight:600;color:var(--green);">New</span></td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--text-d);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.clientName||'—'}</td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--text-d);">${t._project||'—'}</td>
     </tr>`).join('');
 }
 
@@ -31909,7 +31987,7 @@ async function intConnectWithToken() {
     <div class="modal-head">
       <div>
         <div class="modal-title">📥 Import from Todoist</div>
-        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Paste your Todoist CSV export below — one project at a time.</div>
+        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Import from Todoist — single project or full backup with multiple projects.</div>
       </div>
       <button class="modal-close" onclick="closeModal('modal-td-import')">×</button>
     </div>
@@ -31966,6 +32044,21 @@ async function intConnectWithToken() {
           </div>
         </div>
         <button class="btn btn-primary" onclick="tdParseCSV()">Preview Import →</button>
+      </div>
+
+      <!-- Step 2b: Project mapping (multi-project imports) -->
+      <div id="td-step-mapping" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Map Projects to Clients</div>
+            <div style="font-size:12px;color:var(--text-d);">Assign each Todoist project to an ARK client</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="tdResetImport()">← Start Over</button>
+        </div>
+        <div id="td-project-list" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="tdApplyProjectMapping()">Continue to Preview →</button>
+        </div>
       </div>
 
       <!-- Step 3: Preview table (hidden until parsed) -->
