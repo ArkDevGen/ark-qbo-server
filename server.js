@@ -4430,9 +4430,20 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
         }
       }
 
+      // Look up the franchise config label (same as sales JE uses)
+      let franchiseLabel = storeName;
+      if (storeNum) {
+        for (const [key, info] of Object.entries(FRANCHISE_MAP)) {
+          if (info.stores?.[storeNum] !== undefined) {
+            franchiseLabel = info.label || key;
+            break;
+          }
+        }
+      }
+
       franchises.push({
         key: storeName,
-        label: storeName,
+        label: franchiseLabel,
         storeId: storeNum || '',
         realmId: realm?.realmId || null,
         qboCompanyName: realm?.qboName || realm?.clientName || '',
