@@ -1401,14 +1401,17 @@ app.post('/qbo/api', async (req, res) => {
         ? 'https://sandbox-quickbooks.api.intuit.com'
         : 'https://quickbooks.api.intuit.com';
 
-      // Query all JEs with EchoSync memo
-      const query = `SELECT Id, DocNumber, TxnDate, SyncToken, PrivateNote FROM JournalEntry WHERE PrivateNote LIKE '%EchoSync%' ORDERBY DocNumber MAXRESULTS 1000`;
+      // Query all recent JEs (last 60 days) then filter by memo in code
+      const sinceDate = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+      const query = `SELECT Id, DocNumber, TxnDate, SyncToken, PrivateNote FROM JournalEntry WHERE TxnDate >= '${sinceDate}' ORDERBY DocNumber MAXRESULTS 1000`;
       const qResp = await fetch(`${baseUrl}/v3/company/${targetRealm}/query?query=${encodeURIComponent(query)}&minorversion=65`, {
         headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
       });
       if (!qResp.ok) throw new Error(`Query failed: ${qResp.status}`);
       const qData = await qResp.json();
-      const allJEs = (qData.QueryResponse?.JournalEntry || []);
+      const allJEs = (qData.QueryResponse?.JournalEntry || []).filter(je =>
+        (je.PrivateNote || '').includes('EchoSync')
+      );
 
       // Find duplicates — group by DocNumber, keep first (lowest Id), delete rest
       const byDocNum = {};
