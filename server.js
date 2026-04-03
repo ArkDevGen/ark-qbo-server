@@ -4393,14 +4393,25 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
         // Set description on first line only
         if (lines.length > 0) lines[0].description = description;
 
-        // Credit line: Harvest Payable
-        lines.push({
-          account: cogsGetAccount('harvest_payable'),
-          debit: null,
-          credit: r(debitTotal),
-          description: '',
-          class: '',
-        });
+        // Balancing line: Harvest Payable
+        // Normal invoice: credit. Credit memo (negative total): debit.
+        if (debitTotal >= 0) {
+          lines.push({
+            account: cogsGetAccount('harvest_payable'),
+            debit: null,
+            credit: r(debitTotal),
+            description: '',
+            class: '',
+          });
+        } else {
+          lines.push({
+            account: cogsGetAccount('harvest_payable'),
+            debit: r(Math.abs(debitTotal)),
+            credit: null,
+            description: '',
+            class: '',
+          });
+        }
 
         const entryDebits = lines.reduce((s, l) => s + (l.debit || 0), 0);
         const entryCredits = lines.reduce((s, l) => s + (l.credit || 0), 0);

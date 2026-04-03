@@ -27542,7 +27542,7 @@ async function sjePushOne(idx) {
         }
         return {
           DetailType: 'JournalEntryLineDetail',
-          Amount: l.debit || l.credit || 0,
+          Amount: Math.abs(l.debit || l.credit || 0),
           Description: l.description || '',
           JournalEntryLineDetail: lineDetail,
         };
