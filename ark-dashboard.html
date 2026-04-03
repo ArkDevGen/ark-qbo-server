@@ -2327,7 +2327,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-tasks" style="padding:28px 32px;">
 
     <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div>
         <div class="card-title">🏭 Production</div>
         <div class="card-subtitle" id="tc-subtitle"></div>
@@ -2337,6 +2337,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="btn btn-primary" onclick="tcOpenNew()">+ New Task</button>
       </div>
     </div>
+
+    <!-- Production mode: Tasks vs Notes -->
+    <div style="display:flex;gap:0;margin-bottom:16px;">
+      <button class="tc-vtoggle active" data-pmode="tasks" onclick="tcProdMode('tasks')" style="border-radius:var(--radius) 0 0 var(--radius);">🏭 Tasks</button>
+      <button class="tc-vtoggle" data-pmode="notes" onclick="tcProdMode('notes')" style="border-radius:0 var(--radius) var(--radius) 0;">📌 Notes</button>
+    </div>
+
+    <!-- Tasks panel (default) -->
+    <div id="tc-tasks-panel">
 
     <!-- KPI strip -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;">
@@ -2404,6 +2413,24 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="tc-view-list"></div>
     <div id="tc-view-board" style="display:none;"></div>
     <div id="tc-view-calendar" style="display:none;"></div>
+
+    </div><!-- /tc-tasks-panel -->
+
+    <!-- Notes panel (hidden by default) -->
+    <div id="tc-notes-panel" style="display:none;">
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <input type="text" id="notes-search" class="field-input" placeholder="Search notes..." oninput="notesRender()" style="flex:1;max-width:300px;">
+        <select id="notes-filter-client" class="field-input" onchange="notesRender()" style="width:200px;">
+          <option value="">All Clients</option>
+        </select>
+        <select id="notes-group-by" class="field-input" onchange="notesRender()" style="width:160px;">
+          <option value="project">Group by Project</option>
+          <option value="client">Group by Client</option>
+          <option value="none">No Grouping</option>
+        </select>
+      </div>
+      <div id="notes-list"></div>
+    </div>
 
   </div>
 
@@ -18530,8 +18557,8 @@ function tcRender(){
   const weekStr  = weekEnd.toISOString().slice(0,10);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
 
-  // Pre-filter by AM for KPIs (so KPIs reflect the user's own tasks)
-  const kpiSource = fAM ? tasks.filter(t => t.amId === fAM) : tasks;
+  // Pre-filter by AM for KPIs (exclude no-date tasks)
+  const kpiSource = (fAM ? tasks.filter(t => t.amId === fAM) : tasks).filter(t => t.dueDate || t.status === 'completed');
   let kpiOverdue=0, kpiToday=0, kpiWeek=0, kpiOpen=0, kpiDone=0;
   kpiSource.forEach(t => {
     if(t.status==='completed'){
@@ -18548,8 +18575,9 @@ function tcRender(){
   s('tc-kpi-week', kpiWeek);       s('tc-kpi-open', kpiOpen);
   s('tc-kpi-done', kpiDone);
 
-  // Filter
+  // Filter (exclude no-date tasks — those go to Notes)
   let list = tasks.filter(t => {
+    if(!t.dueDate && t.status !== 'completed') return false; // no-date tasks go to Notes panel
     if(fClient && t.clientId !== fClient) return false;
     if(fAM && t.amId !== fAM) return false;
     if(search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
@@ -18740,6 +18768,78 @@ function tcRenderHistory(t){
       <div style="font-size:12px;color:var(--text);">${entry.text}</div>
     </div>`;
   }).join('');
+}
+
+// ── Production Mode: Tasks vs Notes ─────────────────────────────
+function tcProdMode(mode) {
+  document.getElementById('tc-tasks-panel').style.display = mode === 'tasks' ? '' : 'none';
+  document.getElementById('tc-notes-panel').style.display = mode === 'notes' ? '' : 'none';
+  document.querySelectorAll('[data-pmode]').forEach(b => b.classList.toggle('active', b.dataset.pmode === mode));
+  if (mode === 'notes') notesRender();
+}
+
+function notesRender() {
+  const search = (document.getElementById('notes-search')?.value || '').toLowerCase();
+  const fClient = document.getElementById('notes-filter-client')?.value || '';
+  const groupBy = document.getElementById('notes-group-by')?.value || 'project';
+  const fAM = document.getElementById('tc-filter-am')?.value || '';
+
+  // Populate client filter
+  const clientSel = document.getElementById('notes-filter-client');
+  if (clientSel && !clientSel._populated) {
+    clientSel._populated = true;
+    const clients = (DB.clients || []).sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
+    clientSel.innerHTML = '<option value="">All Clients</option>' + clients.map(c => `<option value="${c.id}">${c.biz}</option>`).join('');
+  }
+
+  // Get no-date tasks only
+  let notes = (DB.tasks || []).filter(t => !t.dueDate && t.status !== 'completed');
+  if (fAM) notes = notes.filter(t => t.amId === fAM);
+  if (fClient) notes = notes.filter(t => t.clientId === fClient);
+  if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''} ${t.clientName || ''}`.toLowerCase().includes(search));
+
+  const container = document.getElementById('notes-list');
+  if (!notes.length) {
+    container.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">No notes found.</div>';
+    return;
+  }
+
+  // Group
+  const groups = {};
+  notes.forEach(t => {
+    let key = 'Notes';
+    if (groupBy === 'client') {
+      const c = (DB.clients || []).find(x => x.id === t.clientId);
+      key = c ? c.biz : (t.clientName || 'No Client');
+    } else if (groupBy === 'project') {
+      // Use the Todoist project from notes if available
+      const projMatch = (t.notes || '').match(/\[Todoist:\s*([^\]]+)\]/);
+      key = t._project || (projMatch ? projMatch[1] : (t.clientName || 'General'));
+    }
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  container.innerHTML = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0])).map(([groupName, items]) => `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">${groupName} <span style="font-weight:400;opacity:.6;">(${items.length})</span></div>
+      ${items.map(t => {
+        const client = (DB.clients || []).find(c => c.id === t.clientId);
+        const clientName = client ? client.biz : (t.clientName || '');
+        const priColor = TC_PRI_COLOR[t.priority] || '#999';
+        const catColor = TC_CAT_COLOR[t.category] || '#555';
+        return `<div style="padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;background:var(--surface);cursor:pointer;transition:all .15s;" onclick="twfOpen('${t.id}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='var(--surface)'">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${priColor};flex-shrink:0;"></span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${t.name}</span>
+            <span style="font-size:9px;padding:1px 6px;border-radius:8px;background:${catColor}22;color:${catColor};">${t.category || 'Other'}</span>
+            ${clientName ? `<span style="font-size:11px;color:var(--text-d);">📁 ${clientName}</span>` : ''}
+            <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;opacity:.5;">×</button>
+          </div>
+          ${t.notes ? `<div style="font-size:11px;color:var(--text-d);margin-top:4px;margin-left:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.notes.substring(0, 100)}${t.notes.length > 100 ? '…' : ''}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
 }
 
 // ── View Switching ──────────────────────────────────────────────
