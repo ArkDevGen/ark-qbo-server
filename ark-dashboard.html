@@ -18537,9 +18537,9 @@ function tcRender(){
       if(t.completedAt && t.completedAt.slice(0,10) >= monthStart) kpiDone++;
     } else {
       kpiOpen++;
-      if(t.dueDate < todayStr) kpiOverdue++;
+      if(t.dueDate && t.dueDate < todayStr) kpiOverdue++;
       else if(t.dueDate === todayStr) kpiToday++;
-      else if(t.dueDate <= weekStr) kpiWeek++;
+      else if(t.dueDate && t.dueDate <= weekStr) kpiWeek++;
     }
   });
   const s = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
@@ -18558,17 +18558,19 @@ function tcRender(){
       const showDate = new Date(today); showDate.setDate(today.getDate() + adv);
       return t.dueDate <= showDate.toISOString().slice(0,10) || t.status === 'review' || t.isReviewTask || t.isNotifyTask;
     }
-    if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate < todayStr;
+    if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate && t.dueDate < todayStr;
     if(fStat === 'due-today') return t.status !== 'completed' && t.dueDate === todayStr;
     if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate > todayStr && t.dueDate <= weekStr;
     if(fStat === 'completed') return t.status === 'completed';
     return true; // 'all'
   });
 
-  // Sort: overdue first, then by due date
+  // Sort: completed last, no-date after dated, then by due date
   list.sort((a,b) => {
     if(a.status==='completed' && b.status!=='completed') return 1;
     if(b.status==='completed' && a.status!=='completed') return -1;
+    if(!a.dueDate && b.dueDate) return 1;
+    if(a.dueDate && !b.dueDate) return -1;
     return (a.dueDate||'').localeCompare(b.dueDate||'');
   });
 
@@ -18589,6 +18591,7 @@ function tcRender(){
       key = t.category || 'Other';
     } else if(groupBy === 'due'){
       if(t.status==='completed') key = '✓ Completed';
+      else if(!t.dueDate) key = '📌 No Due Date';
       else if(t.dueDate < todayStr) key = '🔴 Overdue';
       else if(t.dueDate === todayStr) key = '🟡 Due Today';
       else {
@@ -18772,10 +18775,11 @@ function tcBoardCard(t, today, todayStr) {
   const isCompleted = t.status === 'completed';
   const priColor = TC_PRI_COLOR[t.priority] || '#999';
   const catColor = TC_CAT_COLOR[t.category] || '#555';
-  const isOverdue = !isCompleted && t.dueDate < todayStr;
+  const isOverdue = !isCompleted && t.dueDate && t.dueDate < todayStr;
 
   let dueLabel = '';
   if (isCompleted) dueLabel = '<span style="color:#2e7d5e;">✓</span>';
+  else if (!t.dueDate) dueLabel = '<span class="due-label" style="color:var(--text-d);">No date</span>';
   else if (isOverdue) dueLabel = `<span class="due-label" style="color:#b03a3a;">⚠ ${t.dueDate}</span>`;
   else if (t.dueDate === todayStr) dueLabel = '<span class="due-label" style="color:var(--gold);">Today</span>';
   else dueLabel = `<span class="due-label" style="color:var(--text-d);">${t.dueDate}</span>`;
@@ -19301,7 +19305,7 @@ function tdParseMultiFiles() {
         _import: true, _checked: true, _row: i, _project: file.name,
         id: uid(), name: name.trim(),
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
-        priority, dueDate: dueDate || new Date().toISOString().slice(0, 10), _noDate: !dueDate,
+        priority, dueDate: dueDate || '', _noDate: !dueDate,
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
         recurring: isRecurring, recurFreq: recurFreq, showDaysAdvance: 3, status: 'open',
         noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -32286,8 +32290,8 @@ async function intConnectWithToken() {
         <div id="td-project-list" style="display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
         <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
           <label style="font-size:12px;color:var(--text-d);display:flex;align-items:center;gap:6px;cursor:pointer;">
-            <input type="checkbox" id="td-skip-no-date" checked style="accent-color:var(--navy);">
-            Skip tasks without due dates (notes, reference items)
+            <input type="checkbox" id="td-skip-no-date" style="accent-color:var(--navy);">
+            Skip tasks without due dates
           </label>
           <button class="btn btn-primary" onclick="tdApplyProjectMapping()" style="margin-left:auto;">Continue to Preview →</button>
         </div>
