@@ -4042,9 +4042,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div id="cogs-upload">
           <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;" onclick="document.getElementById('cogs-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';cogsHandleDrop(event)">
             <div style="font-size:36px;opacity:.4;margin-bottom:12px;">📦</div>
-            <div style="font-size:13px;color:var(--text-d);margin-bottom:8px;">Drop a Harvest Invoice Breakdown CSV here</div>
-            <div style="font-size:11px;color:var(--text-d);">or click to browse · HarvestInvoiceBreakdown_*.csv</div>
-            <input type="file" id="cogs-file-input" accept=".csv,.xlsx,.xls" style="display:none;" onchange="cogsHandleFile(this.files[0])">
+            <div style="font-size:13px;color:var(--text-d);margin-bottom:8px;">Drop Harvest Invoice Breakdown CSVs here</div>
+            <div style="font-size:11px;color:var(--text-d);">Select multiple files · HarvestInvoiceBreakdown_*.csv</div>
+            <input type="file" id="cogs-file-input" accept=".csv,.xlsx,.xls" multiple style="display:none;" onchange="cogsHandleFiles(this.files)">
           </div>
           <div id="cogs-upload-status" style="text-align:center;margin-top:12px;font-size:12px;"></div>
         </div>
@@ -27718,29 +27718,77 @@ function sjeMode(mode) {
 }
 
 function cogsHandleDrop(e) {
-  const file = e.dataTransfer?.files?.[0];
-  if (file) cogsHandleFile(file);
+  const files = e.dataTransfer?.files;
+  if (files?.length) cogsHandleFiles(files);
 }
 
-async function cogsHandleFile(file) {
-  if (!file) return;
+async function cogsHandleFiles(files) {
+  if (!files || !files.length) return;
   const statusEl = document.getElementById('cogs-upload-status');
-  statusEl.innerHTML = '<span style="color:var(--accent);">Uploading & parsing...</span>';
+  const count = files.length;
+  statusEl.innerHTML = `<span style="color:var(--navy);">Uploading & parsing ${count} file${count > 1 ? 's' : ''}...</span>`;
 
-  const formData = new FormData();
-  formData.append('file', file);
+  // Parse all files and merge results
+  let allFranchises = [];
+  let allWarnings = [];
+  let totalDebits = 0, totalCredits = 0, totalEntries = 0;
+  let parsed = 0, failed = 0;
 
-  try {
-    const resp = await authFetch(ARK_SERVER + '/scooters/parse-harvest', { method: 'POST', body: formData });
-    const data = await resp.json();
-    if (!data.success) throw new Error(data.error || 'Parse failed');
+  for (const file of files) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const resp = await authFetch(ARK_SERVER + '/scooters/parse-harvest', { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Parse failed');
 
-    _cogsData = data;
-    statusEl.innerHTML = `<span style="color:var(--green);">✓ Parsed ${data.totalEntries} entries across ${data.franchises.length} stores</span>`;
-    cogsShowReview();
-  } catch(e) {
-    statusEl.innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
+      allFranchises.push(...(data.franchises || []));
+      allWarnings.push(...(data.warnings || []));
+      totalDebits += data.totalDebits || 0;
+      totalCredits += data.totalCredits || 0;
+      totalEntries += data.totalEntries || 0;
+      parsed++;
+      statusEl.innerHTML = `<span style="color:var(--navy);">Parsed ${parsed}/${count} files (${totalEntries} entries so far)...</span>`;
+    } catch(e) {
+      failed++;
+      allWarnings.push(`Failed to parse ${file.name}: ${e.message}`);
+    }
   }
+
+  if (!allFranchises.length) {
+    statusEl.innerHTML = `<span style="color:var(--red);">No data found in ${count} file${count > 1 ? 's' : ''}</span>`;
+    return;
+  }
+
+  // Merge franchises with same store key (in case multiple files have the same store)
+  const merged = {};
+  for (const f of allFranchises) {
+    const key = f.storeId || f.key;
+    if (merged[key]) {
+      merged[key].entries.push(...f.entries);
+      merged[key].entryCount += f.entryCount;
+      merged[key].totalDebits += f.totalDebits;
+      merged[key].totalCredits += f.totalCredits;
+      merged[key].balanced = Math.abs(merged[key].totalDebits - merged[key].totalCredits) < 0.02;
+      // Update date range
+      const allDates = merged[key].entries.map(e => e.date).sort();
+      merged[key].dateRange = allDates.length ? `${allDates[0]} - ${allDates[allDates.length-1]}` : '';
+    } else {
+      merged[key] = { ...f };
+    }
+  }
+
+  _cogsData = {
+    success: true,
+    franchises: Object.values(merged).sort((a, b) => a.label.localeCompare(b.label)),
+    warnings: allWarnings,
+    totalDebits: Math.round(totalDebits * 100) / 100,
+    totalCredits: Math.round(totalCredits * 100) / 100,
+    totalEntries,
+  };
+
+  statusEl.innerHTML = `<span style="color:#22c55e;">✓ Parsed ${parsed} file${parsed > 1 ? 's' : ''}: ${totalEntries} entries across ${_cogsData.franchises.length} stores${failed ? ` (${failed} failed)` : ''}</span>`;
+  cogsShowReview();
 }
 
 function cogsShowReview() {
