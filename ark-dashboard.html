@@ -17896,6 +17896,7 @@ function tcSetFilter(val){
   if(sel){ sel.value = val; tcRender(); }
 }
 
+let _tcFilterInitialized = false;
 function tcPopulateFilters(){
   const clientSel = document.getElementById('tc-filter-client');
   const amSel     = document.getElementById('tc-filter-am');
@@ -17910,6 +17911,15 @@ function tcPopulateFilters(){
   amSel.innerHTML = '<option value="">All AMs</option>' +
     (DB.accountManagers||[])
       .map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+  // Auto-filter to current user's tasks on first load
+  if (!_tcFilterInitialized && currentUser) {
+    _tcFilterInitialized = true;
+    // Find the AM record matching the current user
+    const myAM = (DB.accountManagers||[]).find(a => a.id === currentUser.id);
+    if (myAM) {
+      amSel.value = myAM.id;
+    }
+  }
 }
 
 function tcPopulateAMSelect(selectedId){
@@ -18519,9 +18529,10 @@ function tcRender(){
   const weekStr  = weekEnd.toISOString().slice(0,10);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
 
-  // KPI counts
+  // Pre-filter by AM for KPIs (so KPIs reflect the user's own tasks)
+  const kpiSource = fAM ? tasks.filter(t => t.amId === fAM) : tasks;
   let kpiOverdue=0, kpiToday=0, kpiWeek=0, kpiOpen=0, kpiDone=0;
-  tasks.forEach(t => {
+  kpiSource.forEach(t => {
     if(t.status==='completed'){
       if(t.completedAt && t.completedAt.slice(0,10) >= monthStart) kpiDone++;
     } else {
