@@ -4389,8 +4389,8 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
         dateRange: entries.length ? `${entries[0].date} - ${entries[entries.length - 1].date}` : '',
         entryCount: entries.length,
         entries,
-        totalDebits: r(fDebits),
-        totalCredits: r(fCredits),
+        totalDebits: Math.round(fDebits * 100) / 100,
+        totalCredits: Math.round(fCredits * 100) / 100,
         balanced: Math.abs(fDebits - fCredits) < 0.02,
       });
     }
