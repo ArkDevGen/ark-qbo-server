@@ -27739,9 +27739,14 @@ async function cogsHandleFiles(files) {
       const formData = new FormData();
       formData.append('file', file);
       const resp = await authFetch(ARK_SERVER + '/scooters/parse-harvest', { method: 'POST', body: formData });
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Server returned ${resp.status} non-JSON for ${file.name}`);
+      }
       const data = await resp.json();
       if (!data.success) throw new Error(data.error || 'Parse failed');
 
+      console.log(`COGS parsed ${file.name}: ${data.totalEntries} entries, ${data.franchises?.length} stores`);
       allFranchises.push(...(data.franchises || []));
       allWarnings.push(...(data.warnings || []));
       totalDebits += data.totalDebits || 0;
@@ -27751,6 +27756,7 @@ async function cogsHandleFiles(files) {
       statusEl.innerHTML = `<span style="color:var(--navy);">Parsed ${parsed}/${count} files (${totalEntries} entries so far)...</span>`;
     } catch(e) {
       failed++;
+      console.error(`COGS parse failed for ${file.name}:`, e.message);
       allWarnings.push(`Failed to parse ${file.name}: ${e.message}`);
     }
   }

@@ -4224,11 +4224,13 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const wb = require('xlsx').read(req.file.buffer, { cellDates: true });
+    console.log(`Harvest COGS: received file "${req.file.originalname}" (${req.file.size} bytes, type: ${req.file.mimetype})`);
+    const wb = require('xlsx').read(req.file.buffer, { cellDates: true, type: 'buffer' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rawData = require('xlsx').utils.sheet_to_json(ws);
 
-    if (!rawData.length) return res.status(400).json({ error: 'File is empty' });
+    if (!rawData.length) return res.status(400).json({ error: `File "${req.file.originalname}" is empty (0 data rows)` });
+    console.log(`  Columns: ${Object.keys(rawData[0]).join(', ')}`);
 
     console.log(`Harvest COGS parse: ${rawData.length} rows`);
 
