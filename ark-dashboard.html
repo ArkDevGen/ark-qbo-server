@@ -19241,25 +19241,36 @@ function tdParseMultiFiles() {
   const defaultCat = document.getElementById('td-cat-sel')?.value || 'Other';
 
   for (const file of _tdFiles) {
-    const lines = file.content.split(/\r?\n/).filter(l => l.trim());
-    if (!lines.length) continue;
-
-    const sep = lines[0].indexOf(';') > 0 && lines[0].indexOf(';') < (lines[0].indexOf(',') || 9999) ? ';' : ',';
-    function parseRow(line) {
-      const result = []; let cur = '', inQ = false;
-      for (let i = 0; i < line.length; i++) {
-        const c = line[i];
-        if (c === '"') inQ = !inQ;
-        else if (c === sep && !inQ) { result.push(cur); cur = ''; }
-        else cur += c;
+    // Parse CSV properly handling multi-line quoted fields
+    function parseCSVContent(text) {
+      const rows = [];
+      let row = [], cur = '', inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === '"') {
+          if (inQ && text[i+1] === '"') { cur += '"'; i++; } // escaped quote
+          else inQ = !inQ;
+        } else if (c === ',' && !inQ) {
+          row.push(cur.trim()); cur = '';
+        } else if ((c === '\n' || c === '\r') && !inQ) {
+          if (c === '\r' && text[i+1] === '\n') i++; // skip \r\n
+          row.push(cur.trim()); cur = '';
+          if (row.some(v => v)) rows.push(row);
+          row = [];
+        } else {
+          cur += c;
+        }
       }
-      result.push(cur);
-      return result.map(v => v.trim());
+      if (cur || row.length) { row.push(cur.trim()); if (row.some(v => v)) rows.push(row); }
+      return rows;
     }
 
-    // Remove BOM if present
-    const headerLine = lines[0].replace(/^\uFEFF/, '');
-    const headers = parseRow(headerLine).map(h => h.toUpperCase().trim());
+    const csvRows = parseCSVContent(file.content.replace(/^\uFEFF/, ''));
+    if (!csvRows.length) continue;
+    const lines = csvRows; // compatibility with rest of code
+
+    // Headers are already parsed as first row
+    const headers = lines[0].map(h => h.toUpperCase().trim());
     const idx = h => headers.indexOf(h);
     const iType = idx('TYPE'), iName = idx('CONTENT'), iDesc = idx('DESCRIPTION');
     const iPri = idx('PRIORITY'), iDate = idx('DATE'), iDeadline = idx('DEADLINE');
@@ -19484,7 +19495,7 @@ function tdParseMultiFiles() {
 
     let sectionName = '';
     for (let i = 1; i < lines.length; i++) {
-      const cols = parseRow(lines[i]);
+      const cols = lines[i]; // already parsed
       const type = iType >= 0 ? (cols[iType] || '').toLowerCase().trim() : 'task';
       if (type === 'section') { sectionName = iName >= 0 ? cols[iName] : ''; continue; }
       if (type === 'meta' || (type !== 'task' && type !== '')) continue;
