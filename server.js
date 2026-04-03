@@ -1345,6 +1345,109 @@ app.post('/qbo/api', async (req, res) => {
       });
     }
 
+  // ── Action: Delete Journal Entry ────────────────────────────────
+  } else if (action === 'deleteJournalEntry') {
+    if (!payload?.id) return res.status(400).json({ error: 'JE id required' });
+    try {
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      }
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+
+      // First get the JE to get SyncToken
+      const getResp = await fetch(`${baseUrl}/v3/company/${targetRealm}/journalentry/${payload.id}?minorversion=65`, {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+      });
+      if (!getResp.ok) throw new Error(`Failed to fetch JE ${payload.id}: ${getResp.status}`);
+      const jeData = await getResp.json();
+      const syncToken = jeData.JournalEntry?.SyncToken;
+
+      // Delete it
+      const delResp = await fetch(`${baseUrl}/v3/company/${targetRealm}/journalentry?operation=delete&minorversion=65`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ Id: payload.id, SyncToken: syncToken }),
+      });
+      if (!delResp.ok) {
+        const errBody = await delResp.json().catch(() => ({}));
+        throw new Error(errBody?.Fault?.Error?.[0]?.Detail || `Delete failed: ${delResp.status}`);
+      }
+      console.log(`  ✓ Deleted JE ${payload.id} from realm ${targetRealm}`);
+      res.json({ success: true, deleted: payload.id });
+    } catch(e) {
+      console.error('deleteJournalEntry error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+
+  // ── Action: Find duplicate JEs and clean up ─────────────────────
+  } else if (action === 'cleanupDuplicates') {
+    try {
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      }
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+
+      // Query all JEs with EchoSync memo
+      const query = `SELECT Id, DocNumber, TxnDate, SyncToken, PrivateNote FROM JournalEntry WHERE PrivateNote LIKE '%EchoSync%' ORDERBY DocNumber MAXRESULTS 1000`;
+      const qResp = await fetch(`${baseUrl}/v3/company/${targetRealm}/query?query=${encodeURIComponent(query)}&minorversion=65`, {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+      });
+      if (!qResp.ok) throw new Error(`Query failed: ${qResp.status}`);
+      const qData = await qResp.json();
+      const allJEs = (qData.QueryResponse?.JournalEntry || []);
+
+      // Find duplicates — group by DocNumber, keep first (lowest Id), delete rest
+      const byDocNum = {};
+      for (const je of allJEs) {
+        if (!byDocNum[je.DocNumber]) byDocNum[je.DocNumber] = [];
+        byDocNum[je.DocNumber].push(je);
+      }
+
+      let deleted = 0, errors = 0;
+      const deletedList = [];
+      for (const [docNum, entries] of Object.entries(byDocNum)) {
+        if (entries.length <= 1) continue; // no duplicates
+        // Sort by Id ascending, keep the first, delete the rest
+        entries.sort((a, b) => parseInt(a.Id) - parseInt(b.Id));
+        for (let i = 1; i < entries.length; i++) {
+          try {
+            const delResp = await fetch(`${baseUrl}/v3/company/${targetRealm}/journalentry?operation=delete&minorversion=65`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify({ Id: entries[i].Id, SyncToken: entries[i].SyncToken }),
+            });
+            if (delResp.ok) {
+              deleted++;
+              deletedList.push({ docNumber: docNum, id: entries[i].Id, date: entries[i].TxnDate });
+            } else {
+              errors++;
+            }
+            await new Promise(r => setTimeout(r, 200)); // rate limit
+          } catch(e) { errors++; }
+        }
+      }
+
+      console.log(`  Cleanup realm ${targetRealm}: ${deleted} duplicates deleted, ${errors} errors`);
+      res.json({ success: true, totalJEs: allJEs.length, duplicateSets: Object.values(byDocNum).filter(v => v.length > 1).length, deleted, errors, deletedList });
+    } catch(e) {
+      console.error('cleanupDuplicates error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+
   // ── Action: Switch Active Realm ────────────────────────────────
   } else if (action === 'switchRealm') {
     const rid = payload?.realmId;
