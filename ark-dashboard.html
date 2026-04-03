@@ -17967,9 +17967,10 @@ function tcPopulateFilters(){
 
 function tcPopulateAMSelect(selectedId){
   const sel = document.getElementById('tc-am'); if(!sel) return;
-  const defId = selectedId || (currentUser && currentUser.role!=='admin' ? currentUser.id : '');
+  const defId = selectedId || (currentUser ? currentUser.id : '');
+  const teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
   sel.innerHTML = '<option value="">— Unassigned —</option>' +
-    (DB.accountManagers||[]).map(a=>`<option value="${a.id}" ${a.id===defId?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+    teamList.map(a=>`<option value="${a.id}" ${a.id===defId?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
 
 function tcOpenNew(){
@@ -18777,7 +18778,7 @@ function tcRenderHistory(t){
     const d = new Date(entry.at);
     const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     const isCompletion = entry.type === 'completion';
-    return `<div style="padding:10px 12px;background:${isCompletion?'#0a140a':'var(--surface2)'};border:1px solid ${isCompletion?'#1a3a1a':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;">
+    return `<div style="padding:10px 12px;background:${isCompletion?'rgba(46,125,94,.08)':'var(--surface2)'};border:1px solid ${isCompletion?'rgba(46,125,94,.2)':'var(--border)'};border-radius:var(--radius);margin-bottom:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:12px;font-weight:600;color:${isCompletion?'var(--green)':'var(--navy)'};">${entry.author||'Unknown'}</span>
         <span style="font-size:11px;color:var(--text-d);">${dateStr}</span>
@@ -18876,7 +18877,9 @@ function tcBuildProjectSidebar() {
     '<div class="tc-proj-section">Projects</div>' +
     clientProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
     (personalProjects.length ? '<div class="tc-proj-section">Personal</div>' : '') +
-    personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+    personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
+    '<div class="tc-proj-divider"></div>' +
+    '<div class="tc-proj-item" onclick="tcAddProject()" style="color:var(--gold);"><span class="icon">+</span><span class="label">Add Project</span></div>';
 }
 
 function notesRender() {
@@ -18941,6 +18944,36 @@ function notesRender() {
         </div>`;
       }).join('')}
     </div>`).join('');
+}
+
+function tcAddProject() {
+  const name = prompt('Project name:');
+  if (!name || !name.trim()) return;
+
+  // Check if it matches a client
+  const clients = (DB.clients || []).sort((a, b) => a.biz.localeCompare(b.biz));
+  const match = clients.find(c => c.biz.toLowerCase() === name.trim().toLowerCase());
+
+  if (match) {
+    // Client exists — just navigate to it
+    tcSelectView('project:' + match.id);
+    return;
+  }
+
+  // Create a placeholder task for this project so it appears in the sidebar
+  if (!DB.tasks) DB.tasks = [];
+  const id = uid();
+  DB.tasks.push({
+    id, name: name.trim() + ' — Project', notes: 'Project placeholder',
+    clientId: '', clientName: name.trim(), amId: currentUser?.id || '',
+    category: 'Other', dueDate: '', priority: 'medium', recurring: false,
+    recurFreq: null, showDaysAdvance: 3, status: 'open', noteLog: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '',
+  });
+  saveDB();
+  tcRender();
+  showToast('Project "' + name.trim() + '" created');
 }
 
 // ── View Switching ──────────────────────────────────────────────
@@ -20578,9 +20611,10 @@ function tcToggleReviewer(){
 
 function tcPopulateReviewerSelect(excludeAmId){
   const sel = document.getElementById('tc-reviewer-id'); if(!sel) return;
-  const ams = (DB.accountManagers||[]).filter(a=>a.status==='Active' && a.id !== excludeAmId);
+  const teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const filtered = teamList.filter(a => a.id !== excludeAmId);
   sel.innerHTML = '<option value="">— Select reviewer —</option>' +
-    ams.map(a=>`<option value="${a.id}">${a.fname} ${a.lname||''}</option>`).join('');
+    filtered.map(a=>`<option value="${a.id}">${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
 
 
