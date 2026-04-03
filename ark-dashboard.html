@@ -18586,8 +18586,8 @@ function tcRender(){
       const c = (DB.clients||[]).find(x=>x.id===t.clientId);
       key = c ? c.biz : (t.clientName||'No Client');
     } else if(groupBy === 'am'){
-      const a = (DB.accountManagers||[]).find(x=>x.id===t.amId);
-      key = a ? a.fname+' '+a.lname : 'Unassigned';
+      const name = getAMName(t.amId);
+      key = name && name !== '—' ? name : 'Unassigned';
     } else if(groupBy === 'category'){
       key = t.category || 'Other';
     } else if(groupBy === 'due'){
@@ -18635,8 +18635,7 @@ function tcRender(){
 function tcTaskCard(t, today, todayStr){
   const client = (DB.clients||[]).find(c=>c.id===t.clientId);
   const clientName = client ? client.biz : (t.clientName||'—');
-  const am = (DB.accountManagers||[]).find(a=>a.id===t.amId);
-  const amName = am ? am.fname+' '+(am.lname||'') : '—';
+  const amName = getAMName(t.amId);
   const isCompleted = t.status === 'completed';
   const isReview    = t.status === 'review';
   const isOverdue   = !isCompleted && !isReview && t.dueDate < todayStr;
@@ -18771,8 +18770,8 @@ function tcRenderBoard(list, groups, today, todayStr) {
 function tcBoardCard(t, today, todayStr) {
   const client = (DB.clients||[]).find(c=>c.id===t.clientId);
   const clientName = client ? client.biz : (t.clientName||'');
-  const am = (DB.accountManagers||[]).find(a=>a.id===t.amId);
-  const amInitials = am ? (am.fname?.[0]||'')+(am.lname?.[0]||'') : '';
+  const amFullName = getAMName(t.amId);
+  const amInitials = amFullName && amFullName !== '—' ? amFullName.split(' ').map(w=>w[0]||'').join('').toUpperCase() : '';
   const isCompleted = t.status === 'completed';
   const priColor = TC_PRI_COLOR[t.priority] || '#999';
   const catColor = TC_CAT_COLOR[t.category] || '#555';
