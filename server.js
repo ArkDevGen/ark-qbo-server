@@ -1306,43 +1306,59 @@ app.post('/qbo/api', async (req, res) => {
     const { docNumberPrefix, docNumbers } = payload || {};
     if (!docNumberPrefix && !docNumbers?.length) return res.status(400).json({ error: 'docNumberPrefix or docNumbers required' });
 
-    if (docNumbers && docNumbers.length) {
-      // Batch exact match — query for specific DocNumbers
-      // QBO supports IN clause: WHERE DocNumber IN ('INV-1', 'INV-2', ...)
-      // Process in chunks of 50 to avoid query length limits
+    try {
+      // Get fresh token
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      }
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+
       const allEntries = [];
-      for (let i = 0; i < docNumbers.length; i += 50) {
-        const chunk = docNumbers.slice(i, i + 50);
-        const inList = chunk.map(d => `'${String(d).replace(/'/g, "''")}'`).join(',');
-        const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber IN (${inList}) MAXRESULTS 1000`;
-        try {
-          const data = await new Promise((resolve, reject) => {
-            qbo.query(query, (err, d) => err ? reject(err) : resolve(d));
+
+      if (docNumbers && docNumbers.length) {
+        // Batch exact match in chunks of 30
+        for (let i = 0; i < docNumbers.length; i += 30) {
+          const chunk = docNumbers.slice(i, i + 30);
+          const inList = chunk.map(d => `'${String(d).replace(/'/g, "''")}'`).join(',');
+          const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber IN (${inList}) MAXRESULTS 1000`;
+          const resp = await fetch(`${baseUrl}/v3/company/${targetRealm}/query?query=${encodeURIComponent(query)}&minorversion=65`, {
+            headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
           });
-          const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
-            id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
-          }));
-          allEntries.push(...entries);
-        } catch(e) {
-          console.error('findJournalEntries chunk error:', e.message);
+          if (resp.ok) {
+            const data = await resp.json();
+            (data.QueryResponse?.JournalEntry || []).forEach(je => {
+              allEntries.push({ id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate });
+            });
+          } else {
+            console.error('findJournalEntries chunk failed:', resp.status);
+          }
+          await new Promise(r => setTimeout(r, 200));
+        }
+      } else {
+        const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber LIKE '${docNumberPrefix}%' MAXRESULTS 1000`;
+        const resp = await fetch(`${baseUrl}/v3/company/${targetRealm}/query?query=${encodeURIComponent(query)}&minorversion=65`, {
+          headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          (data.QueryResponse?.JournalEntry || []).forEach(je => {
+            allEntries.push({ id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate });
+          });
         }
       }
-      console.log(`  Found ${allEntries.length} existing JEs from ${docNumbers.length} DocNumbers`);
+
+      console.log(`  Found ${allEntries.length} existing JEs for realm ${targetRealm}`);
       res.json({ success: true, entries: allEntries });
-    } else {
-      // Legacy prefix search
-      const query = `SELECT Id, DocNumber, TxnDate FROM JournalEntry WHERE DocNumber LIKE '${docNumberPrefix}%' MAXRESULTS 1000`;
-      qbo.query(query, (err, data) => {
-        if (err) {
-          console.error('findJournalEntries error:', err.message);
-          return res.status(500).json({ error: err.message || 'Query failed' });
-        }
-        const entries = (data.QueryResponse?.JournalEntry || []).map(je => ({
-          id: je.Id, docNumber: je.DocNumber, txnDate: je.TxnDate,
-        }));
-        console.log(`  Found ${entries.length} existing JEs matching "${docNumberPrefix}*"`);
-        res.json({ success: true, entries });
-      });
+    } catch(e) {
+      console.error('findJournalEntries error:', e.message);
+      res.status(500).json({ error: e.message });
     }
 
   // ── Action: Delete Journal Entry ────────────────────────────────
