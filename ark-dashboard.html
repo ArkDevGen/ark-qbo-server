@@ -17908,9 +17908,10 @@ function tcPopulateFilters(){
       .sort((a,b)=>a.biz.localeCompare(b.biz))
       .map(c=>`<option value="${c.id}" ${c.id===cVal?'selected':''}>${c.biz}</option>`).join('');
   const aVal = amSel.value;
+  // Use DB.accountManagers, fall back to cached server users
+  const amList = (DB.accountManagers||[]).length ? DB.accountManagers : (_cachedServerUsers||[]).filter(u=>u.role==='am'||u.role==='admin');
   amSel.innerHTML = '<option value="">All AMs</option>' +
-    (DB.accountManagers||[])
-      .map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+    amList.map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
   // Auto-filter to current user's tasks on first load
   if (!_tcFilterInitialized && currentUser) {
     _tcFilterInitialized = true;
@@ -20596,16 +20597,19 @@ function tcRenderSmartBanner(){
   const banner = document.getElementById('tc-smart-banner'); if(!banner) return;
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
-  const overdue = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate<todayStr);
-  const dueToday= (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate===todayStr);
+  // Filter by current AM selection
+  const fAM = document.getElementById('tc-filter-am')?.value || '';
+  const myTasks = (DB.tasks||[]).filter(t => !fAM || t.amId === fAM);
+  const overdue = myTasks.filter(t=>t.status!=='completed' && t.dueDate && t.dueDate<todayStr);
+  const dueToday= myTasks.filter(t=>t.status!=='completed' && t.dueDate===todayStr);
   if(!overdue.length && !dueToday.length){ banner.innerHTML=''; return; }
-  banner.innerHTML = `<div style="background:${overdue.length?'#1a0a0a':'#1a1200'};border:1px solid ${overdue.length?'#3a1a1a':'#3a2a00'};border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+  banner.innerHTML = `<div style="background:${overdue.length?'rgba(176,58,58,.08)':'rgba(184,146,42,.08)'};border:1px solid ${overdue.length?'rgba(176,58,58,.2)':'rgba(184,146,42,.2)'};border-radius:var(--radius);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      ${overdue.length?`<span style="font-size:12px;font-weight:700;color:#ff6b6b;">⚠ ${overdue.length} overdue</span>`:''}
-      ${dueToday.length?`<span style="font-size:12px;font-weight:700;color:#f0b429;">📅 ${dueToday.length} due today</span>`:''}
+      ${overdue.length?`<span style="font-size:12px;font-weight:700;color:#b03a3a;">⚠ ${overdue.length} overdue</span>`:''}
+      ${dueToday.length?`<span style="font-size:12px;font-weight:700;color:var(--gold);">📅 ${dueToday.length} due today</span>`:''}
       <span style="font-size:11px;color:var(--text-d);">${[...overdue,...dueToday].slice(0,3).map(t=>t.name).join(' · ')}${[...overdue,...dueToday].length>3?' …':''}</span>
     </div>
-    <button onclick="tcSetFilter('overdue')" style="font-size:11px;padding:4px 12px;background:none;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--text-d);">Show Overdue →</button>
+    ${overdue.length?`<button onclick="tcSetFilter('overdue')" style="font-size:11px;padding:4px 12px;background:none;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;color:var(--text-d);">Show Overdue →</button>`:''}
   </div>`;
 }
 
