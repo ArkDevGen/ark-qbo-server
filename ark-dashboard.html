@@ -17908,8 +17908,8 @@ function tcPopulateFilters(){
       .sort((a,b)=>a.biz.localeCompare(b.biz))
       .map(c=>`<option value="${c.id}" ${c.id===cVal?'selected':''}>${c.biz}</option>`).join('');
   const aVal = amSel.value;
-  // Use DB.accountManagers, fall back to cached server users
-  const amList = (DB.accountManagers||[]).length ? DB.accountManagers : (_cachedServerUsers||[]).filter(u=>u.role==='am'||u.role==='admin');
+  // Use DB.accountManagers, fall back to all server users
+  const amList = (DB.accountManagers||[]).length ? DB.accountManagers : (_cachedServerUsers||[]);
   amSel.innerHTML = '<option value="">All AMs</option>' +
     amList.map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
   // Auto-filter to current user's tasks on first load
