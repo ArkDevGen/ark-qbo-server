@@ -27171,13 +27171,10 @@ function sjeShowReview() {
   if (!_sjeData) return;
 
   // Update step indicators: Upload=done, Review=active, Confirm=pending
-  document.getElementById('sje-step-1').style.background = '#22c55e';
-  document.getElementById('sje-step-1').style.color = '#fff';
+  document.getElementById('sje-step-1').style.cssText += 'background:#22c55e !important;color:#fff !important;';
   document.getElementById('sje-step-1').textContent = '✓ Upload';
-  document.getElementById('sje-step-2').style.background = 'var(--accent)';
-  document.getElementById('sje-step-2').style.color = '#fff';
-  document.getElementById('sje-step-3').style.background = 'var(--surface2)';
-  document.getElementById('sje-step-3').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-2').style.cssText += 'background:#3b82f6 !important;color:#fff !important;';
+  document.getElementById('sje-step-3').style.cssText += 'background:var(--surface2) !important;color:var(--text-d) !important;';
   document.getElementById('sje-step-3').textContent = '3 · Confirm';
 
   // Hide upload, show review
@@ -27288,14 +27285,11 @@ function sjeBackToUpload() {
   document.getElementById('sje-upload-status').innerHTML = '';
   document.getElementById('sje-file-input').value = '';
   // Reset step indicators
-  document.getElementById('sje-step-1').style.background = 'var(--accent)';
-  document.getElementById('sje-step-1').style.color = '#fff';
+  document.getElementById('sje-step-1').style.cssText += 'background:#3b82f6 !important;color:#fff !important;';
   document.getElementById('sje-step-1').textContent = '1 · Upload';
-  document.getElementById('sje-step-2').style.background = 'var(--surface2)';
-  document.getElementById('sje-step-2').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-2').style.cssText += 'background:var(--surface2) !important;color:var(--text-d) !important;';
   document.getElementById('sje-step-2').textContent = '2 · Review';
-  document.getElementById('sje-step-3').style.background = 'var(--surface2)';
-  document.getElementById('sje-step-3').style.color = 'var(--text-d)';
+  document.getElementById('sje-step-3').style.cssText += 'background:var(--surface2) !important;color:var(--text-d) !important;';
   document.getElementById('sje-step-3').textContent = '3 · Confirm';
   document.getElementById('sje-step-3').style.background = 'var(--surface2)';
   document.getElementById('sje-step-3').style.color = 'var(--text-d)';
@@ -27608,10 +27602,9 @@ async function sjePushOne(idx) {
 
 function sjeShowConfirm() {
   // Upload=done, Review=done, Confirm=active
-  document.getElementById('sje-step-2').style.background = '#22c55e';
+  document.getElementById('sje-step-2').style.cssText += 'background:#22c55e !important;color:#fff !important;';
   document.getElementById('sje-step-2').textContent = '✓ Review';
-  document.getElementById('sje-step-3').style.background = 'var(--accent)';
-  document.getElementById('sje-step-3').style.color = '#fff';
+  document.getElementById('sje-step-3').style.cssText += 'background:#3b82f6 !important;color:#fff !important;';
   document.getElementById('sje-step-3').textContent = '3 · Confirm';
 
   document.getElementById('sje-review').style.display = 'none';
