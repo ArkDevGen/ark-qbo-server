@@ -4284,13 +4284,23 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
       return null;
     }
 
-    // Group rows by store
+    // Group rows by resolved store number (not raw Store_Name)
+    // This merges rows with different names but same store (e.g., "Jessica and Ty O'Toole Store 660" + "Waterman")
     const storeGroups = {};
+    const storeNameMap = {}; // storeNum → first Store_Name seen
     for (const row of rawData) {
       const storeName = String(row['Store_Name'] || row['store_name'] || '').trim();
       if (!storeName) continue;
-      if (!storeGroups[storeName]) storeGroups[storeName] = [];
-      storeGroups[storeName].push(row);
+      // Resolve store number for grouping
+      let sNum = extractStoreNum(storeName);
+      if (!sNum) sNum = findStoreNumFromCRM(storeName);
+      if (!sNum) sNum = findStoreNumFromConfig(storeName);
+      const groupKey = sNum || storeName; // fall back to name if no number found
+      if (!storeGroups[groupKey]) {
+        storeGroups[groupKey] = [];
+        storeNameMap[groupKey] = storeName;
+      }
+      storeGroups[groupKey].push(row);
     }
 
     // Look up store number from CRM client franchise records by matching store name
@@ -4336,13 +4346,11 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     const warnings = [];
     let totalDebits = 0, totalCredits = 0, totalEntries = 0;
 
-    for (const [storeName, rows] of Object.entries(storeGroups)) {
-      // Priority: 1) CSV "Store XXXX" pattern (most specific), 2) CRM client records, 3) franchise config name match
-      let storeNum = extractStoreNum(storeName);
-      let storeNumSource = storeNum ? 'CSV' : '';
-      if (!storeNum) { storeNum = findStoreNumFromCRM(storeName); storeNumSource = storeNum ? 'CRM' : ''; }
-      if (!storeNum) { storeNum = findStoreNumFromConfig(storeName); storeNumSource = storeNum ? 'config' : ''; }
-      console.log(`  Store "${storeName}" → #${storeNum || 'NONE'} (source: ${storeNumSource || 'not found'})`);
+    for (const [groupKey, rows] of Object.entries(storeGroups)) {
+      const storeName = storeNameMap[groupKey] || groupKey;
+      // groupKey is already the resolved store number (or raw name if none found)
+      const storeNum = /^\d+$/.test(groupKey) ? groupKey : null;
+      console.log(`  Store "${storeName}" → #${storeNum || 'NONE'} (${rows.length} rows)`);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
       const entries = [];
       let fDebits = 0, fCredits = 0;
