@@ -19714,15 +19714,20 @@ function tdShowProjectMapping(projects) {
   const taskCounts = {};
   _tdParsed.forEach(t => { taskCounts[t._project] = (taskCounts[t._project]||0) + 1; });
 
+  const clientList = (DB.clients||[]).sort((a,b)=>(a.biz||'').localeCompare(b.biz||''));
+
   document.getElementById('td-project-list').innerHTML = projects.map((p, i) => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;color:var(--text);">${p}</div>
         <div style="font-size:11px;color:var(--text-d);">${taskCounts[p]||0} task${(taskCounts[p]||0)!==1?'s':''}</div>
       </div>
-      <select id="td-proj-client-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-client" style="width:200px;font-size:12px;margin:0;">
-        ${clientOpts}
-      </select>
+      <div style="position:relative;width:200px;">
+        <input type="text" id="td-proj-search-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-client" placeholder="Search client..." autocomplete="off"
+          oninput="tdProjFilterClients(${i})" onfocus="tdProjFilterClients(${i})" style="width:100%;font-size:12px;margin:0;">
+        <input type="hidden" id="td-proj-clientid-${i}" data-project="${p.replace(/"/g,'&quot;')}">
+        <div id="td-proj-dd-${i}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:160px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+      </div>
       <select id="td-proj-cat-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-cat" style="width:140px;font-size:12px;margin:0;">
         ${catOpts}
       </select>
@@ -19732,20 +19737,51 @@ function tdShowProjectMapping(projects) {
       </label>
     </div>
   `).join('');
+
+  // Auto-match project names to clients
+  projects.forEach((p, i) => {
+    const pLower = p.toLowerCase();
+    const match = clientList.find(c => pLower.includes(c.biz.toLowerCase()) || c.biz.toLowerCase().includes(pLower));
+    if (match) {
+      document.getElementById('td-proj-search-' + i).value = match.biz;
+      document.getElementById('td-proj-clientid-' + i).value = match.id;
+    }
+  });
+}
+
+function tdProjFilterClients(idx) {
+  const input = document.getElementById('td-proj-search-' + idx);
+  const dd = document.getElementById('td-proj-dd-' + idx);
+  const q = (input?.value || '').toLowerCase();
+  const clients = (DB.clients||[]).filter(c => !q || c.biz.toLowerCase().includes(q)).sort((a,b)=>a.biz.localeCompare(b.biz)).slice(0, 10);
+  if (!clients.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = '<div onmousedown="event.preventDefault();tdProjSelectClient(' + idx + ',\'\',\'\')" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text-d);border-bottom:1px solid var(--border);">— No Client —</div>' +
+    clients.map(c => `<div onmousedown="event.preventDefault();tdProjSelectClient(${idx},'${c.id}','${c.biz.replace(/'/g,"\\'")}')"
+      style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}</div>`).join('');
+  // Close on blur
+  input.onblur = () => setTimeout(() => { dd.style.display = 'none'; }, 200);
+}
+
+function tdProjSelectClient(idx, id, name) {
+  document.getElementById('td-proj-search-' + idx).value = name;
+  document.getElementById('td-proj-clientid-' + idx).value = id;
+  document.getElementById('td-proj-dd-' + idx).style.display = 'none';
 }
 
 function tdApplyProjectMapping() {
   const defaultAM = document.getElementById('td-am-sel')?.value || '';
 
   // Read mappings
-  const clientSels = document.querySelectorAll('.td-proj-client');
+  const clientInputs = document.querySelectorAll('.td-proj-client');
   const catSels = document.querySelectorAll('.td-proj-cat');
   const skipChecks = document.querySelectorAll('.td-proj-skip');
 
   const projectMap = {};
-  clientSels.forEach((sel, i) => {
-    const proj = sel.dataset.project;
-    const clientId = sel.value;
+  clientInputs.forEach((input, i) => {
+    const proj = input.dataset.project;
+    const clientId = document.getElementById('td-proj-clientid-' + i)?.value || '';
     const clientName = clientId ? ((DB.clients||[]).find(c=>c.id===clientId)?.biz||'') : '';
     const category = catSels[i]?.value || 'Other';
     const skip = skipChecks[i]?.checked || false;
