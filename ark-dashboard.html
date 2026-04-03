@@ -465,7 +465,7 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .tc-proj-item .count{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;flex-shrink:0;}
 .tc-proj-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);padding:16px 16px 6px;opacity:.6;}
 .tc-proj-divider{border-top:1px solid var(--border);margin:8px 16px;}
-.tc-content{flex:1;min-width:0;padding:0 0 0 20px;}
+.tc-content{flex:1;min-width:0;padding:0 0 0 20px;overflow-x:auto;}
 
 /* ── Production View Toggle ── */
 .tc-vtoggle{padding:7px 16px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text-d);cursor:pointer;transition:all .15s;}
@@ -2345,9 +2345,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div class="card-title">🏭 Production</div>
         <div class="card-subtitle" id="tc-subtitle"></div>
       </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-ghost" onclick="tdImportOpen()" style="font-size:12px;">📥 Import from Todoist</button>
-        <button class="btn btn-primary" onclick="tcOpenNew()">+ New Task</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="tdImportOpen()" style="font-size:11px;">📥 Import</button>
+        <button class="btn btn-ghost btn-sm" onclick="tcAddProject()" style="font-size:11px;">+ Project</button>
+        <button class="btn btn-primary btn-sm" onclick="tcOpenNew()">+ New Task</button>
       </div>
     </div>
 
@@ -2363,7 +2364,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="tc-tasks-panel">
 
     <!-- KPI strip -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
       <div class="sum-card" style="--card-accent:#b03a3a;cursor:pointer;" onclick="tcSetFilter('overdue')">
         <div class="label">Overdue</div>
         <div class="value" id="tc-kpi-overdue" style="color:#b03a3a;font-size:28px;">0</div>
@@ -2391,7 +2392,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="search-wrap" style="flex:1;min-width:200px;">
         <input id="tc-search" class="field-input" placeholder="Search tasks…" oninput="tcRender()" style="margin:0;">
       </div>
-      <select id="tc-filter-status" class="field-input" style="width:130px;margin:0;" onchange="tcRender()">
+      <select id="tc-filter-status" class="field-input" style="width:120px;margin:0;" onchange="tcRender()">
         <option value="open">Open</option>
         <option value="overdue">Overdue</option>
         <option value="due-today">Due Today</option>
@@ -18878,8 +18879,7 @@ function tcBuildProjectSidebar() {
     clientProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
     (personalProjects.length ? '<div class="tc-proj-section">Personal</div>' : '') +
     personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
-    '<div class="tc-proj-divider"></div>' +
-    '<div class="tc-proj-item" onclick="tcAddProject()" style="color:var(--gold);"><span class="icon">+</span><span class="label">Add Project</span></div>';
+    '';
 }
 
 function notesRender() {
@@ -19915,8 +19915,14 @@ function tdApplyProjectMapping() {
   const projectMap = {};
   clientInputs.forEach((input, i) => {
     const proj = input.dataset.project;
-    const clientId = document.getElementById('td-proj-clientid-' + i)?.value || '';
-    const clientName = clientId ? ((DB.clients||[]).find(c=>c.id===clientId)?.biz||'') : '';
+    let clientId = document.getElementById('td-proj-clientid-' + i)?.value || '';
+    // If no clientId but search box has text, try to find the client
+    if (!clientId && input.value.trim()) {
+      const searchVal = input.value.trim().toLowerCase();
+      const match = (DB.clients||[]).find(c => c.biz.toLowerCase() === searchVal || c.biz.toLowerCase().includes(searchVal) || searchVal.includes(c.biz.toLowerCase()));
+      if (match) clientId = match.id;
+    }
+    const clientName = clientId ? ((DB.clients||[]).find(c=>c.id===clientId)?.biz||'') : (input.value.trim() || '');
     const category = catSels[i]?.value || 'Other';
     const skip = skipChecks[i]?.checked || false;
     projectMap[proj] = { clientId, clientName, category, skip };
