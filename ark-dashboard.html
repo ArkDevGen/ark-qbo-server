@@ -19171,7 +19171,16 @@ function tdParseMultiFiles() {
     const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
     const monthShort = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
-    function parseTodoistDate(raw) {
+    // Reference dates for "every other" patterns (known last occurrences)
+    const biweeklyRefs = {
+      wednesday: new Date(2026, 3, 1),  // Haines: last was Wed Apr 1
+      tuesday:   new Date(2026, 2, 31), // Newtown/VC: last was Tue Mar 31
+      monday:    new Date(2026, 2, 30), // Van Engen: last was Mon Mar 30
+    };
+    // Hazard "every other wed" ref: last was Mar 25 (different week than Haines)
+    const hazardWedRef = new Date(2026, 2, 25);
+
+    function parseTodoistDate(raw, taskName) {
       if (!raw || !raw.trim()) return { dueDate: '', recurring: false, recurFreq: null };
       const s = raw.trim().toLowerCase();
 
@@ -19179,15 +19188,97 @@ function tdParseMultiFiles() {
       if (s.startsWith('every ')) {
         const recur = s.slice(6).trim();
         let recurFreq = 'custom', dueDate = '';
-        const today = new Date();
+        const today = new Date(); today.setHours(0,0,0,0);
 
-        // "every tuesday", "every wednesday", etc.
-        const dayIdx = dayNames.indexOf(recur);
+        // "every other tuesday", "every other wednesday", "every other monday"
+        const everyOther = recur.match(/^other\s+(\w+)$/);
+        if (everyOther) {
+          const dayName = everyOther[1].toLowerCase();
+          // Normalize short names
+          const fullDay = dayNames.find(d => d.startsWith(dayName)) || dayName;
+          const dayIdx = dayNames.indexOf(fullDay);
+          if (dayIdx >= 0) {
+            recurFreq = 'biweekly';
+            // Use project-specific reference if available, else general
+            const isHazard = (taskName||'').toLowerCase().includes('hazard') || (taskName||'').toLowerCase().includes('export payroll');
+            let ref = biweeklyRefs[fullDay];
+            if (fullDay === 'wednesday' && isHazard) ref = hazardWedRef;
+            if (ref) {
+              // Find next occurrence after today, stepping by 2 weeks from reference
+              const d = new Date(ref);
+              while (d <= today) d.setDate(d.getDate() + 14);
+              dueDate = d.toISOString().slice(0, 10);
+            } else {
+              const d = new Date(today);
+              while (d.getDay() !== dayIdx) d.setDate(d.getDate() + 1);
+              dueDate = d.toISOString().slice(0, 10);
+            }
+            return { dueDate, recurring: true, recurFreq };
+          }
+        }
+
+        // "every tuesday", "every wednesday", "every wed", etc.
+        const shortDay = dayNames.find(d => d.startsWith(recur)) || '';
+        const dayIdx = shortDay ? dayNames.indexOf(shortDay) : dayNames.indexOf(recur);
         if (dayIdx >= 0) {
           recurFreq = 'weekly';
-          // Find next occurrence of this day
           const d = new Date(today);
+          d.setDate(d.getDate() + 1); // start from tomorrow
           while (d.getDay() !== dayIdx) d.setDate(d.getDate() + 1);
+          dueDate = d.toISOString().slice(0, 10);
+          return { dueDate, recurring: true, recurFreq };
+        }
+
+        // "every 3rd wednesday" — Nth weekday of month
+        const nthDay = recur.match(/^(\d)(st|nd|rd|th)\s+(\w+)$/);
+        if (nthDay) {
+          const nth = parseInt(nthDay[1]);
+          const dayName = nthDay[3].toLowerCase();
+          const fullDayN = dayNames.find(d => d.startsWith(dayName)) || dayName;
+          const dayIdxN = dayNames.indexOf(fullDayN);
+          if (dayIdxN >= 0) {
+            recurFreq = 'monthly';
+            // Find the Nth weekday of this month or next
+            function findNthDay(year, month) {
+              let count = 0;
+              for (let d = 1; d <= 31; d++) {
+                const dt = new Date(year, month, d);
+                if (dt.getMonth() !== month) break;
+                if (dt.getDay() === dayIdxN) { count++; if (count === nth) return dt; }
+              }
+              return null;
+            }
+            let result = findNthDay(today.getFullYear(), today.getMonth());
+            if (!result || result <= today) result = findNthDay(today.getFullYear(), today.getMonth() + 1);
+            dueDate = result ? result.toISOString().slice(0, 10) : '';
+            return { dueDate, recurring: true, recurFreq };
+          }
+        }
+
+        // "every 1st, 16th" or "every 1st, every 16th" — bimonthly
+        const multiDay = recur.match(/^(\d{1,2})(st|nd|rd|th)?,?\s*(?:every\s+)?(\d{1,2})(st|nd|rd|th)?$/);
+        if (multiDay) {
+          recurFreq = 'bimonthly';
+          const d1 = parseInt(multiDay[1]), d2 = parseInt(multiDay[3]);
+          // Find next occurrence
+          const candidates = [];
+          for (let mOff = 0; mOff <= 1; mOff++) {
+            const m = today.getMonth() + mOff;
+            const y = today.getFullYear();
+            [d1, d2].forEach(dom => {
+              const dt = new Date(y, m, dom);
+              if (dt > today) candidates.push(dt);
+            });
+          }
+          candidates.sort((a,b) => a-b);
+          dueDate = candidates.length ? candidates[0].toISOString().slice(0, 10) : '';
+          return { dueDate, recurring: true, recurFreq, recurBmDay1: String(d1), recurBmDay2: String(d2) };
+        }
+
+        // "every month"
+        if (recur === 'month') {
+          recurFreq = 'monthly';
+          const d = new Date(today); d.setMonth(d.getMonth() + 1);
           dueDate = d.toISOString().slice(0, 10);
           return { dueDate, recurring: true, recurFreq };
         }
@@ -19212,19 +19303,28 @@ function tdParseMultiFiles() {
           else if (unit === 'month') recurFreq = n === 1 ? 'monthly' : n === 3 ? 'quarterly' : 'custom';
           else if (unit === 'year') recurFreq = 'annually';
           else recurFreq = 'custom';
-          const d = new Date(today);
-          if (unit === 'day') d.setDate(d.getDate() + n);
-          else if (unit === 'week') d.setDate(d.getDate() + n * 7);
-          else if (unit === 'month') d.setMonth(d.getMonth() + n);
-          else if (unit === 'year') d.setFullYear(d.getFullYear() + n);
-          dueDate = d.toISOString().slice(0, 10);
+          // For "every 4 weeks", use reference date Apr 13
+          if (n === 4 && unit === 'week') {
+            const ref = new Date(2026, 3, 13); // known next: Apr 13
+            const d = new Date(ref);
+            while (d <= today) d.setDate(d.getDate() + 28);
+            dueDate = d.toISOString().slice(0, 10);
+          } else {
+            const d = new Date(today);
+            if (unit === 'day') d.setDate(d.getDate() + n);
+            else if (unit === 'week') d.setDate(d.getDate() + n * 7);
+            else if (unit === 'month') d.setMonth(d.getMonth() + n);
+            else if (unit === 'year') d.setFullYear(d.getFullYear() + n);
+            dueDate = d.toISOString().slice(0, 10);
+          }
           return { dueDate, recurring: true, recurFreq };
         }
 
-        // "every december 28th", "every march 15"
+        // "every december 28th", "every march 15", "every sept 30th", "every sep 30"
         const monthDay = recur.match(/^(\w+)\s+(\d{1,2})(st|nd|rd|th)?$/);
         if (monthDay) {
-          const mIdx = monthNames.indexOf(monthDay[1]) >= 0 ? monthNames.indexOf(monthDay[1]) : monthShort.indexOf(monthDay[1].slice(0,3));
+          const mStr = monthDay[1].slice(0, 3).toLowerCase();
+          const mIdx = monthShort.indexOf(mStr);
           if (mIdx >= 0) {
             recurFreq = 'annually';
             const dom = parseInt(monthDay[2]);
@@ -19235,9 +19335,10 @@ function tdParseMultiFiles() {
           }
         }
 
-        // Fallback recurring — use tomorrow
-        const d = new Date(today); d.setDate(d.getDate() + 1);
-        return { dueDate: d.toISOString().slice(0, 10), recurring: true, recurFreq: 'custom' };
+        // "every september 30th" — full month name already handled above via slice(0,3)
+
+        // Fallback recurring — use empty (will go to No Due Date)
+        return { dueDate: '', recurring: true, recurFreq: 'custom' };
       }
 
       // Non-recurring date parsing
@@ -19295,8 +19396,8 @@ function tdParseMultiFiles() {
       const priority = iPri >= 0 ? mapPri(cols[iPri]) : 'medium';
       const dateRaw = iDate >= 0 ? (cols[iDate] || '').trim() : '';
       const deadRaw = iDeadline >= 0 ? (cols[iDeadline] || '').trim() : '';
-      const dateInfo = parseTodoistDate(dateRaw) || {};
-      const deadInfo = parseTodoistDate(deadRaw) || {};
+      const dateInfo = parseTodoistDate(dateRaw, name + ' ' + file.name) || {};
+      const deadInfo = parseTodoistDate(deadRaw, name + ' ' + file.name) || {};
       const dueDate = dateInfo.dueDate || deadInfo.dueDate || '';
       const isRecurring = dateInfo.recurring || deadInfo.recurring || false;
       const recurFreq = dateInfo.recurFreq || deadInfo.recurFreq || null;
@@ -19307,7 +19408,10 @@ function tdParseMultiFiles() {
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
         priority, dueDate: dueDate || '', _noDate: !dueDate,
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
-        recurring: isRecurring, recurFreq: recurFreq, showDaysAdvance: 3, status: 'open',
+        recurring: isRecurring, recurFreq: recurFreq,
+        recurBmDay1: dateInfo.recurBmDay1 || deadInfo.recurBmDay1 || '',
+        recurBmDay2: dateInfo.recurBmDay2 || deadInfo.recurBmDay2 || '',
+        showDaysAdvance: 3, status: 'open',
         noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'Import',
       });
