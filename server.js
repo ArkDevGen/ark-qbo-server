@@ -4785,9 +4785,10 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   const yyyy = d.getFullYear();
-  // Append class to DocNumber if present (so classed stores in same QBO company have unique DocNumbers)
-  const classSuffix = className ? ' - ' + className : '';
-  const journalNo = grossSales === 0 ? `${mm}.${dd}.${yyyy} - NO DATA${classSuffix}` : `${mm}.${dd}.${yyyy}${classSuffix}`;
+  // Append store ID to DocNumber if classed (so classed stores in same QBO company have unique DocNumbers)
+  // QBO DocNumber max length is 21 characters. "03.01.2026" = 10, "-1411" = 5, total = 15 (safe)
+  const classSuffix = className && storeId ? '-' + storeId : '';
+  const journalNo = grossSales === 0 ? `${mm}.${dd}.${yyyy}-ND${classSuffix}` : `${mm}.${dd}.${yyyy}${classSuffix}`;
   const journalDate = `${mm}/${dd}/${yyyy}`;
 
   const adyenFees = Math.round(mobile * 0.0362 * 100) / 100;
