@@ -14428,7 +14428,9 @@ function tcInit(){
   tcSetMode('quick');
 
   // Show admin dropdown or user-specific display
-  const showAll = canDo('_isAdmin') || canDo('canViewTimeAll');
+  // Only admins or users with explicit canViewTimeAll permission see the dropdown
+  const isAdmin = currentUser && (currentUser.role === 'admin' || getPerms(currentUser)._isAdmin);
+  const showAll = isAdmin || (currentUser && getPerms(currentUser).canViewTimeAll === true);
   document.getElementById('tc-emp-admin-wrap').style.display = showAll ? '' : 'none';
   document.getElementById('tc-emp-user-wrap').style.display = showAll ? 'none' : '';
 
