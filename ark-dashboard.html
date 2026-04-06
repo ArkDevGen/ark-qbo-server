@@ -14600,9 +14600,10 @@ function tcThisPeriod(){
 
 function tcPopulateEmployees(){
   const sel = document.getElementById('tc-emp-select');
-  const users = DB.users||[];
+  // Use server users (actual team), fall back to DB.users
+  const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
   sel.innerHTML = '<option value="">— Select employee —</option>' +
-    users.map(u=>`<option value="${u.id}">${u.fname} ${u.lname||''}</option>`).join('');
+    users.map(u=>`<option value="${u.id}">${u.fname||u.userName||''} ${u.lname||''}</option>`).join('');
 }
 
 function tcLoadEmployee(){
