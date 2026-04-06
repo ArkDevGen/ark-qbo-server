@@ -961,10 +961,14 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0])">
         </label>
       </div>
-      <div id="current-user-pill" onclick="signOut()" title="Click to sign out">
+      <div id="current-user-pill" style="position:relative;cursor:pointer;" onclick="document.getElementById('user-menu').style.display=document.getElementById('user-menu').style.display==='none'?'block':'none'">
         <div class="pill-av" id="pill-av" style="background:var(--navy);">?</div>
         <span id="pill-name">—</span>
-        <span style="color:var(--text-d);font-weight:400;font-size:11px;">· sign out</span>
+        <span style="color:var(--text-d);font-weight:400;font-size:11px;">▾</span>
+        <div id="user-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:999;" onclick="event.stopPropagation()">
+          <div onclick="openChangePassword()" style="padding:10px 16px;font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">🔑 Change Password</div>
+          <div onclick="signOut()" style="padding:10px 16px;font-size:12px;color:var(--red);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">🚪 Sign Out</div>
+        </div>
       </div>
     </div>
   </header>
@@ -7166,6 +7170,49 @@ async function loginWithCredentials(){
     btnEl.textContent = 'Sign In';
   }
 }
+
+function openChangePassword() {
+  document.getElementById('user-menu').style.display = 'none';
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new').value = '';
+  document.getElementById('cp-confirm').value = '';
+  document.getElementById('cp-msg').innerHTML = '';
+  openModal('modal-change-pw');
+}
+
+async function submitChangePassword() {
+  const current = document.getElementById('cp-current').value;
+  const newPw = document.getElementById('cp-new').value;
+  const confirm = document.getElementById('cp-confirm').value;
+  const msg = document.getElementById('cp-msg');
+
+  if (!current) { msg.innerHTML = '<span style="color:var(--red);">Enter your current password</span>'; return; }
+  if (!newPw || newPw.length < 6) { msg.innerHTML = '<span style="color:var(--red);">New password must be at least 6 characters</span>'; return; }
+  if (newPw !== confirm) { msg.innerHTML = '<span style="color:var(--red);">Passwords do not match</span>'; return; }
+
+  msg.innerHTML = '<span style="color:var(--text-d);">Changing password...</span>';
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: current, newPassword: newPw }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed');
+    msg.innerHTML = '<span style="color:var(--green);font-weight:600;">✓ Password changed successfully!</span>';
+    setTimeout(() => closeModal('modal-change-pw'), 1500);
+  } catch(e) {
+    msg.innerHTML = `<span style="color:var(--red);">${e.message}</span>`;
+  }
+}
+
+// Close user menu when clicking outside
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('user-menu');
+  const pill = document.getElementById('current-user-pill');
+  if (menu && pill && !pill.contains(e.target)) menu.style.display = 'none';
+});
 
 function signOut(){
   if(!confirm('Sign out and return to the login screen?')) return;
@@ -31748,6 +31795,35 @@ async function intConnectWithToken() {
 }
 
 </script>
+
+<!-- ════ CHANGE PASSWORD MODAL ════ -->
+<div class="overlay" id="modal-change-pw" style="display:none" onclick="overlayClose(event,'modal-change-pw')">
+  <div class="modal" style="width:400px;">
+    <div class="modal-head">
+      <div class="modal-title">🔑 Change Password</div>
+      <button class="modal-close" onclick="closeModal('modal-change-pw')">×</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Current Password</label>
+        <input type="password" id="cp-current" class="field-input" placeholder="Enter current password" style="width:100%;">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">New Password</label>
+        <input type="password" id="cp-new" class="field-input" placeholder="At least 6 characters" style="width:100%;">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Confirm New Password</label>
+        <input type="password" id="cp-confirm" class="field-input" placeholder="Re-enter new password" style="width:100%;">
+      </div>
+      <div id="cp-msg" style="font-size:12px;min-height:20px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-change-pw')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitChangePassword()">Change Password</button>
+    </div>
+  </div>
+</div>
 
 <!-- ════ PROPOSAL MODAL ════ -->
 <div class="overlay" id="modal-proposal" style="display:none" onclick="overlayClose(event,'modal-proposal')">
