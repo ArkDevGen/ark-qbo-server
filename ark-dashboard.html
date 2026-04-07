@@ -18086,7 +18086,7 @@ function tcSetFilter(val){
 }
 
 let _tcFilterInitialized = false;
-function tcPopulateFilters(){
+async function tcPopulateFilters(){
   const clientSel = document.getElementById('tc-filter-client');
   const amSel     = document.getElementById('tc-filter-am');
   if(!clientSel || !amSel) return;
@@ -18096,20 +18096,24 @@ function tcPopulateFilters(){
     (DB.clients||[]).filter(c=>usedClients.includes(c.id))
       .sort((a,b)=>a.biz.localeCompare(b.biz))
       .map(c=>`<option value="${c.id}" ${c.id===cVal?'selected':''}>${c.biz}</option>`).join('');
+  // Ensure server users are loaded for AM dropdown
+  if (!_cachedServerUsers.length) await refreshServerUsersCache();
   const aVal = amSel.value;
-  // Use DB.accountManagers, fall back to all server users
-  const amList = (DB.accountManagers||[]).length ? DB.accountManagers : (_cachedServerUsers||[]);
-  amSel.innerHTML = '<option value="">All Team</option>' +
-    amList.map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
+  const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  // Non-admins: only show themselves. Admins: show all team.
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  if (isAdmin) {
+    amSel.innerHTML = '<option value="">All Team</option>' +
+      amList.map(a=>`<option value="${a.id}" ${a.id===aVal?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
+  } else if (currentUser) {
+    // Non-admin: locked to own tasks, hide dropdown
+    amSel.innerHTML = `<option value="${currentUser.id}" selected>${currentUser.fname||''} ${currentUser.lname||''}</option>`;
+    amSel.style.display = 'none';
+  }
   // Auto-filter to current user's tasks on first load
   if (!_tcFilterInitialized && currentUser) {
     _tcFilterInitialized = true;
-    // Auto-select current user — always
     amSel.value = currentUser.id;
-    // Non-admins can't see other people's tasks
-    if (currentUser.role !== 'admin') {
-      amSel.style.display = 'none';
-    }
   }
 }
 
@@ -18705,8 +18709,8 @@ function tcRecurLabel(freq, n, d1, d2){
 }
 
 // ── Init / render ────────────────────────────────────────────────
-function tcRender(){
-  tcPopulateFilters();
+async function tcRender(){
+  await tcPopulateFilters();
 
   const tasks  = DB.tasks || [];
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
