@@ -1043,6 +1043,10 @@ app.post('/qbo/api', async (req, res) => {
       start_date: startDate,
       end_date: endDate,
     };
+    // Support class breakout (summarize_column_by=Class)
+    if (payload.summarize_column_by) {
+      params.summarize_column_by = payload.summarize_column_by;
+    }
 
     const method = reportType === 'detail' ? 'reportProfitAndLossDetail' : 'reportProfitAndLoss';
     qbo[method](params, (err, data) => {

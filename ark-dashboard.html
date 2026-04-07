@@ -3385,6 +3385,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;">
         <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);padding:0 10px;">Reports</span>
         <button onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 P&amp;L Digest</button>
+        <button onclick="qboOpenTool('plreport')" id="qbo-tool-plreport" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📈 P&amp;L Report</button>
         <button onclick="qboOpenTool('balsheet')" id="qbo-tool-balsheet" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 Balance Sheet</button>
         <button onclick="qboOpenTool('araging')" id="qbo-tool-araging" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">⏳ AR Aging</button>
       </div>
@@ -3911,6 +3912,40 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
             <div id="qbo-bs-output" style="max-height:600px;overflow-y:auto;">
               <div style="padding:40px;text-align:center;color:var(--text-d);font-size:12px;">Select a date and click "Run Report"</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P&L Report Workspace -->
+        <div id="qbo-ws-plreport" style="display:none;">
+          <div class="card" style="overflow:visible;position:relative;z-index:10;">
+            <div class="card-header" style="padding:12px 16px;">
+              <div class="card-title" style="font-size:13px;">Profit & Loss Report</div>
+            </div>
+            <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--border);">
+              <label style="font-size:11px;color:var(--text-d);">From:</label>
+              <input type="date" id="qbo-pl-rpt-start" class="input" style="font-size:12px;width:140px;">
+              <label style="font-size:11px;color:var(--text-d);">To:</label>
+              <input type="date" id="qbo-pl-rpt-end" class="input" style="font-size:12px;width:140px;">
+              <div style="display:flex;gap:4px;">
+                <button class="btn btn-sm" onclick="qboPLRptQuick('this-month')" style="font-size:10px;padding:4px 8px;">This Mo</button>
+                <button class="btn btn-sm" onclick="qboPLRptQuick('last-month')" style="font-size:10px;padding:4px 8px;">Last Mo</button>
+                <button class="btn btn-sm" onclick="qboPLRptQuick('this-quarter')" style="font-size:10px;padding:4px 8px;">This Qtr</button>
+                <button class="btn btn-sm" onclick="qboPLRptQuick('last-quarter')" style="font-size:10px;padding:4px 8px;">Last Qtr</button>
+                <button class="btn btn-sm" onclick="qboPLRptQuick('this-year')" style="font-size:10px;padding:4px 8px;">YTD</button>
+                <button class="btn btn-sm" onclick="qboPLRptQuick('last-year')" style="font-size:10px;padding:4px 8px;">Last Yr</button>
+              </div>
+              <label style="font-size:11px;color:var(--text-d);margin-left:6px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="qbo-pl-rpt-pct"> % of Income
+              </label>
+              <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="qbo-pl-rpt-class"> By Class
+              </label>
+              <button class="btn btn-sm btn-primary" onclick="qboPLRptRun()" style="font-size:11px;">Run Report</button>
+              <span id="qbo-pl-rpt-status" style="font-size:11px;color:var(--text-d);margin-left:auto;"></span>
+            </div>
+            <div id="qbo-pl-rpt-output" style="max-height:600px;overflow:auto;">
+              <div style="padding:40px;text-align:center;color:var(--text-d);font-size:12px;">Select a date range and click "Run Report"</div>
             </div>
           </div>
         </div>
@@ -24868,7 +24903,7 @@ function qboPopulateDropdowns() {
 
 // ── Tool navigation ───────────────────────────────────────────────
 function qboOpenTool(tool) {
-  ['qbo-gje-workspace','qbo-expense-workspace','qbo-pl-workspace','qbo-batch-workspace','qbo-ws-coasync','qbo-ws-entitysync','qbo-ws-invoices','qbo-ws-balsheet','qbo-ws-araging','qbo-ws-billsap','qbo-default-workspace'].forEach(id => {
+  ['qbo-gje-workspace','qbo-expense-workspace','qbo-pl-workspace','qbo-batch-workspace','qbo-ws-coasync','qbo-ws-entitysync','qbo-ws-invoices','qbo-ws-balsheet','qbo-ws-plreport','qbo-ws-araging','qbo-ws-billsap','qbo-default-workspace'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   if (tool === 'batch') {
@@ -24881,6 +24916,9 @@ function qboOpenTool(tool) {
     document.getElementById('qbo-pl-workspace').style.display = '';
     plPopulateClients();
     plSetQuickPeriod('last-month');
+  } else if (tool === 'plreport') {
+    document.getElementById('qbo-ws-plreport').style.display = '';
+    qboPLRptQuick('last-month');
   } else if (tool === 'expense') {
     document.getElementById('qbo-expense-workspace').style.display = '';
     // Repopulate vendor and account dropdowns with live data
@@ -25226,6 +25264,184 @@ function qboFmtMoney(val) {
   const n = parseFloat(val);
   if (isNaN(n)) return val;
   return (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── P&L Report Workspace ───────────────────────────────────────────
+
+function qboPLRptQuick(preset) {
+  const today = new Date();
+  let s, e;
+  if (preset === 'this-month') {
+    s = new Date(today.getFullYear(), today.getMonth(), 1);
+    e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  } else if (preset === 'last-month') {
+    s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    e = new Date(today.getFullYear(), today.getMonth(), 0);
+  } else if (preset === 'this-quarter') {
+    const q = Math.floor(today.getMonth() / 3) * 3;
+    s = new Date(today.getFullYear(), q, 1);
+    e = new Date(today.getFullYear(), q + 3, 0);
+  } else if (preset === 'last-quarter') {
+    const q = Math.floor(today.getMonth() / 3) * 3 - 3;
+    s = new Date(today.getFullYear(), q, 1);
+    e = new Date(today.getFullYear(), q + 3, 0);
+  } else if (preset === 'this-year') {
+    s = new Date(today.getFullYear(), 0, 1);
+    e = today;
+  } else if (preset === 'last-year') {
+    s = new Date(today.getFullYear() - 1, 0, 1);
+    e = new Date(today.getFullYear() - 1, 11, 31);
+  }
+  const fmt = d => d.toISOString().slice(0, 10);
+  document.getElementById('qbo-pl-rpt-start').value = fmt(s);
+  document.getElementById('qbo-pl-rpt-end').value = fmt(e);
+}
+
+async function qboPLRptRun() {
+  const startDate = document.getElementById('qbo-pl-rpt-start').value;
+  const endDate = document.getElementById('qbo-pl-rpt-end').value;
+  if (!startDate || !endDate) { alert('Select a date range'); return; }
+  const showPct = document.getElementById('qbo-pl-rpt-pct').checked;
+  const byClass = document.getElementById('qbo-pl-rpt-class').checked;
+  const statusEl = document.getElementById('qbo-pl-rpt-status');
+  const output = document.getElementById('qbo-pl-rpt-output');
+  statusEl.textContent = 'Loading…';
+  output.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-d);font-size:12px;">Fetching P&L…</div>';
+
+  try {
+    const payload = { startDate, endDate, reportType: 'summary' };
+    if (byClass) payload.summarize_column_by = 'Class';
+    const resp = await authFetch(ARK_SERVER + '/qbo/api', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId: qboActiveRealmId }),
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    statusEl.textContent = startDate + ' → ' + endDate;
+    qboPLRptRender(data.report, output, showPct, byClass);
+    qboLog('info', 'P&L Report loaded for ' + startDate + ' → ' + endDate + (byClass ? ' (by class)' : ''));
+  } catch (e) {
+    output.innerHTML = `<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px;">${e.message}</div>`;
+    statusEl.textContent = 'Error';
+  }
+}
+
+function qboPLRptRender(report, container, showPct, byClass) {
+  const rows = report?.Rows?.Row || [];
+  const cols = (report?.Columns?.Column || []).map(c => c.ColTitle);
+  const colCount = cols.length;
+
+  // Build column header row
+  let html = '<div style="padding:12px 16px;">';
+
+  // Column headers
+  if (colCount > 1) {
+    html += '<div style="display:flex;padding:6px 8px;border-bottom:2px solid var(--border);margin-bottom:4px;">';
+    html += '<span style="flex:1;font-size:11px;font-weight:700;color:var(--text-d);"></span>';
+    for (let i = 1; i < colCount; i++) {
+      html += `<span style="width:${byClass ? 110 : 120}px;text-align:right;font-size:10px;font-weight:700;color:var(--text-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
+    }
+    html += '</div>';
+  }
+
+  // Determine income total for % calculation
+  let incomeTotal = 0;
+  if (showPct) {
+    for (const section of rows) {
+      const headerLabel = section.Header?.ColData?.[0]?.value || '';
+      if (headerLabel.toLowerCase().includes('income') && !headerLabel.toLowerCase().includes('other') && !headerLabel.toLowerCase().includes('net')) {
+        const sumVals = section.Summary?.ColData || [];
+        // Use the total column (last numeric column, or column index 1 for single-column)
+        const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
+        if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
+        break;
+      }
+    }
+    // Fallback: look for "Total Income" in summary rows
+    if (!incomeTotal) {
+      for (const section of rows) {
+        const sumLabel = section.Summary?.ColData?.[0]?.value || '';
+        if (sumLabel.toLowerCase().includes('total income') || sumLabel.toLowerCase() === 'gross profit') {
+          const sumVals = section.Summary?.ColData || [];
+          const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
+          if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
+          break;
+        }
+      }
+    }
+  }
+
+  for (const section of rows) {
+    if (section.Header) {
+      const headerVal = section.Header.ColData?.map(c => c.value) || [];
+      html += `<div style="font-size:13px;font-weight:700;color:var(--text);padding:10px 0 4px;border-bottom:2px solid var(--border);margin-top:12px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        ${headerVal[0] || 'Section'} <span style="float:right;font-size:11px;opacity:.5;">click to toggle</span></div>`;
+      html += '<div>';
+      html += qboPLRptRenderRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass);
+      if (section.Summary) {
+        html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, true);
+      }
+      html += '</div>';
+    } else if (section.Summary) {
+      // Grand total row (e.g., Net Income)
+      html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, false, true);
+    }
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotal, byClass) {
+  let html = '';
+  const indent = depth * 16;
+  for (const row of rows) {
+    if (row.type === 'Data' && row.ColData) {
+      const vals = row.ColData.map(c => c.value);
+      html += `<div style="display:flex;padding:3px 8px 3px ${8 + indent}px;font-size:12px;color:var(--text);">`;
+      html += `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${vals[0] || ''}</span>`;
+      for (let i = 1; i < vals.length; i++) {
+        const money = qboFmtMoney(vals[i]);
+        html += `<span style="width:${byClass ? 110 : 120}px;text-align:right;font-family:'DM Mono',monospace;color:var(--text-d);font-size:11px;">${money}`;
+        if (showPct && incomeTotal) {
+          const pct = (parseFloat(vals[i]) || 0) / incomeTotal * 100;
+          html += `<span style="font-size:9px;color:var(--text-d);opacity:.6;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+        }
+        html += '</span>';
+      }
+      html += '</div>';
+    } else if (row.Header) {
+      const headerVals = row.Header.ColData?.map(c => c.value) || [];
+      html += `<div style="font-size:12px;font-weight:600;padding:6px 8px 2px ${8 + indent}px;color:var(--text);cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
+      html += '<div>';
+      html += qboPLRptRenderRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass);
+      if (row.Summary) {
+        html += qboPLRptSummaryRow(row.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, true);
+      }
+      html += '</div>';
+    }
+  }
+  return html;
+}
+
+function qboPLRptSummaryRow(colData, colCount, showPct, incomeTotal, byClass, isSection, isGrand) {
+  const vals = colData.map(c => c.value);
+  const border = isGrand ? '3px double var(--border)' : '2px solid var(--border)';
+  const fontSize = isGrand ? '13px' : '12px';
+  const pad = isGrand ? '10px 8px' : '6px 8px';
+  const mt = isGrand ? '16px' : '4px';
+  let html = `<div style="display:flex;padding:${pad};font-weight:700;font-size:${fontSize};border-top:${border};margin-top:${mt};">`;
+  html += `<span style="flex:1;">${vals[0] || ''}</span>`;
+  for (let i = 1; i < vals.length; i++) {
+    const money = qboFmtMoney(vals[i]);
+    html += `<span style="width:${byClass ? 110 : 120}px;text-align:right;font-family:'DM Mono',monospace;">${money}`;
+    if (showPct && incomeTotal) {
+      const pct = (parseFloat(vals[i]) || 0) / incomeTotal * 100;
+      html += `<span style="font-size:9px;opacity:.6;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+    }
+    html += '</span>';
+  }
+  html += '</div>';
+  return html;
 }
 
 // ── AR Aging Workspace ─────────────────────────────────────────────
