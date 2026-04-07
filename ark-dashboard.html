@@ -14608,14 +14608,16 @@ async function tcPopulateEmployees(){
 }
 
 function tcLoadEmployee(){
-  const empId = document.getElementById('tc-emp-select').value;
+  const empId = document.getElementById('tc-emp-select')?.value;
   tcCurrentUser = empId||null;
+  const emptyEl = document.getElementById('tc-summary-empty');
+  const wrapEl = document.getElementById('tc-timecard-wrap');
   if(!empId){
-    document.getElementById('tc-summary-empty').style.display='';
-    document.getElementById('tc-timecard-wrap').style.display='none';
+    if(emptyEl) emptyEl.style.display='';
+    if(wrapEl) wrapEl.style.display='none';
     return;
   }
-  document.getElementById('tc-summary-empty').style.display='none';
+  if(emptyEl) emptyEl.style.display='none';
   tcRenderTimecard(empId);
 }
 
