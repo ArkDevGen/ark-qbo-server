@@ -6459,6 +6459,7 @@ function _buildDBPayload() {
     meetings:       DB.meetings||[],
     notebooks:      DB.notebooks||[],
     notebookEntries:DB.notebookEntries||[],
+    projectGroups:  DB.projectGroups||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -6494,6 +6495,7 @@ function _applyDBPayload(saved) {
     meetings:       saved.meetings       || [],
     notebooks:      saved.notebooks      || [],
     notebookEntries:saved.notebookEntries|| [],
+    projectGroups:  saved.projectGroups  || [],
   });
 }
 
@@ -18332,6 +18334,8 @@ function tcSaveTask(){
     reviewStatus: existing?.reviewStatus || null,
     reviewTaskId: existing?.reviewTaskId || null,
     parentTaskId: existing?.parentTaskId || null,
+    type:         existing?.type || 'task',
+    parentId:     existing?.parentId || null,
   };
 
   if(!DB.tasks) DB.tasks = [];
