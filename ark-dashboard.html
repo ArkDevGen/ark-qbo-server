@@ -2451,17 +2451,47 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     </div><!-- /tc-tasks-panel -->
 
-    <!-- Notes panel (hidden by default) -->
+    <!-- Notes/Notebooks panel (hidden by default) -->
     <div id="tc-notes-panel" style="display:none;">
-      <div style="display:flex;gap:10px;margin-bottom:16px;">
-        <input type="text" id="notes-search" class="field-input" placeholder="Search notes..." oninput="notesRender()" style="flex:1;max-width:300px;">
-        <select id="notes-group-by" class="field-input" onchange="notesRender()" style="width:160px;">
-          <option value="project">Group by Project</option>
-          <option value="client">Group by Client</option>
-          <option value="none">No Grouping</option>
-        </select>
+      <div style="display:flex;gap:0;min-height:calc(100vh - 280px);">
+
+        <!-- Notebook sidebar -->
+        <div style="width:200px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">
+          <div style="padding:0 12px 10px;">
+            <button class="btn btn-sm" onclick="nbOpenCreateModal()" style="width:100%;font-size:11px;">+ New Notebook</button>
+          </div>
+          <div class="tc-proj-item active" data-nb="all" onclick="nbSelectNotebook('all')" style="padding:6px 12px;">
+            <span class="icon">📚</span><span class="label">All Notes</span>
+            <span class="count" id="nb-count-all">0</span>
+          </div>
+          <div id="nb-notebook-list" style="overflow-y:auto;max-height:calc(100vh - 380px);"></div>
+        </div>
+
+        <!-- Entries area -->
+        <div style="flex:1;min-width:0;padding:0 0 0 16px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <input type="text" id="nb-search" class="field-input" placeholder="Search notes..." oninput="nbRenderEntries()" style="flex:1;max-width:280px;">
+            <span id="nb-current-name" style="font-size:14px;font-weight:600;color:var(--navy);margin-left:auto;"></span>
+            <button class="btn btn-primary btn-sm" onclick="nbNewEntry()" id="nb-new-entry-btn">+ New Note</button>
+          </div>
+
+          <!-- Entry editor (hidden by default) -->
+          <div id="nb-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+            <input type="text" id="nb-entry-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;">
+            <textarea id="nb-entry-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;"></textarea>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+              <span id="nb-entry-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
+              <button class="btn btn-ghost btn-sm" onclick="nbCancelEdit()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="nbSaveEntry()">Save</button>
+            </div>
+            <input type="hidden" id="nb-entry-id">
+          </div>
+
+          <!-- Entry list -->
+          <div id="nb-entries-list"></div>
+        </div>
+
       </div>
-      <div id="notes-list"></div>
     </div>
 
     </div><!-- /tc-content -->
@@ -6411,6 +6441,8 @@ function _buildDBPayload() {
     leads:          DB.leads||[],
     tasks:          DB.tasks||[],
     meetings:       DB.meetings||[],
+    notebooks:      DB.notebooks||[],
+    notebookEntries:DB.notebookEntries||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -6444,6 +6476,8 @@ function _applyDBPayload(saved) {
     leads:          saved.leads          || [],
     tasks:          saved.tasks          || [],
     meetings:       saved.meetings       || [],
+    notebooks:      saved.notebooks      || [],
+    notebookEntries:saved.notebookEntries|| [],
   });
 }
 
@@ -18959,7 +18993,7 @@ function tcSelectView(view) {
   document.getElementById('tc-notes-panel').style.display = isNotes ? '' : 'none';
 
   if (isNotes) {
-    notesRender();
+    nbInit();
   } else {
     // Set status filter based on view
     const statusSel = document.getElementById('tc-filter-status');
@@ -18996,7 +19030,10 @@ function tcBuildProjectSidebar() {
   const cOverdue = open.filter(t => t.dueDate < todayStr).length;
   const cToday = open.filter(t => t.dueDate === todayStr).length;
   const cUpcoming = open.length;
-  const cNotes = myTasks.filter(t => !t.dueDate && t.status !== 'completed').length;
+  // Notes count from notebook entries (not tasks)
+  const myNotebooks = (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
+  const myNbIds = myNotebooks.map(n => n.id);
+  const cNotes = (DB.notebookEntries||[]).filter(e => myNbIds.includes(e.notebookId)).length;
 
   // Projects: group by client
   const projects = {};
@@ -19040,6 +19077,282 @@ function tcBuildProjectSidebar() {
     '';
 }
 
+// ══════════════════════════════════════════════
+//  NOTEBOOK SYSTEM
+// ══════════════════════════════════════════════
+let _nbActiveNotebook = 'all';
+let _nbEditingEntryId = null;
+
+function nbInit() {
+  if (!DB.notebooks) DB.notebooks = [];
+  if (!DB.notebookEntries) DB.notebookEntries = [];
+  // Auto-migrate no-date tasks to notebooks on first use
+  if (!DB.notebooks.length && (DB.tasks||[]).some(t => !t.dueDate && t.status !== 'completed')) {
+    nbMigrateFromTasks();
+  }
+  nbRenderNotebooks();
+  nbRenderEntries();
+}
+
+function nbMigrateFromTasks() {
+  const noDateTasks = (DB.tasks||[]).filter(t => !t.dueDate && t.status !== 'completed' && t.amId === (currentUser?.id || ''));
+  if (!noDateTasks.length) return;
+  // Group by _project
+  const groups = {};
+  noDateTasks.forEach(t => {
+    const proj = t._project || t.clientName || 'General';
+    if (!groups[proj]) groups[proj] = [];
+    groups[proj].push(t);
+  });
+  for (const [projName, tasks] of Object.entries(groups)) {
+    const nbId = uid();
+    DB.notebooks.push({
+      id: nbId, name: projName, userId: currentUser?.id || '',
+      clientId: tasks[0]?.clientId || '', color: '',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    tasks.forEach(t => {
+      DB.notebookEntries.push({
+        id: uid(), notebookId: nbId, title: t.name,
+        content: t.notes || '', createdAt: t.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(), createdBy: t.createdBy || '',
+      });
+    });
+  }
+  saveDB();
+  console.log(`Migrated ${noDateTasks.length} notes into ${Object.keys(groups).length} notebooks`);
+}
+
+function nbMyNotebooks() {
+  return (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
+}
+
+function nbMyEntries(notebookId) {
+  const nbs = nbMyNotebooks().map(n => n.id);
+  let entries = (DB.notebookEntries||[]).filter(e => nbs.includes(e.notebookId));
+  if (notebookId && notebookId !== 'all') entries = entries.filter(e => e.notebookId === notebookId);
+  return entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+}
+
+function nbRenderNotebooks() {
+  const list = document.getElementById('nb-notebook-list');
+  if (!list) return;
+  const notebooks = nbMyNotebooks();
+  const entryCounts = {};
+  (DB.notebookEntries||[]).forEach(e => { entryCounts[e.notebookId] = (entryCounts[e.notebookId]||0) + 1; });
+  const totalEntries = nbMyEntries('all').length;
+  document.getElementById('nb-count-all').textContent = totalEntries;
+
+  list.innerHTML = notebooks.sort((a,b) => a.name.localeCompare(b.name)).map(nb => {
+    const count = entryCounts[nb.id] || 0;
+    const client = nb.clientId ? (DB.clients||[]).find(c => c.id === nb.clientId) : null;
+    const active = _nbActiveNotebook === nb.id;
+    return `<div class="tc-proj-item${active?' active':''}" data-nb="${nb.id}" onclick="nbSelectNotebook('${nb.id}')" style="padding:6px 12px;">
+      <span class="icon">📓</span>
+      <span class="label" title="${nb.name}${client ? ' — '+client.biz : ''}">${nb.name}</span>
+      <span class="count">${count}</span>
+    </div>`;
+  }).join('');
+
+  // Update sidebar All Notes active state
+  document.querySelector('[data-nb="all"]')?.classList.toggle('active', _nbActiveNotebook === 'all');
+}
+
+function nbSelectNotebook(id) {
+  _nbActiveNotebook = id;
+  nbRenderNotebooks();
+  nbRenderEntries();
+  nbCancelEdit();
+  const nb = nbMyNotebooks().find(n => n.id === id);
+  document.getElementById('nb-current-name').textContent = id === 'all' ? 'All Notes' : (nb?.name || '');
+}
+
+function nbRenderEntries() {
+  const container = document.getElementById('nb-entries-list');
+  if (!container) return;
+  const search = (document.getElementById('nb-search')?.value || '').toLowerCase();
+  let entries = nbMyEntries(_nbActiveNotebook);
+  if (search) entries = entries.filter(e => `${e.title} ${e.content}`.toLowerCase().includes(search));
+
+  if (!entries.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-d);font-size:13px;">No notes yet. Click "+ New Note" to create one.</div>';
+    return;
+  }
+
+  container.innerHTML = entries.map(e => {
+    const nb = (DB.notebooks||[]).find(n => n.id === e.notebookId);
+    const preview = (e.content || '').substring(0, 120).replace(/\n/g, ' ');
+    const date = e.updatedAt ? new Date(e.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return `<div style="padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;background:var(--surface);cursor:pointer;transition:all .15s;" onclick="nbEditEntry('${e.id}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='var(--surface)'">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;">${e.title || 'Untitled'}</span>
+        <span style="font-size:10px;color:var(--text-d);">${date}</span>
+        ${_nbActiveNotebook === 'all' && nb ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text-d);">${nb.name}</span>` : ''}
+        <button onclick="event.stopPropagation();nbDeleteEntry('${e.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;opacity:.4;">×</button>
+      </div>
+      ${preview ? `<div style="font-size:12px;color:var(--text-d);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${preview}${e.content?.length > 120 ? '…' : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function nbNewEntry() {
+  _nbEditingEntryId = null;
+  document.getElementById('nb-entry-id').value = '';
+  document.getElementById('nb-entry-title').value = '';
+  document.getElementById('nb-entry-content').value = '';
+  document.getElementById('nb-entry-meta').textContent = '';
+  document.getElementById('nb-editor').style.display = '';
+  document.getElementById('nb-entry-title').focus();
+}
+
+function nbEditEntry(id) {
+  const entry = (DB.notebookEntries||[]).find(e => e.id === id);
+  if (!entry) return;
+  _nbEditingEntryId = id;
+  document.getElementById('nb-entry-id').value = id;
+  document.getElementById('nb-entry-title').value = entry.title || '';
+  document.getElementById('nb-entry-content').value = entry.content || '';
+  const date = entry.updatedAt ? new Date(entry.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  document.getElementById('nb-entry-meta').textContent = `Last edited ${date}${entry.createdBy ? ' by ' + entry.createdBy : ''}`;
+  document.getElementById('nb-editor').style.display = '';
+  document.getElementById('nb-entry-title').focus();
+}
+
+function nbSaveEntry() {
+  const title = document.getElementById('nb-entry-title').value.trim();
+  const content = document.getElementById('nb-entry-content').value;
+  if (!title) { alert('Title is required'); return; }
+
+  // Determine which notebook to save to
+  let notebookId = _nbActiveNotebook !== 'all' ? _nbActiveNotebook : '';
+  if (!notebookId) {
+    // If viewing All Notes, use the first notebook or create a default
+    const notebooks = nbMyNotebooks();
+    if (notebooks.length) {
+      notebookId = notebooks[0].id;
+    } else {
+      notebookId = uid();
+      DB.notebooks.push({
+        id: notebookId, name: 'General', userId: currentUser?.id || '',
+        clientId: '', color: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  const existingId = document.getElementById('nb-entry-id').value;
+  if (existingId) {
+    // Update
+    const entry = (DB.notebookEntries||[]).find(e => e.id === existingId);
+    if (entry) {
+      entry.title = title;
+      entry.content = content;
+      entry.updatedAt = new Date().toISOString();
+    }
+  } else {
+    // Create
+    DB.notebookEntries.push({
+      id: uid(), notebookId, title, content,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : '',
+    });
+  }
+
+  saveDB();
+  nbCancelEdit();
+  nbRenderNotebooks();
+  nbRenderEntries();
+}
+
+function nbCancelEdit() {
+  document.getElementById('nb-editor').style.display = 'none';
+  _nbEditingEntryId = null;
+}
+
+function nbDeleteEntry(id) {
+  if (!confirm('Delete this note?')) return;
+  DB.notebookEntries = (DB.notebookEntries||[]).filter(e => e.id !== id);
+  saveDB();
+  nbRenderNotebooks();
+  nbRenderEntries();
+}
+
+// ── Notebook CRUD ──
+function nbOpenCreateModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="card" style="width:400px;padding:0;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">New Notebook</div>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Notebook Name</label>
+        <input type="text" id="nb-create-name" class="field-input" placeholder="e.g. Meeting Notes, Procedures..." style="width:100%;" autofocus>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Link to Client (optional)</label>
+        <div style="position:relative;">
+          <input type="text" id="nb-create-client-search" class="field-input" placeholder="Search clients..." autocomplete="off" oninput="nbCreateClientFilter()" onfocus="nbCreateClientFilter()" style="width:100%;">
+          <input type="hidden" id="nb-create-client-id">
+          <div id="nb-create-client-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:150px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('[style*=fixed]').remove()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="nbCreateNotebook()">Create</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('nb-create-name')?.focus(), 100);
+}
+
+function nbCreateClientFilter() {
+  const q = (document.getElementById('nb-create-client-search')?.value || '').toLowerCase();
+  const dd = document.getElementById('nb-create-client-dd');
+  const clients = (DB.clients||[]).filter(c => !q || c.biz.toLowerCase().includes(q)).sort((a,b) => a.biz.localeCompare(b.biz)).slice(0, 8);
+  if (!clients.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = '<div onmousedown="event.preventDefault();document.getElementById(\'nb-create-client-id\').value=\'\';document.getElementById(\'nb-create-client-search\').value=\'\';document.getElementById(\'nb-create-client-dd\').style.display=\'none\';" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text-d);border-bottom:1px solid var(--border);">— No Client —</div>' +
+    clients.map(c => `<div onmousedown="event.preventDefault();document.getElementById('nb-create-client-id').value='${c.id}';document.getElementById('nb-create-client-search').value='${c.biz.replace(/'/g,"\\'")}';document.getElementById('nb-create-client-dd').style.display='none';" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}</div>`).join('');
+  document.getElementById('nb-create-client-search').onblur = () => setTimeout(() => { dd.style.display = 'none'; }, 200);
+}
+
+function nbCreateNotebook() {
+  const name = document.getElementById('nb-create-name')?.value.trim();
+  if (!name) { alert('Name is required'); return; }
+  const clientId = document.getElementById('nb-create-client-id')?.value || '';
+
+  const id = uid();
+  if (!DB.notebooks) DB.notebooks = [];
+  DB.notebooks.push({
+    id, name, userId: currentUser?.id || '', clientId, color: '',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  });
+  saveDB();
+
+  // Close modal
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+
+  nbSelectNotebook(id);
+  nbRenderNotebooks();
+  showToast('Notebook "' + name + '" created');
+}
+
+function nbDeleteNotebook(id) {
+  const nb = (DB.notebooks||[]).find(n => n.id === id);
+  if (!nb) return;
+  if (!confirm(`Delete notebook "${nb.name}" and all its notes?`)) return;
+  DB.notebooks = DB.notebooks.filter(n => n.id !== id);
+  DB.notebookEntries = (DB.notebookEntries||[]).filter(e => e.notebookId !== id);
+  saveDB();
+  nbSelectNotebook('all');
+  nbRenderNotebooks();
+  showToast('Notebook deleted');
+}
+
+// Legacy compatibility
 function notesRender() {
   const search = (document.getElementById('notes-search')?.value || '').toLowerCase();
   const fClient = document.getElementById('notes-filter-client')?.value || '';
@@ -19136,33 +19449,7 @@ document.addEventListener('click', (e) => {
 });
 
 function tcAddProject() {
-  const name = prompt('Project name:');
-  if (!name || !name.trim()) return;
-
-  // Check if it matches a client
-  const clients = (DB.clients || []).sort((a, b) => a.biz.localeCompare(b.biz));
-  const match = clients.find(c => c.biz.toLowerCase() === name.trim().toLowerCase());
-
-  if (match) {
-    // Client exists — just navigate to it
-    tcSelectView('project:' + match.id);
-    return;
-  }
-
-  // Create a placeholder task for this project so it appears in the sidebar
-  if (!DB.tasks) DB.tasks = [];
-  const id = uid();
-  DB.tasks.push({
-    id, name: name.trim() + ' — Project', notes: 'Project placeholder',
-    clientId: '', clientName: name.trim(), amId: currentUser?.id || '',
-    category: 'Other', dueDate: '', priority: 'medium', recurring: false,
-    recurFreq: null, showDaysAdvance: 3, status: 'open', noteLog: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '',
-  });
-  saveDB();
-  tcRender();
-  showToast('Project "' + name.trim() + '" created');
+  nbOpenCreateModal();
 }
 
 // ── View Switching ──────────────────────────────────────────────
