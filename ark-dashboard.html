@@ -2453,7 +2453,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- Notes/Notebooks panel (hidden by default) -->
     <div id="tc-notes-panel" style="display:none;">
-      <div style="display:flex;gap:0;min-height:calc(100vh - 280px);">
+      <div style="display:flex;gap:0;min-height:calc(100vh - 280px);max-width:100%;overflow:hidden;">
 
         <!-- Notebook sidebar -->
         <div style="width:200px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">
@@ -2468,7 +2468,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
         <!-- Entries area -->
-        <div style="flex:1;min-width:0;padding:0 0 0 16px;">
+        <div style="flex:1;min-width:0;padding:0 0 0 16px;overflow:hidden;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
             <input type="text" id="nb-search" class="field-input" placeholder="Search notes..." oninput="nbRenderEntries()" style="flex:1;max-width:280px;">
             <span id="nb-current-name" style="font-size:14px;font-weight:600;color:var(--navy);margin-left:auto;"></span>
