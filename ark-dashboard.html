@@ -1838,7 +1838,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div id="tc-manual-preview" style="font-size:12px;color:var(--text-d);min-height:18px;margin-bottom:8px;text-align:center;"></div>
               <button onclick="tcManualEntry()"
                 style="width:100%;padding:11px;background:var(--navy);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:'DM Sans',sans-serif;transition:all .15s;"
-                onmouseover="this.style.background='var(--navy-mid)'" onmouseout="this.style.background='var(--navy)'">
+                onmouseover="this.style.background='#243058'" onmouseout="this.style.background='var(--navy)'">
                 + Save Shift
               </button>
               <div style="font-size:11px;color:var(--text-d);margin-top:6px;text-align:center;">
@@ -2149,7 +2149,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:stretch;">
             <button onclick="ccSendFax()"
               style="padding:10px;background:var(--navy);border:none;color:#fff;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700;font-family:'DM Sans',sans-serif;transition:all .15s;"
-              onmouseover="this.style.background='var(--navy-mid)'" onmouseout="this.style.background='var(--navy)'">
+              onmouseover="this.style.background='#243058'" onmouseout="this.style.background='var(--navy)'">
               📠 Send Fax
             </button>
             <button onclick="ccResetFaxForm(true)"
@@ -14730,8 +14730,8 @@ function tcRenderTimecard(empId){
   const {start, end} = tcCurrentPeriod;
   const rows  = tcBuildPairs(empId, start, end);
   const stats = tcCalcOT(rows, start);
-  const user  = (DB.users||[]).find(u=>u.id===empId);
-  const name  = user ? `${user.fname} ${user.lname||''}`.trim() : empId;
+  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
+  const name  = user ? `${user.fname||user.userName||''} ${user.lname||''}`.trim() : empId;
 
   // PTO entries for this period
   const periodStartStr = start.toISOString().slice(0,10);
@@ -14911,8 +14911,8 @@ function tcPrintTimecard(){
   const {start, end, payday} = tcCurrentPeriod;
   const rows  = tcBuildPairs(empId, start, end);
   const stats = tcCalcOT(rows, start);
-  const user  = (DB.users||[]).find(u=>u.id===empId);
-  const name  = user ? `${user.fname} ${user.lname||''}`.trim() : empId;
+  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
+  const name  = user ? `${user.fname||user.userName||''} ${user.lname||''}`.trim() : empId;
   const ptoP   = ((DB.timePTO||{})[empId]||[]).filter(p=>p.date>=start.toISOString().slice(0,10)&&p.date<=end.toISOString().slice(0,10));
   const totalPTOP = ptoP.reduce((s,p)=>s+p.hours,0);
   const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -16966,7 +16966,7 @@ function nhRenderQueueBanner(byState){
       <div style="display:flex;gap:8px;align-items:center;padding-top:2px;">
         <button onclick="nhRunScheduler(true)"
           style="padding:8px 16px;background:var(--navy);border:1px solid var(--navy-mid);border-radius:var(--radius);color:#fff;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;"
-          onmouseover="this.style.background='var(--navy-mid)'" onmouseout="this.style.background='var(--navy)'">
+          onmouseover="this.style.background='#243058'" onmouseout="this.style.background='var(--navy)'">
           📠 Send Now
         </button>
       </div>
