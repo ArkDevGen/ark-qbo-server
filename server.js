@@ -4785,9 +4785,17 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   const yyyy = d.getFullYear();
-  // Append store ID to DocNumber if classed (so classed stores in same QBO company have unique DocNumbers)
-  // QBO DocNumber max length is 21 characters. "03.01.2026" = 10, "-1411" = 5, total = 15 (safe)
-  const classSuffix = className && storeId ? '-' + storeId : '';
+  // Append letter suffix for classed stores (so classed stores in same QBO company have unique DocNumbers)
+  // Uses alphabetical letter based on store position in franchise config: A, B, C...
+  let classSuffix = '';
+  if (className && storeId) {
+    const franchiseInfo = FRANCHISE_MAP[franchiseKey];
+    if (franchiseInfo) {
+      const storeIds = Object.keys(franchiseInfo.stores || {});
+      const idx = storeIds.indexOf(storeId);
+      classSuffix = '-' + String.fromCharCode(65 + (idx >= 0 ? idx : 0)); // A, B, C...
+    }
+  }
   const journalNo = grossSales === 0 ? `${mm}.${dd}.${yyyy}-ND${classSuffix}` : `${mm}.${dd}.${yyyy}${classSuffix}`;
   const journalDate = `${mm}/${dd}/${yyyy}`;
 
