@@ -2361,7 +2361,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" onclick="tdImportOpen()" style="font-size:11px;">📥 Import</button>
         <button class="btn btn-ghost btn-sm" onclick="tcAddProject()" style="font-size:11px;">+ Project</button>
-        <button class="btn btn-primary btn-sm" onclick="tcOpenNew()">+ New Task</button>
+        <div style="position:relative;display:inline-block;">
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New Task ▾</button>
+          <div id="tc-newtask-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:200px;z-index:999;">
+            <div onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNew()" style="padding:10px 16px;font-size:12px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">📝 New Task (for me)</div>
+            <div id="tc-send-task-list" style="max-height:250px;overflow-y:auto;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -18828,6 +18834,7 @@ async function tcRender(){
   }
   if(typeof tcRenderSmartBanner === 'function') tcRenderSmartBanner();
   if(typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  if(typeof tcPopulateSendList === 'function') tcPopulateSendList();
 }
 
 function tcTaskCard(t, today, todayStr){
@@ -19096,6 +19103,37 @@ function notesRender() {
       }).join('')}
     </div>`).join('');
 }
+
+function tcPopulateSendList() {
+  const list = document.getElementById('tc-send-task-list');
+  if (!list) return;
+  const users = (_cachedServerUsers || []).filter(u => !currentUser || u.id !== currentUser.id);
+  list.innerHTML = users.length
+    ? '<div style="padding:6px 16px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Send task to...</div>' +
+      users.map(u => `<div onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNewFor('${u.id}')"
+        style="padding:8px 16px;font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        📤 ${u.fname || u.userName || ''} ${u.lname || ''}
+      </div>`).join('')
+    : '';
+}
+
+function tcOpenNewFor(userId) {
+  tcOpenNew();
+  // Pre-select the target user in the Assigned To dropdown
+  setTimeout(() => {
+    const sel = document.getElementById('tc-am');
+    if (sel) sel.value = userId;
+  }, 100);
+}
+
+// Close new task menu when clicking outside
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('tc-newtask-menu');
+  if (menu && !e.target.closest('[onclick*="tc-newtask-menu"]') && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
 
 function tcAddProject() {
   const name = prompt('Project name:');
