@@ -19310,7 +19310,7 @@ function nbOpenCreateModal() {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
   overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-  overlay.innerHTML = `<div class="card" style="width:400px;padding:0;">
+  overlay.innerHTML = `<div class="card" style="width:400px;padding:0;overflow:visible;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:15px;font-weight:700;color:var(--navy);">New Notebook</div>
     </div>
