@@ -2453,45 +2453,26 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- Notes/Notebooks panel (hidden by default) -->
     <div id="tc-notes-panel" style="display:none;">
-      <div style="display:flex;gap:0;min-height:calc(100vh - 280px);max-width:100%;overflow:hidden;">
-
-        <!-- Notebook sidebar -->
-        <div style="width:200px;flex-shrink:0;border-right:1px solid var(--border);padding:12px 0;">
-          <div style="padding:0 12px 10px;">
-            <button class="btn btn-sm" onclick="nbOpenCreateModal()" style="width:100%;font-size:11px;">+ New Notebook</button>
-          </div>
-          <div class="tc-proj-item active" data-nb="all" onclick="nbSelectNotebook('all')" style="padding:6px 12px;">
-            <span class="icon">📚</span><span class="label">All Notes</span>
-            <span class="count" id="nb-count-all">0</span>
-          </div>
-          <div id="nb-notebook-list" style="overflow-y:auto;max-height:calc(100vh - 380px);"></div>
-        </div>
-
-        <!-- Entries area -->
-        <div style="flex:1;min-width:0;padding:0 0 0 16px;overflow:hidden;word-break:break-word;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-            <input type="text" id="nb-search" class="field-input" placeholder="Search notes..." oninput="nbRenderEntries()" style="flex:1;max-width:280px;">
-            <span id="nb-current-name" style="font-size:14px;font-weight:600;color:var(--navy);margin-left:auto;"></span>
-            <button class="btn btn-primary btn-sm" onclick="nbNewEntry()" id="nb-new-entry-btn">+ New Note</button>
-          </div>
-
-          <!-- Entry editor (hidden by default) -->
-          <div id="nb-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
-            <input type="text" id="nb-entry-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;">
-            <textarea id="nb-entry-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;"></textarea>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-              <span id="nb-entry-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
-              <button class="btn btn-ghost btn-sm" onclick="nbCancelEdit()">Cancel</button>
-              <button class="btn btn-primary btn-sm" onclick="nbSaveEntry()">Save</button>
-            </div>
-            <input type="hidden" id="nb-entry-id">
-          </div>
-
-          <!-- Entry list -->
-          <div id="nb-entries-list"></div>
-        </div>
-
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <input type="text" id="nb-search" class="field-input" placeholder="Search notes..." oninput="nbRenderEntries()" style="flex:1;max-width:280px;">
+        <span id="nb-current-name" style="font-size:14px;font-weight:600;color:var(--navy);margin-left:auto;"></span>
+        <button class="btn btn-primary btn-sm" onclick="nbNewEntry()" id="nb-new-entry-btn">+ New Note</button>
       </div>
+
+      <!-- Entry editor (hidden by default) -->
+      <div id="nb-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <input type="text" id="nb-entry-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;width:100%;box-sizing:border-box;">
+        <textarea id="nb-entry-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;width:100%;box-sizing:border-box;"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <span id="nb-entry-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
+          <button class="btn btn-ghost btn-sm" onclick="nbCancelEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="nbSaveEntry()">Save</button>
+        </div>
+        <input type="hidden" id="nb-entry-id">
+      </div>
+
+      <!-- Entry list -->
+      <div id="nb-entries-list" style="word-break:break-word;"></div>
     </div>
 
     </div><!-- /tc-content -->
@@ -18991,11 +18972,22 @@ function tcSelectView(view) {
   const isNotes = view === 'notes';
   document.getElementById('tc-tasks-panel').style.display = isNotes ? 'none' : '';
   document.getElementById('tc-notes-panel').style.display = isNotes ? '' : 'none';
-  // Hide project sidebar when notes is active (notebook sidebar replaces it)
-  const projSidebar = document.getElementById('tc-project-sidebar');
-  if (projSidebar) projSidebar.style.display = isNotes ? 'none' : '';
+  // When notes is active, project sidebar stays visible for navigation
+  // but we don't need to hide it — it has the Notes link to get back
+
+  if (view.startsWith('notebook:')) {
+    // Clicking a specific notebook — switch to notes view with that notebook selected
+    const nbId = view.slice(9);
+    _nbActiveNotebook = nbId;
+    document.getElementById('tc-tasks-panel').style.display = 'none';
+    document.getElementById('tc-notes-panel').style.display = '';
+    nbInit();
+    document.querySelectorAll('.tc-proj-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+    return;
+  }
 
   if (isNotes) {
+    _nbActiveNotebook = 'all';
     nbInit();
   } else {
     // Set status filter based on view
@@ -19077,7 +19069,18 @@ function tcBuildProjectSidebar() {
     clientProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
     (personalProjects.length ? '<div class="tc-proj-section">Personal</div>' : '') +
     personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
-    '';
+    // Notebooks section
+    (function() {
+      const notebooks = (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
+      if (!notebooks.length) return '';
+      const entryCounts = {};
+      (DB.notebookEntries||[]).forEach(e => { entryCounts[e.notebookId] = (entryCounts[e.notebookId]||0) + 1; });
+      return '<div class="tc-proj-divider"></div>' +
+        '<div class="tc-proj-section">Notebooks</div>' +
+        notebooks.sort((a,b) => a.name.localeCompare(b.name)).map(nb =>
+          item('notebook:' + nb.id, '📓', nb.name, entryCounts[nb.id] || 0, '')
+        ).join('');
+    })();
 }
 
 // ══════════════════════════════════════════════
@@ -19138,27 +19141,11 @@ function nbMyEntries(notebookId) {
 }
 
 function nbRenderNotebooks() {
-  const list = document.getElementById('nb-notebook-list');
-  if (!list) return;
-  const notebooks = nbMyNotebooks();
-  const entryCounts = {};
-  (DB.notebookEntries||[]).forEach(e => { entryCounts[e.notebookId] = (entryCounts[e.notebookId]||0) + 1; });
-  const totalEntries = nbMyEntries('all').length;
-  document.getElementById('nb-count-all').textContent = totalEntries;
-
-  list.innerHTML = notebooks.sort((a,b) => a.name.localeCompare(b.name)).map(nb => {
-    const count = entryCounts[nb.id] || 0;
-    const client = nb.clientId ? (DB.clients||[]).find(c => c.id === nb.clientId) : null;
-    const active = _nbActiveNotebook === nb.id;
-    return `<div class="tc-proj-item${active?' active':''}" data-nb="${nb.id}" onclick="nbSelectNotebook('${nb.id}')" style="padding:6px 12px;">
-      <span class="icon">📓</span>
-      <span class="label" title="${nb.name}${client ? ' — '+client.biz : ''}">${nb.name}</span>
-      <span class="count">${count}</span>
-    </div>`;
-  }).join('');
-
-  // Update sidebar All Notes active state
-  document.querySelector('[data-nb="all"]')?.classList.toggle('active', _nbActiveNotebook === 'all');
+  // Notebooks are now rendered in the main project sidebar via tcBuildProjectSidebar
+  // Just update the current notebook name display
+  const nb = nbMyNotebooks().find(n => n.id === _nbActiveNotebook);
+  const nameEl = document.getElementById('nb-current-name');
+  if (nameEl) nameEl.textContent = _nbActiveNotebook === 'all' ? 'All Notes' : (nb?.name || '');
 }
 
 function nbSelectNotebook(id) {
