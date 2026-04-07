@@ -14836,10 +14836,8 @@ function tcRenderTimecard(empId){
       <td style="text-align:center;">${weekLabel}</td>
       <td style="font-size:11px;color:var(--text-d);">${loggedAt}${overrideBadge}${enteredByBadge}</td>
       <td><div class="row-actions">
-        ${r.inP?`<button class="btn btn-ghost btn-sm" onclick="tcEditPunch('${empId}','${r.inP.id}')">Edit In</button>`:''}
-        ${r.outP?`<button class="btn btn-ghost btn-sm" onclick="tcEditPunch('${empId}','${r.outP.id}')">Edit Out</button>`:''}
-        ${r.inP?`<button class="btn btn-danger btn-sm" onclick="tcDeletePunch('${empId}','${r.inP.id}')">×</button>`:''}
-        ${r.outP?`<button class="btn btn-danger btn-sm" onclick="tcDeletePunch('${empId}','${r.outP.id}')">×</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="tcEditShift('${empId}','${r.inP?.id||''}','${r.outP?.id||''}','${r.date}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="tcDeleteShift('${empId}','${r.inP?.id||''}','${r.outP?.id||''}')">×</button>
       </div></td>
     </tr>`;
   }).join('');
@@ -14903,6 +14901,49 @@ function tcEditPunch(empId, punchId){
 function tcDeletePunch(empId, punchId){
   if(!confirm('Delete this punch? This cannot be undone.')) return;
   DB.timePunches[empId] = (DB.timePunches[empId]||[]).filter(p=>p.id!==punchId);
+  saveDB();
+  tcRenderTimecard(empId);
+}
+
+function tcEditShift(empId, inId, outId, date) {
+  const punches = DB.timePunches[empId] || [];
+  const inP = inId ? punches.find(x => x.id === inId) : null;
+  const outP = outId ? punches.find(x => x.id === outId) : null;
+
+  const currentIn = inP ? inP.time : '';
+  const currentOut = outP ? outP.time : '';
+
+  const newIn = prompt(`Edit Clock In for ${date}\nCurrent: ${currentIn ? tcFmtTime(currentIn) : 'None'}\n\nEnter new time (HH:MM 24-hour, or leave blank to keep):`, currentIn);
+  if (newIn === null) return;
+
+  const newOut = prompt(`Edit Clock Out for ${date}\nCurrent: ${currentOut ? tcFmtTime(currentOut) : 'None'}\n\nEnter new time (HH:MM 24-hour, or leave blank to keep):`, currentOut);
+  if (newOut === null) return;
+
+  const timeRe = /^\d{1,2}:\d{2}$/;
+  if (newIn.trim() && inP) {
+    if (!timeRe.test(newIn.trim())) { alert('Invalid Clock In time. Use HH:MM'); return; }
+    inP.time = newIn.trim().padStart(5, '0');
+    inP.override = true;
+    inP.loggedAt = new Date().toISOString();
+    inP.enteredBy = tcEnteredBy();
+  }
+  if (newOut.trim() && outP) {
+    if (!timeRe.test(newOut.trim())) { alert('Invalid Clock Out time. Use HH:MM'); return; }
+    outP.time = newOut.trim().padStart(5, '0');
+    outP.override = true;
+    outP.loggedAt = new Date().toISOString();
+    outP.enteredBy = tcEnteredBy();
+  }
+
+  DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  saveDB();
+  tcRenderTimecard(empId);
+}
+
+function tcDeleteShift(empId, inId, outId) {
+  if (!confirm('Delete this shift? This cannot be undone.')) return;
+  const ids = [inId, outId].filter(Boolean);
+  DB.timePunches[empId] = (DB.timePunches[empId] || []).filter(p => !ids.includes(p.id));
   saveDB();
   tcRenderTimecard(empId);
 }
