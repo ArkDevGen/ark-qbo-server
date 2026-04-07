@@ -14421,10 +14421,10 @@ function tcEnteredBy(){
     : currentUser.fname;
 }
 
-function tcInit(){
+async function tcInit(){
   tcCurrentPeriod = tcPeriodFor(new Date());
   tcRenderBanner();
-  tcPopulateEmployees();
+  await tcPopulateEmployees();
   tcSetMode('quick');
 
   // Show admin dropdown or user-specific display
@@ -14598,9 +14598,10 @@ function tcThisPeriod(){
   if(tcCurrentUser) tcRenderTimecard(tcCurrentUser);
 }
 
-function tcPopulateEmployees(){
+async function tcPopulateEmployees(){
   const sel = document.getElementById('tc-emp-select');
-  // Use server users (actual team), fall back to DB.users
+  // Ensure server users are loaded
+  if (!_cachedServerUsers.length) await refreshServerUsersCache();
   const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
   sel.innerHTML = '<option value="">— Select employee —</option>' +
     users.map(u=>`<option value="${u.id}">${u.fname||u.userName||''} ${u.lname||''}</option>`).join('');
