@@ -14971,7 +14971,7 @@ function tcSaveShiftEdit(empId, inId, outId) {
   tcRenderTimecard(empId);
 
   // Close the overlay
-  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  document.getElementById('tc-edit-in')?.closest('[style*="fixed"]')?.remove();
 }
 
 function tcDeleteShift(empId, inId, outId) {
