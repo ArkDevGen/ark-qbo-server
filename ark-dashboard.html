@@ -14378,7 +14378,7 @@ function tcPeriodFor(d){
   const anchor = new Date(TC_ANCHOR_START);
   anchor.setHours(0,0,0,0);
   const target = new Date(d); target.setHours(0,0,0,0);
-  const diff  = Math.floor((target - anchor) / 86400000); // days from anchor start
+  const diff  = Math.round((target - anchor) / 86400000); // days from anchor start (round to avoid DST)
   const block = Math.floor(diff / 14);                    // which 14-day block
   const start = new Date(anchor); start.setDate(anchor.getDate() + block * 14);
   const end   = new Date(start);  end.setDate(start.getDate() + 13);
