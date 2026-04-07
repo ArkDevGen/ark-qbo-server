@@ -14583,14 +14583,16 @@ function tcPrevPeriod(){
   prev.setDate(prev.getDate()-1);
   tcCurrentPeriod = tcPeriodFor(prev);
   tcRenderBanner();
-  if(tcCurrentUser) tcRenderTimecard(tcCurrentUser);
+  const empId = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
+  if(empId) tcRenderTimecard(empId);
 }
 function tcNextPeriod(){
   const next = new Date(tcCurrentPeriod.end);
   next.setDate(next.getDate()+1);
   tcCurrentPeriod = tcPeriodFor(next);
   tcRenderBanner();
-  if(tcCurrentUser) tcRenderTimecard(tcCurrentUser);
+  const empId = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
+  if(empId) tcRenderTimecard(empId);
 }
 function tcThisPeriod(){
   tcCurrentPeriod = tcPeriodFor(new Date());
