@@ -18104,10 +18104,11 @@ function tcPopulateFilters(){
   // Auto-filter to current user's tasks on first load
   if (!_tcFilterInitialized && currentUser) {
     _tcFilterInitialized = true;
-    // Find the AM record matching the current user
-    const myAM = (DB.accountManagers||[]).find(a => a.id === currentUser.id);
-    if (myAM) {
-      amSel.value = myAM.id;
+    // Auto-select current user — always
+    amSel.value = currentUser.id;
+    // Non-admins can't see other people's tasks
+    if (currentUser.role !== 'admin') {
+      amSel.style.display = 'none';
     }
   }
 }
