@@ -2468,7 +2468,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
         <!-- Entries area -->
-        <div style="flex:1;min-width:0;padding:0 0 0 16px;overflow:hidden;">
+        <div style="flex:1;min-width:0;padding:0 0 0 16px;overflow:hidden;word-break:break-word;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
             <input type="text" id="nb-search" class="field-input" placeholder="Search notes..." oninput="nbRenderEntries()" style="flex:1;max-width:280px;">
             <span id="nb-current-name" style="font-size:14px;font-weight:600;color:var(--navy);margin-left:auto;"></span>
@@ -18991,6 +18991,9 @@ function tcSelectView(view) {
   const isNotes = view === 'notes';
   document.getElementById('tc-tasks-panel').style.display = isNotes ? 'none' : '';
   document.getElementById('tc-notes-panel').style.display = isNotes ? '' : 'none';
+  // Hide project sidebar when notes is active (notebook sidebar replaces it)
+  const projSidebar = document.getElementById('tc-project-sidebar');
+  if (projSidebar) projSidebar.style.display = isNotes ? 'none' : '';
 
   if (isNotes) {
     nbInit();
