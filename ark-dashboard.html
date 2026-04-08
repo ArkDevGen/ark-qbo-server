@@ -18269,12 +18269,70 @@ async function tcPopulateFilters(){
   }
 }
 
+let _tcSelectedAMs = [];
 function tcPopulateAMSelect(selectedId){
-  const sel = document.getElementById('tc-am'); if(!sel) return;
-  const defId = selectedId || (currentUser ? currentUser.id : '');
   const teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
-  sel.innerHTML = '<option value="">— Unassigned —</option>' +
-    teamList.map(a=>`<option value="${a.id}" ${a.id===defId?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
+  // For editing, selectedId is the single AM; for new tasks, default to current user
+  const defId = selectedId || (currentUser ? currentUser.id : '');
+  _tcSelectedAMs = defId ? [defId] : [];
+  // Also update the hidden input for backward compat
+  document.getElementById('tc-am').value = defId;
+  tcRenderAmDropdown(teamList);
+  tcUpdateAmLabel(teamList);
+}
+
+function tcRenderAmDropdown(teamList){
+  if(!teamList) teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const dd = document.getElementById('tc-am-dropdown'); if(!dd) return;
+  dd.innerHTML = teamList.map(a => {
+    const name = `${a.fname||a.userName||''} ${a.lname||''}`.trim();
+    const checked = _tcSelectedAMs.includes(a.id);
+    return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border);"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${checked?'checked':''} onchange="tcToggleAM('${a.id}')" style="accent-color:var(--navy);cursor:pointer;">
+      ${name}${a.id===currentUser?.id?' (me)':''}
+    </label>`;
+  }).join('');
+}
+
+function tcToggleAM(amId){
+  const idx = _tcSelectedAMs.indexOf(amId);
+  if(idx >= 0) _tcSelectedAMs.splice(idx, 1);
+  else _tcSelectedAMs.push(amId);
+  // Update hidden input (primary AM = first selected)
+  document.getElementById('tc-am').value = _tcSelectedAMs[0] || '';
+  tcUpdateAmLabel();
+}
+
+function tcUpdateAmLabel(teamList){
+  if(!teamList) teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const label = document.getElementById('tc-am-multi-label'); if(!label) return;
+  if(!_tcSelectedAMs.length){ label.textContent = 'Select…'; label.style.color = 'var(--text-d)'; return; }
+  const names = _tcSelectedAMs.map(id => {
+    const a = teamList.find(x => x.id === id);
+    return a ? `${a.fname||a.userName||''}`.trim() : '?';
+  });
+  label.textContent = names.join(', ');
+  label.style.color = 'var(--text)';
+}
+
+let _tcAmDdOpen = false;
+function tcToggleAmDropdown(){
+  const dd = document.getElementById('tc-am-dropdown'); if(!dd) return;
+  _tcAmDdOpen = !_tcAmDdOpen;
+  dd.style.display = _tcAmDdOpen ? '' : 'none';
+  if(_tcAmDdOpen){
+    setTimeout(() => document.addEventListener('click', _tcAmOutsideClick, {once:true}), 10);
+  }
+}
+function _tcAmOutsideClick(e){
+  const wrap = document.getElementById('tc-am-multi-wrap');
+  const dd = document.getElementById('tc-am-dropdown');
+  if(wrap && !wrap.contains(e.target) && dd && !dd.contains(e.target)){
+    dd.style.display = 'none'; _tcAmDdOpen = false;
+  } else if(_tcAmDdOpen){
+    setTimeout(() => document.addEventListener('click', _tcAmOutsideClick, {once:true}), 10);
+  }
 }
 
 function tcOpenNew(){
@@ -18368,10 +18426,9 @@ function tcSaveTask(){
   const clientId = document.getElementById('tc-client-id').value;
   const dueDate  = document.getElementById('tc-due').value;
   if(!name)     { alert('Please enter a task name.'); return; }
-  if(!clientId) { alert('Please select a client.'); return; }
   if(!dueDate)  { alert('Please set a due date.'); return; }
 
-  const client      = (DB.clients||[]).find(c=>c.id===clientId);
+  const client      = clientId ? (DB.clients||[]).find(c=>c.id===clientId) : null;
   const recurring   = document.getElementById('tc-recurring').checked;
   const recurFreq   = document.getElementById('tc-recur-freq').value;
   const recurCustomN= parseInt(document.getElementById('tc-recur-custom-n').value)||0;
@@ -18399,63 +18456,70 @@ function tcSaveTask(){
   const bankUrl = (category==='Banking' && clientId)
     ? ((DB.clients||[]).find(c=>c.id===clientId)?.bankUrl||'') : '';
 
-  const task = {
-    id:           _tcEditId || uid(),
-    name,
-    clientId,
-    clientName:   client ? client.biz : clientId,
-    amId:         document.getElementById('tc-am').value,
-    category,
-    dueDate,
-    recurring,
-    recurFreq:    recurring ? recurFreq : null,
-    recurCustomN: recurring && recurFreq==='custom' ? recurCustomN : null,
-    recurBmDay1:  recurring && recurFreq==='bimonthly' ? recurBmDay1 : null,
-    recurBmDay2:  recurring && recurFreq==='bimonthly' ? recurBmDay2 : null,
-    showDaysAdvance: parseInt(document.getElementById('tc-show-days').value)||3,
-    priority,
-    notes:        document.getElementById('tc-notes').value.trim(),
-    bankUrl,
-    status:       existing?.status || 'open',
-    noteLog:      existing?.noteLog || [],
-    createdAt:    existing?.createdAt || new Date().toISOString(),
-    updatedAt:    new Date().toISOString(),
-    createdBy:    who,
-    completedAt:  existing?.completedAt || null,
-    completedBy:  existing?.completedBy || null,
-    reviewType:   reviewType || null,
-    reviewerId:   reviewerId || null,
-    reviewStatus: existing?.reviewStatus || null,
-    reviewTaskId: existing?.reviewTaskId || null,
-    parentTaskId: existing?.parentTaskId || null,
-    type:         existing?.type || 'task',
-    parentId:     existing?.parentId || null,
-  };
+  // Multi-assign: for new tasks with multiple AMs, create one task per AM
+  const assignees = (!_tcEditId && _tcSelectedAMs.length > 1) ? [..._tcSelectedAMs] : [document.getElementById('tc-am').value || ''];
 
   if(!DB.tasks) DB.tasks = [];
-  const idx = DB.tasks.findIndex(x=>x.id===task.id);
-  if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
-  saveDB();
-  logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${task.clientName}`);
+  const creator = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Someone';
+  const clientName = client ? client.biz : (clientId || 'No Client');
 
-  // ── Notify the assigned AM if this is a NEW task ──────────────────────
-  if(idx < 0 && task.amId) {
-    const creator = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Someone';
-    const assignedAM = (DB.accountManagers||[]).find(a => a.id === task.amId);
-    const amName = assignedAM ? `${assignedAM.fname} ${assignedAM.lname||''}`.trim() : '';
-    // Only notify if assigned to a DIFFERENT person than creator
-    if(!currentUser || task.amId !== currentUser.id) {
-      notifCreate({
-        type:     'new-task',
-        targetAm: task.amId,
-        title:    `New task assigned to you`,
-        body:     `"${name}" for ${task.clientName} · Due ${task.dueDate}`,
-        taskId:   task.id,
-        from:     creator,
-        amName,
-      });
+  for(const amId of assignees){
+    const task = {
+      id:           (_tcEditId && assignees.length === 1) ? _tcEditId : uid(),
+      name,
+      clientId:     clientId || '',
+      clientName,
+      amId,
+      category,
+      dueDate,
+      recurring,
+      recurFreq:    recurring ? recurFreq : null,
+      recurCustomN: recurring && recurFreq==='custom' ? recurCustomN : null,
+      recurBmDay1:  recurring && recurFreq==='bimonthly' ? recurBmDay1 : null,
+      recurBmDay2:  recurring && recurFreq==='bimonthly' ? recurBmDay2 : null,
+      showDaysAdvance: parseInt(document.getElementById('tc-show-days').value)||3,
+      priority,
+      notes:        document.getElementById('tc-notes').value.trim(),
+      bankUrl,
+      status:       existing?.status || 'open',
+      noteLog:      existing?.noteLog || [],
+      createdAt:    existing?.createdAt || new Date().toISOString(),
+      updatedAt:    new Date().toISOString(),
+      createdBy:    who,
+      completedAt:  existing?.completedAt || null,
+      completedBy:  existing?.completedBy || null,
+      reviewType:   reviewType || null,
+      reviewerId:   reviewerId || null,
+      reviewStatus: existing?.reviewStatus || null,
+      reviewTaskId: existing?.reviewTaskId || null,
+      parentTaskId: existing?.parentTaskId || null,
+      type:         existing?.type || 'task',
+      parentId:     existing?.parentId || null,
+    };
+
+    const idx = DB.tasks.findIndex(x=>x.id===task.id);
+    if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
+    logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${clientName}`);
+
+    // ── Notify the assigned AM if this is a NEW task ──────────────────────
+    if(idx < 0 && task.amId) {
+      const assignedAM = (DB.accountManagers||[]).find(a => a.id === task.amId);
+      const amName = assignedAM ? `${assignedAM.fname} ${assignedAM.lname||''}`.trim() : '';
+      // Only notify if assigned to a DIFFERENT person than creator
+      if(!currentUser || task.amId !== currentUser.id) {
+        notifCreate({
+          type:     'new-task',
+          targetAm: task.amId,
+          title:    `New task assigned to you`,
+          body:     `"${name}" ${clientName!=='No Client'?'for '+clientName+' ':''}· Due ${task.dueDate}`,
+          taskId:   task.id,
+          from:     creator,
+          amName,
+        });
+      }
     }
   }
+  saveDB();
 
   closeModal('modal-task');
   tcRender();
@@ -33624,9 +33688,9 @@ async function intConnectWithToken() {
       <!-- Client search + Category -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
         <div>
-          <label>Client <span style="color:var(--red)">*</span></label>
+          <label>Client</label>
           <div style="position:relative;">
-            <input id="tc-client-search" class="field-input" placeholder="Search clients…" oninput="tcClientSearch(this.value)" autocomplete="off">
+            <input id="tc-client-search" class="field-input" placeholder="Search clients… (optional)" oninput="tcClientSearch(this.value)" autocomplete="off">
             <div id="tc-client-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:400;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);"></div>
             <input type="hidden" id="tc-client-id">
           </div>
@@ -33703,9 +33767,14 @@ async function intConnectWithToken() {
 
       <!-- AM + Due + Priority in one row -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
-        <div>
+        <div style="position:relative;">
           <label>Assigned To</label>
-          <select id="tc-am" class="field-input"></select>
+          <div id="tc-am-multi-wrap" class="field-input" onclick="tcToggleAmDropdown()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;min-height:36px;padding:6px 10px;">
+            <span id="tc-am-multi-label" style="font-size:12px;color:var(--text-d);">Select…</span>
+            <span style="font-size:10px;color:var(--text-dd);">▾</span>
+          </div>
+          <input type="hidden" id="tc-am">
+          <div id="tc-am-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:400;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-height:220px;overflow-y:auto;box-shadow:var(--shadow);"></div>
         </div>
         <div>
           <label>Due Date <span style="color:var(--red)">*</span></label>

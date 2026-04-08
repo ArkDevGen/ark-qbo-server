@@ -12,8 +12,9 @@ const crypto      = require('crypto');
 const fs          = require('fs');
 const multer      = require('multer');
 const bcrypt      = require('bcryptjs');
-let webpush;
-try { webpush = require('web-push'); } catch(e) { console.log('web-push not available:', e.message); webpush = null; }
+// Web Push — optional dependency, loaded if available
+let webpush = null;
+try { webpush = require('web-push'); } catch(_) { /* web-push not installed — push notifications disabled */ }
 // S3/B2 imports removed — now using ShareFile API
 const { google }       = require('googleapis');
 
