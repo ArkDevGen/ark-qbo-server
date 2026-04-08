@@ -5253,9 +5253,52 @@ app.post('/notifications/push', requireAuth, async (req, res) => {
 const CHAT_FILE = path.join(DATA_DIR, 'chat-messages.json');
 const CHAT_READ_FILE = path.join(DATA_DIR, 'chat-read-status.json');
 
+// Normalize old dm_ channel IDs to dm~ format
+function _normalizeDmChannelId(channelId) {
+  if (!channelId || !channelId.startsWith('dm_') || channelId.startsWith('dm~')) return channelId;
+  const matches = channelId.match(/usr_[a-f0-9]+/g);
+  if (matches && matches.length >= 2) return 'dm~' + matches.sort().join('~');
+  return channelId;
+}
+
 function _loadChatMessages() {
   try { if (fs.existsSync(CHAT_FILE)) return JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')); } catch (_) {}
   return [];
+}
+
+// One-time migration: convert old dm_ channel IDs to dm~ format
+let _chatMigrated = false;
+function _migrateChatChannelIds() {
+  if (_chatMigrated) return;
+  _chatMigrated = true;
+  try {
+    if (!fs.existsSync(CHAT_FILE)) return;
+    const messages = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8'));
+    let changed = false;
+    for (const m of messages) {
+      const norm = _normalizeDmChannelId(m.channelId);
+      if (norm !== m.channelId) { m.channelId = norm; changed = true; }
+    }
+    if (changed) {
+      fs.writeFileSync(CHAT_FILE, JSON.stringify(messages));
+      console.log('Chat: migrated old dm_ channel IDs to dm~ format');
+    }
+    // Also migrate read status
+    if (fs.existsSync(CHAT_READ_FILE)) {
+      const readStatus = JSON.parse(fs.readFileSync(CHAT_READ_FILE, 'utf8'));
+      let rsChanged = false;
+      for (const uid of Object.keys(readStatus)) {
+        const newObj = {};
+        for (const [ch, ts] of Object.entries(readStatus[uid])) {
+          const norm2 = _normalizeDmChannelId(ch);
+          newObj[norm2] = ts;
+          if (norm2 !== ch) rsChanged = true;
+        }
+        readStatus[uid] = newObj;
+      }
+      if (rsChanged) fs.writeFileSync(CHAT_READ_FILE, JSON.stringify(readStatus));
+    }
+  } catch (e) { console.log('Chat migration error:', e.message); }
 }
 
 function _saveChatMessages(messages) {
@@ -5650,6 +5693,7 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 // Start listening
 // ─────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
+  _migrateChatChannelIds();
   console.log(`ARK QBO Server running on http://localhost:${PORT}`);
   console.log(`  Data dir: ${DATA_DIR}`);
   const faxOk = SINCH.fax.keyId ? '✓' : '✗';
