@@ -24364,6 +24364,7 @@ function chatTogglePanel() {
     chatLoadChannels();
   } else {
     panel.style.display = 'none';
+    chatStopPoll();
   }
 }
 
@@ -24444,6 +24445,8 @@ function chatChannelItem(channelId, name, preview, unread, msgCount, time) {
   </div>`;
 }
 
+let _chatPollTimer = null;
+
 async function chatOpenChannel(channelId, name) {
   _chatChannel = channelId;
   const list = document.getElementById('chat-channel-list');
@@ -24458,21 +24461,47 @@ async function chatOpenChannel(channelId, name) {
   if (title) title.textContent = name || channelId;
 
   // Load messages
-  try {
-    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(channelId) + '&limit=50');
-    if (resp.ok) {
-      const data = await resp.json();
-      _chatMessages = data.messages || [];
-      _chatHasMore = data.hasMore || false;
-      chatRenderMessages();
-    }
-  } catch (_) {}
+  await chatRefreshMessages();
 
   // Mark as read
   authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId }) }).catch(() => {});
 
+  // Start polling for new messages every 3 seconds while thread is open
+  chatStartPoll();
+
   // Focus input
   setTimeout(() => { const inp = document.getElementById('chat-input'); if (inp) inp.focus(); }, 100);
+}
+
+async function chatRefreshMessages() {
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(_chatChannel) + '&limit=50');
+    if (resp.ok) {
+      const data = await resp.json();
+      const newMsgs = data.messages || [];
+      // Only re-render if there are new messages
+      if (newMsgs.length !== _chatMessages.length || (newMsgs.length && newMsgs[newMsgs.length - 1].id !== (_chatMessages[_chatMessages.length - 1]?.id))) {
+        _chatMessages = newMsgs;
+        _chatHasMore = data.hasMore || false;
+        chatRenderMessages();
+      }
+    }
+  } catch (_) {}
+}
+
+function chatStartPoll() {
+  chatStopPoll();
+  _chatPollTimer = setInterval(() => {
+    if (_chatOpen && document.getElementById('chat-thread')?.style.display !== 'none') {
+      chatRefreshMessages();
+    } else {
+      chatStopPoll();
+    }
+  }, 3000);
+}
+
+function chatStopPoll() {
+  if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
 }
 
 function chatRenderMessages() {
@@ -24572,6 +24601,7 @@ async function chatLoadOlder() {
 }
 
 function chatBackToList() {
+  chatStopPoll();
   chatLoadChannels();
 }
 
