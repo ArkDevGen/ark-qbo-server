@@ -4730,12 +4730,22 @@ function sjeGetAccount(key, franchiseKey) {
 }
 
 function sjeGetRoyaltyRate(franchiseKey, storeId) {
+  // Check royalty_overrides.json first
   const override = ROYALTY_OVERRIDES[franchiseKey];
   if (typeof override === 'object' && override !== null && !Array.isArray(override)) {
     if (storeId && override[storeId] !== undefined) return override[storeId];
     return ROYALTY_OVERRIDES.default_rate || 0.06;
   }
   if (override !== undefined && override !== null) return override;
+
+  // Fallback: check franchise config's royalty_overrides field
+  const franchiseInfo = FRANCHISE_MAP[franchiseKey];
+  if (franchiseInfo?.royalty_overrides) {
+    if (storeId && franchiseInfo.royalty_overrides[storeId] !== undefined) return franchiseInfo.royalty_overrides[storeId];
+    // Check if there's a blanket override (empty key)
+    if (franchiseInfo.royalty_overrides[''] !== undefined) return franchiseInfo.royalty_overrides[''];
+  }
+
   return ROYALTY_OVERRIDES.default_rate || 0.06;
 }
 
