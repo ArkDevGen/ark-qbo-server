@@ -12,6 +12,7 @@ const crypto      = require('crypto');
 const fs          = require('fs');
 const multer      = require('multer');
 const bcrypt      = require('bcryptjs');
+const webpush     = require('web-push');
 // S3/B2 imports removed — now using ShareFile API
 const { google }       = require('googleapis');
 
@@ -5160,6 +5161,182 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
     console.error('Scooter\'s parse error:', e);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// NOTIFICATIONS — SSE real-time + push broadcast
+// ─────────────────────────────────────────────────────────────────
+
+// Active SSE connections: Map<userId, Set<Response>>
+const _sseClients = new Map();
+
+// SSE stream endpoint — clients connect to receive real-time notifications
+app.get('/notifications/stream', requireAuth, (req, res) => {
+  const userId = req.arkUser.userId;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Credentials': 'true',
+  });
+  res.write('data: {"type":"connected"}\n\n');
+
+  // Register this connection
+  if (!_sseClients.has(userId)) _sseClients.set(userId, new Set());
+  _sseClients.get(userId).add(res);
+  console.log(`SSE: ${req.arkUser.userName} connected (${_sseClients.get(userId).size} connections)`);
+
+  // Keepalive every 30s to prevent Render timeout
+  const keepalive = setInterval(() => {
+    try { res.write(':keepalive\n\n'); } catch (_) { clearInterval(keepalive); }
+  }, 30000);
+
+  // Cleanup on disconnect
+  req.on('close', () => {
+    clearInterval(keepalive);
+    const clients = _sseClients.get(userId);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) _sseClients.delete(userId);
+    }
+    console.log(`SSE: ${req.arkUser.userName} disconnected`);
+  });
+});
+
+// Broadcast a notification to a specific user via SSE + future Web Push
+app.post('/notifications/push', requireAuth, (req, res) => {
+  try {
+    const { notification } = req.body;
+    if (!notification || !notification.targetAm) {
+      return res.status(400).json({ error: 'Missing notification or targetAm' });
+    }
+
+    // Broadcast via SSE to all connections for this user
+    const clients = _sseClients.get(notification.targetAm);
+    if (clients && clients.size > 0) {
+      const data = `data: ${JSON.stringify(notification)}\n\n`;
+      for (const client of clients) {
+        try { client.write(data); } catch (_) { clients.delete(client); }
+      }
+      console.log(`Notif push: sent to ${clients.size} SSE client(s) for user ${notification.targetAm}`);
+    }
+
+    // Web Push to all subscriptions for targetAm
+    const pushSubs = _loadPushSubscriptions(notification.targetAm);
+    let pushSent = 0;
+    for (const sub of pushSubs) {
+      try {
+        await webpush.sendNotification(sub.subscription, JSON.stringify({
+          id: notification.id, title: notification.title, body: notification.body, taskId: notification.taskId,
+        }));
+        pushSent++;
+      } catch (e) {
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          // Subscription expired — remove it
+          _removePushSubscription(notification.targetAm, sub.subscription.endpoint);
+        }
+      }
+    }
+
+    res.json({ ok: true, sseDelivered: clients?.size || 0, pushSent });
+  } catch (e) {
+    console.error('Notification push error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// WEB PUSH — VAPID setup, subscription management
+// ─────────────────────────────────────────────────────────────────
+
+// Configure VAPID keys
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:info@arkfinancialservices.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+  console.log('Web Push: VAPID keys configured');
+} else {
+  console.log('Web Push: VAPID keys not set — push notifications disabled');
+}
+
+// Push subscription persistence
+const PUSH_SUBS_FILE = path.join(DATA_DIR, 'push-subscriptions.json');
+
+function _loadAllPushSubscriptions() {
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) return JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, 'utf8'));
+  } catch (_) {}
+  return {};
+}
+
+function _savePushSubscriptions(data) {
+  fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2));
+}
+
+function _loadPushSubscriptions(userId) {
+  const all = _loadAllPushSubscriptions();
+  return all[userId] || [];
+}
+
+function _removePushSubscription(userId, endpoint) {
+  const all = _loadAllPushSubscriptions();
+  if (all[userId]) {
+    all[userId] = all[userId].filter(s => s.subscription.endpoint !== endpoint);
+    _savePushSubscriptions(all);
+  }
+}
+
+// Return VAPID public key so client can subscribe
+app.get('/push/vapid-key', (req, res) => {
+  if (!process.env.VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+// Store a push subscription for the authenticated user
+app.post('/push/subscribe', requireAuth, (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Missing subscription' });
+
+    const userId = req.arkUser.userId;
+    const all = _loadAllPushSubscriptions();
+    if (!all[userId]) all[userId] = [];
+
+    // Avoid duplicates
+    const exists = all[userId].find(s => s.subscription.endpoint === subscription.endpoint);
+    if (!exists) {
+      all[userId].push({ subscription, createdAt: new Date().toISOString() });
+      _savePushSubscriptions(all);
+      console.log(`Push: ${req.arkUser.userName} subscribed (${all[userId].length} devices)`);
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Remove a push subscription
+app.delete('/push/subscribe', requireAuth, (req, res) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
+    _removePushSubscription(req.arkUser.userId, endpoint);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Serve the service worker from root scope
+app.get('/sw-push.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(__dirname, 'sw-push.js'));
 });
 
 // ─────────────────────────────────────────────────────────────────

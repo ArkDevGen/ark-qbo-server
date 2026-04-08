@@ -7367,6 +7367,7 @@ document.addEventListener('click', (e) => {
 
 function signOut(){
   if(!confirm('Sign out and return to the login screen?')) return;
+  notifDisconnectSSE();
   currentUser = null;
   _serverToken = null;
   sessionStorage.removeItem('ark_session');
@@ -18512,6 +18513,8 @@ function tcToggleComplete(id){
     t.reviewTaskId = reviewTask.id;
     DB.tasks.push(reviewTask);
     logAct(`Review task created for ${reviewer?.fname||'reviewer'} — "${t.name}" (${t.clientName})`);
+    // Notify the reviewer
+    notifCreate({ type:'sent-for-review', targetAm: t.reviewerId, title:'Task submitted for review', body:`"${t.name}" (${t.clientName||''}) · from ${who}`, taskId: reviewTask.id, from: who });
 
   // ── Mode 2: Notify Only ───────────────────────────────────────────
   } else if(t.reviewType === 'notify' && t.reviewerId){
@@ -18541,6 +18544,8 @@ function tcToggleComplete(id){
     };
     DB.tasks.push(notifyTask);
     logAct(`Notification sent to ${reviewer?.fname||'reviewer'} — "${t.name}" completed (${t.clientName})`);
+    // Notify the reviewer that a task was completed
+    notifCreate({ type:'task-completed', targetAm: t.reviewerId, title:'Task completed', body:`"${t.name}" (${t.clientName||''}) completed by ${who}`, taskId: notifyTask.id, from: who });
 
   // ── No review — normal complete ───────────────────────────────────
   } else {
@@ -18654,6 +18659,10 @@ function tcApproveReview(reviewTaskId){
     if(!parent.noteLog) parent.noteLog = [];
     parent.noteLog.unshift({ id:uid(), text:`✅ Approved by ${who}`, author:who, at:when, type:'review' });
     logAct(`Task "${parent.name}" approved by ${who} (${parent.clientName})`);
+    // Notify the original task owner
+    if(parent.amId && parent.amId !== currentUser?.id){
+      notifCreate({ type:'review-approved', targetAm: parent.amId, title:'Task approved', body:`"${parent.name}" (${parent.clientName||''}) approved by ${who}`, taskId: parent.id, from: who });
+    }
 
     // Auto-spawn next recurring instance now that it's fully approved
     if(parent.recurring){
@@ -18695,6 +18704,10 @@ function tcRejectReview(reviewTaskId){
     if(!parent.noteLog) parent.noteLog = [];
     parent.noteLog.unshift({ id:uid(), text:`❌ Rejected by ${who}${reason?' — '+reason:''}`, author:who, at:when, type:'review' });
     logAct(`Task "${parent.name}" rejected by ${who} (${parent.clientName})`);
+    // Notify the original task owner
+    if(parent.amId && parent.amId !== currentUser?.id){
+      notifCreate({ type:'review-rejected', targetAm: parent.amId, title:'Task returned for revision', body:`"${parent.name}" (${parent.clientName||''}) returned by ${who}${reason?' — '+reason:''}`, taskId: parent.id, from: who });
+    }
   }
   saveDB(); tcRender();
   closeModal('modal-task-workflow');
@@ -24223,6 +24236,14 @@ function notifCreate(opts){
     // No one logged in yet — still fire desktop
     notifFireDesktop(notif);
   }
+
+  // Broadcast to other clients via SSE (only for notifications targeting someone else)
+  if(notif.targetAm && notif.targetAm !== currentUser?.id){
+    authFetch(ARK_SERVER + '/notifications/push', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ notification: notif })
+    }).catch(()=>{});
+  }
 }
 
 // ── Badge count ───────────────────────────────────────────────────
@@ -24296,7 +24317,7 @@ function notifRenderList(){
     return;
   }
 
-  const typeIcon = { 'new-task':'📋', 'info':'ℹ️', 'alert':'⚠️' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -24380,32 +24401,110 @@ function notifFireDesktop(notif){
   } catch(e) { /* silent fail */ }
 }
 
-function notifRequestPermission(){
+async function notifRequestPermission(){
   if(!('Notification' in window)){
     showToast('Desktop notifications not supported in this browser');
     return;
   }
-  Notification.requestPermission().then(perm => {
-    const row = document.getElementById('notif-enable-row');
-    if(perm === 'granted'){
-      if(row) row.style.display = 'none';
-      showToast('✓ Desktop notifications enabled');
-      // Fire a test notification
-      notifFireDesktop({
-        id: 'test',
-        title: 'ARK Notifications enabled ✓',
-        body: 'You\'ll receive desktop alerts when tasks are assigned to you.',
-        taskId: null,
-      });
-    } else {
-      showToast('Desktop notifications blocked — check browser settings');
+  const perm = await Notification.requestPermission();
+  const row = document.getElementById('notif-enable-row');
+  if(perm !== 'granted'){
+    showToast('Desktop notifications blocked — check browser settings');
+    return;
+  }
+  if(row) row.style.display = 'none';
+
+  // Try registering service worker for Web Push (background notifications)
+  if('serviceWorker' in navigator && 'PushManager' in window){
+    try {
+      const reg = await navigator.serviceWorker.register(ARK_SERVER + '/sw-push.js', { scope: '/' });
+      // Get VAPID public key from server
+      const vapidResp = await authFetch(ARK_SERVER + '/push/vapid-key');
+      if(vapidResp.ok){
+        const { publicKey } = await vapidResp.json();
+        const subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: _urlBase64ToUint8Array(publicKey),
+        });
+        // Send subscription to server
+        await authFetch(ARK_SERVER + '/push/subscribe', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ subscription }),
+        });
+        showToast('✓ Push notifications enabled — works even when tab is closed');
+      } else {
+        showToast('✓ Desktop notifications enabled (push not available)');
+      }
+    } catch(e){
+      console.log('Push subscription failed:', e);
+      showToast('✓ Desktop notifications enabled (push setup failed)');
     }
+  } else {
+    showToast('✓ Desktop notifications enabled');
+  }
+
+  // Fire a test notification
+  notifFireDesktop({
+    id: 'test', title: 'ARK Notifications enabled', body: 'You\'ll receive alerts when tasks are assigned to you.', taskId: null,
   });
+}
+
+// Helper: convert VAPID base64 key to Uint8Array for PushManager
+function _urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for(let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// ── SSE real-time notification listener ──────────────────────────
+let _notifSSE = null;
+function notifConnectSSE(){
+  if(_notifSSE){ try{_notifSSE.close();}catch(_){} }
+  if(!currentUser) return;
+  try {
+    // EventSource doesn't support custom headers, so pass token as query param
+    _notifSSE = new EventSource(ARK_SERVER + '/notifications/stream?token=' + encodeURIComponent(_serverToken || ''));
+    _notifSSE.onmessage = (e) => {
+      try {
+        const notif = JSON.parse(e.data);
+        if(notif.type === 'connected') return; // initial handshake
+        // Deduplicate — may already exist from local notifCreate
+        if(!DB.notifications) DB.notifications = [];
+        if(DB.notifications.find(n => n.id === notif.id)) return;
+        DB.notifications.unshift(notif);
+        if(DB.notifications.length > 100) DB.notifications = DB.notifications.slice(0,100);
+        notifUpdateBadge();
+        if(_notifOpen) notifRenderList();
+        notifFireDesktop(notif);
+      } catch(_){}
+    };
+    _notifSSE.onerror = () => {
+      // EventSource auto-reconnects; just log for debugging
+      console.log('SSE: connection error, will auto-reconnect');
+    };
+  } catch(e){ console.log('SSE: failed to connect', e); }
+}
+
+function notifDisconnectSSE(){
+  if(_notifSSE){ try{_notifSSE.close();}catch(_){} _notifSSE = null; }
 }
 
 // ── Init: run on login and page changes ──────────────────────────
 function notifInit(){
   notifUpdateBadge();
+  notifConnectSSE();
+  // Listen for service worker messages (push notification clicks)
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if(e.data?.type === 'notif-click' && e.data.taskId){
+        nav('tasks');
+        setTimeout(() => twfOpen(e.data.taskId), 200);
+      }
+    });
+  }
   // Show permission prompt if never asked
   if('Notification' in window && Notification.permission === 'default'){
     // Non-intrusive — they'll see the button in the dropdown
