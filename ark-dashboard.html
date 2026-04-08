@@ -2212,23 +2212,42 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- ══ CARD 3: Team Chat ══ -->
-      <div class="card" style="min-height:200px;overflow:visible;position:relative;">
-        <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
-          <div class="card-title">Team Chat</div>
-          <button class="btn btn-ghost btn-sm" onclick="chatTogglePanel()" style="font-size:11px;">Open Chat</button>
-        </div>
-        <div id="cc-chat-preview" style="padding:4px 0;font-size:12px;color:var(--text-d);">
-          <div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">Navigate here to see recent messages</div>
-        </div>
+    </div>
+
+    <!-- ══ TEAM CHAT — Full-Width Split Layout ══ -->
+    <div class="card" style="margin-top:22px;overflow:visible;">
+      <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="card-title">Team Chat</div>
+        <button class="btn btn-ghost btn-sm" onclick="ccChatNewDM()" style="font-size:11px;">+ New DM</button>
       </div>
 
-      <!-- ══ CARD 4: Coming Soon ══ -->
-      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
-        <div style="font-size:28px;">⬜</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
-      </div>
+      <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:420px;">
+        <!-- Left: Conversation List -->
+        <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;max-height:480px;flex-shrink:0;">
+          <div id="cc-chat-convo-list" style="font-size:12px;"></div>
+        </div>
 
+        <!-- Right: Thread -->
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+          <!-- Thread Header -->
+          <div id="cc-chat-thread-header" style="padding:12px 14px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
+            <div id="cc-chat-thread-name" style="font-size:14px;font-weight:700;color:var(--navy);"></div>
+          </div>
+
+          <!-- Messages -->
+          <div id="cc-chat-messages" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;max-height:380px;">
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">Select a conversation</div>
+          </div>
+
+          <!-- Compose -->
+          <div id="cc-chat-compose" style="display:none;padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0;">
+            <div style="display:flex;gap:6px;">
+              <input id="cc-chat-input" class="field-input" placeholder="Type a message..." style="margin:0;flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')ccChatSend()">
+              <button onclick="ccChatSend()" class="btn btn-primary" style="padding:6px 12px;font-size:12px;white-space:nowrap;">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -24689,26 +24708,264 @@ async function chatInitBadge() {
 }
 
 // Comm Center chat preview — loads recent General messages into the card
-async function ccLoadChatPreview() {
-  const el = document.getElementById('cc-chat-preview');
-  if (!el) return;
+// ── Comm Center Chat (SMS-style split layout) ────────────────────
+let _ccChatChannel = null;
+let _ccChatMessages = [];
+let _ccChatHasMore = false;
+let _ccChatPollTimer = null;
+
+async function ccLoadChatPreview() { ccChatInit(); }
+
+async function ccChatInit() {
   try {
-    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=general&limit=8');
+    if (!_cachedServerUsers.length) await refreshServerUsersCache();
+    const resp = await authFetch(ARK_SERVER + '/chat/channels');
+    if (!resp.ok) return;
+    const channels = await resp.json();
+    ccChatRenderChannelList(channels);
+  } catch (_) {}
+}
+
+function ccChatRenderChannelList(channels) {
+  const list = document.getElementById('cc-chat-convo-list');
+  if (!list) return;
+  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+
+  const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso), now = new Date();
+    const diffM = Math.round((now - d) / 60000);
+    if (diffM < 1) return 'now';
+    if (diffM < 60) return diffM + 'm';
+    const diffH = Math.floor(diffM / 60);
+    if (diffH < 24) return diffH + 'h';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Ensure general is always present
+  if (!channels.find(c => c.channelId === 'general')) {
+    channels.unshift({ channelId: 'general', messages: 0, lastMessage: null, unread: 0 });
+  }
+
+  list.innerHTML = channels.map(ch => {
+    let name, preview, initial;
+    const isActive = _ccChatChannel === ch.channelId;
+    const unread = ch.unread || 0;
+    const time = fmtTime(ch.lastMessage?.createdAt);
+
+    if (ch.channelId === 'general') {
+      name = 'Team Chat';
+      initial = '#';
+      const lastSender = ch.lastMessage ? _chatSenderName(ch.lastMessage).split(' ')[0] : '';
+      preview = ch.lastMessage ? `${lastSender}: ${ch.lastMessage.text.slice(0, 30)}` : 'No messages yet';
+    } else {
+      const parts = _chatParseDmIds(ch.channelId);
+      const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
+      const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
+      name = (other && other.fname) ? `${other.fname} ${other.lname || ''}`.trim() : _chatSenderName(ch.lastMessage || { senderId: otherId, senderName: otherId });
+      initial = name.charAt(0).toUpperCase();
+      preview = ch.lastMessage ? ch.lastMessage.text.slice(0, 35) : '';
+    }
+
+    const badge = unread > 0 ? `<span style="background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;flex-shrink:0;">${unread > 9 ? '9+' : unread}</span>` : '';
+    const isGeneral = ch.channelId === 'general';
+
+    return `<div onclick="ccChatOpenChannel('${ch.channelId}','${name.replace(/'/g, "\\'")}')"
+      style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:${isActive ? 'var(--surface2)' : ''};transition:background .1s;"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${isActive ? 'var(--surface2)' : ''}'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:${isGeneral ? 'var(--navy)' : 'var(--gold)'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${isGeneral ? '#' : initial}</div>
+          <span style="font-size:13px;font-weight:${unread > 0 ? '800' : '600'};color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${name}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${badge}
+          <span style="font-size:10px;color:var(--text-d);flex-shrink:0;">${time}</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:36px;">${preview}</div>
+    </div>`;
+  }).join('');
+}
+
+async function ccChatOpenChannel(channelId, name) {
+  _ccChatChannel = channelId;
+  const header = document.getElementById('cc-chat-thread-header');
+  const nameEl = document.getElementById('cc-chat-thread-name');
+  const compose = document.getElementById('cc-chat-compose');
+  if (header) header.style.display = '';
+  if (nameEl) nameEl.textContent = name || channelId;
+  if (compose) compose.style.display = '';
+
+  // Refresh channel list to show active state
+  ccChatInit();
+
+  // Load messages
+  await ccChatRefreshMessages();
+
+  // Mark as read
+  authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId }) }).catch(() => {});
+
+  // Start polling
+  ccChatStartPoll();
+
+  setTimeout(() => { const inp = document.getElementById('cc-chat-input'); if (inp) inp.focus(); }, 100);
+}
+
+async function ccChatRefreshMessages() {
+  if (!_ccChatChannel) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(_ccChatChannel) + '&limit=50');
     if (!resp.ok) return;
     const data = await resp.json();
-    if (!data.messages || !data.messages.length) {
-      el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">No messages yet. Open chat to start a conversation.</div>';
-      return;
+    const newMsgs = data.messages || [];
+    if (newMsgs.length !== _ccChatMessages.length || (newMsgs.length && newMsgs[newMsgs.length - 1].id !== (_ccChatMessages[_ccChatMessages.length - 1]?.id))) {
+      _ccChatMessages = newMsgs;
+      _ccChatHasMore = data.hasMore || false;
+      ccChatRenderMessages();
     }
-    el.innerHTML = data.messages.slice(-6).map(m => {
-      const time = new Date(m.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      const isMine = m.senderId === currentUser?.id;
-      return '<div style="padding:4px 0;display:flex;gap:6px;align-items:flex-start;">' +
-        '<span style="font-size:11px;font-weight:600;color:' + (isMine ? 'var(--navy)' : 'var(--gold)') + ';white-space:nowrap;">' + _chatSenderName(m).split(' ')[0] + ':</span>' +
-        '<span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.text.slice(0, 60) + '</span>' +
-        '<span style="font-size:9px;color:var(--text-dd);white-space:nowrap;">' + time + '</span></div>';
-    }).join('');
   } catch (_) {}
+}
+
+function ccChatRenderMessages() {
+  const el = document.getElementById('cc-chat-messages');
+  if (!el) return;
+  const myId = currentUser?.id;
+
+  if (!_ccChatMessages.length) {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">No messages yet. Say hello!</div>';
+    return;
+  }
+
+  let html = '';
+  if (_ccChatHasMore) {
+    html += '<div style="text-align:center;padding:8px;"><button onclick="ccChatLoadOlder()" style="font-size:11px;color:var(--text-d);background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 12px;cursor:pointer;">Load older</button></div>';
+  }
+
+  let lastDate = '';
+  for (const msg of _ccChatMessages) {
+    const d = new Date(msg.createdAt);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (dateStr !== lastDate) {
+      html += `<div style="text-align:center;padding:6px 0 2px;"><span style="font-size:10px;color:var(--text-dd);background:var(--surface);padding:2px 10px;border-radius:8px;border:1px solid var(--border);">${dateStr}</span></div>`;
+      lastDate = dateStr;
+    }
+    const isMine = msg.senderId === myId;
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const displayName = _chatSenderName(msg);
+    const initial = displayName.charAt(0).toUpperCase();
+
+    if (isMine) {
+      html += `<div style="display:flex;justify-content:flex-end;padding:2px 0;">
+        <div style="max-width:70%;background:var(--navy);color:#fff;border-radius:16px 16px 4px 16px;padding:8px 12px;font-size:12px;line-height:1.5;">
+          ${_chatEscape(msg.text)}
+          <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}</div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div style="display:flex;gap:8px;padding:2px 0;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;">${initial}</div>
+        <div style="max-width:70%;">
+          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(displayName)}</div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px 16px 16px 16px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);">
+            ${_chatEscape(msg.text)}
+            <div style="font-size:9px;color:var(--text-dd);margin-top:2px;">${time}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function ccChatSend() {
+  const input = document.getElementById('cc-chat-input');
+  if (!input || !_ccChatChannel) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channelId: _ccChatChannel, text }),
+    });
+    if (resp.ok) {
+      const msg = await resp.json();
+      if (!_ccChatMessages.find(m => m.id === msg.id)) {
+        _ccChatMessages.push(msg);
+        ccChatRenderMessages();
+      }
+      // Refresh channel list to update preview
+      ccChatInit();
+    }
+  } catch (_) {}
+}
+
+async function ccChatLoadOlder() {
+  if (!_ccChatMessages.length || !_ccChatChannel) return;
+  const oldest = _ccChatMessages[0].createdAt;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(_ccChatChannel) + '&before=' + encodeURIComponent(oldest) + '&limit=50');
+    if (resp.ok) {
+      const data = await resp.json();
+      _ccChatMessages = [...(data.messages || []), ..._ccChatMessages];
+      _ccChatHasMore = data.hasMore || false;
+      ccChatRenderMessages();
+    }
+  } catch (_) {}
+}
+
+function ccChatNewDM() {
+  const list = document.getElementById('cc-chat-convo-list');
+  if (!list) return;
+  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+  const others = teamList.filter(u => u.id !== currentUser?.id);
+  list.innerHTML = '<div style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);border-bottom:1px solid var(--border);">New Message To...</div>' +
+    others.map(u => {
+      const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
+      const initial = name.charAt(0).toUpperCase();
+      const channelId = _chatDmChannelId(currentUser.id, u.id);
+      return `<div onclick="ccChatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
+        style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border);"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${initial}</div>
+        <span style="font-size:13px;color:var(--text);">${name}</span>
+      </div>`;
+    }).join('');
+}
+
+function ccChatStartPoll() {
+  ccChatStopPoll();
+  _ccChatPollTimer = setInterval(() => {
+    if (_ccChatChannel && document.getElementById('view-commcenter')?.classList.contains('active')) {
+      ccChatRefreshMessages();
+    } else {
+      ccChatStopPoll();
+    }
+  }, 3000);
+}
+
+function ccChatStopPoll() {
+  if (_ccChatPollTimer) { clearInterval(_ccChatPollTimer); _ccChatPollTimer = null; }
+}
+
+// Handle SSE chat messages for Comm Center view
+function ccChatHandleSSE(msg) {
+  if (!_ccChatChannel) return;
+  if (_ccChatChannel === msg.channelId && document.getElementById('view-commcenter')?.classList.contains('active')) {
+    if (!_ccChatMessages.find(m => m.id === msg.id)) {
+      _ccChatMessages.push(msg);
+      ccChatRenderMessages();
+    }
+    authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: msg.channelId }) }).catch(() => {});
+  }
+  // Refresh channel list if on Comm Center
+  if (document.getElementById('view-commcenter')?.classList.contains('active')) {
+    ccChatInit();
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -25009,6 +25266,7 @@ function notifConnectSSE(){
         // ── Chat messages ──
         if(data.type === 'chat' && data.message) {
           chatHandleSSE(data.message);
+          ccChatHandleSSE(data.message);
           return;
         }
 
