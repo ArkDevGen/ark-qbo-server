@@ -460,6 +460,7 @@
   "Mile 40 Corp - Clearfield": {
     "label": "M40 (1425 ClFiUT)",
     "franchise_names": ["Mile 40, Corp"],
+    "letterOffset": 2,
     "stores": {
       "1425": "Clearfield"
     },

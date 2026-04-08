@@ -4807,7 +4807,8 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
     if (franchiseInfo) {
       const storeIds = Object.keys(franchiseInfo.stores || {});
       const idx = storeIds.indexOf(storeId);
-      classSuffix = '-' + String.fromCharCode(65 + (idx >= 0 ? idx : 0)); // A, B, C...
+      const offset = franchiseInfo.letterOffset || 0; // e.g., 2 for C (skips A,B used by another config)
+      classSuffix = '-' + String.fromCharCode(65 + offset + (idx >= 0 ? idx : 0)); // A, B, C...
     }
   }
   const journalNo = grossSales === 0 ? `${mm}.${dd}.${yyyy}-ND${classSuffix}` : `${mm}.${dd}.${yyyy}${classSuffix}`;
