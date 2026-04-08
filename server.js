@@ -5176,12 +5176,10 @@ const _sseClients = new Map();
 app.get('/notifications/stream', requireAuth, (req, res) => {
   const userId = req.arkUser.userId;
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.flushHeaders();
+  res.set('Content-Type', 'text/event-stream');
+  res.set('Cache-Control', 'no-cache');
+  res.set('Connection', 'keep-alive');
+  res.status(200);
   res.write('data: {"type":"connected"}\n\n');
 
   // Register this connection
@@ -5241,7 +5239,7 @@ app.post('/notifications/push', requireAuth, async (req, res) => {
       }
     }
 
-    res.json({ ok: true, sseDelivered: clients?.size || 0, pushSent });
+    res.json({ ok: true, sseDelivered: (clients && clients.size) || 0, pushSent });
   } catch (e) {
     console.error('Notification push error:', e.message);
     res.status(500).json({ error: e.message });
