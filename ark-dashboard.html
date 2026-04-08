@@ -19826,8 +19826,14 @@ function tcNewProjectNote() {
         <div style="position:relative;">
           <input type="text" id="tcnote-client-search" class="field-input" placeholder="Search clients or leave blank..." autocomplete="off" oninput="tcNoteClientFilter()" onfocus="tcNoteClientFilter()" style="width:100%;">
           <input type="hidden" id="tcnote-client-id">
-          <div id="tcnote-client-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:150px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+          <div id="tcnote-client-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:250px;overflow-y:auto;box-shadow:var(--shadow);"></div>
         </div>
+      </div>
+      <div id="tcnote-task-section" style="display:none;">
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Link to Task (optional)</label>
+        <select id="tcnote-task-id" class="field-input" style="width:100%;">
+          <option value="">— General project note —</option>
+        </select>
       </div>
       <div>
         <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Title</label>
@@ -19850,23 +19856,67 @@ function tcNewProjectNote() {
 function tcNoteClientFilter() {
   const q = (document.getElementById('tcnote-client-search')?.value || '').toLowerCase();
   const dd = document.getElementById('tcnote-client-dd');
-  const clients = (DB.clients||[]).filter(c => !q || c.biz.toLowerCase().includes(q)).sort((a,b)=>a.biz.localeCompare(b.biz)).slice(0,10);
-  if (!clients.length) { dd.style.display = 'none'; return; }
+  const clients = (DB.clients||[]).filter(c => !q || c.biz.toLowerCase().includes(q)).sort((a,b)=>a.biz.localeCompare(b.biz));
   dd.style.display = 'block';
-  dd.innerHTML = '<div onmousedown="event.preventDefault();document.getElementById(\'tcnote-client-id\').value=\'\';document.getElementById(\'tcnote-client-search\').value=\'\';document.getElementById(\'tcnote-client-dd\').style.display=\'none\';" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text-d);border-bottom:1px solid var(--border);">— No Client (personal note) —</div>' +
-    clients.map(c => `<div onmousedown="event.preventDefault();document.getElementById('tcnote-client-id').value='${c.id}';document.getElementById('tcnote-client-search').value='${c.biz.replace(/'/g,"\\'")}';document.getElementById('tcnote-client-dd').style.display='none';" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}</div>`).join('');
+  dd.innerHTML = '<div onmousedown="event.preventDefault();tcNoteSelectClient(\'\',\'\')" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text-d);border-bottom:1px solid var(--border);">— No Client (personal note) —</div>' +
+    clients.map(c => `<div onmousedown="event.preventDefault();tcNoteSelectClient('${c.id}','${c.biz.replace(/'/g,"\\'")}')" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}</div>`).join('');
   document.getElementById('tcnote-client-search').onblur = () => setTimeout(() => { dd.style.display = 'none'; }, 200);
+}
+
+function tcNoteSelectClient(clientId, clientName) {
+  document.getElementById('tcnote-client-id').value = clientId;
+  document.getElementById('tcnote-client-search').value = clientName;
+  document.getElementById('tcnote-client-dd').style.display = 'none';
+
+  // Show task selector if client selected
+  const taskSection = document.getElementById('tcnote-task-section');
+  if (taskSection) {
+    if (clientId) {
+      // Get tasks for this client
+      const fAM = document.getElementById('tc-filter-am')?.value || '';
+      const tasks = (DB.tasks || []).filter(t =>
+        t.clientId === clientId && t.type !== 'note' && !t.parentId && t.status !== 'completed'
+        && (!fAM || t.amId === fAM)
+      ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+      taskSection.style.display = '';
+      const sel = document.getElementById('tcnote-task-id');
+      sel.innerHTML = '<option value="">— General project note (not linked to a task) —</option>' +
+        tasks.map(t => `<option value="${t.id}">${t.name}${t.dueDate ? ' (' + t.dueDate + ')' : ''}</option>`).join('');
+    } else {
+      taskSection.style.display = 'none';
+    }
+  }
 }
 
 function tcSaveNewNote() {
   const title = document.getElementById('tcnote-title')?.value.trim();
   const content = document.getElementById('tcnote-content')?.value || '';
   const clientId = document.getElementById('tcnote-client-id')?.value || '';
+  const taskId = document.getElementById('tcnote-task-id')?.value || '';
   if (!title) { alert('Title is required'); return; }
 
   const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
   const client = clientId ? (DB.clients || []).find(c => c.id === clientId) : null;
 
+  if (taskId) {
+    // Link note to a specific task's noteLog
+    const task = (DB.tasks || []).find(t => t.id === taskId);
+    if (task) {
+      if (!task.noteLog) task.noteLog = [];
+      task.noteLog.unshift({
+        id: uid(), text: `**${title}**\n${content}`, author: who,
+        at: new Date().toISOString(), type: 'note',
+      });
+      task.updatedAt = new Date().toISOString();
+      saveDB();
+      document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+      showToast('Note added to task "' + task.name + '"');
+      return;
+    }
+  }
+
+  // Create as standalone note (type:'note' task)
   if (!DB.tasks) DB.tasks = [];
   DB.tasks.push({
     id: uid(), name: title, notes: content, type: 'note',
