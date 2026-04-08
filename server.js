@@ -5137,12 +5137,18 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
     console.log(`  Generated ${franchises.length} franchise groups, ${totalEntries} entries, ${warnings.length} warnings`);
 
     // Store debug info for the /scooters/parse-debug endpoint
+    const unmatchedColumns = headers.filter(h => !Object.values(colMap).includes(h));
+    const matchedColumns = Object.entries(colMap).filter(([k,v])=>v).map(([k,v])=>({ mapped: k, original: v }));
     _lastParseDebug = {
       timestamp: new Date().toISOString(),
       fileName: req.file.originalname,
+      rawHeaders: headers,
+      matchedColumns,
+      unmatchedColumns,
       dataFranchises,
       dataStores,
       rowCount: rows.length,
+      sampleRow: rows.length ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) => k !== '_date')) : null,
       franchiseSummary: franchises.map(f => ({
         key: f.key, label: f.label, storeId: f.storeId,
         entryCount: f.entryCount, debits: f.totalDebits, credits: f.totalCredits, balanced: f.balanced,
