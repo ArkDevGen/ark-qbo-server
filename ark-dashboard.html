@@ -2212,42 +2212,46 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-    </div>
-
-    <!-- ══ TEAM CHAT — Full-Width Split Layout ══ -->
-    <div class="card" style="margin-top:22px;overflow:visible;">
-      <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
-        <div class="card-title">Team Chat</div>
-        <button class="btn btn-ghost btn-sm" onclick="ccChatNewDM()" style="font-size:11px;">+ New DM</button>
-      </div>
-
-      <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:420px;">
-        <!-- Left: Conversation List -->
-        <div style="width:240px;border-right:1px solid var(--border);overflow-y:auto;max-height:480px;flex-shrink:0;">
-          <div id="cc-chat-convo-list" style="font-size:12px;"></div>
+      <!-- ══ CARD 3: Team Chat ══ -->
+      <div class="card" style="overflow:visible;position:relative;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 14px;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--navy);">Team Chat</div>
+          <div style="position:relative;">
+            <button class="btn btn-ghost btn-sm" onclick="ccChatToggleDMMenu()" style="font-size:11px;">+ New DM</button>
+            <div id="cc-chat-dm-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:400;max-height:250px;overflow-y:auto;"></div>
+          </div>
         </div>
 
-        <!-- Right: Thread -->
-        <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
-          <!-- Thread Header -->
-          <div id="cc-chat-thread-header" style="padding:12px 14px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
-            <div id="cc-chat-thread-name" style="font-size:14px;font-weight:700;color:var(--navy);"></div>
+        <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:1;min-height:320px;">
+          <!-- Left: Conversation List -->
+          <div style="width:200px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;">
+            <div id="cc-chat-convo-list" style="font-size:12px;"></div>
           </div>
 
-          <!-- Messages -->
-          <div id="cc-chat-messages" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;max-height:380px;">
-            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">Select a conversation</div>
-          </div>
-
-          <!-- Compose -->
-          <div id="cc-chat-compose" style="display:none;padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0;">
-            <div style="display:flex;gap:6px;">
-              <input id="cc-chat-input" class="field-input" placeholder="Type a message..." style="margin:0;flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')ccChatSend()">
-              <button onclick="ccChatSend()" class="btn btn-primary" style="padding:6px 12px;font-size:12px;white-space:nowrap;">Send</button>
+          <!-- Right: Thread -->
+          <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+            <div id="cc-chat-thread-header" style="padding:10px 12px;border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
+              <div id="cc-chat-thread-name" style="font-size:13px;font-weight:700;color:var(--navy);"></div>
+            </div>
+            <div id="cc-chat-messages" style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:4px;max-height:280px;">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:12px;font-style:italic;">Select a conversation</div>
+            </div>
+            <div id="cc-chat-compose" style="display:none;padding:6px 8px;border-top:1px solid var(--border);flex-shrink:0;">
+              <div style="display:flex;gap:6px;">
+                <input id="cc-chat-input" class="field-input" placeholder="Type a message..." style="margin:0;flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')ccChatSend()">
+                <button onclick="ccChatSend()" class="btn btn-primary" style="padding:5px 10px;font-size:11px;white-space:nowrap;">Send</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- ══ CARD 4: Coming Soon ══ -->
+      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
+        <div style="font-size:28px;">⬜</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
+      </div>
+
     </div>
   </div>
 
@@ -24944,24 +24948,40 @@ async function ccChatLoadOlder() {
   } catch (_) {}
 }
 
-function ccChatNewDM() {
-  const list = document.getElementById('cc-chat-convo-list');
-  if (!list) return;
-  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
-  const others = teamList.filter(u => u.id !== currentUser?.id);
-  list.innerHTML = '<div style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);border-bottom:1px solid var(--border);">New Message To...</div>' +
-    others.map(u => {
+let _ccDmMenuOpen = false;
+function ccChatToggleDMMenu() {
+  const menu = document.getElementById('cc-chat-dm-menu');
+  if (!menu) return;
+  _ccDmMenuOpen = !_ccDmMenuOpen;
+  if (_ccDmMenuOpen) {
+    const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+    const others = teamList.filter(u => u.id !== currentUser?.id);
+    menu.innerHTML = others.map(u => {
       const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
       const initial = name.charAt(0).toUpperCase();
       const channelId = _chatDmChannelId(currentUser.id, u.id);
-      return `<div onclick="ccChatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
-        style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border);"
+      return `<div onclick="document.getElementById('cc-chat-dm-menu').style.display='none';_ccDmMenuOpen=false;ccChatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
+        style="padding:8px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text);"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${initial}</div>
-        <span style="font-size:13px;color:var(--text);">${name}</span>
+        <div style="width:24px;height:24px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${initial}</div>
+        ${name}
       </div>`;
     }).join('');
+    menu.style.display = '';
+    setTimeout(() => document.addEventListener('click', _ccDmOutsideClick, { once: true }), 10);
+  } else {
+    menu.style.display = 'none';
+  }
 }
+function _ccDmOutsideClick(e) {
+  const menu = document.getElementById('cc-chat-dm-menu');
+  if (menu && !menu.contains(e.target) && !e.target.closest('[onclick*="ccChatToggleDMMenu"]')) {
+    menu.style.display = 'none'; _ccDmMenuOpen = false;
+  } else if (_ccDmMenuOpen) {
+    setTimeout(() => document.addEventListener('click', _ccDmOutsideClick, { once: true }), 10);
+  }
+}
+function ccChatNewDM() { ccChatToggleDMMenu(); }
 
 function ccChatStartPoll() {
   ccChatStopPoll();
