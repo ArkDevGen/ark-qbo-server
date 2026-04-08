@@ -5174,7 +5174,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 });
 
 // Temporary debug endpoint for Scooter's parse results
-app.get('/scooters/parse-debug', requireAuth, (req, res) => {
+app.get('/scooters/parse-debug', (req, res) => {
   if (!_lastParseDebug) return res.json({ message: 'No parse results yet. Upload a file first.' });
   res.json(_lastParseDebug);
 });
