@@ -5281,9 +5281,11 @@ function _sseBroadcastChat(msg) {
         try { client.write(payload); } catch (_) { clients.delete(client); }
       }
     }
-  } else if (msg.channelId.startsWith('dm_')) {
+  } else if (msg.channelId.startsWith('dm_') || msg.channelId.startsWith('dm~')) {
     // DM — broadcast to both participants
-    const parts = msg.channelId.replace('dm_', '').split('_');
+    const parts = msg.channelId.includes('~')
+      ? msg.channelId.replace(/^dm~/, '').split('~')
+      : (msg.channelId.match(/usr_[a-f0-9]+/g) || msg.channelId.replace('dm_', '').split('_'));
     for (const uid of parts) {
       const clients = _sseClients.get(uid);
       if (clients) {
@@ -5313,7 +5315,7 @@ app.get('/chat/channels', requireAuth, (req, res) => {
     for (const msg of messages) {
       const ch = msg.channelId;
       // Only include general or DMs involving this user
-      if (ch === 'general' || (ch.startsWith('dm_') && ch.includes(userId))) {
+      if (ch === 'general' || ((ch.startsWith('dm_') || ch.startsWith('dm~')) && ch.includes(userId))) {
         if (!channelMap[ch]) channelMap[ch] = { channelId: ch, messages: 0, lastMessage: null };
         channelMap[ch].messages++;
         if (!channelMap[ch].lastMessage || msg.createdAt > channelMap[ch].lastMessage.createdAt) {
@@ -5355,7 +5357,7 @@ app.get('/chat/messages', requireAuth, (req, res) => {
 
     const userId = req.arkUser.userId;
     // Security: only allow general or DMs involving this user
-    if (channelId !== 'general' && !(channelId.startsWith('dm_') && channelId.includes(userId))) {
+    if (channelId !== 'general' && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -5386,7 +5388,7 @@ app.post('/chat/messages', requireAuth, (req, res) => {
 
     const userId = req.arkUser.userId;
     // Security check
-    if (channelId !== 'general' && !(channelId.startsWith('dm_') && channelId.includes(userId))) {
+    if (channelId !== 'general' && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

@@ -24395,7 +24395,7 @@ function chatRenderChannelList() {
       return chatChannelItem('general', 'Team Chat', preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
     } else {
       // DM — find the other user
-      const parts = ch.channelId.replace('dm_', '').split('_');
+      const parts = _chatParseDmIds(ch.channelId);
       const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
       const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
       let name = otherId;
@@ -24490,6 +24490,21 @@ function chatStopPoll() {
 }
 
 // Resolve sender display name — look up from team list, fallback to stored name
+// Parse DM channel ID into two user IDs — handles both old (dm_usr_xx_usr_yy) and new (dm~id~id) formats
+function _chatParseDmIds(channelId) {
+  if (channelId.includes('~')) return channelId.replace(/^dm~/, '').split('~');
+  // Old format: dm_usr_abc12345_usr_def67890 — extract usr_XXXXXXXX segments
+  const matches = channelId.match(/usr_[a-f0-9]+/g);
+  if (matches && matches.length >= 2) return matches;
+  // Fallback
+  return channelId.replace(/^dm_/, '').split('_');
+}
+
+// Build a DM channel ID from two user IDs
+function _chatDmChannelId(id1, id2) {
+  return 'dm~' + [id1, id2].sort().join('~');
+}
+
 function _chatSenderName(msg) {
   const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
   const user = teamList.find(u => (u.id || u._id) === msg.senderId || u.username === msg.senderId);
@@ -24615,7 +24630,7 @@ function chatShowNewDM() {
   list.innerHTML = others.map(u => {
     const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
     const initial = name.charAt(0).toUpperCase();
-    const channelId = 'dm_' + [currentUser.id, u.id].sort().join('_');
+    const channelId = _chatDmChannelId(currentUser.id, u.id);
     return `<div onclick="chatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
       style="padding:12px 16px;cursor:pointer;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
