@@ -4377,6 +4377,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
           </div>
 
+          <!-- Company Header -->
+          <div id="scoots-pl-header" style="display:none;padding:28px 40px 0;"></div>
+
           <!-- KPI Dashboard -->
           <div id="scoots-pl-kpis" style="display:none;padding:28px 40px 0;">
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;" id="scoots-kpi-row1"></div>
@@ -26320,6 +26323,17 @@ async function scootsPLRun() {
     const cogsPct = totalIncome ? (cogs / Math.abs(totalIncome)) * 100 : 0;
     const payrollPct = totalIncome ? (payroll / Math.abs(totalIncome)) * 100 : 0;
     const discountPct = totalIncome ? (discounts / Math.abs(totalIncome)) * 100 : 0;
+
+    // Render company header
+    const companyName = qboCurrentCompany?.name || 'Company';
+    const headerEl = document.getElementById('scoots-pl-header');
+    if (headerEl) {
+      headerEl.innerHTML = `<div style="text-align:center;padding:8px 0 20px;">
+        <div style="font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-.01em;">${companyName}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#999;margin-top:4px;">Profit & Loss &nbsp;·&nbsp; ${startDate} → ${endDate}</div>
+      </div>`;
+      headerEl.style.display = '';
+    }
 
     // Render KPIs
     scootsPLRenderKPIs({
