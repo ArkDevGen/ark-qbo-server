@@ -4830,7 +4830,7 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
 
   const descParts = [];
   if (avgCheck > 0) descParts.push(`Avg: $${avgCheck.toFixed(2)}`);
-  if (grossFood > 0) descParts.push(`Food: ${grossFood.toFixed(1)}%`);
+  if (grossFood > 0) descParts.push(`Food: ${(grossFood < 1 ? (grossFood * 100) : grossFood).toFixed(1)}%`);
   if (trafficCount > 0) descParts.push(`T Count: ${Math.round(trafficCount)}`);
   const avgCheckDesc = descParts.join(' - ');
 
