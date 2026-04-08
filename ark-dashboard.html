@@ -24682,12 +24682,23 @@ async function chatDeleteChannel(channelId) {
   try {
     const resp = await authFetch(ARK_SERVER + '/chat/channels/' + encodeURIComponent(channelId), { method: 'DELETE' });
     if (resp.ok) {
-      // Reset views if this was the active channel
-      if (_chatChannel === channelId) { _chatChannel = null; _chatMessages = []; }
-      if (_ccChatChannel === channelId) { _ccChatChannel = null; _ccChatMessages = []; }
-      // Refresh both channel lists
-      chatLoadChannels();
-      if (document.getElementById('view-commcenter')?.classList.contains('active')) ccChatInit();
+      // Reset floating panel
+      if (_chatChannel === channelId) {
+        _chatChannel = null; _chatMessages = [];
+        chatBackToList();
+      } else {
+        chatLoadChannels();
+      }
+      // Reset Comm Center
+      if (_ccChatChannel === channelId) {
+        _ccChatChannel = null; _ccChatMessages = [];
+        const header = document.getElementById('cc-chat-thread-header'); if (header) header.style.display = 'none';
+        const compose = document.getElementById('cc-chat-compose'); if (compose) compose.style.display = 'none';
+        const msgs = document.getElementById('cc-chat-messages');
+        if (msgs) msgs.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">Select a conversation</div>';
+        ccChatStopPoll();
+      }
+      ccChatInit();
       showToast('Conversation deleted');
     }
   } catch (_) {}
@@ -24698,12 +24709,15 @@ async function chatDeleteMsg(msgId, source) {
   try {
     const resp = await authFetch(ARK_SERVER + '/chat/messages/' + msgId, { method: 'DELETE' });
     if (resp.ok) {
-      // Remove from floating panel
+      // Remove from floating panel and re-render
       _chatMessages = _chatMessages.filter(m => m.id !== msgId);
       chatRenderMessages();
-      // Remove from Comm Center
+      // Remove from Comm Center and re-render
       _ccChatMessages = _ccChatMessages.filter(m => m.id !== msgId);
-      if (document.getElementById('view-commcenter')?.classList.contains('active')) ccChatRenderMessages();
+      ccChatRenderMessages();
+      // Refresh channel lists to update previews
+      chatLoadChannels();
+      ccChatInit();
     }
   } catch (_) {}
 }
