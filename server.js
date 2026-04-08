@@ -4759,10 +4759,12 @@ function sjeGetRoyaltyRate(franchiseKey, storeId) {
 
 function sjeGetAdFundRate() { return ROYALTY_OVERRIDES.ad_fund_rate || 0.02; }
 
-function sjeFindColumn(headers, possibleNames) {
+function sjeFindColumn(headers, possibleNames, exclude = []) {
+  const excludeSet = new Set(exclude.map(e => String(e).toLowerCase().trim()));
   // First pass: exact match (case-insensitive)
   for (const col of headers) {
     const lower = String(col).toLowerCase().trim();
+    if (excludeSet.has(lower)) continue;
     for (const p of possibleNames) {
       if (lower === p.toLowerCase()) return col;
     }
@@ -4770,6 +4772,7 @@ function sjeFindColumn(headers, possibleNames) {
   // Second pass: includes match (for partial/fuzzy matching)
   for (const col of headers) {
     const lower = String(col).toLowerCase().trim();
+    if (excludeSet.has(lower)) continue;
     for (const p of possibleNames) {
       if (lower.includes(p.toLowerCase())) return col;
     }
@@ -4878,33 +4881,40 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 
     if (!rawData.length) return res.status(400).json({ error: 'Excel file is empty' });
 
-    // Map columns
+    // Map columns — build sequentially so claimed columns are excluded from later mappings
+    // This prevents "Gift Card Load" from stealing the "Gift Card" (redeemed) column via includes matching
     const headers = Object.keys(rawData[0]);
+    const claimed = []; // already-claimed column names
+    function mapCol(possibleNames) {
+      const result = sjeFindColumn(headers, possibleNames, claimed);
+      if (result) claimed.push(result);
+      return result;
+    }
     const colMap = {
-      'Store': sjeFindColumn(headers, ['store']),
-      'Day': sjeFindColumn(headers, ['day', 'date']),
-      'Franchise': sjeFindColumn(headers, ['franchise']),
-      'Gross Sales': sjeFindColumn(headers, ['gross sales']),
-      'Discount': sjeFindColumn(headers, ['discount']),
-      'Employee Discount': sjeFindColumn(headers, ['employee discount', 'emp discount']),
-      'Net Sales': sjeFindColumn(headers, ['net sales']),
-      'Gift Card Load': sjeFindColumn(headers, ['gift card load', 'gift cards sold', 'gc load', 'gift card sold', 'loaded gift card', 'sold gc', 'gift load']),
-      'Tax': sjeFindColumn(headers, ['tax']),
-      'Donation': sjeFindColumn(headers, ['donation', 'donations']),
-      'Tip': sjeFindColumn(headers, ['tip']),
-      'Cash': sjeFindColumn(headers, ['cash']),
-      'Credit Card': sjeFindColumn(headers, ['credit card']),
-      'Gift Card': sjeFindColumn(headers, ['gift card', 'gift card redeemed', 'gift cards redeemed', 'gc redeemed', 'gift card used', 'redeemed gift card', 'gift redemption', 'gc redemption', 'gift redeemed', 'redeem gc']),
-      'Mobile App': sjeFindColumn(headers, ['mobile app']),
-      'Promotion': sjeFindColumn(headers, ['promotion']),
-      'Other': sjeFindColumn(headers, ['other']),
-      'Reconciliation': sjeFindColumn(headers, ['reconciliation']),
-      'Rounding': sjeFindColumn(headers, ['rounding']),
-      'Avg Check': sjeFindColumn(headers, ['avg check', 'average check', 'avg ticket']),
-      'Discount %': sjeFindColumn(headers, ['discount %']),
-      'Traffic Count': sjeFindColumn(headers, ['traffic count']),
-      'Gross Food %': sjeFindColumn(headers, ['gross food %']),
-      'Class': sjeFindColumn(headers, ['class']),
+      'Store': mapCol(['store']),
+      'Day': mapCol(['day', 'date']),
+      'Franchise': mapCol(['franchise']),
+      'Gross Sales': mapCol(['gross sales']),
+      'Discount': mapCol(['discount']),
+      'Employee Discount': mapCol(['employee discount', 'emp discount']),
+      'Net Sales': mapCol(['net sales']),
+      'Gift Card Load': mapCol(['gift card load', 'gift cards sold', 'gc load', 'gift card sold', 'loaded gift card', 'sold gc', 'gift load']),
+      'Tax': mapCol(['tax']),
+      'Donation': mapCol(['donation', 'donations']),
+      'Tip': mapCol(['tip']),
+      'Cash': mapCol(['cash']),
+      'Credit Card': mapCol(['credit card']),
+      'Gift Card': mapCol(['gift card', 'gift card redeemed', 'gift cards redeemed', 'gc redeemed', 'gift card used', 'redeemed gift card', 'gift redemption', 'gc redemption', 'gift redeemed', 'redeem gc']),
+      'Mobile App': mapCol(['mobile app']),
+      'Promotion': mapCol(['promotion']),
+      'Other': mapCol(['other']),
+      'Reconciliation': mapCol(['reconciliation']),
+      'Rounding': mapCol(['rounding']),
+      'Avg Check': mapCol(['avg check', 'average check', 'avg ticket']),
+      'Discount %': mapCol(['discount %']),
+      'Traffic Count': mapCol(['traffic count']),
+      'Gross Food %': mapCol(['gross food %']),
+      'Class': mapCol(['class']),
     };
 
     // Normalize rows
