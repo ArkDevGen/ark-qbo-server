@@ -5472,6 +5472,34 @@ app.delete('/chat/messages/:id', requireAuth, (req, res) => {
   }
 });
 
+// Delete an entire DM channel (not allowed for 'general')
+app.delete('/chat/channels/:channelId', requireAuth, (req, res) => {
+  try {
+    const channelId = req.params.channelId;
+    if (channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat' });
+    if (!channelId.startsWith('dm_') && !channelId.startsWith('dm~')) return res.status(403).json({ error: 'Can only delete DM channels' });
+    // Verify user is a participant
+    const userId = req.arkUser.userId;
+    if (!channelId.includes(userId)) return res.status(403).json({ error: 'Not a participant' });
+
+    const messages = _loadChatMessages();
+    const remaining = messages.filter(m => m.channelId !== channelId);
+    _saveChatMessages(remaining);
+
+    // Clean up read status
+    const readStatus = _loadChatReadStatus();
+    for (const uid of Object.keys(readStatus)) {
+      if (readStatus[uid][channelId]) delete readStatus[uid][channelId];
+    }
+    _saveChatReadStatus(readStatus);
+
+    console.log(`Chat: ${req.arkUser.userName} deleted channel ${channelId} (${messages.length - remaining.length} messages)`);
+    res.json({ ok: true, deleted: messages.length - remaining.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────
 // WEB PUSH — VAPID setup, subscription management
 // ─────────────────────────────────────────────────────────────────
