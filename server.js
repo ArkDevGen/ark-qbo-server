@@ -5645,6 +5645,14 @@ app.get('/sw-push.js', (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 // HEALTH CHECK — Render uses this for zero-downtime deploys
 // ─────────────────────────────────────────────────────────────────
+// Temp: clear all chat messages
+app.post('/chat/clear-all', requireAuth, (req, res) => {
+  _saveChatMessages([]);
+  _saveChatReadStatus({});
+  _saveChatHidden({});
+  res.json({ ok: true, message: 'All chat messages cleared' });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), dataDir: DATA_DIR });
 });
