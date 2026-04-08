@@ -5646,7 +5646,7 @@ app.get('/sw-push.js', (req, res) => {
 // HEALTH CHECK — Render uses this for zero-downtime deploys
 // ─────────────────────────────────────────────────────────────────
 // Temp: clear all chat messages
-app.post('/chat/clear-all', requireAuth, (req, res) => {
+app.post('/chat/clear-all', (req, res) => {
   _saveChatMessages([]);
   _saveChatReadStatus({});
   _saveChatHidden({});
