@@ -4070,6 +4070,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="display:flex;gap:4px;">
           <button class="btn btn-sm" id="sje-mode-sales" onclick="sjeMode('sales')" style="font-size:12px;font-weight:600;background:var(--accent);color:#fff;border-color:var(--accent);">Sales JE</button>
           <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;">COGS JE</button>
+          <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Review</button>
         </div>
       </div>
 
@@ -4308,6 +4309,54 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
       </div><!-- /sje-cogs-panel -->
+
+      <!-- ═══ P&L PRESENTATION TOOL ═══ -->
+      <div id="scoots-pl-panel" style="display:none;">
+        <div style="background:#FFF8F0;border:2px solid #C8102E;border-radius:12px;overflow:hidden;">
+          <!-- Branded Header -->
+          <div style="background:linear-gradient(135deg,#C8102E 0%,#a00d24 100%);padding:18px 24px;display:flex;align-items:center;gap:14px;">
+            <div style="width:44px;height:44px;border-radius:10px;background:#F2A900;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 2px 8px rgba(0,0,0,.2);">☕</div>
+            <div style="flex:1;">
+              <div style="font-size:18px;font-weight:700;color:#fff;font-family:'Cormorant Garamond',serif;letter-spacing:.02em;">Scooter's Coffee — P&L Review</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.7);">Franchisee Performance Analysis</div>
+            </div>
+            <span id="scoots-pl-status" style="font-size:11px;color:rgba(255,255,255,.8);"></span>
+          </div>
+
+          <!-- Controls Bar -->
+          <div style="padding:14px 24px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid rgba(200,16,46,.15);background:rgba(200,16,46,.03);">
+            <label style="font-size:11px;color:#6b5b4f;font-weight:600;">From:</label>
+            <input type="date" id="scoots-pl-start" class="input" style="font-size:12px;width:140px;border-color:rgba(200,16,46,.25);background:#fff;">
+            <label style="font-size:11px;color:#6b5b4f;font-weight:600;">To:</label>
+            <input type="date" id="scoots-pl-end" class="input" style="font-size:12px;width:140px;border-color:rgba(200,16,46,.25);background:#fff;">
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-sm" onclick="scootsPLQuick('this-month')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">This Mo</button>
+              <button class="btn btn-sm" onclick="scootsPLQuick('last-month')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">Last Mo</button>
+              <button class="btn btn-sm" onclick="scootsPLQuick('this-quarter')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">This Qtr</button>
+              <button class="btn btn-sm" onclick="scootsPLQuick('last-quarter')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">Last Qtr</button>
+              <button class="btn btn-sm" onclick="scootsPLQuick('this-year')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">YTD</button>
+            </div>
+            <label style="font-size:11px;color:#6b5b4f;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;">
+              <input type="checkbox" id="scoots-pl-pct"> % of Income
+            </label>
+            <label style="font-size:11px;color:#6b5b4f;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;">
+              <input type="checkbox" id="scoots-pl-class"> By Class
+            </label>
+            <button onclick="scootsPLRun()" style="font-size:12px;font-weight:700;padding:7px 20px;background:#C8102E;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 6px rgba(200,16,46,.3);transition:all .15s;">Run Report</button>
+          </div>
+
+          <!-- KPI Dashboard (hidden until report loads) -->
+          <div id="scoots-pl-kpis" style="display:none;padding:20px 24px 0;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;" id="scoots-kpi-row1"></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;" id="scoots-kpi-row2"></div>
+          </div>
+
+          <!-- P&L Report Output -->
+          <div id="scoots-pl-output" style="padding:16px 24px 24px;">
+            <div style="padding:40px;text-align:center;color:#9a8b7e;font-size:13px;">Select a date range and click <strong style="color:#C8102E;">Run Report</strong></div>
+          </div>
+        </div>
+      </div>
 
     </div><!-- /qbo-tab-scooters -->
 
@@ -25448,6 +25497,339 @@ function qboPLRptSummaryRow(colData, colCount, showPct, incomeTotal, byClass, is
   return html;
 }
 
+// ── Scooter's P&L Presentation Tool ────────────────────────────────
+
+function scootsPLQuick(preset) {
+  const today = new Date();
+  let s, e;
+  if (preset === 'this-month') {
+    s = new Date(today.getFullYear(), today.getMonth(), 1);
+    e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  } else if (preset === 'last-month') {
+    s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    e = new Date(today.getFullYear(), today.getMonth(), 0);
+  } else if (preset === 'this-quarter') {
+    const q = Math.floor(today.getMonth() / 3) * 3;
+    s = new Date(today.getFullYear(), q, 1);
+    e = new Date(today.getFullYear(), q + 3, 0);
+  } else if (preset === 'last-quarter') {
+    const q = Math.floor(today.getMonth() / 3) * 3 - 3;
+    s = new Date(today.getFullYear(), q, 1);
+    e = new Date(today.getFullYear(), q + 3, 0);
+  } else if (preset === 'this-year') {
+    s = new Date(today.getFullYear(), 0, 1);
+    e = today;
+  }
+  const fmt = d => d.toISOString().slice(0, 10);
+  document.getElementById('scoots-pl-start').value = fmt(s);
+  document.getElementById('scoots-pl-end').value = fmt(e);
+}
+
+// Extract a numeric value from a QBO P&L report by section name keyword
+function scootsPLExtract(report, ...keywords) {
+  const rows = report?.Rows?.Row || [];
+  for (const section of rows) {
+    const hdr = (section.Header?.ColData?.[0]?.value || '').toLowerCase();
+    const sumLabel = (section.Summary?.ColData?.[0]?.value || '').toLowerCase();
+    const match = keywords.some(kw => hdr.includes(kw) || sumLabel.includes(kw));
+    if (match && section.Summary) {
+      const vals = section.Summary.ColData || [];
+      // Use the last numeric column (total column)
+      for (let i = vals.length - 1; i >= 1; i--) {
+        const n = parseFloat(vals[i].value);
+        if (!isNaN(n)) return n;
+      }
+    }
+    // Also search inside sub-rows for line items (e.g., "Discounts given")
+    if (section.Rows?.Row) {
+      for (const sub of section.Rows.Row) {
+        const subLabel = (sub.ColData?.[0]?.value || sub.Header?.ColData?.[0]?.value || '').toLowerCase();
+        if (keywords.some(kw => subLabel.includes(kw)) && sub.ColData) {
+          for (let i = sub.ColData.length - 1; i >= 1; i--) {
+            const n = parseFloat(sub.ColData[i].value);
+            if (!isNaN(n)) return n;
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+// Deep search for a line item inside nested P&L rows
+function scootsPLDeepSearch(rows, ...keywords) {
+  for (const row of rows) {
+    const label = (row.ColData?.[0]?.value || row.Header?.ColData?.[0]?.value || '').toLowerCase();
+    if (keywords.some(kw => label.includes(kw))) {
+      const vals = row.ColData || row.Summary?.ColData || [];
+      for (let i = vals.length - 1; i >= 1; i--) {
+        const n = parseFloat(vals[i].value);
+        if (!isNaN(n)) return n;
+      }
+    }
+    // Recurse into nested rows
+    if (row.Rows?.Row) {
+      const found = scootsPLDeepSearch(row.Rows.Row, ...keywords);
+      if (found !== 0) return found;
+    }
+  }
+  return 0;
+}
+
+async function scootsPLFetch(startDate, endDate, byClass) {
+  const payload = { startDate, endDate, reportType: 'summary' };
+  if (byClass) payload.summarize_column_by = 'Classes';
+  const resp = await authFetch(ARK_SERVER + '/qbo/api', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId: qboActiveRealmId }),
+  });
+  const data = await resp.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch P&L');
+  return data.report;
+}
+
+async function scootsPLRun() {
+  const startDate = document.getElementById('scoots-pl-start').value;
+  const endDate = document.getElementById('scoots-pl-end').value;
+  if (!startDate || !endDate) { alert('Select a date range'); return; }
+  const showPct = document.getElementById('scoots-pl-pct').checked;
+  const byClass = document.getElementById('scoots-pl-class').checked;
+  const statusEl = document.getElementById('scoots-pl-status');
+  const output = document.getElementById('scoots-pl-output');
+  const kpiBox = document.getElementById('scoots-pl-kpis');
+
+  statusEl.textContent = 'Loading…';
+  kpiBox.style.display = 'none';
+  output.innerHTML = '<div style="padding:40px;text-align:center;color:#9a8b7e;font-size:13px;">☕ Fetching P&L data…</div>';
+
+  try {
+    // Calculate comparison periods
+    const sd = new Date(startDate + 'T00:00:00');
+    const ed = new Date(endDate + 'T00:00:00');
+    const fmt = d => d.toISOString().slice(0, 10);
+
+    // Previous month period (shift back 1 month)
+    const prevStart = new Date(sd.getFullYear(), sd.getMonth() - 1, sd.getDate());
+    const prevEnd = new Date(ed.getFullYear(), ed.getMonth() - 1, ed.getDate());
+    // Clamp prevEnd to last day of its month if needed
+    const prevEndClamped = new Date(prevEnd.getFullYear(), prevEnd.getMonth() + 1, 0);
+    const prevEndFinal = prevEnd > prevEndClamped ? prevEndClamped : prevEnd;
+
+    // Year ago period
+    const yoyStart = new Date(sd.getFullYear() - 1, sd.getMonth(), sd.getDate());
+    const yoyEnd = new Date(ed.getFullYear() - 1, ed.getMonth(), ed.getDate());
+    const yoyEndClamped = new Date(yoyEnd.getFullYear(), yoyEnd.getMonth() + 1, 0);
+    const yoyEndFinal = yoyEnd > yoyEndClamped ? yoyEndClamped : yoyEnd;
+
+    // Fetch all 3 periods in parallel (no class breakout for comparisons — just totals)
+    const [currentReport, prevReport, yoyReport] = await Promise.all([
+      scootsPLFetch(startDate, endDate, byClass),
+      scootsPLFetch(fmt(prevStart), fmt(prevEndFinal), false),
+      scootsPLFetch(fmt(yoyStart), fmt(yoyEndFinal), false),
+    ]);
+
+    // Extract KPI values from current period
+    const allRows = currentReport?.Rows?.Row || [];
+    const totalIncome = scootsPLExtract(currentReport, 'income', 'revenue') || scootsPLExtract(currentReport, 'gross profit');
+    const cogs = Math.abs(scootsPLExtract(currentReport, 'cost of goods', 'cogs'));
+    const payroll = Math.abs(scootsPLDeepSearch(allRows, 'payroll', 'wages', 'salaries', 'labor'));
+    const discounts = Math.abs(scootsPLDeepSearch(allRows, 'discount'));
+    const netIncome = scootsPLExtract(currentReport, 'net income', 'net operating');
+
+    // Previous period income
+    const prevIncome = scootsPLExtract(prevReport, 'income', 'revenue') || scootsPLExtract(prevReport, 'gross profit');
+    // YoY income
+    const yoyIncome = scootsPLExtract(yoyReport, 'income', 'revenue') || scootsPLExtract(yoyReport, 'gross profit');
+
+    // Calculate KPI metrics
+    const momDelta = totalIncome - prevIncome;
+    const momPct = prevIncome ? ((totalIncome - prevIncome) / Math.abs(prevIncome)) * 100 : 0;
+    const yoyDelta = totalIncome - yoyIncome;
+    const yoyPct = yoyIncome ? ((totalIncome - yoyIncome) / Math.abs(yoyIncome)) * 100 : 0;
+    const cogsPct = totalIncome ? (cogs / Math.abs(totalIncome)) * 100 : 0;
+    const payrollPct = totalIncome ? (payroll / Math.abs(totalIncome)) * 100 : 0;
+    const discountPct = totalIncome ? (discounts / Math.abs(totalIncome)) * 100 : 0;
+
+    // Render KPIs
+    scootsPLRenderKPIs({
+      totalIncome, momDelta, momPct, yoyDelta, yoyPct,
+      cogsPct, payrollPct, discountPct, netIncome
+    });
+    kpiBox.style.display = '';
+
+    // Render P&L report
+    scootsPLRenderReport(currentReport, output, showPct, byClass);
+
+    statusEl.textContent = startDate + ' → ' + endDate;
+    qboLog('info', 'Scooter\'s P&L loaded for ' + startDate + ' → ' + endDate);
+  } catch (e) {
+    output.innerHTML = `<div style="padding:30px;text-align:center;color:#C8102E;font-size:13px;">⚠️ ${e.message}</div>`;
+    statusEl.textContent = 'Error';
+    kpiBox.style.display = 'none';
+  }
+}
+
+function scootsPLRenderKPIs(kpi) {
+  const fmtMoney = v => {
+    const abs = Math.abs(v);
+    if (abs >= 1000000) return (v < 0 ? '-' : '') + '$' + (abs / 1000000).toFixed(1) + 'M';
+    if (abs >= 1000) return (v < 0 ? '-' : '') + '$' + (abs / 1000).toFixed(1) + 'K';
+    return qboFmtMoney(String(v));
+  };
+  const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const arrow = v => v >= 0 ? '▲' : '▼';
+  const trendColor = v => v >= 0 ? '#16a34a' : '#dc2626';
+  // For expense %: lower is better (green), higher is cautionary (amber/red)
+  const expColor = v => v <= 30 ? '#16a34a' : v <= 45 ? '#F2A900' : '#dc2626';
+
+  const kpiCard = (label, value, subtitle, color, borderColor) => `
+    <div style="background:#fff;border-radius:10px;padding:16px 18px;border-left:4px solid ${borderColor || '#C8102E'};box-shadow:0 1px 4px rgba(0,0,0,.06);transition:transform .15s;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#9a8b7e;margin-bottom:8px;">${label}</div>
+      <div style="font-size:24px;font-weight:800;font-family:'Cormorant Garamond',serif;color:${color};line-height:1;letter-spacing:-.01em;">${value}</div>
+      <div style="font-size:10px;color:#9a8b7e;margin-top:6px;">${subtitle}</div>
+    </div>`;
+
+  // Row 1: Revenue metrics
+  document.getElementById('scoots-kpi-row1').innerHTML =
+    kpiCard('Total Sales', fmtMoney(kpi.totalIncome), 'current period', '#1a1a2e', '#F2A900') +
+    kpiCard('MoM Sales Δ', (kpi.momDelta >= 0 ? '+' : '') + fmtMoney(kpi.momDelta), arrow(kpi.momDelta) + ' vs prior month', trendColor(kpi.momDelta), trendColor(kpi.momDelta)) +
+    kpiCard('MoM Sales %', fmtPct(kpi.momPct), arrow(kpi.momPct) + ' vs prior month', trendColor(kpi.momPct), trendColor(kpi.momPct)) +
+    kpiCard('YoY Sales %', fmtPct(kpi.yoyPct), arrow(kpi.yoyPct) + ' vs same period last year', trendColor(kpi.yoyPct), trendColor(kpi.yoyPct));
+
+  // Row 2: Expense ratios + Net Profit
+  document.getElementById('scoots-kpi-row2').innerHTML =
+    kpiCard('COGS %', kpi.cogsPct.toFixed(1) + '%', 'of income', expColor(kpi.cogsPct), expColor(kpi.cogsPct)) +
+    kpiCard('Payroll %', kpi.payrollPct.toFixed(1) + '%', 'of income', expColor(kpi.payrollPct), expColor(kpi.payrollPct)) +
+    kpiCard('Discount %', kpi.discountPct.toFixed(1) + '%', 'of income', kpi.discountPct <= 5 ? '#16a34a' : '#F2A900', kpi.discountPct <= 5 ? '#16a34a' : '#F2A900') +
+    kpiCard('Net Profit', fmtMoney(kpi.netIncome), kpi.netIncome >= 0 ? 'profitable' : 'net loss', kpi.netIncome >= 0 ? '#16a34a' : '#dc2626', kpi.netIncome >= 0 ? '#16a34a' : '#dc2626');
+}
+
+function scootsPLRenderReport(report, container, showPct, byClass) {
+  const rows = report?.Rows?.Row || [];
+  const cols = (report?.Columns?.Column || []).map(c => c.ColTitle);
+  const colCount = cols.length;
+  const colW = byClass ? '110px' : '130px';
+
+  let html = '<div style="margin-top:16px;">';
+
+  // Report title bar
+  html += '<div style="display:flex;align-items:center;padding:12px 0;border-bottom:3px solid #C8102E;margin-bottom:8px;">';
+  html += '<span style="font-size:15px;font-weight:700;color:#C8102E;font-family:\'Cormorant Garamond\',serif;letter-spacing:.02em;">Profit & Loss Statement</span>';
+  html += '</div>';
+
+  // Column headers
+  if (colCount > 1) {
+    html += '<div style="display:flex;padding:8px 10px;border-bottom:2px solid rgba(200,16,46,.2);margin-bottom:6px;">';
+    html += '<span style="flex:1;font-size:11px;font-weight:700;color:#6b5b4f;text-transform:uppercase;letter-spacing:.06em;"></span>';
+    for (let i = 1; i < colCount; i++) {
+      html += `<span style="width:${colW};text-align:right;font-size:10px;font-weight:700;color:#6b5b4f;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
+    }
+    html += '</div>';
+  }
+
+  // Determine income total for % calculation
+  let incomeTotal = 0;
+  if (showPct) {
+    for (const section of rows) {
+      const headerLabel = section.Header?.ColData?.[0]?.value || '';
+      if (headerLabel.toLowerCase().includes('income') && !headerLabel.toLowerCase().includes('other') && !headerLabel.toLowerCase().includes('net')) {
+        const sumVals = section.Summary?.ColData || [];
+        const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
+        if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
+        break;
+      }
+    }
+    if (!incomeTotal) {
+      for (const section of rows) {
+        const sumLabel = section.Summary?.ColData?.[0]?.value || '';
+        if (sumLabel.toLowerCase().includes('total income') || sumLabel.toLowerCase() === 'gross profit') {
+          const sumVals = section.Summary?.ColData || [];
+          const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
+          if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
+          break;
+        }
+      }
+    }
+  }
+
+  for (const section of rows) {
+    if (section.Header) {
+      const headerVal = section.Header.ColData?.map(c => c.value) || [];
+      html += `<div style="font-size:14px;font-weight:700;color:#C8102E;padding:14px 0 6px;border-bottom:2px solid rgba(200,16,46,.15);margin-top:16px;cursor:pointer;font-family:'Cormorant Garamond',serif;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        ${headerVal[0] || 'Section'} <span style="float:right;font-size:10px;opacity:.4;font-family:'DM Sans',sans-serif;font-weight:400;">click to toggle</span></div>`;
+      html += '<div>';
+      html += scootsPLRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass, colW);
+      if (section.Summary) {
+        html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, true);
+      }
+      html += '</div>';
+    } else if (section.Summary) {
+      html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, false, true);
+    }
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW) {
+  let html = '';
+  const indent = depth * 18;
+  for (const row of rows) {
+    if (row.type === 'Data' && row.ColData) {
+      const vals = row.ColData.map(c => c.value);
+      html += `<div style="display:flex;padding:4px 10px 4px ${10 + indent}px;font-size:12px;color:#3d3427;transition:background .1s;" onmouseenter="this.style.background='rgba(200,16,46,.04)'" onmouseleave="this.style.background=''">`;
+      html += `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${vals[0] || ''}</span>`;
+      for (let i = 1; i < vals.length; i++) {
+        const n = parseFloat(vals[i]);
+        const money = qboFmtMoney(vals[i]);
+        const negStyle = n < 0 ? 'color:#dc2626;' : '';
+        html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:11px;${negStyle}">${money}`;
+        if (showPct && incomeTotal) {
+          const pct = (n || 0) / incomeTotal * 100;
+          html += `<span style="font-size:9px;color:#9a8b7e;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+        }
+        html += '</span>';
+      }
+      html += '</div>';
+    } else if (row.Header) {
+      const headerVals = row.Header.ColData?.map(c => c.value) || [];
+      html += `<div style="font-size:12px;font-weight:600;padding:8px 10px 3px ${10 + indent}px;color:#6b5b4f;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
+      html += '<div>';
+      html += scootsPLRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass, colW);
+      if (row.Summary) {
+        html += scootsPLSumRow(row.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, true);
+      }
+      html += '</div>';
+    }
+  }
+  return html;
+}
+
+function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, isSection, isGrand) {
+  const vals = colData.map(c => c.value);
+  const border = isGrand ? '3px double #C8102E' : '2px solid rgba(200,16,46,.2)';
+  const fontSize = isGrand ? '14px' : '12px';
+  const pad = isGrand ? '12px 10px' : '6px 10px';
+  const mt = isGrand ? '20px' : '4px';
+  const bg = isGrand ? 'background:rgba(200,16,46,.04);' : '';
+  const fontFam = isGrand ? "font-family:'Cormorant Garamond',serif;" : '';
+  let html = `<div style="display:flex;padding:${pad};font-weight:700;font-size:${fontSize};border-top:${border};margin-top:${mt};${bg}${fontFam}border-radius:${isGrand ? '0 0 8px 8px' : '0'};">`;
+  html += `<span style="flex:1;color:#1a1a2e;">${vals[0] || ''}</span>`;
+  for (let i = 1; i < vals.length; i++) {
+    const n = parseFloat(vals[i]);
+    const money = qboFmtMoney(vals[i]);
+    const negStyle = n < 0 ? 'color:#dc2626;' : 'color:#1a1a2e;';
+    html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;${negStyle}">${money}`;
+    if (showPct && incomeTotal) {
+      const pct = (n || 0) / incomeTotal * 100;
+      html += `<span style="font-size:9px;color:#9a8b7e;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+    }
+    html += '</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
 // ── AR Aging Workspace ─────────────────────────────────────────────
 
 async function qboARRun() {
@@ -29365,14 +29747,18 @@ let _cogsPushResults = [];
 function sjeMode(mode) {
   document.getElementById('sje-sales-panel').style.display = mode === 'sales' ? '' : 'none';
   document.getElementById('sje-cogs-panel').style.display = mode === 'cogs' ? '' : 'none';
+  document.getElementById('scoots-pl-panel').style.display = mode === 'pl' ? '' : 'none';
   const salesBtn = document.getElementById('sje-mode-sales');
   const cogsBtn = document.getElementById('sje-mode-cogs');
+  const plBtn = document.getElementById('sje-mode-pl');
+  // Reset all buttons
+  [salesBtn, cogsBtn, plBtn].forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
   if (mode === 'sales') {
     salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
-    cogsBtn.style.background = ''; cogsBtn.style.color = ''; cogsBtn.style.borderColor = ''; cogsBtn.style.fontWeight = '';
-  } else {
+  } else if (mode === 'cogs') {
     cogsBtn.style.background = 'var(--accent)'; cogsBtn.style.color = '#fff'; cogsBtn.style.borderColor = 'var(--accent)'; cogsBtn.style.fontWeight = '600';
-    salesBtn.style.background = ''; salesBtn.style.color = ''; salesBtn.style.borderColor = ''; salesBtn.style.fontWeight = '';
+  } else if (mode === 'pl') {
+    plBtn.style.background = '#C8102E'; plBtn.style.color = '#fff'; plBtn.style.borderColor = '#C8102E'; plBtn.style.fontWeight = '600';
   }
 }
 
