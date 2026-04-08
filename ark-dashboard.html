@@ -4380,6 +4380,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <button class="btn btn-sm" onclick="scootsPLQuick('this-quarter')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">This Qtr</button>
                 <button class="btn btn-sm" onclick="scootsPLQuick('last-quarter')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">Last Qtr</button>
                 <button class="btn btn-sm" onclick="scootsPLQuick('this-year')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">YTD</button>
+                <button class="btn btn-sm" onclick="scootsPLQuick('ytd-last-month')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">YTD → Last Mo</button>
               </div>
               <div style="display:flex;align-items:center;gap:12px;margin-left:4px;">
                 <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
@@ -4390,6 +4391,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 </label>
               </div>
               <button onclick="scootsPLRun()" style="font-size:12px;font-weight:600;padding:8px 24px;background:#C8102E;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;margin-left:auto;" onmouseenter="this.style.background='#a00d24'" onmouseleave="this.style.background='#C8102E'">Run Report</button>
+              <button onclick="scootsPLPrint()" id="scoots-pl-print-btn" style="display:none;font-size:12px;font-weight:600;padding:8px 20px;background:#fff;color:#333;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'">Print / PDF</button>
             </div>
           </div>
 
@@ -26673,6 +26675,9 @@ function scootsPLQuick(preset) {
   } else if (preset === 'this-year') {
     s = new Date(today.getFullYear(), 0, 1);
     e = today;
+  } else if (preset === 'ytd-last-month') {
+    s = new Date(today.getFullYear(), 0, 1);
+    e = new Date(today.getFullYear(), today.getMonth(), 0);
   }
   const fmt = d => d.toISOString().slice(0, 10);
   document.getElementById('scoots-pl-start').value = fmt(s);
@@ -26806,16 +26811,26 @@ async function scootsPLRun() {
     const payrollPct = totalIncome ? (payroll / Math.abs(totalIncome)) * 100 : 0;
     const discountPct = totalIncome ? (discounts / Math.abs(totalIncome)) * 100 : 0;
 
-    // Render company header
-    const companyName = qboCurrentCompany?.name || 'Company';
+    // Render company header — try report header options, then QBO company, then fallback
+    let reportName = '';
+    const headerOpts = currentReport?.Header?.Option || [];
+    for (const opt of headerOpts) {
+      if (opt.Name === 'CompanyName' && opt.Value) { reportName = opt.Value; break; }
+    }
+    if (!reportName) reportName = currentReport?.Header?.CompanyName || '';
+    const companyName = reportName || qboCurrentCompany?.name || 'Company';
     const headerEl = document.getElementById('scoots-pl-header');
     if (headerEl) {
       headerEl.innerHTML = `<div style="text-align:center;padding:8px 0 20px;">
-        <div style="font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-.01em;">${companyName}</div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#999;margin-top:4px;">Profit &amp; Loss &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:26px;font-weight:700;color:#1a1a1a;letter-spacing:-.02em;">${companyName}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#999;margin-top:6px;">Profit &amp; Loss &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}</div>
       </div>`;
       headerEl.style.display = '';
     }
+
+    // Show print button
+    const printBtn = document.getElementById('scoots-pl-print-btn');
+    if (printBtn) printBtn.style.display = '';
 
     // Render KPIs
     scootsPLRenderKPIs({
@@ -26943,6 +26958,38 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
   }
   html += '</div>';
   container.innerHTML = html;
+}
+
+function scootsPLPrint() {
+  const header = document.getElementById('scoots-pl-header');
+  const kpis = document.getElementById('scoots-pl-kpis');
+  const report = document.getElementById('scoots-pl-output');
+  if (!report || !report.innerHTML.trim()) { showToast('Run a report first', 'error'); return; }
+
+  const printWin = window.open('', '_blank', 'width=900,height=700');
+  printWin.document.write(`<!DOCTYPE html><html><head><title>P&L Report</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; color:#1a1a1a; background:#fff; padding:48px 56px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @media print {
+    body { padding:32px 40px; }
+    @page { margin:0.5in 0.6in; size:letter; }
+  }
+</style></head><body>`);
+
+  if (header && header.style.display !== 'none') {
+    printWin.document.write(header.innerHTML);
+  }
+  if (kpis && kpis.style.display !== 'none') {
+    printWin.document.write('<div style="margin:16px 0 8px;">' + kpis.innerHTML + '</div>');
+  }
+  printWin.document.write('<div style="margin-top:12px;">' + report.innerHTML + '</div>');
+  printWin.document.write('</body></html>');
+  printWin.document.close();
+
+  // Wait for fonts to load, then trigger print
+  setTimeout(() => { printWin.print(); }, 600);
 }
 
 function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW) {
