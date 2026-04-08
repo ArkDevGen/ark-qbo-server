@@ -5349,14 +5349,21 @@ function _dmChannelId(uid1, uid2) {
 app.get('/chat/channels', requireAuth, (req, res) => {
   try {
     const userId = req.arkUser.userId;
-    const messages = _loadChatMessages();
+    const allMessages = _loadChatMessages();
     const readStatus = _loadChatReadStatus();
     const userRead = readStatus[userId] || {};
+    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [] };
+
+    // Filter out hidden messages and channels for this user
+    const messages = allMessages.filter(m =>
+      !hidden.messages.includes(m.id) && !hidden.channels.includes(m.channelId)
+    );
 
     // Build channel map
     const channelMap = {};
     for (const msg of messages) {
       const ch = msg.channelId;
+      if (hidden.channels.includes(ch)) continue;
       // Only include general or DMs involving this user
       if (ch === 'general' || ((ch.startsWith('dm_') || ch.startsWith('dm~')) && ch.includes(userId))) {
         if (!channelMap[ch]) channelMap[ch] = { channelId: ch, messages: 0, lastMessage: null };
@@ -5404,8 +5411,9 @@ app.get('/chat/messages', requireAuth, (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const messages = _loadChatMessages();
-    let filtered = messages.filter(m => m.channelId === channelId);
+    const allMessages = _loadChatMessages();
+    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [] };
+    let filtered = allMessages.filter(m => m.channelId === channelId && !hidden.messages.includes(m.id));
     if (before) filtered = filtered.filter(m => m.createdAt < before);
     filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
     const pageSize = Math.min(parseInt(lim) || 50, 100);
@@ -5482,33 +5490,33 @@ app.post('/chat/read', requireAuth, (req, res) => {
 });
 
 // Delete a message (own messages only)
+// Per-user hidden messages/channels — deleting only hides for you, not the other person
+const CHAT_HIDDEN_FILE = path.join(DATA_DIR, 'chat-hidden.json');
+
+function _loadChatHidden() {
+  try { if (fs.existsSync(CHAT_HIDDEN_FILE)) return JSON.parse(fs.readFileSync(CHAT_HIDDEN_FILE, 'utf8')); } catch (_) {}
+  return {};
+}
+
+function _saveChatHidden(data) {
+  fs.writeFileSync(CHAT_HIDDEN_FILE, JSON.stringify(data, null, 2));
+}
+
+// Hide a message (per-user, DMs only)
 app.delete('/chat/messages/:id', requireAuth, (req, res) => {
   try {
     const messages = _loadChatMessages();
-    const idx = messages.findIndex(m => m.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Message not found' });
-    if (messages[idx].channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat messages' });
-    if (messages[idx].senderId !== req.arkUser.userId) return res.status(403).json({ error: 'Can only delete your own messages' });
+    const msg = messages.find(m => m.id === req.params.id);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    if (msg.channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat messages' });
 
-    const deleted = messages[idx];
-    messages.splice(idx, 1);
-    _saveChatMessages(messages);
-
-    // Broadcast deletion via SSE
-    const payload = `data: ${JSON.stringify({ type: 'chat-delete', messageId: deleted.id, channelId: deleted.channelId })}\n\n`;
-    if (deleted.channelId === 'general') {
-      for (const [, clients] of _sseClients) {
-        for (const client of clients) { try { client.write(payload); } catch (_) { clients.delete(client); } }
-      }
-    } else if (deleted.channelId.startsWith('dm_') || deleted.channelId.startsWith('dm~')) {
-      const parts = deleted.channelId.includes('~')
-        ? deleted.channelId.replace(/^dm~/, '').split('~')
-        : (deleted.channelId.match(/usr_[a-f0-9]+/g) || []);
-      for (const uid of parts) {
-        const clients = _sseClients.get(uid);
-        if (clients) { for (const client of clients) { try { client.write(payload); } catch (_) { clients.delete(client); } } }
-      }
+    const userId = req.arkUser.userId;
+    const hidden = _loadChatHidden();
+    if (!hidden[userId]) hidden[userId] = { messages: [], channels: [] };
+    if (!hidden[userId].messages.includes(req.params.id)) {
+      hidden[userId].messages.push(req.params.id);
     }
+    _saveChatHidden(hidden);
 
     res.json({ ok: true });
   } catch (e) {
@@ -5516,29 +5524,24 @@ app.delete('/chat/messages/:id', requireAuth, (req, res) => {
   }
 });
 
-// Delete an entire DM channel (not allowed for 'general')
+// Hide an entire DM channel (per-user, not allowed for 'general')
 app.delete('/chat/channels/:channelId', requireAuth, (req, res) => {
   try {
     const channelId = req.params.channelId;
     if (channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat' });
     if (!channelId.startsWith('dm_') && !channelId.startsWith('dm~')) return res.status(403).json({ error: 'Can only delete DM channels' });
-    // Verify user is a participant
     const userId = req.arkUser.userId;
     if (!channelId.includes(userId)) return res.status(403).json({ error: 'Not a participant' });
 
-    const messages = _loadChatMessages();
-    const remaining = messages.filter(m => m.channelId !== channelId);
-    _saveChatMessages(remaining);
-
-    // Clean up read status
-    const readStatus = _loadChatReadStatus();
-    for (const uid of Object.keys(readStatus)) {
-      if (readStatus[uid][channelId]) delete readStatus[uid][channelId];
+    const hidden = _loadChatHidden();
+    if (!hidden[userId]) hidden[userId] = { messages: [], channels: [] };
+    if (!hidden[userId].channels.includes(channelId)) {
+      hidden[userId].channels.push(channelId);
     }
-    _saveChatReadStatus(readStatus);
+    _saveChatHidden(hidden);
 
-    console.log(`Chat: ${req.arkUser.userName} deleted channel ${channelId} (${messages.length - remaining.length} messages)`);
-    res.json({ ok: true, deleted: messages.length - remaining.length });
+    console.log(`Chat: ${req.arkUser.userName} hid channel ${channelId}`);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
