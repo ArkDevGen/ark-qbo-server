@@ -5247,6 +5247,196 @@ app.post('/notifications/push', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// TEAM CHAT — DMs + General Channel
+// ─────────────────────────────────────────────────────────────────
+
+const CHAT_FILE = path.join(DATA_DIR, 'chat-messages.json');
+const CHAT_READ_FILE = path.join(DATA_DIR, 'chat-read-status.json');
+
+function _loadChatMessages() {
+  try { if (fs.existsSync(CHAT_FILE)) return JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8')); } catch (_) {}
+  return [];
+}
+
+function _saveChatMessages(messages) {
+  fs.writeFileSync(CHAT_FILE, JSON.stringify(messages));
+}
+
+function _loadChatReadStatus() {
+  try { if (fs.existsSync(CHAT_READ_FILE)) return JSON.parse(fs.readFileSync(CHAT_READ_FILE, 'utf8')); } catch (_) {}
+  return {};
+}
+
+function _saveChatReadStatus(status) {
+  fs.writeFileSync(CHAT_READ_FILE, JSON.stringify(status));
+}
+
+// Helper: broadcast a chat message to relevant SSE connections
+function _sseBroadcastChat(msg) {
+  const payload = `data: ${JSON.stringify({ type: 'chat', message: msg })}\n\n`;
+  if (msg.channelId === 'general') {
+    // Broadcast to ALL connected users
+    for (const [userId, clients] of _sseClients) {
+      for (const client of clients) {
+        try { client.write(payload); } catch (_) { clients.delete(client); }
+      }
+    }
+  } else if (msg.channelId.startsWith('dm_')) {
+    // DM — broadcast to both participants
+    const parts = msg.channelId.replace('dm_', '').split('_');
+    for (const uid of parts) {
+      const clients = _sseClients.get(uid);
+      if (clients) {
+        for (const client of clients) {
+          try { client.write(payload); } catch (_) { clients.delete(client); }
+        }
+      }
+    }
+  }
+}
+
+// Helper: build DM channel ID (sorted so both users get same ID)
+function _dmChannelId(uid1, uid2) {
+  return 'dm_' + [uid1, uid2].sort().join('_');
+}
+
+// Get channels the user participates in
+app.get('/chat/channels', requireAuth, (req, res) => {
+  try {
+    const userId = req.arkUser.userId;
+    const messages = _loadChatMessages();
+    const readStatus = _loadChatReadStatus();
+    const userRead = readStatus[userId] || {};
+
+    // Build channel map
+    const channelMap = {};
+    for (const msg of messages) {
+      const ch = msg.channelId;
+      // Only include general or DMs involving this user
+      if (ch === 'general' || (ch.startsWith('dm_') && ch.includes(userId))) {
+        if (!channelMap[ch]) channelMap[ch] = { channelId: ch, messages: 0, lastMessage: null };
+        channelMap[ch].messages++;
+        if (!channelMap[ch].lastMessage || msg.createdAt > channelMap[ch].lastMessage.createdAt) {
+          channelMap[ch].lastMessage = msg;
+        }
+      }
+    }
+
+    // Always include general even if empty
+    if (!channelMap['general']) channelMap['general'] = { channelId: 'general', messages: 0, lastMessage: null };
+
+    // Calculate unread counts
+    const channels = Object.values(channelMap).map(ch => {
+      const lastRead = userRead[ch.channelId] || '1970-01-01T00:00:00Z';
+      const unread = messages.filter(m => m.channelId === ch.channelId && m.createdAt > lastRead && m.senderId !== userId).length;
+      return { ...ch, unread };
+    });
+
+    // Sort: general first, then by last message time
+    channels.sort((a, b) => {
+      if (a.channelId === 'general') return -1;
+      if (b.channelId === 'general') return 1;
+      const aTime = a.lastMessage?.createdAt || '';
+      const bTime = b.lastMessage?.createdAt || '';
+      return bTime.localeCompare(aTime);
+    });
+
+    res.json(channels);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get messages for a channel (paginated)
+app.get('/chat/messages', requireAuth, (req, res) => {
+  try {
+    const { channelId, before, limit: lim } = req.query;
+    if (!channelId) return res.status(400).json({ error: 'channelId required' });
+
+    const userId = req.arkUser.userId;
+    // Security: only allow general or DMs involving this user
+    if (channelId !== 'general' && !(channelId.startsWith('dm_') && channelId.includes(userId))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const messages = _loadChatMessages();
+    let filtered = messages.filter(m => m.channelId === channelId);
+    if (before) filtered = filtered.filter(m => m.createdAt < before);
+    filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
+    const pageSize = Math.min(parseInt(lim) || 50, 100);
+    const page = filtered.slice(0, pageSize);
+
+    // Mark channel as read
+    const readStatus = _loadChatReadStatus();
+    if (!readStatus[userId]) readStatus[userId] = {};
+    readStatus[userId][channelId] = new Date().toISOString();
+    _saveChatReadStatus(readStatus);
+
+    res.json({ messages: page.reverse(), hasMore: filtered.length > pageSize }); // return chronological order
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Send a message
+app.post('/chat/messages', requireAuth, (req, res) => {
+  try {
+    const { channelId, text } = req.body;
+    if (!channelId || !text?.trim()) return res.status(400).json({ error: 'channelId and text required' });
+
+    const userId = req.arkUser.userId;
+    // Security check
+    if (channelId !== 'general' && !(channelId.startsWith('dm_') && channelId.includes(userId))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const msg = {
+      id: crypto.randomUUID(),
+      channelId,
+      senderId: userId,
+      senderName: req.arkUser.userName || 'Unknown',
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const messages = _loadChatMessages();
+    messages.push(msg);
+    // Keep max 10000 messages (trim oldest)
+    if (messages.length > 10000) messages.splice(0, messages.length - 10000);
+    _saveChatMessages(messages);
+
+    // Mark as read for sender
+    const readStatus = _loadChatReadStatus();
+    if (!readStatus[userId]) readStatus[userId] = {};
+    readStatus[userId][channelId] = msg.createdAt;
+    _saveChatReadStatus(readStatus);
+
+    // Broadcast via SSE
+    _sseBroadcastChat(msg);
+
+    console.log(`Chat: ${req.arkUser.userName} → ${channelId}: "${text.trim().slice(0, 50)}"`);
+    res.json(msg);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Mark a channel as read
+app.post('/chat/read', requireAuth, (req, res) => {
+  try {
+    const { channelId } = req.body;
+    if (!channelId) return res.status(400).json({ error: 'channelId required' });
+    const readStatus = _loadChatReadStatus();
+    if (!readStatus[req.arkUser.userId]) readStatus[req.arkUser.userId] = {};
+    readStatus[req.arkUser.userId][channelId] = new Date().toISOString();
+    _saveChatReadStatus(readStatus);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // WEB PUSH — VAPID setup, subscription management
 // ─────────────────────────────────────────────────────────────────
 

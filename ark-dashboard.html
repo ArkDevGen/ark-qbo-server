@@ -922,6 +922,17 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="topbar-clock"></div>
       <div id="topbar-actions"></div>
 
+      <!-- ── Chat Icon ── -->
+      <div style="position:relative;" id="chat-icon-wrap">
+        <button id="chat-icon-btn" onclick="chatTogglePanel()" title="Team Chat"
+          style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.55);font-size:14px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;position:relative;"
+          onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.9)'"
+          onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.55)'">
+          💬
+          <span id="chat-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;font-family:'DM Sans',sans-serif;"></span>
+        </button>
+      </div>
+
       <!-- ── Notification Bell ── -->
       <div style="position:relative;" id="notif-bell-wrap">
         <button id="notif-bell-btn" onclick="notifToggle()" title="Notifications"
@@ -2201,10 +2212,42 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- ══ CARD 3: Coming Soon ══ -->
-      <div class="card" style="min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
-        <div style="font-size:28px;">⬜</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
+      <!-- ══ CARD 3: Team Chat ══ -->
+      <div class="card" style="min-height:200px;overflow:visible;position:relative;">
+        <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="card-title">Team Chat</div>
+          <button class="btn btn-ghost btn-sm" onclick="chatTogglePanel()" style="font-size:11px;">Open Chat</button>
+        </div>
+        <div id="cc-chat-preview" style="padding:4px 0;font-size:12px;color:var(--text-d);">
+          <div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">Loading recent messages...</div>
+        </div>
+        <script>
+          // Load recent general channel messages for Comm Center preview
+          (function(){
+            async function ccChatPreview(){
+              try {
+                const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=general&limit=8');
+                if(!resp.ok) return;
+                const data = await resp.json();
+                const el = document.getElementById('cc-chat-preview');
+                if(!el) return;
+                if(!data.messages || !data.messages.length){
+                  el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">No messages yet. Open chat to start a conversation.</div>';
+                  return;
+                }
+                el.innerHTML = data.messages.slice(-6).map(m => {
+                  const time = new Date(m.createdAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+                  const isMine = m.senderId === currentUser?.id;
+                  return '<div style="padding:4px 0;display:flex;gap:6px;align-items:flex-start;">' +
+                    '<span style="font-size:11px;font-weight:600;color:'+(isMine?'var(--navy)':'var(--gold)')+';white-space:nowrap;">' + (m.senderName||'?').split(' ')[0] + ':</span>' +
+                    '<span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.text.slice(0,60) + '</span>' +
+                    '<span style="font-size:9px;color:var(--text-dd);white-space:nowrap;">' + time + '</span></div>';
+                }).join('');
+              } catch(_){}
+            }
+            setTimeout(ccChatPreview, 1000);
+          })();
+        </script>
       </div>
 
       <!-- ══ CARD 4: Coming Soon ══ -->
@@ -7225,6 +7268,7 @@ async function loginAs(userId){
   applyNavPermissions(u);
   document.getElementById('sidebar-footer').textContent = `Logged in: ${u.fname}`;
   if(typeof notifInit === 'function') notifInit();
+  if(typeof chatInitBadge === 'function') chatInitBadge();
 
   // Persist session so refresh keeps you logged in
   sessionStorage.setItem('ark_session', JSON.stringify({
@@ -7288,6 +7332,7 @@ async function loginWithCredentials(){
       applyRoleRestrictions(currentUser);
       document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
       if(typeof notifInit === 'function') notifInit();
+  if(typeof chatInitBadge === 'function') chatInitBadge();
       sessionStorage.setItem('ark_session', JSON.stringify({
         userId: currentUser.id,
         token: _serverToken,
@@ -12698,6 +12743,7 @@ renderLoginScreen();
       applyRoleRestrictions(currentUser);
       document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
       if(typeof notifInit === 'function') notifInit();
+  if(typeof chatInitBadge === 'function') chatInitBadge();
       await refreshServerUsersCache();
       await loadDB();
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
@@ -24265,6 +24311,345 @@ function sfClearFolderChecklist(){
 
 
 // ══════════════════════════════════════════════════════════════════
+//  TEAM CHAT SYSTEM
+//  - Floating panel accessible from any page (💬 icon in topbar)
+//  - General team channel + direct messages
+//  - Real-time via SSE
+// ══════════════════════════════════════════════════════════════════
+
+let _chatOpen = false;
+let _chatChannel = 'general';    // current channel
+let _chatChannels = [];          // cached channel list
+let _chatMessages = [];          // messages for current channel
+let _chatHasMore = false;
+
+function chatTogglePanel() {
+  _chatOpen = !_chatOpen;
+  let panel = document.getElementById('chat-panel');
+  if (!panel) {
+    // Create panel on first open
+    panel = document.createElement('div');
+    panel.id = 'chat-panel';
+    panel.innerHTML = `
+      <div style="display:flex;flex-direction:column;height:100%;">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <span id="chat-panel-title" style="font-size:14px;font-weight:700;color:var(--text);">Team Chat</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button onclick="chatShowNewDM()" title="New message" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;padding:3px 8px;color:var(--text-d);">+ DM</button>
+            <button onclick="chatBackToList()" title="Channel list" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-d);display:none;" id="chat-back-btn">◀</button>
+            <button onclick="chatTogglePanel()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-d);">✕</button>
+          </div>
+        </div>
+        <div id="chat-channel-list" style="flex:1;overflow-y:auto;"></div>
+        <div id="chat-thread" style="flex:1;overflow-y:auto;display:none;"></div>
+        <div id="chat-compose" style="display:none;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;">
+          <div style="display:flex;gap:8px;">
+            <input id="chat-input" type="text" placeholder="Type a message..."
+              style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text);outline:none;"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}">
+            <button onclick="chatSend()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Send</button>
+          </div>
+        </div>
+      </div>`;
+    Object.assign(panel.style, {
+      position:'fixed', bottom:'70px', right:'32px', width:'380px', height:'520px',
+      background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+      boxShadow:'0 12px 48px rgba(0,0,0,.25)', zIndex:'999', display:'none',
+      overflow:'hidden', fontFamily:"'DM Sans',sans-serif",
+    });
+    document.body.appendChild(panel);
+  }
+  if (_chatOpen) {
+    panel.style.display = '';
+    chatLoadChannels();
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function chatLoadChannels() {
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/channels');
+    if (!resp.ok) return;
+    _chatChannels = await resp.json();
+    chatRenderChannelList();
+  } catch (_) {}
+}
+
+function chatRenderChannelList() {
+  const list = document.getElementById('chat-channel-list');
+  const thread = document.getElementById('chat-thread');
+  const compose = document.getElementById('chat-compose');
+  const backBtn = document.getElementById('chat-back-btn');
+  const title = document.getElementById('chat-panel-title');
+  if (!list) return;
+  list.style.display = '';
+  thread.style.display = 'none';
+  compose.style.display = 'none';
+  if (backBtn) backBtn.style.display = 'none';
+  if (title) title.textContent = 'Team Chat';
+
+  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+
+  const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso), now = new Date();
+    const diffM = Math.round((now - d) / 60000);
+    if (diffM < 1) return 'now';
+    if (diffM < 60) return diffM + 'm';
+    const diffH = Math.floor(diffM / 60);
+    if (diffH < 24) return diffH + 'h';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  if (!_chatChannels.length) {
+    list.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--text-d);font-size:13px;">No conversations yet.<br>Click <b>+ DM</b> or send a message in General.</div>';
+    // Still show general
+    list.innerHTML = chatChannelItem('general', 'General', 'Team channel', null, 0, '') + list.innerHTML;
+    return;
+  }
+
+  list.innerHTML = _chatChannels.map(ch => {
+    if (ch.channelId === 'general') {
+      const preview = ch.lastMessage ? `${ch.lastMessage.senderName.split(' ')[0]}: ${ch.lastMessage.text.slice(0, 40)}` : 'No messages yet';
+      return chatChannelItem('general', 'General', preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
+    } else {
+      // DM — find the other user
+      const parts = ch.channelId.replace('dm_', '').split('_');
+      const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
+      const other = teamList.find(u => u.id === otherId);
+      const name = other ? `${other.fname || other.userName || ''} ${other.lname || ''}`.trim() : otherId;
+      const preview = ch.lastMessage ? ch.lastMessage.text.slice(0, 45) : '';
+      return chatChannelItem(ch.channelId, name, preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
+    }
+  }).join('');
+}
+
+function chatChannelItem(channelId, name, preview, unread, msgCount, time) {
+  const initial = name.charAt(0).toUpperCase();
+  const isGeneral = channelId === 'general';
+  const badge = unread > 0 ? `<span style="background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;">${unread > 9 ? '9+' : unread}</span>` : '';
+  return `<div onclick="chatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
+    style="padding:12px 16px;cursor:pointer;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);transition:background .1s;"
+    onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+    <div style="width:36px;height:36px;border-radius:50%;background:${isGeneral ? 'var(--navy)' : 'var(--gold)'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;">${isGeneral ? '#' : initial}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:13px;font-weight:${unread > 0 ? '700' : '500'};color:var(--text);">${name}</span>
+        <span style="font-size:10px;color:var(--text-dd);flex-shrink:0;">${time}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${preview}</div>
+    </div>
+    ${badge}
+  </div>`;
+}
+
+async function chatOpenChannel(channelId, name) {
+  _chatChannel = channelId;
+  const list = document.getElementById('chat-channel-list');
+  const thread = document.getElementById('chat-thread');
+  const compose = document.getElementById('chat-compose');
+  const backBtn = document.getElementById('chat-back-btn');
+  const title = document.getElementById('chat-panel-title');
+  if (list) list.style.display = 'none';
+  if (thread) thread.style.display = '';
+  if (compose) compose.style.display = '';
+  if (backBtn) backBtn.style.display = '';
+  if (title) title.textContent = name || channelId;
+
+  // Load messages
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(channelId) + '&limit=50');
+    if (resp.ok) {
+      const data = await resp.json();
+      _chatMessages = data.messages || [];
+      _chatHasMore = data.hasMore || false;
+      chatRenderMessages();
+    }
+  } catch (_) {}
+
+  // Mark as read
+  authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId }) }).catch(() => {});
+
+  // Focus input
+  setTimeout(() => { const inp = document.getElementById('chat-input'); if (inp) inp.focus(); }, 100);
+}
+
+function chatRenderMessages() {
+  const thread = document.getElementById('chat-thread');
+  if (!thread) return;
+  const myId = currentUser?.id;
+
+  if (!_chatMessages.length) {
+    thread.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--text-d);font-size:12px;font-style:italic;">No messages yet. Say hello!</div>';
+    return;
+  }
+
+  let html = '';
+  if (_chatHasMore) {
+    html += `<div style="text-align:center;padding:8px;"><button onclick="chatLoadOlder()" style="font-size:11px;color:var(--text-d);background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Load older messages</button></div>`;
+  }
+
+  let lastDate = '';
+  for (const msg of _chatMessages) {
+    const d = new Date(msg.createdAt);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (dateStr !== lastDate) {
+      html += `<div style="text-align:center;padding:8px 0 4px;"><span style="font-size:10px;color:var(--text-dd);background:var(--surface);padding:2px 10px;border-radius:8px;border:1px solid var(--border);">${dateStr}</span></div>`;
+      lastDate = dateStr;
+    }
+    const isMine = msg.senderId === myId;
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const initial = (msg.senderName || '?').charAt(0).toUpperCase();
+
+    if (isMine) {
+      html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;">
+        <div style="max-width:75%;background:var(--navy);color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:12px;line-height:1.5;">
+          ${_chatEscape(msg.text)}
+          <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}</div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div style="display:flex;gap:8px;padding:3px 12px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;">${initial}</div>
+        <div style="max-width:75%;">
+          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(msg.senderName || 'Unknown')}</div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);">
+            ${_chatEscape(msg.text)}
+            <div style="font-size:9px;color:var(--text-dd);margin-top:2px;">${time}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
+  thread.innerHTML = html;
+  // Auto-scroll to bottom
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function _chatEscape(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function chatSend() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channelId: _chatChannel, text }),
+    });
+    if (resp.ok) {
+      const msg = await resp.json();
+      // Add to local messages if not already there (SSE might deliver it too)
+      if (!_chatMessages.find(m => m.id === msg.id)) {
+        _chatMessages.push(msg);
+        chatRenderMessages();
+      }
+    }
+  } catch (_) {}
+}
+
+async function chatLoadOlder() {
+  if (!_chatMessages.length) return;
+  const oldest = _chatMessages[0].createdAt;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=' + encodeURIComponent(_chatChannel) + '&before=' + encodeURIComponent(oldest) + '&limit=50');
+    if (resp.ok) {
+      const data = await resp.json();
+      _chatMessages = [...(data.messages || []), ..._chatMessages];
+      _chatHasMore = data.hasMore || false;
+      chatRenderMessages();
+    }
+  } catch (_) {}
+}
+
+function chatBackToList() {
+  chatLoadChannels();
+}
+
+function chatShowNewDM() {
+  const list = document.getElementById('chat-channel-list');
+  if (!list) return;
+  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+  const others = teamList.filter(u => u.id !== currentUser?.id);
+
+  list.style.display = '';
+  document.getElementById('chat-thread').style.display = 'none';
+  document.getElementById('chat-compose').style.display = 'none';
+  document.getElementById('chat-panel-title').textContent = 'New Message';
+  const backBtn = document.getElementById('chat-back-btn');
+  if (backBtn) backBtn.style.display = '';
+
+  list.innerHTML = others.map(u => {
+    const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
+    const initial = name.charAt(0).toUpperCase();
+    const channelId = 'dm_' + [currentUser.id, u.id].sort().join('_');
+    return `<div onclick="chatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
+      style="padding:12px 16px;cursor:pointer;display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--border);"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">${initial}</div>
+      <span style="font-size:13px;color:var(--text);">${name}</span>
+    </div>`;
+  }).join('');
+}
+
+// Handle incoming chat messages via SSE
+function chatHandleSSE(msg) {
+  // Update badge
+  if (msg.senderId !== currentUser?.id) {
+    chatUpdateBadge(1);
+  }
+  // If chat panel is open and viewing this channel, add message
+  if (_chatOpen && _chatChannel === msg.channelId) {
+    if (!_chatMessages.find(m => m.id === msg.id)) {
+      _chatMessages.push(msg);
+      chatRenderMessages();
+    }
+    // Mark as read
+    authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: msg.channelId }) }).catch(() => {});
+  }
+}
+
+function chatUpdateBadge(increment) {
+  const badge = document.getElementById('chat-badge');
+  if (!badge) return;
+  if (increment) {
+    const current = parseInt(badge.textContent) || 0;
+    const next = current + increment;
+    badge.textContent = next > 9 ? '9+' : next;
+    badge.style.display = 'flex';
+  }
+}
+
+async function chatInitBadge() {
+  // Load unread count on login
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/channels');
+    if (resp.ok) {
+      const channels = await resp.json();
+      const totalUnread = channels.reduce((sum, ch) => sum + (ch.unread || 0), 0);
+      const badge = document.getElementById('chat-badge');
+      if (badge) {
+        if (totalUnread > 0) {
+          badge.textContent = totalUnread > 9 ? '9+' : totalUnread;
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  NOTIFICATION SYSTEM
 //  - In-app bell with unread badge
 //  - Browser desktop notifications (with permission)
@@ -24556,9 +24941,17 @@ function notifConnectSSE(){
     _notifSSE = new EventSource(ARK_SERVER + '/notifications/stream?token=' + encodeURIComponent(_serverToken || ''));
     _notifSSE.onmessage = (e) => {
       try {
-        const notif = JSON.parse(e.data);
-        if(notif.type === 'connected') return; // initial handshake
-        // Deduplicate — may already exist from local notifCreate
+        const data = JSON.parse(e.data);
+        if(data.type === 'connected') return; // initial handshake
+
+        // ── Chat messages ──
+        if(data.type === 'chat' && data.message) {
+          chatHandleSSE(data.message);
+          return;
+        }
+
+        // ── Notifications ──
+        const notif = data;
         if(!DB.notifications) DB.notifications = [];
         if(DB.notifications.find(n => n.id === notif.id)) return;
         DB.notifications.unshift(notif);
