@@ -14878,7 +14878,7 @@ function tcRenderTimecard(empId){
   const {start, end} = tcCurrentPeriod;
   const rows  = tcBuildPairs(empId, start, end);
   const stats = tcCalcOT(rows, start);
-  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
+  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId) || (currentUser?.id===empId ? currentUser : null);
   const name  = user ? `${user.fname||user.userName||''} ${user.lname||''}`.trim() : empId;
 
   // PTO entries for this period
@@ -15132,7 +15132,7 @@ function tcPrintTimecard(){
   const {start, end, payday} = tcCurrentPeriod;
   const rows  = tcBuildPairs(empId, start, end);
   const stats = tcCalcOT(rows, start);
-  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
+  const user  = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId) || (currentUser?.id===empId ? currentUser : null);
   const name  = user ? `${user.fname||user.userName||''} ${user.lname||''}`.trim() : empId;
   const ptoP   = ((DB.timePTO||{})[empId]||[]).filter(p=>p.date>=start.toISOString().slice(0,10)&&p.date<=end.toISOString().slice(0,10));
   const totalPTOP = ptoP.reduce((s,p)=>s+p.hours,0);
