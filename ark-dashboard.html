@@ -19110,67 +19110,69 @@ let _tcActiveView = 'upcoming'; // 'upcoming' | 'today' | 'overdue' | 'notes' | 
 function tcSelectView(view) {
   _tcActiveView = view;
 
-  // Show/hide panels
+  // Always start clean — show tasks panel, hide notes panel
+  document.getElementById('tc-tasks-panel').style.display = '';
+  document.getElementById('tc-notes-panel').style.display = 'none';
+
+  // Reset project-specific UI
+  const projTabs = document.getElementById('tc-project-tabs');
+  const projNotes = document.getElementById('tc-project-notes');
+  const viewToggle = document.getElementById('tc-view-toggle');
+  if (projTabs) projTabs.style.display = 'none';
+  if (projNotes) projNotes.style.display = 'none';
+  if (viewToggle) viewToggle.style.display = '';
+
+  // Restore task view containers
+  const savedView = sessionStorage.getItem('tc_view_mode') || 'list';
+  ['list','board','calendar'].forEach(v => {
+    const el = document.getElementById('tc-view-' + v);
+    if (el) el.style.display = (v === savedView) ? '' : 'none';
+  });
+
   const isNotes = view === 'notes';
-  document.getElementById('tc-tasks-panel').style.display = isNotes ? 'none' : '';
-  document.getElementById('tc-notes-panel').style.display = isNotes ? '' : 'none';
-  // When notes is active, project sidebar stays visible for navigation
-  // but we don't need to hide it — it has the Notes link to get back
+  const isProject = view.startsWith('project:');
 
   if (view.startsWith('notebook:')) {
-    // Clicking a specific notebook — switch to notes view with that notebook selected
-    const nbId = view.slice(9);
-    _nbActiveNotebook = nbId;
+    // Legacy notebook view — redirect to notes
+    _tcActiveView = 'notes';
     document.getElementById('tc-tasks-panel').style.display = 'none';
     document.getElementById('tc-notes-panel').style.display = '';
     nbInit();
-    document.querySelectorAll('.tc-proj-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+    document.querySelectorAll('.tc-proj-item').forEach(el => el.classList.toggle('active', el.dataset.view === 'notes'));
     return;
   }
 
   if (isNotes) {
-    // Show all notes (type:'note' tasks) in the project notes view
-    const clientSel = document.getElementById('tc-filter-client');
-    if (clientSel) clientSel.value = '';
-    document.getElementById('tc-tasks-panel').style.display = '';
-    document.getElementById('tc-notes-panel').style.display = 'none';
-    // Show project tabs with Notes selected
-    const projTabs = document.getElementById('tc-project-tabs');
+    // Show all notes across all projects
     if (projTabs) projTabs.style.display = '';
     _tcProjectTab = 'notes';
     document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === 'notes'));
-    document.getElementById('tc-view-toggle').style.display = 'none';
-    document.getElementById('tc-view-list').style.display = 'none';
-    document.getElementById('tc-view-board').style.display = 'none';
-    document.getElementById('tc-view-calendar').style.display = 'none';
-    document.getElementById('tc-project-notes').style.display = '';
+    if (viewToggle) viewToggle.style.display = 'none';
+    ['list','board','calendar'].forEach(v => { const el = document.getElementById('tc-view-' + v); if (el) el.style.display = 'none'; });
+    if (projNotes) projNotes.style.display = '';
+    const clientSel = document.getElementById('tc-filter-client');
+    if (clientSel) clientSel.value = '';
     tcRenderProjectNotes();
+  } else if (isProject) {
+    // Project view — show Tasks/Notes tabs
+    if (projTabs) projTabs.style.display = '';
+    _tcProjectTab = 'tasks';
+    document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === 'tasks'));
+
+    const statusSel = document.getElementById('tc-filter-status');
+    const clientSel = document.getElementById('tc-filter-client');
+    const clientId = view.slice(8);
+    if (statusSel) statusSel.value = 'open';
+    if (clientSel) clientSel.value = clientId === '_noClient' ? '_noClient' : clientId;
+    tcRender();
   } else {
-    // Set status filter based on view
+    // Standard views: upcoming, today, overdue
     const statusSel = document.getElementById('tc-filter-status');
     const clientSel = document.getElementById('tc-filter-client');
     if (view === 'today') { if (statusSel) statusSel.value = 'due-today'; if (clientSel) clientSel.value = ''; }
     else if (view === 'overdue') { if (statusSel) statusSel.value = 'overdue'; if (clientSel) clientSel.value = ''; }
-    else if (view.startsWith('project:')) {
-      const clientId = view.slice(8);
-      if (statusSel) statusSel.value = 'open';
-      if (clientSel) clientSel.value = clientId === '_noClient' ? '_noClient' : clientId;
-    }
-    else { if (statusSel) statusSel.value = 'open'; if (clientSel) clientSel.value = ''; } // upcoming
+    else { if (statusSel) statusSel.value = 'open'; if (clientSel) clientSel.value = ''; }
     tcRender();
-  }
-
-  // Show project tabs when a project is selected
-  const projTabs = document.getElementById('tc-project-tabs');
-  const isProject = view.startsWith('project:');
-  if (projTabs) {
-    projTabs.style.display = isProject ? '' : 'none';
-    if (isProject) {
-      _tcProjectTab = 'tasks'; // reset to tasks tab
-      document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === 'tasks'));
-      document.getElementById('tc-project-notes').style.display = 'none';
-      document.getElementById('tc-view-toggle').style.display = '';
-    }
   }
 
   // Update sidebar active state
@@ -19796,12 +19798,91 @@ function tcRenderProjectNotes() {
 }
 
 function tcNewProjectNote() {
-  document.getElementById('tc-pnote-id').value = '';
-  document.getElementById('tc-pnote-title').value = '';
-  document.getElementById('tc-pnote-content').value = '';
-  document.getElementById('tc-pnote-meta').textContent = '';
-  document.getElementById('tc-pnotes-editor').style.display = '';
-  document.getElementById('tc-pnote-title').focus();
+  // If a project is selected, use that client. Otherwise show a selector.
+  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  if (fClient && fClient !== '_noClient') {
+    // Client already selected from project view — open editor directly
+    document.getElementById('tc-pnote-id').value = '';
+    document.getElementById('tc-pnote-title').value = '';
+    document.getElementById('tc-pnote-content').value = '';
+    document.getElementById('tc-pnote-meta').textContent = '';
+    document.getElementById('tc-pnotes-editor').style.display = '';
+    document.getElementById('tc-pnote-title').focus();
+    return;
+  }
+
+  // No client selected — show a modal to pick client + optionally link to a task
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="card" style="width:440px;padding:0;overflow:visible;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">New Note</div>
+      <div style="font-size:12px;color:var(--text-d);">Add a note to a client or as a personal reference</div>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Client (optional)</label>
+        <div style="position:relative;">
+          <input type="text" id="tcnote-client-search" class="field-input" placeholder="Search clients or leave blank..." autocomplete="off" oninput="tcNoteClientFilter()" onfocus="tcNoteClientFilter()" style="width:100%;">
+          <input type="hidden" id="tcnote-client-id">
+          <div id="tcnote-client-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:150px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Title</label>
+        <input type="text" id="tcnote-title" class="field-input" placeholder="Note title..." style="width:100%;">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Content</label>
+        <textarea id="tcnote-content" class="field-input" placeholder="Write your note..." style="width:100%;min-height:120px;resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('[style*=fixed]').remove()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="tcSaveNewNote()">Save Note</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('tcnote-title')?.focus(), 100);
+}
+
+function tcNoteClientFilter() {
+  const q = (document.getElementById('tcnote-client-search')?.value || '').toLowerCase();
+  const dd = document.getElementById('tcnote-client-dd');
+  const clients = (DB.clients||[]).filter(c => !q || c.biz.toLowerCase().includes(q)).sort((a,b)=>a.biz.localeCompare(b.biz)).slice(0,10);
+  if (!clients.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = '<div onmousedown="event.preventDefault();document.getElementById(\'tcnote-client-id\').value=\'\';document.getElementById(\'tcnote-client-search\').value=\'\';document.getElementById(\'tcnote-client-dd\').style.display=\'none\';" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text-d);border-bottom:1px solid var(--border);">— No Client (personal note) —</div>' +
+    clients.map(c => `<div onmousedown="event.preventDefault();document.getElementById('tcnote-client-id').value='${c.id}';document.getElementById('tcnote-client-search').value='${c.biz.replace(/'/g,"\\'")}';document.getElementById('tcnote-client-dd').style.display='none';" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}</div>`).join('');
+  document.getElementById('tcnote-client-search').onblur = () => setTimeout(() => { dd.style.display = 'none'; }, 200);
+}
+
+function tcSaveNewNote() {
+  const title = document.getElementById('tcnote-title')?.value.trim();
+  const content = document.getElementById('tcnote-content')?.value || '';
+  const clientId = document.getElementById('tcnote-client-id')?.value || '';
+  if (!title) { alert('Title is required'); return; }
+
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
+  const client = clientId ? (DB.clients || []).find(c => c.id === clientId) : null;
+
+  if (!DB.tasks) DB.tasks = [];
+  DB.tasks.push({
+    id: uid(), name: title, notes: content, type: 'note',
+    clientId: clientId, clientName: client ? client.biz : '',
+    amId: currentUser?.id || '', category: 'Other', dueDate: '', priority: 'medium',
+    recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
+    noteLog: [], parentId: null, parentTaskId: null,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: who,
+  });
+  saveDB();
+
+  // Close modal
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  tcRenderProjectNotes();
+  tcBuildProjectSidebar();
+  showToast('Note "' + title + '" saved');
 }
 
 function tcEditProjectNote(id) {
