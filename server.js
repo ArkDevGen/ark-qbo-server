@@ -313,6 +313,13 @@ app.get('/users', requireAuth, requireRole('admin'), (req, res) => {
   res.json({ users: _users.map(safeUser) });
 });
 
+// Public team list — returns minimal info (name, id, role) for any authenticated user
+app.get('/users/team', requireAuth, (req, res) => {
+  res.json(_users.filter(u => u.active !== false).map(u => ({
+    id: u.id, fname: u.fname, lname: u.lname, role: u.role, color: u.color,
+  })));
+});
+
 app.get('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   const user = _users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });

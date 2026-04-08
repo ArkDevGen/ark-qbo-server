@@ -8059,10 +8059,17 @@ function svcChips(svcs){ return (svcs||[]).map(s=>badgeSvc(s)).join(' ')||'—';
 let _cachedServerUsers = [];
 async function refreshServerUsersCache() {
   try {
+    // Try full user list (admin only)
     const resp = await authFetch(ARK_SERVER + '/users');
     if (resp.ok) {
       const data = await resp.json();
       _cachedServerUsers = data.users || data;
+      return;
+    }
+    // Fallback: team list (any authenticated user)
+    const teamResp = await authFetch(ARK_SERVER + '/users/team');
+    if (teamResp.ok) {
+      _cachedServerUsers = await teamResp.json();
     }
   } catch(e) {}
 }
