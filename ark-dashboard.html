@@ -19695,13 +19695,16 @@ function notesRender() {
     </div>`).join('');
 }
 
-function tcPopulateSendList() {
+async function tcPopulateSendList() {
   const list = document.getElementById('tc-send-task-list');
   if (!list) return;
-  const users = (_cachedServerUsers || []).filter(u => !currentUser || u.id !== currentUser.id);
-  list.innerHTML = users.length
+  if (!_cachedServerUsers.length) await refreshServerUsersCache();
+  const users = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+  // Show all team members (including self — they can assign to themselves via the form)
+  const others = users.filter(u => !currentUser || u.id !== currentUser.id);
+  list.innerHTML = others.length
     ? '<div style="padding:6px 16px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Send task to...</div>' +
-      users.map(u => `<div onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNewFor('${u.id}')"
+      others.map(u => `<div onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNewFor('${u.id}')"
         style="padding:8px 16px;font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         📤 ${u.fname || u.userName || ''} ${u.lname || ''}
@@ -19711,10 +19714,12 @@ function tcPopulateSendList() {
 
 function tcOpenNewFor(userId) {
   tcOpenNew();
-  // Pre-select the target user in the Assigned To dropdown
+  // Pre-select the target user in the multi-assign dropdown
   setTimeout(() => {
-    const sel = document.getElementById('tc-am');
-    if (sel) sel.value = userId;
+    _tcSelectedAMs = [userId];
+    document.getElementById('tc-am').value = userId;
+    tcRenderAmDropdown();
+    tcUpdateAmLabel();
   }, 100);
 }
 
