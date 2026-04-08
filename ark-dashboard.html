@@ -24419,7 +24419,7 @@ function notifRenderList(){
     </div>`).join('');
 }
 
-function notifClickItem(id){
+async function notifClickItem(id){
   const notif = notifGetAll().find(n => n.id === id);
   if(!notif) return;
   // Mark as read
@@ -24429,16 +24429,31 @@ function notifClickItem(id){
   notifRenderList();
   // Navigate to task if applicable
   if(notif.taskId){
-    const task = (DB.tasks||[]).find(t => t.id === notif.taskId);
+    // Close dropdown
+    const dd = document.getElementById('notif-dropdown');
+    if(dd) dd.style.display = 'none';
+    _notifOpen = false;
+    // If task not in local DB, refresh from server first
+    let task = (DB.tasks||[]).find(t => t.id === notif.taskId);
+    if(!task){
+      try {
+        const resp = await authFetch(ARK_SERVER + '/db/load');
+        if(resp.ok){
+          const payload = await resp.json();
+          if(payload) _applyDBPayload(payload);
+          localStorage.setItem(ARK_DB_KEY, JSON.stringify(_buildDBPayload()));
+        }
+      } catch(_){}
+      task = (DB.tasks||[]).find(t => t.id === notif.taskId);
+    }
     if(task){
-      // Close dropdown, go to production
-      const dd = document.getElementById('notif-dropdown');
-      if(dd) dd.style.display = 'none';
-      _notifOpen = false;
       nav('tasks');
-      setTimeout(() => {
-        twfOpen(notif.taskId);
-      }, 200);
+      setTimeout(() => twfOpen(notif.taskId), 200);
+    } else {
+      // Task might be for a different view — just go to production
+      nav('tasks');
+      showToast('Task opened — refreshing...');
+      tcRender();
     }
   }
 }
@@ -24551,6 +24566,8 @@ function notifConnectSSE(){
         notifUpdateBadge();
         if(_notifOpen) notifRenderList();
         notifFireDesktop(notif);
+        // Refresh DB from server so new tasks/changes are available
+        _notifRefreshDB();
       } catch(_){}
     };
     _notifSSE.onerror = () => {
@@ -24562,6 +24579,37 @@ function notifConnectSSE(){
 
 function notifDisconnectSSE(){
   if(_notifSSE){ try{_notifSSE.close();}catch(_){} _notifSSE = null; }
+}
+
+// Debounced DB refresh when notifications arrive — pulls latest tasks from server
+let _notifRefreshTimer = null;
+function _notifRefreshDB(){
+  if(_notifRefreshTimer) clearTimeout(_notifRefreshTimer);
+  _notifRefreshTimer = setTimeout(async () => {
+    try {
+      const resp = await authFetch(ARK_SERVER + '/db/load');
+      if(resp.ok){
+        const payload = await resp.json();
+        if(payload && payload.tasks){
+          // Merge new tasks into local DB without losing local notifications
+          const localNotifs = DB.notifications || [];
+          _applyDBPayload(payload);
+          // Restore local notifications (they may not be in the server payload yet)
+          if(localNotifs.length) {
+            if(!DB.notifications) DB.notifications = [];
+            for(const n of localNotifs){
+              if(!DB.notifications.find(x => x.id === n.id)) DB.notifications.push(n);
+            }
+          }
+          localStorage.setItem(ARK_DB_KEY, JSON.stringify(_buildDBPayload()));
+          // Re-render if on production page
+          if(document.getElementById('view-tasks')?.style.display !== 'none'){
+            tcRender();
+          }
+        }
+      }
+    } catch(_){}
+  }, 500); // 500ms debounce in case multiple notifications arrive at once
 }
 
 // ── Init: run on login and page changes ──────────────────────────
