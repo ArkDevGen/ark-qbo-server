@@ -4720,7 +4720,6 @@ const XLSX = require('xlsx');
 // Load Scooter's config files
 const SCOOTERS_CONFIG_DIR = path.join(__dirname, 'config');
 let FRANCHISE_MAP = {}, ACCOUNT_PRESETS = {}, ROYALTY_OVERRIDES = {};
-let _lastParseDebug = null; // Temporary debug store
 try {
   FRANCHISE_MAP = JSON.parse(fs.readFileSync(path.join(SCOOTERS_CONFIG_DIR, 'franchises.json'), 'utf8'));
   ACCOUNT_PRESETS = JSON.parse(fs.readFileSync(path.join(SCOOTERS_CONFIG_DIR, 'account_presets.json'), 'utf8'));
@@ -5146,32 +5145,6 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 
     console.log(`  Generated ${franchises.length} franchise groups, ${totalEntries} entries, ${warnings.length} warnings`);
 
-    // Store debug info for the /scooters/parse-debug endpoint
-    const unmatchedColumns = headers.filter(h => !Object.values(colMap).includes(h));
-    const matchedColumns = Object.entries(colMap).filter(([k,v])=>v).map(([k,v])=>({ mapped: k, original: v }));
-    _lastParseDebug = {
-      timestamp: new Date().toISOString(),
-      fileName: req.file.originalname,
-      rawHeaders: headers,
-      matchedColumns,
-      unmatchedColumns,
-      dataFranchises,
-      dataStores,
-      rowCount: rows.length,
-      sampleRow: rows.length ? Object.fromEntries(Object.entries(rows[0]).filter(([k]) => k !== '_date')) : null,
-      franchiseSummary: franchises.map(f => ({
-        key: f.key, label: f.label, storeId: f.storeId,
-        entryCount: f.entryCount, debits: f.totalDebits, credits: f.totalCredits, balanced: f.balanced,
-        imbalancedCount: f.imbalancedCount || 0,
-        imbalancedEntries: f.entries.filter(e => !e.entryBalanced).map(e => ({
-          journalNo: e.journalNo, date: e.date, debits: e.entryDebits, credits: e.entryCredits,
-          diff: Math.round((e.entryDebits - e.entryCredits) * 100) / 100,
-          lines: e.lines.map(l => ({ account: l.account, debit: l.debit, credit: l.credit, desc: l.description }))
-        }))
-      })),
-      warnings,
-    };
-
     res.json({
       franchises,
       warnings,
@@ -5187,12 +5160,6 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
     console.error('Scooter\'s parse error:', e);
     res.status(500).json({ error: e.message });
   }
-});
-
-// Temporary debug endpoint for Scooter's parse results
-app.get('/scooters/parse-debug', (req, res) => {
-  if (!_lastParseDebug) return res.json({ message: 'No parse results yet. Upload a file first.' });
-  res.json(_lastParseDebug);
 });
 
 // ─────────────────────────────────────────────────────────────────
