@@ -2213,7 +2213,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- ══ CARD 3: Team Chat ══ -->
-      <div class="card" style="display:flex;flex-direction:column;overflow:visible;position:relative;">
+      <div class="card" style="display:flex;flex-direction:column;">
         <div class="card-header" style="border-bottom:2px solid var(--gold)22;">
           <div>
             <div class="card-title" style="display:flex;align-items:center;gap:8px;">
@@ -2222,8 +2222,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div class="card-subtitle">Internal team messaging</div>
           </div>
           <div style="position:relative;">
-            <button onclick="ccChatToggleDMMenu()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-d);font-family:'DM Sans',sans-serif;">+ New DM</button>
-            <div id="cc-chat-dm-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:400;max-height:250px;overflow-y:auto;"></div>
+            <button onclick="ccChatToggleDMMenu(event)" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-d);font-family:'DM Sans',sans-serif;">+ New DM</button>
           </div>
         </div>
 
@@ -24955,18 +24954,31 @@ async function ccChatLoadOlder() {
 }
 
 let _ccDmMenuOpen = false;
-function ccChatToggleDMMenu() {
-  const menu = document.getElementById('cc-chat-dm-menu');
-  if (!menu) return;
+function ccChatToggleDMMenu(e) {
+  let menu = document.getElementById('cc-chat-dm-menu-float');
   _ccDmMenuOpen = !_ccDmMenuOpen;
   if (_ccDmMenuOpen) {
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'cc-chat-dm-menu-float';
+      Object.assign(menu.style, { position:'fixed', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 8px 24px rgba(0,0,0,.15)', minWidth:'180px', zIndex:'1000', maxHeight:'250px', overflowY:'auto', display:'none' });
+      document.body.appendChild(menu);
+    }
+    // Position below the button
+    const btn = (e && e.target) ? e.target.closest('button') : document.querySelector('[onclick*="ccChatToggleDMMenu"]');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.right = (window.innerWidth - rect.right) + 'px';
+      menu.style.left = '';
+    }
     const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
     const others = teamList.filter(u => u.id !== currentUser?.id);
     menu.innerHTML = others.map(u => {
       const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
       const initial = name.charAt(0).toUpperCase();
       const channelId = _chatDmChannelId(currentUser.id, u.id);
-      return `<div onclick="document.getElementById('cc-chat-dm-menu').style.display='none';_ccDmMenuOpen=false;ccChatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
+      return `<div onclick="document.getElementById('cc-chat-dm-menu-float').style.display='none';_ccDmMenuOpen=false;ccChatOpenChannel('${channelId}','${name.replace(/'/g, "\\'")}')"
         style="padding:8px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text);"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:24px;height:24px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${initial}</div>
@@ -24975,12 +24987,12 @@ function ccChatToggleDMMenu() {
     }).join('');
     menu.style.display = '';
     setTimeout(() => document.addEventListener('click', _ccDmOutsideClick, { once: true }), 10);
-  } else {
+  } else if (menu) {
     menu.style.display = 'none';
   }
 }
 function _ccDmOutsideClick(e) {
-  const menu = document.getElementById('cc-chat-dm-menu');
+  const menu = document.getElementById('cc-chat-dm-menu-float');
   if (menu && !menu.contains(e.target) && !e.target.closest('[onclick*="ccChatToggleDMMenu"]')) {
     menu.style.display = 'none'; _ccDmMenuOpen = false;
   } else if (_ccDmMenuOpen) {
