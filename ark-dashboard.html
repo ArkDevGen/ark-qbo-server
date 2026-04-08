@@ -26257,7 +26257,9 @@ async function scootsPLFetch(startDate, endDate, byClass) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId: qboActiveRealmId }),
   });
-  const data = await resp.json();
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { throw new Error('Server returned invalid response — it may still be deploying. Try again in a moment.'); }
   if (!data.success) throw new Error(data.error || 'Failed to fetch P&L');
   return data.report;
 }
@@ -26330,7 +26332,7 @@ async function scootsPLRun() {
     if (headerEl) {
       headerEl.innerHTML = `<div style="text-align:center;padding:8px 0 20px;">
         <div style="font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:-.01em;">${companyName}</div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#999;margin-top:4px;">Profit & Loss &nbsp;·&nbsp; ${startDate} → ${endDate}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#999;margin-top:4px;">Profit &amp; Loss &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}</div>
       </div>`;
       headerEl.style.display = '';
     }
