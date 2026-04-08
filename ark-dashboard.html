@@ -24397,8 +24397,14 @@ function chatRenderChannelList() {
       // DM — find the other user
       const parts = ch.channelId.replace('dm_', '').split('_');
       const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
-      const other = teamList.find(u => u.id === otherId);
-      const name = other ? `${other.fname || other.userName || ''} ${other.lname || ''}`.trim() : otherId;
+      const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
+      let name = otherId;
+      if (other && other.fname) {
+        name = `${other.fname} ${other.lname || ''}`.trim();
+      } else if (ch.lastMessage) {
+        // Fallback: resolve name from the other person's messages in this channel
+        name = _chatSenderName(ch.lastMessage.senderId !== currentUser?.id ? ch.lastMessage : { senderId: otherId, senderName: otherId });
+      }
       const preview = ch.lastMessage ? ch.lastMessage.text.slice(0, 45) : '';
       return chatChannelItem(ch.channelId, name, preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
     }
@@ -24486,8 +24492,8 @@ function chatStopPoll() {
 // Resolve sender display name — look up from team list, fallback to stored name
 function _chatSenderName(msg) {
   const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
-  const user = teamList.find(u => u.id === msg.senderId);
-  if (user) return `${user.fname || ''} ${user.lname || ''}`.trim();
+  const user = teamList.find(u => (u.id || u._id) === msg.senderId || u.username === msg.senderId);
+  if (user && user.fname) return `${user.fname} ${user.lname || ''}`.trim();
   return msg.senderName || 'Unknown';
 }
 
