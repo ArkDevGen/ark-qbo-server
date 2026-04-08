@@ -5207,7 +5207,7 @@ app.get('/notifications/stream', requireAuth, (req, res) => {
 });
 
 // Broadcast a notification to a specific user via SSE + future Web Push
-app.post('/notifications/push', requireAuth, (req, res) => {
+app.post('/notifications/push', requireAuth, async (req, res) => {
   try {
     const { notification } = req.body;
     if (!notification || !notification.targetAm) {
