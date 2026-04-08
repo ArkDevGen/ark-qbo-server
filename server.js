@@ -4927,6 +4927,11 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
     }).filter(r => r['_date'] && !isNaN(r['_date'].getTime()));
 
     console.log(`  Parsed ${rows.length} valid rows, columns: ${Object.entries(colMap).filter(([k,v])=>v).map(([k])=>k).join(', ')}`);
+    // Log unique franchise names and stores in the data for debugging
+    const dataFranchises = [...new Set(rows.map(r => String(r['Franchise'] || '').trim()))];
+    const dataStores = [...new Set(rows.map(r => String(r['Store'] || '').trim()))];
+    console.log(`  Data franchise names: [${dataFranchises.join(', ')}]`);
+    console.log(`  Data store numbers: [${dataStores.join(', ')}]`);
 
     // Load CRM client data for realm ID matching
     let crmClients = [];
@@ -4964,6 +4969,10 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 
       if (!franchiseRows.length) continue;
 
+      // Log franchise matching for debugging
+      const uniqueStores = [...new Set(franchiseRows.map(r => String(r['Store'] || '').trim()))];
+      console.log(`  Franchise "${franchiseKey}": matched ${franchiseRows.length} rows, stores: [${uniqueStores.join(', ')}]`);
+
       if (!info.use_classes) {
         // Simple: one store per franchise entry
         for (const [storeId, className] of Object.entries(info.stores || {})) {
@@ -4981,11 +4990,28 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
           for (const dateKey of dates) {
             const dayRows = storeRows.filter(r => r._date.toISOString().slice(0, 10) === dateKey);
             const entry = sjeBuildEntry(dayRows[0], franchiseKey, className || '', dayRows[0]._date.toISOString(), storeId);
+            const d = Math.round(entry.lines.reduce((s, l) => s + (l.debit || 0), 0) * 100) / 100;
+            const c = Math.round(entry.lines.reduce((s, l) => s + (l.credit || 0), 0) * 100) / 100;
+            entry.entryDebits = d;
+            entry.entryCredits = c;
+            entry.entryBalanced = Math.abs(d - c) < 0.01;
             entries.push(entry);
-            const d = entry.lines.reduce((s, l) => s + (l.debit || 0), 0);
-            const c = entry.lines.reduce((s, l) => s + (l.credit || 0), 0);
             fDebits += d;
             fCredits += c;
+          }
+
+          // Log imbalanced entries for debugging
+          const imbalancedEntries = entries.filter(e => !e.entryBalanced);
+          if (imbalancedEntries.length) {
+            console.log(`  ⚠ ${franchiseKey} (${storeId}): ${imbalancedEntries.length} imbalanced entries:`);
+            for (const e of imbalancedEntries) {
+              console.log(`    ${e.journalNo}: D=${e.entryDebits} C=${e.entryCredits} diff=${Math.round((e.entryDebits - e.entryCredits) * 100) / 100}`);
+              if (e === imbalancedEntries[0]) {
+                for (const l of e.lines) {
+                  if (l.debit || l.credit) console.log(`      ${l.account}: D=${l.debit || 0} C=${l.credit || 0} ${l.description || ''}`);
+                }
+              }
+            }
           }
 
           const dateRange = dates.length ? `${storeRows[0]._date.toLocaleDateString('en-US')} - ${storeRows[storeRows.length-1]._date.toLocaleDateString('en-US')}` : '';
@@ -5003,6 +5029,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
             totalDebits: Math.round(fDebits * 100) / 100,
             totalCredits: Math.round(fCredits * 100) / 100,
             balanced: Math.abs(fDebits - fCredits) < 0.01,
+            imbalancedCount: imbalancedEntries.length,
             entries,
           });
 
@@ -5041,15 +5068,33 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
               if (!dayRows.length) continue;
 
               const entry = sjeBuildEntry(dayRows[0], franchiseKey, className, dayRows[0]._date.toISOString(), storeId);
+              const d = Math.round(entry.lines.reduce((s, l) => s + (l.debit || 0), 0) * 100) / 100;
+              const c = Math.round(entry.lines.reduce((s, l) => s + (l.credit || 0), 0) * 100) / 100;
+              entry.entryDebits = d;
+              entry.entryCredits = c;
+              entry.entryBalanced = Math.abs(d - c) < 0.01;
               entries.push(entry);
-              const d = entry.lines.reduce((s, l) => s + (l.debit || 0), 0);
-              const c = entry.lines.reduce((s, l) => s + (l.credit || 0), 0);
               fDebits += d;
               fCredits += c;
             }
           }
 
           if (!entries.length) continue;
+
+          // Log imbalanced entries for debugging
+          const imbalancedEntries = entries.filter(e => !e.entryBalanced);
+          if (imbalancedEntries.length) {
+            console.log(`  ⚠ ${franchiseKey}: ${imbalancedEntries.length} imbalanced entries:`);
+            for (const e of imbalancedEntries) {
+              console.log(`    ${e.journalNo}: D=${e.entryDebits} C=${e.entryCredits} diff=${Math.round((e.entryDebits - e.entryCredits) * 100) / 100}`);
+              // Log each line for the first imbalanced entry
+              if (e === imbalancedEntries[0]) {
+                for (const l of e.lines) {
+                  if (l.debit || l.credit) console.log(`      ${l.account}: D=${l.debit || 0} C=${l.credit || 0} ${l.description || ''}`);
+                }
+              }
+            }
+          }
 
           const classNames = groupStores.map(s => info.stores?.[s] || s).filter(Boolean).join(', ');
           const dateRange = sortedDates.length ? `${new Date(sortedDates[0]).toLocaleDateString('en-US')} - ${new Date(sortedDates[sortedDates.length-1]).toLocaleDateString('en-US')}` : '';
@@ -5067,6 +5112,7 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
             totalDebits: Math.round(fDebits * 100) / 100,
             totalCredits: Math.round(fCredits * 100) / 100,
             balanced: Math.abs(fDebits - fCredits) < 0.01,
+            imbalancedCount: imbalancedEntries.length,
             entries,
           });
 
