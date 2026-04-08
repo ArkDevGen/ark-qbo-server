@@ -14753,8 +14753,9 @@ async function tcPopulateEmployees(){
 }
 
 function tcLoadEmployee(){
-  const empId = document.getElementById('tc-emp-select')?.value;
-  tcCurrentUser = empId||null;
+  const dropdownId = document.getElementById('tc-emp-select')?.value;
+  const empId = dropdownId || tcCurrentUser || (currentUser?.id);
+  tcCurrentUser = empId || null;
   const emptyEl = document.getElementById('tc-summary-empty');
   const wrapEl = document.getElementById('tc-timecard-wrap');
   if(!empId){
