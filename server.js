@@ -5438,6 +5438,40 @@ app.post('/chat/read', requireAuth, (req, res) => {
   }
 });
 
+// Delete a message (own messages only)
+app.delete('/chat/messages/:id', requireAuth, (req, res) => {
+  try {
+    const messages = _loadChatMessages();
+    const idx = messages.findIndex(m => m.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Message not found' });
+    if (messages[idx].senderId !== req.arkUser.userId) return res.status(403).json({ error: 'Can only delete your own messages' });
+
+    const deleted = messages[idx];
+    messages.splice(idx, 1);
+    _saveChatMessages(messages);
+
+    // Broadcast deletion via SSE
+    const payload = `data: ${JSON.stringify({ type: 'chat-delete', messageId: deleted.id, channelId: deleted.channelId })}\n\n`;
+    if (deleted.channelId === 'general') {
+      for (const [, clients] of _sseClients) {
+        for (const client of clients) { try { client.write(payload); } catch (_) { clients.delete(client); } }
+      }
+    } else if (deleted.channelId.startsWith('dm_') || deleted.channelId.startsWith('dm~')) {
+      const parts = deleted.channelId.includes('~')
+        ? deleted.channelId.replace(/^dm~/, '').split('~')
+        : (deleted.channelId.match(/usr_[a-f0-9]+/g) || []);
+      for (const uid of parts) {
+        const clients = _sseClients.get(uid);
+        if (clients) { for (const client of clients) { try { client.write(payload); } catch (_) { clients.delete(client); } } }
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────
 // WEB PUSH — VAPID setup, subscription management
 // ─────────────────────────────────────────────────────────────────

@@ -24560,7 +24560,8 @@ function chatRenderMessages() {
     const initial = displayName.charAt(0).toUpperCase();
 
     if (isMine) {
-      html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;">
+      html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;position:relative;" class="chat-msg-row" onmouseover="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='flex')" onmouseout="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='none')">
+        <button class="chat-del" onclick="chatDeleteMsg('${msg.id}')" title="Delete" style="display:none;position:absolute;left:-2px;top:50%;transform:translateY(-50%);background:var(--surface);border:1px solid var(--border);border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;align-items:center;justify-content:center;color:var(--red);z-index:2;">x</button>
         <div style="max-width:75%;background:var(--navy);color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:12px;line-height:1.5;">
           ${_chatEscape(msg.text)}
           <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}</div>
@@ -24660,6 +24661,30 @@ function chatShowNewDM() {
 }
 
 // Handle incoming chat messages via SSE
+// Delete a chat message
+async function chatDeleteMsg(msgId, source) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages/' + msgId, { method: 'DELETE' });
+    if (resp.ok) {
+      // Remove from floating panel
+      _chatMessages = _chatMessages.filter(m => m.id !== msgId);
+      chatRenderMessages();
+      // Remove from Comm Center
+      _ccChatMessages = _ccChatMessages.filter(m => m.id !== msgId);
+      if (document.getElementById('view-commcenter')?.classList.contains('active')) ccChatRenderMessages();
+    }
+  } catch (_) {}
+}
+
+// Handle SSE chat-delete events
+function chatHandleDeleteSSE(data) {
+  _chatMessages = _chatMessages.filter(m => m.id !== data.messageId);
+  _ccChatMessages = _ccChatMessages.filter(m => m.id !== data.messageId);
+  if (_chatOpen && _chatChannel === data.channelId) chatRenderMessages();
+  if (document.getElementById('view-commcenter')?.classList.contains('active') && _ccChatChannel === data.channelId) ccChatRenderMessages();
+}
+
 function chatHandleSSE(msg) {
   // Update badge
   if (msg.senderId !== currentUser?.id) {
@@ -24856,7 +24881,8 @@ function ccChatRenderMessages() {
     const initial = displayName.charAt(0).toUpperCase();
 
     if (isMine) {
-      html += `<div style="display:flex;justify-content:flex-end;padding:2px 0;">
+      html += `<div style="display:flex;justify-content:flex-end;padding:2px 0;position:relative;" class="chat-msg-row" onmouseover="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='flex')" onmouseout="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='none')">
+        <button class="chat-del" onclick="chatDeleteMsg('${msg.id}','cc')" title="Delete" style="display:none;position:absolute;left:-2px;top:50%;transform:translateY(-50%);background:var(--surface);border:1px solid var(--border);border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;align-items:center;justify-content:center;color:var(--red);z-index:2;">x</button>
         <div style="max-width:70%;background:var(--navy);color:#fff;border-radius:16px 16px 4px 16px;padding:8px 12px;font-size:12px;line-height:1.5;">
           ${_chatEscape(msg.text)}
           <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}</div>
@@ -25267,6 +25293,10 @@ function notifConnectSSE(){
         if(data.type === 'chat' && data.message) {
           chatHandleSSE(data.message);
           ccChatHandleSSE(data.message);
+          return;
+        }
+        if(data.type === 'chat-delete' && data.messageId) {
+          chatHandleDeleteSSE(data);
           return;
         }
 
