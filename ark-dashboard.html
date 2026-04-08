@@ -25314,7 +25314,7 @@ async function qboPLRptRun() {
 
   try {
     const payload = { startDate, endDate, reportType: 'summary' };
-    if (byClass) payload.summarize_column_by = 'Class';
+    if (byClass) payload.summarize_column_by = 'Classes';
     const resp = await authFetch(ARK_SERVER + '/qbo/api', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId: qboActiveRealmId }),
