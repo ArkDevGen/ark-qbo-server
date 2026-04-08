@@ -5394,7 +5394,7 @@ app.post('/chat/messages', requireAuth, (req, res) => {
       id: crypto.randomUUID(),
       channelId,
       senderId: userId,
-      senderName: req.arkUser.userName || 'Unknown',
+      senderName: req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown'),
       text: text.trim(),
       createdAt: new Date().toISOString(),
     };

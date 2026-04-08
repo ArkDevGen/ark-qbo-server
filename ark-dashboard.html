@@ -2219,35 +2219,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <button class="btn btn-ghost btn-sm" onclick="chatTogglePanel()" style="font-size:11px;">Open Chat</button>
         </div>
         <div id="cc-chat-preview" style="padding:4px 0;font-size:12px;color:var(--text-d);">
-          <div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">Loading recent messages...</div>
+          <div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">Navigate here to see recent messages</div>
         </div>
-        <script>
-          // Load recent general channel messages for Comm Center preview
-          (function(){
-            async function ccChatPreview(){
-              try {
-                const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=general&limit=8');
-                if(!resp.ok) return;
-                const data = await resp.json();
-                const el = document.getElementById('cc-chat-preview');
-                if(!el) return;
-                if(!data.messages || !data.messages.length){
-                  el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">No messages yet. Open chat to start a conversation.</div>';
-                  return;
-                }
-                el.innerHTML = data.messages.slice(-6).map(m => {
-                  const time = new Date(m.createdAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-                  const isMine = m.senderId === currentUser?.id;
-                  return '<div style="padding:4px 0;display:flex;gap:6px;align-items:flex-start;">' +
-                    '<span style="font-size:11px;font-weight:600;color:'+(isMine?'var(--navy)':'var(--gold)')+';white-space:nowrap;">' + (m.senderName||'?').split(' ')[0] + ':</span>' +
-                    '<span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.text.slice(0,60) + '</span>' +
-                    '<span style="font-size:9px;color:var(--text-dd);white-space:nowrap;">' + time + '</span></div>';
-                }).join('');
-              } catch(_){}
-            }
-            setTimeout(ccChatPreview, 1000);
-          })();
-        </script>
       </div>
 
       <!-- ══ CARD 4: Coming Soon ══ -->
@@ -8058,7 +8031,7 @@ function nav(page){
   if(page==='import'){ importInit(); }
   if(page==='salestax'){ stTab('crm'); renderSalesTax(); }
   if(page==='taxcenter'){ renderTaxHub(); }
-  if(page==='commcenter'){ ccInit(); }
+  if(page==='commcenter'){ ccInit(); ccLoadChatPreview(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
     const iframe = document.getElementById('payroll-admin-iframe');
@@ -24362,6 +24335,9 @@ function chatTogglePanel() {
   if (_chatOpen) {
     panel.style.display = '';
     chatLoadChannels();
+    // Reset badge when opening
+    const badge = document.getElementById('chat-badge');
+    if (badge) badge.style.display = 'none';
   } else {
     panel.style.display = 'none';
     chatStopPoll();
@@ -24676,6 +24652,29 @@ async function chatInitBadge() {
         }
       }
     }
+  } catch (_) {}
+}
+
+// Comm Center chat preview — loads recent General messages into the card
+async function ccLoadChatPreview() {
+  const el = document.getElementById('cc-chat-preview');
+  if (!el) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/chat/messages?channelId=general&limit=8');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!data.messages || !data.messages.length) {
+      el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text-dd);font-style:italic;">No messages yet. Open chat to start a conversation.</div>';
+      return;
+    }
+    el.innerHTML = data.messages.slice(-6).map(m => {
+      const time = new Date(m.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const isMine = m.senderId === currentUser?.id;
+      return '<div style="padding:4px 0;display:flex;gap:6px;align-items:flex-start;">' +
+        '<span style="font-size:11px;font-weight:600;color:' + (isMine ? 'var(--navy)' : 'var(--gold)') + ';white-space:nowrap;">' + (m.senderName || '?').split(' ')[0] + ':</span>' +
+        '<span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.text.slice(0, 60) + '</span>' +
+        '<span style="font-size:9px;color:var(--text-dd);white-space:nowrap;">' + time + '</span></div>';
+    }).join('');
   } catch (_) {}
 }
 
