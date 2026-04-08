@@ -2434,14 +2434,41 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </select>
     </div>
 
+    <!-- Project sub-tabs (shown when a project is selected) -->
+    <div id="tc-project-tabs" style="display:none;margin-bottom:14px;">
+      <div style="display:flex;gap:0;">
+        <button class="tc-vtoggle active" data-ptab="tasks" onclick="tcProjectTab('tasks')">📋 Tasks</button>
+        <button class="tc-vtoggle" data-ptab="notes" onclick="tcProjectTab('notes')">📝 Notes</button>
+      </div>
+    </div>
+
     <!-- View toggle -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div id="tc-view-toggle" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <div style="display:flex;gap:0;">
         <button class="tc-vtoggle active" data-view="list" onclick="tcSwitchView('list')">☰ List</button>
         <button class="tc-vtoggle" data-view="board" onclick="tcSwitchView('board')">▦ Board</button>
         <button class="tc-vtoggle" data-view="calendar" onclick="tcSwitchView('calendar')">📅 Calendar</button>
       </div>
       <div id="tc-smart-banner"></div>
+    </div>
+
+    <!-- Project notes container (hidden, shown when Notes tab active in project view) -->
+    <div id="tc-project-notes" style="display:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <input type="text" id="tc-pnotes-search" class="field-input" placeholder="Search notes..." oninput="tcRenderProjectNotes()" style="flex:1;max-width:280px;">
+        <button class="btn btn-primary btn-sm" onclick="tcNewProjectNote()">+ New Note</button>
+      </div>
+      <div id="tc-pnotes-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <input type="text" id="tc-pnote-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;width:100%;box-sizing:border-box;">
+        <textarea id="tc-pnote-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;width:100%;box-sizing:border-box;"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <span id="tc-pnote-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
+          <button class="btn btn-ghost btn-sm" onclick="tcCancelProjectNote()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="tcSaveProjectNote()">Save</button>
+        </div>
+        <input type="hidden" id="tc-pnote-id">
+      </div>
+      <div id="tc-pnotes-list" style="word-break:break-word;"></div>
     </div>
 
     <!-- View containers -->
@@ -18863,6 +18890,8 @@ async function tcRender(){
   // Filter (exclude no-date tasks — those go to Notes)
   let list = tasks.filter(t => {
     if(!t.dueDate && t.status !== 'completed') return false; // no-date tasks go to Notes panel
+    if(t.parentId) return false; // subtasks render under their parent, not in main list
+    if(t.type === 'note') return false; // notes go to project Notes tab
     if(fClient === '_noClient' && t.clientId) return false; // "No Client" filter
     if(fClient && fClient !== '_noClient' && t.clientId !== fClient) return false;
     if(fAM && t.amId !== fAM) return false;
@@ -19030,10 +19059,27 @@ function tcTaskCard(t, today, todayStr){
     <div style="display:flex;gap:6px;flex-shrink:0;" onclick="event.stopPropagation()">
       ${noteCount>0?`<span style="font-size:11px;color:var(--accent);padding:3px 8px;border:1px solid var(--navy);border-radius:var(--radius);background:#0e2035;pointer-events:none;">💬 ${noteCount}</span>`:''}
       ${reviewActions}
+      ${!t.isReviewTask&&!t.isNotifyTask&&!t.parentId?`<button onclick="event.stopPropagation();tcAddSubtask('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;">+ Sub</button>`:''}
       ${!t.isReviewTask&&!t.isNotifyTask?`<button onclick="event.stopPropagation();tcEditTask('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;">Edit</button>`:''}
       <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" class="btn btn-danger btn-sm" style="font-size:11px;padding:4px 8px;">×</button>
     </div>
-  </div>`;
+  </div>
+  ${(function(){
+    const subs = tcGetSubtasks(t.id);
+    if(!subs.length) return '';
+    const done = subs.filter(s=>s.status==='completed').length;
+    let html = `<div style="margin-left:36px;margin-bottom:4px;font-size:10px;color:var(--text-d);font-weight:600;">${done}/${subs.length} subtasks</div>`;
+    html += subs.map(s => {
+      const subCompleted = s.status==='completed';
+      return `<div style="margin-left:36px;padding:6px 10px;border-left:2px solid var(--border);margin-bottom:2px;display:flex;align-items:center;gap:8px;${subCompleted?'opacity:.5;':''}">
+        <input type="checkbox" ${subCompleted?'checked':''} onclick="event.stopPropagation();tcToggleComplete('${s.id}')" style="accent-color:var(--navy);cursor:pointer;">
+        <span style="font-size:12px;${subCompleted?'text-decoration:line-through;color:var(--text-d);':'color:var(--text);'}">${s.name}</span>
+        ${s.dueDate?`<span style="font-size:10px;color:var(--text-d);margin-left:auto;">${s.dueDate}</span>`:''}
+        <button onclick="event.stopPropagation();tcDeleteTask('${s.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:12px;opacity:.4;margin-left:auto;">×</button>
+      </div>`;
+    }).join('');
+    return html;
+  })()}`;
 }
 
 function tcRenderHistory(t){
@@ -19083,8 +19129,22 @@ function tcSelectView(view) {
   }
 
   if (isNotes) {
-    _nbActiveNotebook = 'all';
-    nbInit();
+    // Show all notes (type:'note' tasks) in the project notes view
+    const clientSel = document.getElementById('tc-filter-client');
+    if (clientSel) clientSel.value = '';
+    document.getElementById('tc-tasks-panel').style.display = '';
+    document.getElementById('tc-notes-panel').style.display = 'none';
+    // Show project tabs with Notes selected
+    const projTabs = document.getElementById('tc-project-tabs');
+    if (projTabs) projTabs.style.display = '';
+    _tcProjectTab = 'notes';
+    document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === 'notes'));
+    document.getElementById('tc-view-toggle').style.display = 'none';
+    document.getElementById('tc-view-list').style.display = 'none';
+    document.getElementById('tc-view-board').style.display = 'none';
+    document.getElementById('tc-view-calendar').style.display = 'none';
+    document.getElementById('tc-project-notes').style.display = '';
+    tcRenderProjectNotes();
   } else {
     // Set status filter based on view
     const statusSel = document.getElementById('tc-filter-status');
@@ -19098,6 +19158,19 @@ function tcSelectView(view) {
     }
     else { if (statusSel) statusSel.value = 'open'; if (clientSel) clientSel.value = ''; } // upcoming
     tcRender();
+  }
+
+  // Show project tabs when a project is selected
+  const projTabs = document.getElementById('tc-project-tabs');
+  const isProject = view.startsWith('project:');
+  if (projTabs) {
+    projTabs.style.display = isProject ? '' : 'none';
+    if (isProject) {
+      _tcProjectTab = 'tasks'; // reset to tasks tab
+      document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === 'tasks'));
+      document.getElementById('tc-project-notes').style.display = 'none';
+      document.getElementById('tc-view-toggle').style.display = '';
+    }
   }
 
   // Update sidebar active state
@@ -19121,10 +19194,8 @@ function tcBuildProjectSidebar() {
   const cOverdue = open.filter(t => t.dueDate < todayStr).length;
   const cToday = open.filter(t => t.dueDate === todayStr).length;
   const cUpcoming = open.length;
-  // Notes count from notebook entries (not tasks)
-  const myNotebooks = (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
-  const myNbIds = myNotebooks.map(n => n.id);
-  const cNotes = (DB.notebookEntries||[]).filter(e => myNbIds.includes(e.notebookId)).length;
+  // Notes count — type:'note' tasks for current user
+  const cNotes = myTasks.filter(t => t.type === 'note' && t.status !== 'completed').length;
 
   // Projects: group by client
   const projects = {};
@@ -19155,28 +19226,48 @@ function tcBuildProjectSidebar() {
       ${count > 0 ? `<span class="count" style="${countColor ? 'color:'+countColor+';font-weight:600;' : ''}">${count}</span>` : ''}
     </div>`;
 
+  // Build grouped sidebar
+  const groups = (DB.projectGroups || []).filter(g => g.userId === (currentUser?.id || ''));
+  const groupedClientIds = new Set();
+  groups.forEach(g => (g.clientIds || []).forEach(id => groupedClientIds.add(id)));
+  const ungroupedProjects = clientProjects.filter(p => !groupedClientIds.has(p.id));
+
+  let projectsHtml = '';
+
+  // Render groups (collapsible)
+  groups.forEach(g => {
+    const isCollapsed = g.collapsed;
+    const groupProjects = clientProjects.filter(p => (g.clientIds || []).includes(p.id));
+    const groupCount = groupProjects.reduce((s, p) => s + p.count, 0);
+    projectsHtml += `<div class="tc-proj-section" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="tcToggleGroup('${g.id}')">
+      <span>${isCollapsed ? '▶' : '▼'} ${g.name}</span>
+      <span style="font-size:9px;font-weight:400;opacity:.5;">${groupCount}</span>
+    </div>`;
+    if (!isCollapsed) {
+      projectsHtml += groupProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+    }
+  });
+
+  // Ungrouped projects
+  if (ungroupedProjects.length) {
+    if (groups.length) projectsHtml += '<div class="tc-proj-section">Other Projects</div>';
+    projectsHtml += ungroupedProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+  }
+
+  // Personal projects
+  if (personalProjects.length) {
+    projectsHtml += '<div class="tc-proj-section">Personal</div>';
+    projectsHtml += personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+  }
+
   sidebar.innerHTML =
     item('upcoming', '📅', 'Upcoming', cUpcoming, '') +
     item('today', '🟡', 'Today', cToday, cToday > 0 ? 'var(--gold)' : '') +
     item('overdue', '🔴', 'Overdue', cOverdue, cOverdue > 0 ? '#b03a3a' : '') +
     item('notes', '📌', 'Notes', cNotes, '') +
     '<div class="tc-proj-divider"></div>' +
-    '<div class="tc-proj-section">Projects</div>' +
-    clientProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
-    (personalProjects.length ? '<div class="tc-proj-section">Personal</div>' : '') +
-    personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('') +
-    // Notebooks section
-    (function() {
-      const notebooks = (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
-      if (!notebooks.length) return '';
-      const entryCounts = {};
-      (DB.notebookEntries||[]).forEach(e => { entryCounts[e.notebookId] = (entryCounts[e.notebookId]||0) + 1; });
-      return '<div class="tc-proj-divider"></div>' +
-        '<div class="tc-proj-section">Notebooks</div>' +
-        notebooks.sort((a,b) => a.name.localeCompare(b.name)).map(nb =>
-          item('notebook:' + nb.id, '📓', nb.name, entryCounts[nb.id] || 0, '')
-        ).join('');
-    })();
+    '<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Projects <span style="font-size:10px;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();tcManageGroups()">⚙</span></div>' +
+    projectsHtml;
 }
 
 // ══════════════════════════════════════════════
@@ -19536,6 +19627,257 @@ document.addEventListener('click', (e) => {
 
 function tcAddProject() {
   nbOpenCreateModal();
+}
+
+// ── View Switching ──────────────────────────────────────────────
+// ── Project Groups (collapsible sidebar folders) ────────────────
+function tcToggleGroup(groupId) {
+  const group = (DB.projectGroups || []).find(g => g.id === groupId);
+  if (group) { group.collapsed = !group.collapsed; saveDB(); tcBuildProjectSidebar(); }
+}
+
+function tcManageGroups() {
+  const groups = (DB.projectGroups || []).filter(g => g.userId === (currentUser?.id || ''));
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  const allClients = (DB.clients || []).sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
+  const groupedIds = new Set();
+  groups.forEach(g => (g.clientIds || []).forEach(id => groupedIds.add(id)));
+
+  overlay.innerHTML = `<div class="card" style="width:500px;max-height:80vh;overflow-y:auto;padding:0;overflow:visible;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">Manage Project Groups</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
+    </div>
+    <div style="padding:16px 20px;" id="tc-groups-content">
+      ${groups.map(g => `<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <input type="text" value="${g.name}" onchange="tcRenameGroup('${g.id}',this.value)" class="field-input" style="flex:1;font-weight:600;font-size:13px;">
+          <button onclick="tcDeleteGroup('${g.id}')" class="btn btn-danger btn-sm" style="font-size:10px;">Delete</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-d);margin-bottom:4px;">Clients in this group:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          ${(g.clientIds||[]).map(cid => {
+            const c = allClients.find(x => x.id === cid);
+            return c ? `<span style="font-size:11px;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;gap:4px;">${c.biz} <button onclick="tcRemoveFromGroup('${g.id}','${cid}')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-d);">×</button></span>` : '';
+          }).join('')}
+        </div>
+      </div>`).join('')}
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <input type="text" id="tc-new-group-name" class="field-input" placeholder="New group name..." style="flex:1;">
+        <button class="btn btn-primary btn-sm" onclick="tcCreateGroup()">+ Create Group</button>
+      </div>
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text-d);margin-bottom:8px;">Ungrouped clients — drag to a group or use the select below:</div>
+        <div style="display:flex;gap:8px;">
+          <select id="tc-assign-client" class="field-input" style="flex:1;">
+            <option value="">Select client...</option>
+            ${allClients.filter(c => !groupedIds.has(c.id)).map(c => `<option value="${c.id}">${c.biz}</option>`).join('')}
+          </select>
+          <select id="tc-assign-group" class="field-input" style="flex:1;">
+            <option value="">Select group...</option>
+            ${groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
+          </select>
+          <button class="btn btn-sm" onclick="tcAssignToGroup()">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function tcCreateGroup() {
+  const name = document.getElementById('tc-new-group-name')?.value.trim();
+  if (!name) return;
+  if (!DB.projectGroups) DB.projectGroups = [];
+  DB.projectGroups.push({ id: uid(), name, userId: currentUser?.id || '', clientIds: [], collapsed: false });
+  saveDB();
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  tcManageGroups();
+  tcBuildProjectSidebar();
+}
+
+function tcDeleteGroup(groupId) {
+  if (!confirm('Delete this group? Projects inside will become ungrouped.')) return;
+  DB.projectGroups = (DB.projectGroups || []).filter(g => g.id !== groupId);
+  saveDB();
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  tcManageGroups();
+  tcBuildProjectSidebar();
+}
+
+function tcRenameGroup(groupId, newName) {
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if (g) { g.name = newName.trim(); saveDB(); tcBuildProjectSidebar(); }
+}
+
+function tcRemoveFromGroup(groupId, clientId) {
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if (g) { g.clientIds = (g.clientIds || []).filter(id => id !== clientId); saveDB(); }
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  tcManageGroups();
+  tcBuildProjectSidebar();
+}
+
+function tcAssignToGroup() {
+  const clientId = document.getElementById('tc-assign-client')?.value;
+  const groupId = document.getElementById('tc-assign-group')?.value;
+  if (!clientId || !groupId) { alert('Select both a client and a group'); return; }
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if (g && !g.clientIds.includes(clientId)) { g.clientIds.push(clientId); saveDB(); }
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  tcManageGroups();
+  tcBuildProjectSidebar();
+}
+
+// ── Project Tabs (Tasks/Notes within a project) ─────────────────
+let _tcProjectTab = 'tasks'; // 'tasks' | 'notes'
+
+function tcProjectTab(tab) {
+  _tcProjectTab = tab;
+  document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === tab));
+
+  const viewToggle = document.getElementById('tc-view-toggle');
+  const viewList = document.getElementById('tc-view-list');
+  const viewBoard = document.getElementById('tc-view-board');
+  const viewCalendar = document.getElementById('tc-view-calendar');
+  const projNotes = document.getElementById('tc-project-notes');
+
+  if (tab === 'notes') {
+    if (viewToggle) viewToggle.style.display = 'none';
+    if (viewList) viewList.style.display = 'none';
+    if (viewBoard) viewBoard.style.display = 'none';
+    if (viewCalendar) viewCalendar.style.display = 'none';
+    if (projNotes) projNotes.style.display = '';
+    tcRenderProjectNotes();
+  } else {
+    if (viewToggle) viewToggle.style.display = '';
+    if (projNotes) projNotes.style.display = 'none';
+    tcSwitchView(sessionStorage.getItem('tc_view_mode') || 'list');
+  }
+}
+
+function tcRenderProjectNotes() {
+  const container = document.getElementById('tc-pnotes-list');
+  if (!container) return;
+  const search = (document.getElementById('tc-pnotes-search')?.value || '').toLowerCase();
+  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  const fAM = document.getElementById('tc-filter-am')?.value || '';
+
+  let notes = (DB.tasks || []).filter(t => t.type === 'note' && t.status !== 'completed');
+  if (fAM) notes = notes.filter(t => t.amId === fAM);
+  if (fClient && fClient !== '_noClient') notes = notes.filter(t => t.clientId === fClient);
+  else if (fClient === '_noClient') notes = notes.filter(t => !t.clientId);
+  if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''}`.toLowerCase().includes(search));
+
+  notes.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+  if (!notes.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-d);font-size:13px;">No notes yet. Click "+ New Note" to create one.</div>';
+    return;
+  }
+
+  container.innerHTML = notes.map(t => {
+    const client = t.clientId ? (DB.clients || []).find(c => c.id === t.clientId) : null;
+    const preview = (t.notes || '').substring(0, 120).replace(/\n/g, ' ');
+    const date = t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return `<div style="padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;background:var(--surface);cursor:pointer;transition:all .15s;" onclick="tcEditProjectNote('${t.id}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='var(--surface)'">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;">${t.name || 'Untitled'}</span>
+        <span style="font-size:10px;color:var(--text-d);">${date}</span>
+        ${client ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text-d);">${client.biz}</span>` : ''}
+        <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;opacity:.4;">×</button>
+      </div>
+      ${preview ? `<div style="font-size:12px;color:var(--text-d);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${preview}${(t.notes||'').length > 120 ? '…' : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function tcNewProjectNote() {
+  document.getElementById('tc-pnote-id').value = '';
+  document.getElementById('tc-pnote-title').value = '';
+  document.getElementById('tc-pnote-content').value = '';
+  document.getElementById('tc-pnote-meta').textContent = '';
+  document.getElementById('tc-pnotes-editor').style.display = '';
+  document.getElementById('tc-pnote-title').focus();
+}
+
+function tcEditProjectNote(id) {
+  const task = (DB.tasks || []).find(t => t.id === id);
+  if (!task) return;
+  document.getElementById('tc-pnote-id').value = id;
+  document.getElementById('tc-pnote-title').value = task.name || '';
+  document.getElementById('tc-pnote-content').value = task.notes || '';
+  const date = task.updatedAt ? new Date(task.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  document.getElementById('tc-pnote-meta').textContent = date ? `Last edited ${date}${task.createdBy ? ' by ' + task.createdBy : ''}` : '';
+  document.getElementById('tc-pnotes-editor').style.display = '';
+  document.getElementById('tc-pnote-title').focus();
+}
+
+function tcSaveProjectNote() {
+  const title = document.getElementById('tc-pnote-title').value.trim();
+  const content = document.getElementById('tc-pnote-content').value;
+  if (!title) { alert('Title is required'); return; }
+
+  const existingId = document.getElementById('tc-pnote-id').value;
+  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
+
+  if (existingId) {
+    const task = (DB.tasks || []).find(t => t.id === existingId);
+    if (task) {
+      task.name = title;
+      task.notes = content;
+      task.updatedAt = new Date().toISOString();
+    }
+  } else {
+    if (!DB.tasks) DB.tasks = [];
+    DB.tasks.push({
+      id: uid(), name: title, notes: content, type: 'note',
+      clientId: fClient && fClient !== '_noClient' ? fClient : '',
+      clientName: fClient ? ((DB.clients || []).find(c => c.id === fClient)?.biz || '') : '',
+      amId: currentUser?.id || '', category: 'Other', dueDate: '', priority: 'medium',
+      recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
+      noteLog: [], parentId: null, parentTaskId: null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: who,
+    });
+  }
+
+  saveDB();
+  tcCancelProjectNote();
+  tcRenderProjectNotes();
+  tcBuildProjectSidebar();
+}
+
+function tcCancelProjectNote() {
+  document.getElementById('tc-pnotes-editor').style.display = 'none';
+}
+
+// ── Subtask Support ─────────────────────────────────────────────
+function tcGetSubtasks(parentId) {
+  return (DB.tasks || []).filter(t => t.parentId === parentId);
+}
+
+function tcAddSubtask(parentId) {
+  const parent = (DB.tasks || []).find(t => t.id === parentId);
+  if (!parent) return;
+  const name = prompt('Subtask name:');
+  if (!name || !name.trim()) return;
+
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
+  if (!DB.tasks) DB.tasks = [];
+  DB.tasks.push({
+    id: uid(), name: name.trim(), notes: '', type: 'task',
+    clientId: parent.clientId, clientName: parent.clientName,
+    amId: parent.amId, category: parent.category, dueDate: parent.dueDate, priority: parent.priority,
+    recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
+    noteLog: [], parentId: parentId, parentTaskId: null,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: who,
+  });
+  saveDB();
+  tcRender();
 }
 
 // ── View Switching ──────────────────────────────────────────────
