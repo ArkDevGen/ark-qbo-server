@@ -26330,8 +26330,8 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
     html += '<div style="display:flex;padding:0 0 10px;margin-bottom:2px;">';
     html += '<span style="flex:1;"></span>';
     for (let i = 1; i < colCount; i++) {
-      html += `<span style="width:${colW};text-align:right;font-size:10px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
-      if (showPct) html += `<span style="width:60px;text-align:right;font-size:10px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:.08em;">%</span>`;
+      html += `<span style="width:${colW};text-align:right;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
+      if (showPct) html += `<span style="width:60px;text-align:right;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:.08em;">%</span>`;
     }
     html += '</div>';
   }
@@ -26364,7 +26364,7 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
   for (const section of rows) {
     if (section.Header) {
       const headerVal = section.Header.ColData?.map(c => c.value) || [];
-      html += `<div style="font-size:13px;font-weight:700;color:#1a1a1a;padding:18px 0 8px;border-bottom:1px solid #e8e8e8;margin-top:8px;cursor:pointer;letter-spacing:.01em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+      html += `<div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;color:#1a1a1a;padding:20px 0 10px;border-bottom:1px solid #e8e8e8;margin-top:10px;cursor:pointer;letter-spacing:.01em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
         ${headerVal[0] || 'Section'}</div>`;
       html += '<div>';
       html += scootsPLRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass, colW);
@@ -26386,17 +26386,17 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
   for (const row of rows) {
     if (row.type === 'Data' && row.ColData) {
       const vals = row.ColData.map(c => c.value);
-      html += `<div style="display:flex;align-items:baseline;padding:5px 0 5px ${indent}px;font-size:13px;color:#444;border-bottom:1px solid transparent;transition:border-color .15s;" onmouseenter="this.style.borderBottomColor='#f0f0f0'" onmouseleave="this.style.borderBottomColor='transparent'">`;
+      html += `<div style="display:flex;align-items:baseline;padding:6px 0 6px ${indent}px;font-family:'DM Sans',sans-serif;font-size:14px;color:#444;border-bottom:1px solid transparent;transition:border-color .15s;" onmouseenter="this.style.borderBottomColor='#f0f0f0'" onmouseleave="this.style.borderBottomColor='transparent'">`;
       html += `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${vals[0] || ''}</span>`;
       for (let i = 1; i < vals.length; i++) {
         const n = parseFloat(vals[i]);
         const money = qboFmtMoney(vals[i]);
         const clr = n < 0 ? '#cb2431' : '#333';
-        html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:${clr};font-variant-numeric:tabular-nums;">${money}</span>`;
+        html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:${clr};font-variant-numeric:tabular-nums;">${money}</span>`;
         if (showPct) {
           if (incomeTotal) {
             const pct = (n || 0) / incomeTotal * 100;
-            html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:#777;font-weight:500;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
+            html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:#777;font-weight:500;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
           } else {
             html += `<span style="width:60px;"></span>`;
           }
@@ -26405,7 +26405,7 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
       html += '</div>';
     } else if (row.Header) {
       const headerVals = row.Header.ColData?.map(c => c.value) || [];
-      html += `<div style="font-size:12px;font-weight:600;padding:12px 0 4px ${indent}px;color:#888;cursor:pointer;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
+      html += `<div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:14px 0 5px ${indent}px;color:#888;cursor:pointer;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
       html += '<div>';
       html += scootsPLRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass, colW);
       if (row.Summary) {
@@ -26421,11 +26421,11 @@ function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, 
   const vals = colData.map(c => c.value);
   const bTop = isGrand ? '2px solid #1a1a1a' : '1px solid #ddd';
   const bBot = isGrand ? '2px solid #1a1a1a' : 'none';
-  const fontSize = isGrand ? '15px' : '13px';
-  const pad = isGrand ? '14px 0' : '8px 0';
+  const fontSize = isGrand ? '16px' : '14px';
+  const pad = isGrand ? '16px 0' : '9px 0';
   const mt = isGrand ? '24px' : '2px';
   const bg = isGrand ? 'background:#fafafa;padding-left:12px;padding-right:12px;border-radius:8px;' : '';
-  let html = `<div style="display:flex;align-items:baseline;padding:${pad};font-weight:700;font-size:${fontSize};border-top:${bTop};border-bottom:${bBot};margin-top:${mt};${bg}">`;
+  let html = `<div style="display:flex;align-items:baseline;padding:${pad};font-family:'DM Sans',sans-serif;font-weight:700;font-size:${fontSize};border-top:${bTop};border-bottom:${bBot};margin-top:${mt};${bg}">`;
   html += `<span style="flex:1;color:#1a1a1a;">${vals[0] || ''}</span>`;
   for (let i = 1; i < vals.length; i++) {
     const n = parseFloat(vals[i]);
@@ -26435,7 +26435,7 @@ function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, 
     if (showPct) {
       if (incomeTotal) {
         const pct = (n || 0) / incomeTotal * 100;
-        html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:#555;font-weight:600;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
+        html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:#555;font-weight:600;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
       } else {
         html += `<span style="width:60px;"></span>`;
       }
