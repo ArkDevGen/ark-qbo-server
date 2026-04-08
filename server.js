@@ -12,7 +12,8 @@ const crypto      = require('crypto');
 const fs          = require('fs');
 const multer      = require('multer');
 const bcrypt      = require('bcryptjs');
-const webpush     = require('web-push');
+let webpush;
+try { webpush = require('web-push'); } catch(e) { console.log('web-push not available:', e.message); webpush = null; }
 // S3/B2 imports removed — now using ShareFile API
 const { google }       = require('googleapis');
 
@@ -5174,13 +5175,12 @@ const _sseClients = new Map();
 app.get('/notifications/stream', requireAuth, (req, res) => {
   const userId = req.arkUser.userId;
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'true',
-  });
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.flushHeaders();
   res.write('data: {"type":"connected"}\n\n');
 
   // Register this connection
@@ -5224,7 +5224,7 @@ app.post('/notifications/push', requireAuth, (req, res) => {
     }
 
     // Web Push to all subscriptions for targetAm
-    const pushSubs = _loadPushSubscriptions(notification.targetAm);
+    const pushSubs = webpush ? _loadPushSubscriptions(notification.targetAm) : [];
     let pushSent = 0;
     for (const sub of pushSubs) {
       try {
@@ -5252,15 +5252,17 @@ app.post('/notifications/push', requireAuth, (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 
 // Configure VAPID keys
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:info@arkfinancialservices.com',
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  );
-  console.log('Web Push: VAPID keys configured');
+if (webpush && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || 'mailto:info@arkfinancialservices.com',
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+    console.log('Web Push: VAPID keys configured');
+  } catch(e) { console.log('Web Push VAPID setup failed:', e.message); webpush = null; }
 } else {
-  console.log('Web Push: VAPID keys not set — push notifications disabled');
+  console.log('Web Push: not available — push notifications disabled');
 }
 
 // Push subscription persistence
