@@ -14578,11 +14578,12 @@ async function tcInit(){
 
   // Auto-select logged-in user
   if(currentUser){
+    tcCurrentUser = currentUser.id; // Always set for non-admins
     const sel = document.getElementById('tc-emp-select');
     if(sel && sel.querySelector(`option[value="${currentUser.id}"]`)){
       sel.value = currentUser.id;
-      tcLoadEmployee();
     }
+    tcLoadEmployee();
     // Show user name for non-admin view
     if(!showAll){
       const name = `${currentUser.fname || ''} ${currentUser.lname || ''}`.trim();
@@ -14644,7 +14645,7 @@ function tcManualPreview(){
 }
 
 function _tcManualEntryCore(){
-  const empId  = document.getElementById('tc-emp-select').value;
+  const empId  = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date = document.getElementById('tc-manual-date').value;
   const inT  = document.getElementById('tc-manual-in').value;
@@ -14683,7 +14684,7 @@ function _tcManualEntryCore(){
 }
 
 function tcAddPTO(){
-  const empId   = document.getElementById('tc-emp-select').value;
+  const empId   = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date  = document.getElementById('tc-pto-date').value;
   const hours = parseFloat(document.getElementById('tc-pto-hours').value);
@@ -14767,7 +14768,7 @@ function tcLoadEmployee(){
 
 // ── Punch ──
 function _tcPunchCore(type){
-  const empId = document.getElementById('tc-emp-select').value;
+  const empId = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date = document.getElementById('tc-punch-date').value;
   const time = document.getElementById('tc-punch-time').value;
@@ -21710,7 +21711,7 @@ function tcPunch(type){
 
 // ── Intercept tcManualEntry ───────────────────────────────────────
 function tcManualEntry(){
-  const empId = document.getElementById('tc-emp-select')?.value;
+  const empId = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date = document.getElementById('tc-manual-date')?.value;
   const inT  = document.getElementById('tc-manual-in')?.value;
