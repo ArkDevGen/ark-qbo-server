@@ -2383,26 +2383,26 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="tc-tasks-panel">
 
     <!-- KPI strip -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
-      <div class="sum-card" style="--card-accent:#b03a3a;cursor:pointer;" onclick="tcSetFilter('overdue')">
-        <div class="label">Overdue</div>
-        <div class="value" id="tc-kpi-overdue" style="color:#b03a3a;font-size:28px;">0</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+      <div class="sum-card" style="--card-accent:#b03a3a;cursor:pointer;padding:10px 12px;" onclick="tcSelectView('overdue')">
+        <div class="label" style="font-size:9px;">Overdue</div>
+        <div class="value" id="tc-kpi-overdue" style="color:#b03a3a;font-size:22px;">0</div>
       </div>
-      <div class="sum-card" style="--card-accent:#b8922a;cursor:pointer;" onclick="tcSetFilter('due-today')">
-        <div class="label">Due Today</div>
-        <div class="value" id="tc-kpi-today" style="color:#b8922a;font-size:28px;">0</div>
+      <div class="sum-card" style="--card-accent:#b8922a;cursor:pointer;padding:10px 12px;" onclick="tcSelectView('today')">
+        <div class="label" style="font-size:9px;">Due Today</div>
+        <div class="value" id="tc-kpi-today" style="color:#b8922a;font-size:22px;">0</div>
       </div>
-      <div class="sum-card" style="--card-accent:#2e75b6;cursor:pointer;" onclick="tcSetFilter('upcoming')">
-        <div class="label">This Week</div>
-        <div class="value blue" id="tc-kpi-week" style="font-size:28px;">0</div>
+      <div class="sum-card" style="--card-accent:#2e75b6;cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
+        <div class="label" style="font-size:9px;">This Week</div>
+        <div class="value blue" id="tc-kpi-week" style="font-size:22px;">0</div>
       </div>
-      <div class="sum-card" style="cursor:pointer;" onclick="tcSetFilter('all')">
-        <div class="label">Open Tasks</div>
-        <div class="value" id="tc-kpi-open" style="font-size:28px;">0</div>
+      <div class="sum-card" style="cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
+        <div class="label" style="font-size:9px;">Open Tasks</div>
+        <div class="value" id="tc-kpi-open" style="font-size:22px;">0</div>
       </div>
-      <div class="sum-card" style="--card-accent:#2e7d5e;cursor:pointer;" onclick="tcSetFilter('completed')">
-        <div class="label">Done This Month</div>
-        <div class="value green" id="tc-kpi-done" style="font-size:28px;">0</div>
+      <div class="sum-card" style="--card-accent:#2e7d5e;cursor:pointer;padding:10px 12px;" onclick="tcSetFilter('completed')">
+        <div class="label" style="font-size:9px;">Done This Month</div>
+        <div class="value green" id="tc-kpi-done" style="font-size:22px;">0</div>
       </div>
     </div>
 
@@ -18856,6 +18856,11 @@ function tcRecurLabel(freq, n, d1, d2){
 async function tcRender(){
   await tcPopulateFilters();
 
+  // Auto-tag no-date tasks as type:'note' if not already tagged
+  (DB.tasks || []).forEach(t => {
+    if (!t.type) t.type = t.dueDate ? 'task' : 'note';
+  });
+
   const tasks  = DB.tasks || [];
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
   const fStat  = document.getElementById('tc-filter-status')?.value || 'open';
@@ -19281,42 +19286,50 @@ let _nbEditingEntryId = null;
 function nbInit() {
   if (!DB.notebooks) DB.notebooks = [];
   if (!DB.notebookEntries) DB.notebookEntries = [];
-  // Auto-migrate no-date tasks to notebooks on first use
-  if (!DB.notebooks.length && (DB.tasks||[]).some(t => !t.dueDate && t.status !== 'completed')) {
-    nbMigrateFromTasks();
+  // Migrate notebook entries → tasks with type:'note' (one-time)
+  if (DB.notebookEntries.length > 0) {
+    nbMigrateToTasks();
   }
   nbRenderNotebooks();
   nbRenderEntries();
 }
 
-function nbMigrateFromTasks() {
-  const noDateTasks = (DB.tasks||[]).filter(t => !t.dueDate && t.status !== 'completed' && t.amId === (currentUser?.id || ''));
-  if (!noDateTasks.length) return;
-  // Group by _project
-  const groups = {};
-  noDateTasks.forEach(t => {
-    const proj = t._project || t.clientName || 'General';
-    if (!groups[proj]) groups[proj] = [];
-    groups[proj].push(t);
+function nbMigrateToTasks() {
+  // Convert notebook entries into DB.tasks with type:'note'
+  let migrated = 0;
+  const notebooks = DB.notebooks || [];
+  (DB.notebookEntries || []).forEach(entry => {
+    // Check if already migrated (avoid duplicates)
+    if ((DB.tasks || []).some(t => t.type === 'note' && t.name === entry.title && t.notes === entry.content)) return;
+
+    const nb = notebooks.find(n => n.id === entry.notebookId);
+    if (!DB.tasks) DB.tasks = [];
+    DB.tasks.push({
+      id: uid(), name: entry.title || 'Untitled Note', notes: entry.content || '',
+      type: 'note', clientId: nb?.clientId || '', clientName: '',
+      amId: nb?.userId || currentUser?.id || '', category: 'Other',
+      dueDate: '', priority: 'medium', recurring: false, recurFreq: null,
+      showDaysAdvance: 3, status: 'open', noteLog: [],
+      parentId: null, parentTaskId: null,
+      createdAt: entry.createdAt || new Date().toISOString(),
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+      createdBy: entry.createdBy || '',
+      _project: nb?.name || '',
+    });
+    migrated++;
   });
-  for (const [projName, tasks] of Object.entries(groups)) {
-    const nbId = uid();
-    DB.notebooks.push({
-      id: nbId, name: projName, userId: currentUser?.id || '',
-      clientId: tasks[0]?.clientId || '', color: '',
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    });
-    tasks.forEach(t => {
-      DB.notebookEntries.push({
-        id: uid(), notebookId: nbId, title: t.name,
-        content: t.notes || '', createdAt: t.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(), createdBy: t.createdBy || '',
-      });
-    });
+
+  if (migrated > 0) {
+    // Clear old notebook data
+    DB.notebookEntries = [];
+    DB.notebooks = [];
+    saveDB();
+    console.log(`Migrated ${migrated} notebook entries to tasks with type:note`);
   }
-  saveDB();
-  console.log(`Migrated ${noDateTasks.length} notes into ${Object.keys(groups).length} notebooks`);
 }
+
+// Legacy — no longer used (replaced by nbMigrateToTasks)
+function nbMigrateFromTasks() { }
 
 function nbMyNotebooks() {
   return (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
