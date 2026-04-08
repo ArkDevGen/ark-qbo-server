@@ -5487,6 +5487,7 @@ app.delete('/chat/messages/:id', requireAuth, (req, res) => {
     const messages = _loadChatMessages();
     const idx = messages.findIndex(m => m.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Message not found' });
+    if (messages[idx].channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat messages' });
     if (messages[idx].senderId !== req.arkUser.userId) return res.status(403).json({ error: 'Can only delete your own messages' });
 
     const deleted = messages[idx];
