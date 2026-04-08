@@ -19065,7 +19065,7 @@ async function tcRender(){
   }
   if(typeof tcRenderSmartBanner === 'function') tcRenderSmartBanner();
   if(typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
-  if(typeof tcPopulateSendList === 'function') tcPopulateSendList();
+  if(typeof tcPopulateSendList === 'function') await tcPopulateSendList();
 }
 
 function tcTaskCard(t, today, todayStr){
