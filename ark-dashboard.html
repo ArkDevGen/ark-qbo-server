@@ -24388,8 +24388,9 @@ function chatRenderChannelList() {
 
   list.innerHTML = _chatChannels.map(ch => {
     if (ch.channelId === 'general') {
-      const preview = ch.lastMessage ? `${ch.lastMessage.senderName.split(' ')[0]}: ${ch.lastMessage.text.slice(0, 40)}` : 'No messages yet';
-      return chatChannelItem('general', 'General', preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
+      const lastSender = ch.lastMessage ? _chatSenderName(ch.lastMessage).split(' ')[0] : '';
+      const preview = ch.lastMessage ? `${lastSender}: ${ch.lastMessage.text.slice(0, 40)}` : 'No messages yet';
+      return chatChannelItem('general', 'Team Chat', preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
     } else {
       // DM — find the other user
       const parts = ch.channelId.replace('dm_', '').split('_');
@@ -24480,6 +24481,14 @@ function chatStopPoll() {
   if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
 }
 
+// Resolve sender display name — look up from team list, fallback to stored name
+function _chatSenderName(msg) {
+  const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
+  const user = teamList.find(u => u.id === msg.senderId);
+  if (user) return `${user.fname || ''} ${user.lname || ''}`.trim();
+  return msg.senderName || 'Unknown';
+}
+
 function chatRenderMessages() {
   const thread = document.getElementById('chat-thread');
   if (!thread) return;
@@ -24505,7 +24514,8 @@ function chatRenderMessages() {
     }
     const isMine = msg.senderId === myId;
     const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    const initial = (msg.senderName || '?').charAt(0).toUpperCase();
+    const displayName = _chatSenderName(msg);
+    const initial = displayName.charAt(0).toUpperCase();
 
     if (isMine) {
       html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;">
@@ -24518,7 +24528,7 @@ function chatRenderMessages() {
       html += `<div style="display:flex;gap:8px;padding:3px 12px;">
         <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;">${initial}</div>
         <div style="max-width:75%;">
-          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(msg.senderName || 'Unknown')}</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(displayName)}</div>
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);">
             ${_chatEscape(msg.text)}
             <div style="font-size:9px;color:var(--text-dd);margin-top:2px;">${time}</div>
@@ -24671,7 +24681,7 @@ async function ccLoadChatPreview() {
       const time = new Date(m.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       const isMine = m.senderId === currentUser?.id;
       return '<div style="padding:4px 0;display:flex;gap:6px;align-items:flex-start;">' +
-        '<span style="font-size:11px;font-weight:600;color:' + (isMine ? 'var(--navy)' : 'var(--gold)') + ';white-space:nowrap;">' + (m.senderName || '?').split(' ')[0] + ':</span>' +
+        '<span style="font-size:11px;font-weight:600;color:' + (isMine ? 'var(--navy)' : 'var(--gold)') + ';white-space:nowrap;">' + _chatSenderName(m).split(' ')[0] + ':</span>' +
         '<span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.text.slice(0, 60) + '</span>' +
         '<span style="font-size:9px;color:var(--text-dd);white-space:nowrap;">' + time + '</span></div>';
     }).join('');
