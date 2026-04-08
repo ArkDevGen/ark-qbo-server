@@ -444,7 +444,7 @@
   },
   "Mile 40 Corp - Main": {
     "label": "M40 (Roy + PV)",
-    "franchise_names": ["Mile 40 Corporation", "Mile 40, Corp"],
+    "franchise_names": ["Mile 40 Corporation"],
     "stores": {
       "152": "Roy",
       "329": "Pleasant View"
@@ -459,7 +459,7 @@
   },
   "Mile 40 Corp - Clearfield": {
     "label": "M40 (1425 ClFiUT)",
-    "franchise_names": ["Mile 40 Corporation", "Mile 40, Corp"],
+    "franchise_names": ["Mile 40, Corp"],
     "stores": {
       "1425": "Clearfield"
     },
