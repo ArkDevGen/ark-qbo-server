@@ -4312,48 +4312,56 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
       <!-- ═══ P&L PRESENTATION TOOL ═══ -->
       <div id="scoots-pl-panel" style="display:none;">
-        <div style="background:#FFF8F0;border:2px solid #C8102E;border-radius:12px;overflow:hidden;">
-          <!-- Branded Header -->
-          <div style="background:linear-gradient(135deg,#C8102E 0%,#a00d24 100%);padding:18px 24px;display:flex;align-items:center;gap:14px;">
-            <div style="width:44px;height:44px;border-radius:10px;background:#F2A900;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 2px 8px rgba(0,0,0,.2);">☕</div>
-            <div style="flex:1;">
-              <div style="font-size:18px;font-weight:700;color:#fff;font-family:'Cormorant Garamond',serif;letter-spacing:.02em;">Scooter's Coffee — P&L Review</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.7);">Franchisee Performance Analysis</div>
+        <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 32px rgba(0,0,0,.06);">
+
+          <!-- Header — minimal, typographic -->
+          <div style="padding:32px 40px 0;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px;">
+              <div>
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:#C8102E;margin-bottom:6px;">Scooter's Coffee</div>
+                <div style="font-size:28px;font-weight:700;color:#1a1a1a;font-family:'Cormorant Garamond',serif;line-height:1.1;letter-spacing:-.02em;">Profit & Loss Review</div>
+              </div>
+              <span id="scoots-pl-status" style="font-size:12px;color:#999;font-weight:500;padding-bottom:4px;"></span>
             </div>
-            <span id="scoots-pl-status" style="font-size:11px;color:rgba(255,255,255,.8);"></span>
+
+            <!-- Controls — one clean row -->
+            <div style="display:flex;align-items:center;gap:16px;padding-bottom:28px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input type="date" id="scoots-pl-start" class="input" style="font-size:12px;width:132px;border:1px solid #e0e0e0;border-radius:8px;padding:7px 10px;color:#333;">
+                <span style="color:#ccc;font-size:13px;">—</span>
+                <input type="date" id="scoots-pl-end" class="input" style="font-size:12px;width:132px;border:1px solid #e0e0e0;border-radius:8px;padding:7px 10px;color:#333;">
+              </div>
+              <div style="display:flex;gap:2px;background:#f5f5f5;border-radius:8px;padding:2px;">
+                <button class="btn btn-sm" onclick="scootsPLQuick('this-month')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">This Mo</button>
+                <button class="btn btn-sm" onclick="scootsPLQuick('last-month')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">Last Mo</button>
+                <button class="btn btn-sm" onclick="scootsPLQuick('this-quarter')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">This Qtr</button>
+                <button class="btn btn-sm" onclick="scootsPLQuick('last-quarter')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">Last Qtr</button>
+                <button class="btn btn-sm" onclick="scootsPLQuick('this-year')" style="font-size:10px;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#666;font-weight:600;cursor:pointer;">YTD</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;margin-left:4px;">
+                <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
+                  <input type="checkbox" id="scoots-pl-pct" style="accent-color:#C8102E;"> % of Income
+                </label>
+                <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
+                  <input type="checkbox" id="scoots-pl-class" style="accent-color:#C8102E;"> By Class
+                </label>
+              </div>
+              <button onclick="scootsPLRun()" style="font-size:12px;font-weight:600;padding:8px 24px;background:#C8102E;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;margin-left:auto;" onmouseenter="this.style.background='#a00d24'" onmouseleave="this.style.background='#C8102E'">Run Report</button>
+            </div>
           </div>
 
-          <!-- Controls Bar -->
-          <div style="padding:14px 24px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid rgba(200,16,46,.15);background:rgba(200,16,46,.03);">
-            <label style="font-size:11px;color:#6b5b4f;font-weight:600;">From:</label>
-            <input type="date" id="scoots-pl-start" class="input" style="font-size:12px;width:140px;border-color:rgba(200,16,46,.25);background:#fff;">
-            <label style="font-size:11px;color:#6b5b4f;font-weight:600;">To:</label>
-            <input type="date" id="scoots-pl-end" class="input" style="font-size:12px;width:140px;border-color:rgba(200,16,46,.25);background:#fff;">
-            <div style="display:flex;gap:4px;">
-              <button class="btn btn-sm" onclick="scootsPLQuick('this-month')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">This Mo</button>
-              <button class="btn btn-sm" onclick="scootsPLQuick('last-month')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">Last Mo</button>
-              <button class="btn btn-sm" onclick="scootsPLQuick('this-quarter')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">This Qtr</button>
-              <button class="btn btn-sm" onclick="scootsPLQuick('last-quarter')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">Last Qtr</button>
-              <button class="btn btn-sm" onclick="scootsPLQuick('this-year')" style="font-size:10px;padding:4px 8px;border-color:rgba(200,16,46,.3);color:#C8102E;">YTD</button>
-            </div>
-            <label style="font-size:11px;color:#6b5b4f;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;">
-              <input type="checkbox" id="scoots-pl-pct"> % of Income
-            </label>
-            <label style="font-size:11px;color:#6b5b4f;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:500;">
-              <input type="checkbox" id="scoots-pl-class"> By Class
-            </label>
-            <button onclick="scootsPLRun()" style="font-size:12px;font-weight:700;padding:7px 20px;background:#C8102E;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 6px rgba(200,16,46,.3);transition:all .15s;">Run Report</button>
-          </div>
-
-          <!-- KPI Dashboard (hidden until report loads) -->
-          <div id="scoots-pl-kpis" style="display:none;padding:20px 24px 0;">
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;" id="scoots-kpi-row1"></div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;" id="scoots-kpi-row2"></div>
+          <!-- KPI Dashboard -->
+          <div id="scoots-pl-kpis" style="display:none;padding:28px 40px 0;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px;" id="scoots-kpi-row1"></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;" id="scoots-kpi-row2"></div>
           </div>
 
           <!-- P&L Report Output -->
-          <div id="scoots-pl-output" style="padding:16px 24px 24px;">
-            <div style="padding:40px;text-align:center;color:#9a8b7e;font-size:13px;">Select a date range and click <strong style="color:#C8102E;">Run Report</strong></div>
+          <div id="scoots-pl-output" style="padding:28px 40px 40px;">
+            <div style="padding:60px 20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:12px;opacity:.3;">☕</div>
+              <div style="font-size:13px;color:#bbb;font-weight:500;">Select a date range and run the report</div>
+            </div>
           </div>
         </div>
       </div>
@@ -25600,7 +25608,7 @@ async function scootsPLRun() {
 
   statusEl.textContent = 'Loading…';
   kpiBox.style.display = 'none';
-  output.innerHTML = '<div style="padding:40px;text-align:center;color:#9a8b7e;font-size:13px;">☕ Fetching P&L data…</div>';
+  output.innerHTML = '<div style="padding:60px 20px;text-align:center;"><div style="font-size:13px;color:#bbb;font-weight:500;">Loading report…</div></div>';
 
   try {
     // Calculate comparison periods
@@ -25663,71 +25671,77 @@ async function scootsPLRun() {
     statusEl.textContent = startDate + ' → ' + endDate;
     qboLog('info', 'Scooter\'s P&L loaded for ' + startDate + ' → ' + endDate);
   } catch (e) {
-    output.innerHTML = `<div style="padding:30px;text-align:center;color:#C8102E;font-size:13px;">⚠️ ${e.message}</div>`;
+    output.innerHTML = `<div style="padding:40px 20px;text-align:center;"><div style="font-size:13px;color:#cb2431;font-weight:500;">${e.message}</div></div>`;
     statusEl.textContent = 'Error';
     kpiBox.style.display = 'none';
   }
 }
 
 function scootsPLRenderKPIs(kpi) {
-  const fmtMoney = v => {
+  const fmtK = v => {
     const abs = Math.abs(v);
-    if (abs >= 1000000) return (v < 0 ? '-' : '') + '$' + (abs / 1000000).toFixed(1) + 'M';
-    if (abs >= 1000) return (v < 0 ? '-' : '') + '$' + (abs / 1000).toFixed(1) + 'K';
-    return qboFmtMoney(String(v));
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1000000) return sign + '$' + (abs / 1000000).toFixed(1) + 'M';
+    if (abs >= 10000) return sign + '$' + (abs / 1000).toFixed(0) + 'K';
+    if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+    return sign + '$' + abs.toFixed(0);
   };
-  const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
-  const arrow = v => v >= 0 ? '▲' : '▼';
-  const trendColor = v => v >= 0 ? '#16a34a' : '#dc2626';
-  // For expense %: lower is better (green), higher is cautionary (amber/red)
-  const expColor = v => v <= 30 ? '#16a34a' : v <= 45 ? '#F2A900' : '#dc2626';
+  const fmtFull = v => qboFmtMoney(String(v));
+  const fmtPct = v => (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  const tc = v => v > 0 ? '#22863a' : v < 0 ? '#cb2431' : '#586069'; // trend color — GitHub-palette greens/reds
+  const ec = v => v <= 30 ? '#586069' : v <= 40 ? '#b08800' : '#cb2431'; // expense color — neutral unless concerning
+  const pip = (v, good) => {
+    // small colored dot indicator
+    const c = good ? '#22863a' : v === 0 ? '#d1d5db' : '#cb2431';
+    return `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c};margin-right:6px;vertical-align:middle;"></span>`;
+  };
 
-  const kpiCard = (label, value, subtitle, color, borderColor) => `
-    <div style="background:#fff;border-radius:10px;padding:16px 18px;border-left:4px solid ${borderColor || '#C8102E'};box-shadow:0 1px 4px rgba(0,0,0,.06);transition:transform .15s;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#9a8b7e;margin-bottom:8px;">${label}</div>
-      <div style="font-size:24px;font-weight:800;font-family:'Cormorant Garamond',serif;color:${color};line-height:1;letter-spacing:-.01em;">${value}</div>
-      <div style="font-size:10px;color:#9a8b7e;margin-top:6px;">${subtitle}</div>
+  const card = (label, value, sub, color) => `
+    <div style="background:#fafafa;border-radius:12px;padding:20px 22px 18px;transition:box-shadow .2s;" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,.06)'" onmouseleave="this.style.boxShadow='none'">
+      <div style="font-size:11px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">${label}</div>
+      <div style="font-size:28px;font-weight:700;color:${color};font-family:'Cormorant Garamond',serif;line-height:1;letter-spacing:-.02em;">${value}</div>
+      <div style="font-size:11px;color:#bbb;margin-top:8px;font-weight:500;">${sub}</div>
     </div>`;
 
-  // Row 1: Revenue metrics
+  // Row 1 — Revenue story
+  const momArrow = kpi.momDelta >= 0 ? '↑' : '↓';
+  const yoyArrow = kpi.yoyPct >= 0 ? '↑' : '↓';
   document.getElementById('scoots-kpi-row1').innerHTML =
-    kpiCard('Total Sales', fmtMoney(kpi.totalIncome), 'current period', '#1a1a2e', '#F2A900') +
-    kpiCard('MoM Sales Δ', (kpi.momDelta >= 0 ? '+' : '') + fmtMoney(kpi.momDelta), arrow(kpi.momDelta) + ' vs prior month', trendColor(kpi.momDelta), trendColor(kpi.momDelta)) +
-    kpiCard('MoM Sales %', fmtPct(kpi.momPct), arrow(kpi.momPct) + ' vs prior month', trendColor(kpi.momPct), trendColor(kpi.momPct)) +
-    kpiCard('YoY Sales %', fmtPct(kpi.yoyPct), arrow(kpi.yoyPct) + ' vs same period last year', trendColor(kpi.yoyPct), trendColor(kpi.yoyPct));
+    card('Revenue', fmtFull(kpi.totalIncome), 'current period', '#1a1a1a') +
+    card('Month over Month', (kpi.momDelta >= 0 ? '+' : '') + fmtK(kpi.momDelta), momArrow + ' ' + fmtPct(kpi.momPct) + ' vs prior month', tc(kpi.momDelta)) +
+    card('MoM Change', fmtPct(kpi.momPct), momArrow + ' vs prior month', tc(kpi.momPct)) +
+    card('Year over Year', fmtPct(kpi.yoyPct), yoyArrow + ' vs same period last year', tc(kpi.yoyPct));
 
-  // Row 2: Expense ratios + Net Profit
+  // Row 2 — Cost structure + bottom line
   document.getElementById('scoots-kpi-row2').innerHTML =
-    kpiCard('COGS %', kpi.cogsPct.toFixed(1) + '%', 'of income', expColor(kpi.cogsPct), expColor(kpi.cogsPct)) +
-    kpiCard('Payroll %', kpi.payrollPct.toFixed(1) + '%', 'of income', expColor(kpi.payrollPct), expColor(kpi.payrollPct)) +
-    kpiCard('Discount %', kpi.discountPct.toFixed(1) + '%', 'of income', kpi.discountPct <= 5 ? '#16a34a' : '#F2A900', kpi.discountPct <= 5 ? '#16a34a' : '#F2A900') +
-    kpiCard('Net Profit', fmtMoney(kpi.netIncome), kpi.netIncome >= 0 ? 'profitable' : 'net loss', kpi.netIncome >= 0 ? '#16a34a' : '#dc2626', kpi.netIncome >= 0 ? '#16a34a' : '#dc2626');
+    card('COGS', kpi.cogsPct.toFixed(1) + '%', pip(kpi.cogsPct, kpi.cogsPct <= 35) + 'of revenue', ec(kpi.cogsPct)) +
+    card('Payroll', kpi.payrollPct.toFixed(1) + '%', pip(kpi.payrollPct, kpi.payrollPct <= 30) + 'of revenue', ec(kpi.payrollPct)) +
+    card('Discounts', kpi.discountPct.toFixed(1) + '%', pip(kpi.discountPct, kpi.discountPct <= 5) + 'of revenue', kpi.discountPct <= 5 ? '#586069' : '#b08800') +
+    card('Net Profit', fmtFull(kpi.netIncome), pip(kpi.netIncome, kpi.netIncome >= 0) + (kpi.netIncome >= 0 ? 'profitable' : 'net loss'), tc(kpi.netIncome));
 }
 
 function scootsPLRenderReport(report, container, showPct, byClass) {
   const rows = report?.Rows?.Row || [];
   const cols = (report?.Columns?.Column || []).map(c => c.ColTitle);
   const colCount = cols.length;
-  const colW = byClass ? '110px' : '130px';
+  const colW = byClass ? '105px' : '130px';
 
-  let html = '<div style="margin-top:16px;">';
+  let html = '<div style="margin-top:8px;">';
 
-  // Report title bar
-  html += '<div style="display:flex;align-items:center;padding:12px 0;border-bottom:3px solid #C8102E;margin-bottom:8px;">';
-  html += '<span style="font-size:15px;font-weight:700;color:#C8102E;font-family:\'Cormorant Garamond\',serif;letter-spacing:.02em;">Profit & Loss Statement</span>';
-  html += '</div>';
+  // Thin divider — the KPIs already told the story, this is the detail
+  html += '<div style="border-top:1px solid #e8e8e8;padding-top:24px;margin-top:4px;"></div>';
 
-  // Column headers
+  // Column headers — clean, light
   if (colCount > 1) {
-    html += '<div style="display:flex;padding:8px 10px;border-bottom:2px solid rgba(200,16,46,.2);margin-bottom:6px;">';
-    html += '<span style="flex:1;font-size:11px;font-weight:700;color:#6b5b4f;text-transform:uppercase;letter-spacing:.06em;"></span>';
+    html += '<div style="display:flex;padding:0 0 10px;margin-bottom:2px;">';
+    html += '<span style="flex:1;"></span>';
     for (let i = 1; i < colCount; i++) {
-      html += `<span style="width:${colW};text-align:right;font-size:10px;font-weight:700;color:#6b5b4f;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
+      html += `<span style="width:${colW};text-align:right;font-size:10px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cols[i] || ''}</span>`;
     }
     html += '</div>';
   }
 
-  // Determine income total for % calculation
+  // Income total for % of Income
   let incomeTotal = 0;
   if (showPct) {
     for (const section of rows) {
@@ -25755,8 +25769,8 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
   for (const section of rows) {
     if (section.Header) {
       const headerVal = section.Header.ColData?.map(c => c.value) || [];
-      html += `<div style="font-size:14px;font-weight:700;color:#C8102E;padding:14px 0 6px;border-bottom:2px solid rgba(200,16,46,.15);margin-top:16px;cursor:pointer;font-family:'Cormorant Garamond',serif;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
-        ${headerVal[0] || 'Section'} <span style="float:right;font-size:10px;opacity:.4;font-family:'DM Sans',sans-serif;font-weight:400;">click to toggle</span></div>`;
+      html += `<div style="font-size:13px;font-weight:700;color:#1a1a1a;padding:18px 0 8px;border-bottom:1px solid #e8e8e8;margin-top:8px;cursor:pointer;letter-spacing:.01em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        ${headerVal[0] || 'Section'}</div>`;
       html += '<div>';
       html += scootsPLRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass, colW);
       if (section.Summary) {
@@ -25773,27 +25787,27 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
 
 function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW) {
   let html = '';
-  const indent = depth * 18;
+  const indent = depth * 20;
   for (const row of rows) {
     if (row.type === 'Data' && row.ColData) {
       const vals = row.ColData.map(c => c.value);
-      html += `<div style="display:flex;padding:4px 10px 4px ${10 + indent}px;font-size:12px;color:#3d3427;transition:background .1s;" onmouseenter="this.style.background='rgba(200,16,46,.04)'" onmouseleave="this.style.background=''">`;
+      html += `<div style="display:flex;align-items:baseline;padding:5px 0 5px ${indent}px;font-size:13px;color:#444;border-bottom:1px solid transparent;transition:border-color .15s;" onmouseenter="this.style.borderBottomColor='#f0f0f0'" onmouseleave="this.style.borderBottomColor='transparent'">`;
       html += `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${vals[0] || ''}</span>`;
       for (let i = 1; i < vals.length; i++) {
         const n = parseFloat(vals[i]);
         const money = qboFmtMoney(vals[i]);
-        const negStyle = n < 0 ? 'color:#dc2626;' : '';
-        html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:11px;${negStyle}">${money}`;
+        const clr = n < 0 ? '#cb2431' : '#333';
+        html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:${clr};font-variant-numeric:tabular-nums;">${money}`;
         if (showPct && incomeTotal) {
           const pct = (n || 0) / incomeTotal * 100;
-          html += `<span style="font-size:9px;color:#9a8b7e;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+          html += `<span style="font-size:10px;color:#ccc;margin-left:6px;font-weight:500;">${pct.toFixed(1)}%</span>`;
         }
         html += '</span>';
       }
       html += '</div>';
     } else if (row.Header) {
       const headerVals = row.Header.ColData?.map(c => c.value) || [];
-      html += `<div style="font-size:12px;font-weight:600;padding:8px 10px 3px ${10 + indent}px;color:#6b5b4f;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
+      html += `<div style="font-size:12px;font-weight:600;padding:12px 0 4px ${indent}px;color:#888;cursor:pointer;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
       html += '<div>';
       html += scootsPLRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass, colW);
       if (row.Summary) {
@@ -25807,22 +25821,22 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
 
 function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, isSection, isGrand) {
   const vals = colData.map(c => c.value);
-  const border = isGrand ? '3px double #C8102E' : '2px solid rgba(200,16,46,.2)';
-  const fontSize = isGrand ? '14px' : '12px';
-  const pad = isGrand ? '12px 10px' : '6px 10px';
-  const mt = isGrand ? '20px' : '4px';
-  const bg = isGrand ? 'background:rgba(200,16,46,.04);' : '';
-  const fontFam = isGrand ? "font-family:'Cormorant Garamond',serif;" : '';
-  let html = `<div style="display:flex;padding:${pad};font-weight:700;font-size:${fontSize};border-top:${border};margin-top:${mt};${bg}${fontFam}border-radius:${isGrand ? '0 0 8px 8px' : '0'};">`;
-  html += `<span style="flex:1;color:#1a1a2e;">${vals[0] || ''}</span>`;
+  const bTop = isGrand ? '2px solid #1a1a1a' : '1px solid #ddd';
+  const bBot = isGrand ? '2px solid #1a1a1a' : 'none';
+  const fontSize = isGrand ? '15px' : '13px';
+  const pad = isGrand ? '14px 0' : '8px 0';
+  const mt = isGrand ? '24px' : '2px';
+  const bg = isGrand ? 'background:#fafafa;padding-left:12px;padding-right:12px;border-radius:8px;' : '';
+  let html = `<div style="display:flex;align-items:baseline;padding:${pad};font-weight:700;font-size:${fontSize};border-top:${bTop};border-bottom:${bBot};margin-top:${mt};${bg}">`;
+  html += `<span style="flex:1;color:#1a1a1a;">${vals[0] || ''}</span>`;
   for (let i = 1; i < vals.length; i++) {
     const n = parseFloat(vals[i]);
     const money = qboFmtMoney(vals[i]);
-    const negStyle = n < 0 ? 'color:#dc2626;' : 'color:#1a1a2e;';
-    html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;${negStyle}">${money}`;
+    const clr = n < 0 ? '#cb2431' : '#1a1a1a';
+    html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;color:${clr};font-variant-numeric:tabular-nums;">${money}`;
     if (showPct && incomeTotal) {
       const pct = (n || 0) / incomeTotal * 100;
-      html += `<span style="font-size:9px;color:#9a8b7e;margin-left:4px;">${pct.toFixed(1)}%</span>`;
+      html += `<span style="font-size:10px;color:#ccc;margin-left:6px;font-weight:500;">${pct.toFixed(1)}%</span>`;
     }
     html += '</span>';
   }
