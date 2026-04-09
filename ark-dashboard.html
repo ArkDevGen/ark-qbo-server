@@ -8147,7 +8147,9 @@ function getAMName(id){
 function renderDashboard(){
   document.getElementById('s-clients').textContent=DB.clients.length;
   document.getElementById('s-active').textContent=DB.clients.filter(c=>c.status==='Active').length;
-  document.getElementById('s-ams').textContent=DB.accountManagers.filter(a=>a.status==='Active').length;
+  // AM count: prefer server users, fallback to local
+  const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  document.getElementById('s-ams').textContent=amList.filter(a=>a.status==='Active'||!a.status).length;
   renderBankingHoliday();
   renderClockedIn();
 
@@ -12359,7 +12361,7 @@ const BANKING_HOLIDAYS = [
 // ══════════════════════════════════════════════
 function renderClockedIn(){
   const todayStr = new Date().toISOString().slice(0,10);
-  const users = DB.users||[];
+  const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
   const punches = DB.timePunches||{};
 
   // Find users who have an open punch today (clock in with no matching clock out)
