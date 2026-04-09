@@ -12361,12 +12361,14 @@ const BANKING_HOLIDAYS = [
 async function renderClockedIn(){
   const todayStr = new Date().toISOString().slice(0,10);
   const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
-  // Load all punches from server API
+  // Load all punches from server API (only if authenticated)
   let punches = DB.timePunches||{};
-  try {
-    const resp = await authFetch(ARK_SERVER + '/time/punches/all');
-    if (resp.ok) punches = await resp.json();
-  } catch(_) {}
+  if (_serverToken) {
+    try {
+      const resp = await authFetch(ARK_SERVER + '/time/punches/all');
+      if (resp.ok) punches = await resp.json();
+    } catch(_) {}
+  }
 
   // Find users who have an open punch today (clock in with no matching clock out)
   const clockedIn = [];
@@ -25163,6 +25165,9 @@ async function versionInit() {
   // Start polling every 30 seconds
   versionStartPoll();
 }
+
+// Auto-start version polling on page load (doesn't need auth)
+setTimeout(versionInit, 3000);
 
 function versionStartPoll() {
   if (_versionPollTimer) clearInterval(_versionPollTimer);
