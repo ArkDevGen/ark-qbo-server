@@ -25148,15 +25148,17 @@ let _appVersion = null;       // version when page loaded
 let _versionPollTimer = null;
 
 async function versionInit() {
-  // Get current version on page load
+  // Get current version on page load (with cache-buster)
   try {
-    const resp = await fetch(ARK_SERVER + '/version');
+    const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
     if (resp.ok) {
       const data = await resp.json();
       _appVersion = data.version;
-      console.log('App version:', _appVersion);
+      console.log('Version system initialized:', _appVersion);
+    } else {
+      console.log('Version init failed:', resp.status);
     }
-  } catch (_) {}
+  } catch (e) { console.log('Version init error:', e.message); }
 
   // Start polling every 30 seconds
   versionStartPoll();
@@ -25168,9 +25170,16 @@ function versionStartPoll() {
 }
 
 async function versionCheck() {
-  if (!_appVersion) return;
+  if (!_appVersion) {
+    // Retry init if it failed the first time
+    try {
+      const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
+      if (resp.ok) { _appVersion = (await resp.json()).version; }
+    } catch(_){}
+    return;
+  }
   try {
-    const resp = await fetch(ARK_SERVER + '/version');
+    const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
     if (!resp.ok) return;
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
