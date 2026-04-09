@@ -15063,18 +15063,27 @@ function tcRenderTimecard(empId){
     const hoursCell = r.hours !== null
       ? `<span style="font-weight:600;${r.hours>8?'color:#c0392b;':''}">${r.hours.toFixed(2)}</span>`
       : `<span style="color:var(--text-d);font-style:italic;">open</span>`;
-    const loggedAt = r.inP?.loggedAt
-      ? new Date(r.inP.loggedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
-      : '—';
+    // Build audit log entries for clock in, clock out, and edits
+    const logParts = [];
+    const fmtLog = (iso) => iso ? new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+    if(r.inP){
+      const inBy = r.inP.enteredBy ? ` · ${r.inP.enteredBy}` : '';
+      logParts.push(`<div style="font-size:10px;color:var(--text-d);line-height:1.5;"><span style="color:#2e7d5e;font-weight:600;">IN</span> ${fmtLog(r.inP.loggedAt)}${inBy}</div>`);
+      if(r.inP.editedAt){
+        const editBy = r.inP.editedBy ? ` · ${r.inP.editedBy}` : '';
+        logParts.push(`<div style="font-size:10px;color:#856404;line-height:1.5;"><span style="font-weight:600;">✎ Edited</span> ${fmtLog(r.inP.editedAt)}${editBy}</div>`);
+      }
+    }
+    if(r.outP){
+      const outBy = r.outP.enteredBy ? ` · ${r.outP.enteredBy}` : '';
+      logParts.push(`<div style="font-size:10px;color:var(--text-d);line-height:1.5;"><span style="color:#c0392b;font-weight:600;">OUT</span> ${fmtLog(r.outP.loggedAt)}${outBy}</div>`);
+      if(r.outP.editedAt){
+        const editBy = r.outP.editedBy ? ` · ${r.outP.editedBy}` : '';
+        logParts.push(`<div style="font-size:10px;color:#856404;line-height:1.5;"><span style="font-weight:600;">✎ Edited</span> ${fmtLog(r.outP.editedAt)}${editBy}</div>`);
+      }
+    }
     const overrideBadge = (r.inP?.override||r.outP?.override)
       ? `<span style="font-size:9px;background:#fff3cd;color:#856404;padding:1px 5px;border-radius:4px;margin-left:4px;">edited</span>` : '';
-    // Show "entered by X" if someone else logged this punch
-    const enteredByName = r.inP?.enteredBy || r.outP?.enteredBy || '';
-    const empUser = (DB.users||[]).find(u=>u.id===empId);
-    const empFullName = empUser ? `${empUser.fname} ${empUser.lname||''}`.trim() : '';
-    const enteredByBadge = (enteredByName && enteredByName !== empFullName)
-      ? `<div style="font-size:10px;color:#856404;background:#fff3cd;padding:1px 6px;border-radius:4px;margin-top:2px;display:inline-block;">by ${enteredByName}</div>`
-      : '';
     return `<tr>
       <td style="font-weight:500;">${tcFmtDate(dt)}</td>
       <td style="color:var(--text-d);">${tcFmtDay(dt)}</td>
@@ -15082,7 +15091,7 @@ function tcRenderTimecard(empId){
       <td style="font-family:monospace;font-size:12px;">${r.outP ? tcFmtTime(r.outP.time) : '<span style="color:var(--text-d);">—</span>'}</td>
       <td class="num">${hoursCell}</td>
       <td style="text-align:center;">${weekLabel}</td>
-      <td style="font-size:11px;color:var(--text-d);">${loggedAt}${overrideBadge}${enteredByBadge}</td>
+      <td style="font-size:11px;color:var(--text-d);">${logParts.join('')}${overrideBadge}</td>
       <td><div class="row-actions">
         <button class="btn btn-ghost btn-sm" onclick="tcEditShift('${empId}','${r.inP?.id||''}','${r.outP?.id||''}','${r.date}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="tcDeleteShift('${empId}','${r.inP?.id||''}','${r.outP?.id||''}')">×</button>
