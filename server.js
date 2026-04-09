@@ -1847,7 +1847,7 @@ const upload = multer({
 // SHAREFILE: OAuth2 Flow
 // ─────────────────────────────────────────────────────────────────
 // Set ShareFile token directly (for manual token entry)
-app.post('/sharefile/set-token', (req, res) => {
+app.post('/sharefile/set-token', requireAuth, (req, res) => {
   try {
     const { access_token } = req.body;
     if (!access_token) return res.status(400).json({ error: 'access_token required' });
