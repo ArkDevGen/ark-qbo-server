@@ -1847,7 +1847,7 @@ const upload = multer({
 // SHAREFILE: OAuth2 Flow
 // ─────────────────────────────────────────────────────────────────
 app.get('/sharefile/auth', (req, res) => {
-  const authUrl = `https://secure.sharefile.com/oauth/authorize?` +
+  const authUrl = `https://${SF_SUBDOMAIN}.sharefile.com/oauth/authorize?` +
     `response_type=code` +
     `&client_id=${SF_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(process.env.SHAREFILE_REDIRECT_URI || `https://ark-qbo-server.onrender.com/sharefile/callback`)}` +
