@@ -25097,16 +25097,17 @@ async function versionInit() {
     if (resp.ok) {
       const data = await resp.json();
       _appVersion = data.version;
+      console.log('App version:', _appVersion);
     }
   } catch (_) {}
 
-  // Start polling every 60 seconds
+  // Start polling every 30 seconds
   versionStartPoll();
 }
 
 function versionStartPoll() {
   if (_versionPollTimer) clearInterval(_versionPollTimer);
-  _versionPollTimer = setInterval(versionCheck, 60000);
+  _versionPollTimer = setInterval(versionCheck, 30000);
 }
 
 async function versionCheck() {
@@ -25116,6 +25117,7 @@ async function versionCheck() {
     if (!resp.ok) return;
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
+      console.log('New version available:', data.version, '(current:', _appVersion + ')');
       versionShowBanner();
     }
   } catch (_) {}
