@@ -4424,6 +4424,32 @@ function _saveTimePTO(data) { fs.writeFileSync(TIME_PTO_FILE, JSON.stringify(dat
   } catch (e) { console.log('Time punch migration error:', e.message); }
 })();
 
+// Restore time punches from client data (temp endpoint)
+app.post('/time/restore', (req, res) => {
+  try {
+    const { timePunches, timePTO } = req.body;
+    if (timePunches && Object.keys(timePunches).length > 0) {
+      const existing = _loadTimePunches();
+      // Merge: add any punches that don't already exist
+      let added = 0;
+      for (const [empId, punches] of Object.entries(timePunches)) {
+        if (!existing[empId]) existing[empId] = [];
+        const existingIds = new Set(existing[empId].map(p => p.id));
+        for (const p of punches) {
+          if (!existingIds.has(p.id)) { existing[empId].push(p); added++; }
+        }
+        existing[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+      }
+      _saveTimePunches(existing);
+      console.log(`Time restore: ${added} punches added for ${Object.keys(timePunches).length} employees`);
+    }
+    if (timePTO && Object.keys(timePTO).length > 0) {
+      _saveTimePTO(timePTO);
+    }
+    res.json({ ok: true, employees: Object.keys(timePunches || {}).length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Force re-migrate from ark-db.json (temp endpoint)
 app.post('/time/force-migrate', (req, res) => {
   try {
