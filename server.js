@@ -4388,6 +4388,164 @@ app.get('/letters/:id/signed', requireAuth, (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────
+// TIME PUNCHES — Dedicated server-side storage (not in shared ark-db.json)
+// Prevents data loss from DB sync conflicts between users
+// ─────────────────────────────────────────────────────────────────
+
+const TIME_PUNCHES_FILE = path.join(DATA_DIR, 'time-punches.json');
+const TIME_PTO_FILE = path.join(DATA_DIR, 'time-pto.json');
+
+function _loadTimePunches() {
+  try { if (fs.existsSync(TIME_PUNCHES_FILE)) return JSON.parse(fs.readFileSync(TIME_PUNCHES_FILE, 'utf8')); } catch (_) {}
+  return {};
+}
+function _saveTimePunches(data) { fs.writeFileSync(TIME_PUNCHES_FILE, JSON.stringify(data)); }
+
+function _loadTimePTO() {
+  try { if (fs.existsSync(TIME_PTO_FILE)) return JSON.parse(fs.readFileSync(TIME_PTO_FILE, 'utf8')); } catch (_) {}
+  return {};
+}
+function _saveTimePTO(data) { fs.writeFileSync(TIME_PTO_FILE, JSON.stringify(data)); }
+
+// Migration: move timePunches/timePTO from ark-db.json to dedicated files on first startup
+(function _migrateTimePunches() {
+  try {
+    if (fs.existsSync(TIME_PUNCHES_FILE)) return; // already migrated
+    if (!fs.existsSync(ARK_DB_FILE)) return;
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (db.timePunches && Object.keys(db.timePunches).length > 0) {
+      _saveTimePunches(db.timePunches);
+      console.log(`Time punches migrated: ${Object.keys(db.timePunches).length} employees`);
+    }
+    if (db.timePTO && Object.keys(db.timePTO).length > 0) {
+      _saveTimePTO(db.timePTO);
+      console.log(`Time PTO migrated: ${Object.keys(db.timePTO).length} employees`);
+    }
+  } catch (e) { console.log('Time punch migration error:', e.message); }
+})();
+
+// GET /time/punches — get punches for an employee
+app.get('/time/punches', requireAuth, (req, res) => {
+  try {
+    const { empId, startDate, endDate } = req.query;
+    if (!empId) return res.status(400).json({ error: 'empId required' });
+    const all = _loadTimePunches();
+    let punches = all[empId] || [];
+    if (startDate) punches = punches.filter(p => p.date >= startDate);
+    if (endDate) punches = punches.filter(p => p.date <= endDate);
+    punches.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    res.json(punches);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /time/punches/all — get all punches (for admin/dashboard clocked-in display)
+app.get('/time/punches/all', requireAuth, (req, res) => {
+  try {
+    const all = _loadTimePunches();
+    res.json(all);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /time/punches — add a punch
+app.post('/time/punches', requireAuth, (req, res) => {
+  try {
+    const { empId, type, date, time, enteredBy, override, afterMeta } = req.body;
+    if (!empId || !type || !date || !time) return res.status(400).json({ error: 'empId, type, date, time required' });
+    const all = _loadTimePunches();
+    if (!all[empId]) all[empId] = [];
+    const entry = {
+      id: crypto.randomUUID(),
+      type, date, time,
+      loggedAt: new Date().toISOString(),
+      enteredBy: enteredBy || req.arkUser.userName,
+      override: override || false,
+    };
+    if (afterMeta) entry.afterMeta = afterMeta;
+    all[empId].push(entry);
+    all[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    _saveTimePunches(all);
+    res.json(entry);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /time/punches/:id — edit a punch
+app.put('/time/punches/:id', requireAuth, (req, res) => {
+  try {
+    const { empId, time, date } = req.body;
+    if (!empId) return res.status(400).json({ error: 'empId required' });
+    const all = _loadTimePunches();
+    const punches = all[empId] || [];
+    const punch = punches.find(p => p.id === req.params.id);
+    if (!punch) return res.status(404).json({ error: 'Punch not found' });
+    if (time) punch.time = time;
+    if (date) punch.date = date;
+    punch.editedAt = new Date().toISOString();
+    punch.editedBy = req.arkUser.userName;
+    all[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    _saveTimePunches(all);
+    res.json(punch);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /time/punches/:id — delete a punch
+app.delete('/time/punches/:id', requireAuth, (req, res) => {
+  try {
+    const { empId } = req.query;
+    if (!empId) return res.status(400).json({ error: 'empId required' });
+    const all = _loadTimePunches();
+    if (!all[empId]) return res.status(404).json({ error: 'No punches for employee' });
+    const before = all[empId].length;
+    all[empId] = all[empId].filter(p => p.id !== req.params.id);
+    if (all[empId].length === before) return res.status(404).json({ error: 'Punch not found' });
+    _saveTimePunches(all);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /time/pto — get PTO entries for an employee
+app.get('/time/pto', requireAuth, (req, res) => {
+  try {
+    const { empId } = req.query;
+    if (!empId) return res.status(400).json({ error: 'empId required' });
+    const all = _loadTimePTO();
+    res.json(all[empId] || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /time/pto — add PTO entry
+app.post('/time/pto', requireAuth, (req, res) => {
+  try {
+    const { empId, date, hours, note, enteredBy } = req.body;
+    if (!empId || !date || !hours) return res.status(400).json({ error: 'empId, date, hours required' });
+    const all = _loadTimePTO();
+    if (!all[empId]) all[empId] = [];
+    const entry = {
+      id: crypto.randomUUID(),
+      date, hours: parseFloat(hours),
+      note: note || '',
+      enteredBy: enteredBy || req.arkUser.userName,
+      loggedAt: new Date().toISOString(),
+    };
+    all[empId].push(entry);
+    _saveTimePTO(all);
+    res.json(entry);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /time/pto/:id — delete PTO entry
+app.delete('/time/pto/:id', requireAuth, (req, res) => {
+  try {
+    const { empId } = req.query;
+    if (!empId) return res.status(400).json({ error: 'empId required' });
+    const all = _loadTimePTO();
+    if (!all[empId]) return res.status(404).json({ error: 'No PTO for employee' });
+    all[empId] = all[empId].filter(p => p.id !== req.params.id);
+    _saveTimePTO(all);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
 // SCOOTER'S COGS — Harvest Invoice CSV Parser
 // Parses HarvestInvoiceBreakdown CSVs into COGS journal entries

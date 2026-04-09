@@ -6577,13 +6577,13 @@ function _buildDBPayload() {
     w2cs:           DB.w2cs||[],
     efw2Log:        DB.efw2Log||[],
     calls:          DB.calls||{},
-    timePunches:    DB.timePunches||{},
+    // timePunches and timePTO are now stored server-side in dedicated files
+    // DO NOT include them here — they would overwrite other users' data
     faxOutbox:      DB.faxOutbox||[],
     faxInbox:       DB.faxInbox||[],
     smsLog:         DB.smsLog||[],
     smsMessages:    DB.smsMessages||[],
     commConfig:     DB.commConfig||{},
-    timePTO:        DB.timePTO||{},
     nachaCfg:       DB.nachaCfg||{},
     nachaLog:       DB.nachaLog||[],
     proposals:      DB.proposals||[],
@@ -6613,13 +6613,12 @@ function _applyDBPayload(saved) {
     w2cs:           saved.w2cs           || [],
     efw2Log:        saved.efw2Log        || [],
     calls:          saved.calls          || {},
-    timePunches:    saved.timePunches    || {},
+    // timePunches and timePTO loaded separately via /time API
     faxOutbox:      saved.faxOutbox      || [],
     faxInbox:       saved.faxInbox       || [],
     smsLog:         saved.smsLog         || [],
     smsMessages:    saved.smsMessages    || [],
     commConfig:     saved.commConfig     || {},
-    timePTO:        saved.timePTO        || {},
     nachaCfg:       saved.nachaCfg       || {},
     nachaLog:       saved.nachaLog       || [],
     proposals:      saved.proposals      || [],
@@ -12359,10 +12358,15 @@ const BANKING_HOLIDAYS = [
 // ══════════════════════════════════════════════
 //  CLOCKED IN KPI
 // ══════════════════════════════════════════════
-function renderClockedIn(){
+async function renderClockedIn(){
   const todayStr = new Date().toISOString().slice(0,10);
   const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
-  const punches = DB.timePunches||{};
+  // Load all punches from server API
+  let punches = DB.timePunches||{};
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/punches/all');
+    if (resp.ok) punches = await resp.json();
+  } catch(_) {}
 
   // Find users who have an open punch today (clock in with no matching clock out)
   const clockedIn = [];
@@ -14709,7 +14713,7 @@ function tcManualPreview(){
   }
 }
 
-function _tcManualEntryCore(){
+async function _tcManualEntryCore(afterMeta){
   const empId  = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date = document.getElementById('tc-manual-date').value;
@@ -14718,16 +14722,31 @@ function _tcManualEntryCore(){
   if(!date)  { tcMsg('Please enter a date.','#c0392b'); return; }
   if(!inT)   { tcMsg('Clock In time is required.','#c0392b'); return; }
 
-  if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
-  const loggedAt = new Date().toISOString();
   const enteredBy = tcEnteredBy();
+  try {
+    // Save clock-in via API
+    const resp1 = await authFetch(ARK_SERVER + '/time/punches', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ empId, type:'in', date, time:inT, enteredBy, override:false, afterMeta: afterMeta || undefined }),
+    });
+    if (!resp1.ok) { tcMsg('Failed to save clock in','#c0392b'); return; }
+    const entry1 = await resp1.json();
+    if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
+    DB.timePunches[empId].push(entry1);
 
-  DB.timePunches[empId].push({ id:uid(), type:'in',  date, time:inT,  loggedAt, enteredBy, override:false });
-  if(outT){
-    DB.timePunches[empId].push({ id:uid(), type:'out', date, time:outT, loggedAt, enteredBy, override:false });
-  }
-  DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  saveDB();
+    // Save clock-out if provided
+    if(outT){
+      const resp2 = await authFetch(ARK_SERVER + '/time/punches', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ empId, type:'out', date, time:outT, enteredBy, override:false, afterMeta: afterMeta || undefined }),
+      });
+      if (resp2.ok) {
+        const entry2 = await resp2.json();
+        DB.timePunches[empId].push(entry2);
+      }
+    }
+    DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  } catch(e) { tcMsg('Network error saving shift','#c0392b'); return; }
 
   const emp2 = (DB.users||[]).find(u=>u.id===empId);
   const empName2 = emp2 ? `${emp2.fname} ${emp2.lname||''}`.trim() : empId;
@@ -14748,7 +14767,7 @@ function _tcManualEntryCore(){
   tcRenderTimecard(empId);
 }
 
-function tcAddPTO(){
+async function tcAddPTO(){
   const empId   = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date  = document.getElementById('tc-pto-date').value;
@@ -14756,13 +14775,20 @@ function tcAddPTO(){
   if(!date)          { tcMsg('Please enter a PTO date.','#c0392b'); return; }
   if(!hours||hours<=0){ tcMsg('Please enter valid PTO hours.','#c0392b'); return; }
 
-  if(!DB.timePTO) DB.timePTO = {};
-  if(!DB.timePTO[empId]) DB.timePTO[empId] = [];
-  DB.timePTO[empId].push({ id:uid(), date, hours, loggedAt: new Date().toISOString(), enteredBy: tcEnteredBy() });
-  DB.timePTO[empId].sort((a,b)=>a.date.localeCompare(b.date));
-  saveDB();
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/pto', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ empId, date, hours, enteredBy: tcEnteredBy() }),
+    });
+    if (!resp.ok) { tcMsg('Failed to save PTO','#c0392b'); return; }
+    const entry = await resp.json();
+    if(!DB.timePTO) DB.timePTO = {};
+    if(!DB.timePTO[empId]) DB.timePTO[empId] = [];
+    DB.timePTO[empId].push(entry);
+    DB.timePTO[empId].sort((a,b)=>a.date.localeCompare(b.date));
+  } catch(e) { tcMsg('Network error saving PTO','#c0392b'); return; }
 
-  const ptoEmp = (DB.users||[]).find(u=>u.id===empId);
+  const ptoEmp = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
   const ptoEmpName = ptoEmp ? `${ptoEmp.fname} ${ptoEmp.lname||''}`.trim() : empId;
   const ptoIsSelf = currentUser && currentUser.id === empId;
   const ptoBy = ptoIsSelf ? '' : ` — entered by ${tcEnteredBy()}`;
@@ -14817,7 +14843,7 @@ async function tcPopulateEmployees(){
     users.map(u=>`<option value="${u.id}">${u.fname||u.userName||''} ${u.lname||''}</option>`).join('');
 }
 
-function tcLoadEmployee(){
+async function tcLoadEmployee(){
   const dropdownId = document.getElementById('tc-emp-select')?.value;
   const empId = dropdownId || tcCurrentUser || (currentUser?.id);
   tcCurrentUser = empId || null;
@@ -14829,45 +14855,56 @@ function tcLoadEmployee(){
     return;
   }
   if(emptyEl) emptyEl.style.display='none';
+  // Load punches and PTO from server API
+  try {
+    const [punchResp, ptoResp] = await Promise.all([
+      authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId)),
+      authFetch(ARK_SERVER + '/time/pto?empId=' + encodeURIComponent(empId)),
+    ]);
+    if (punchResp.ok) {
+      const punches = await punchResp.json();
+      DB.timePunches[empId] = punches;
+    }
+    if (ptoResp.ok) {
+      if(!DB.timePTO) DB.timePTO = {};
+      DB.timePTO[empId] = await ptoResp.json();
+    }
+  } catch(_) {}
   tcRenderTimecard(empId);
 }
 
 // ── Punch ──
-function _tcPunchCore(type){
+async function _tcPunchCore(type, afterMeta){
   const empId = tcCurrentUser || document.getElementById('tc-emp-select')?.value;
   if(!empId){ tcMsg('Please select an employee first.','#c0392b'); return; }
   const date = document.getElementById('tc-punch-date').value;
   const time = document.getElementById('tc-punch-time').value;
   if(!date||!time){ tcMsg('Please enter date and time.','#c0392b'); return; }
 
-  if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
-  const entry = {
-    id:       uid(),
-    type,           // 'in' or 'out'
-    date,           // YYYY-MM-DD
-    time,           // HH:MM
-    loggedAt:   new Date().toISOString(),
-    enteredBy:  tcEnteredBy(),
-    override:   false,
-  };
-  DB.timePunches[empId].push(entry);
-  // Sort by date+time
-  DB.timePunches[empId].sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
-  saveDB();
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/punches', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ empId, type, date, time, enteredBy: tcEnteredBy(), override: false, afterMeta: afterMeta || undefined }),
+    });
+    if (!resp.ok) { const err = await resp.json(); tcMsg(err.error || 'Failed to save punch', '#c0392b'); return; }
+    const entry = await resp.json();
+    // Update local cache
+    if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
+    DB.timePunches[empId].push(entry);
+    DB.timePunches[empId].sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+  } catch(e) { tcMsg('Network error saving punch','#c0392b'); return; }
 
   const label = type==='in' ? 'Clocked in' : 'Clocked out';
-  const emp = (DB.users||[]).find(u=>u.id===empId);
+  const emp = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
   const empName = emp ? `${emp.fname} ${emp.lname||''}`.trim() : empId;
-  const enteredByName = tcEnteredBy();
   const isSelf = currentUser && currentUser.id === empId;
   if(isSelf){
     logAct(`${label}: ${empName} at ${tcFmtTime(time)} on ${date}`);
   } else {
-    logAct(`${label} for ${empName} at ${tcFmtTime(time)} on ${date} — entered by ${enteredByName}`);
+    logAct(`${label} for ${empName} at ${tcFmtTime(time)} on ${date} — entered by ${tcEnteredBy()}`);
   }
   tcMsg(`✓ ${label} at ${tcFmtTime(time)} on ${date}`,'#2e7d5e');
   tcRenderTimecard(empId);
-  // Auto-advance time by 1 min so next punch is ready
   const now = new Date();
   document.getElementById('tc-punch-time').value = now.toTimeString().slice(0,5);
 }
@@ -15084,36 +15121,43 @@ function tcRenderTimecard(empId){
 }
 
 // ── Delete PTO ──
-function tcDeletePTO(empId, ptoId){
+async function tcDeletePTO(empId, ptoId){
   if(!confirm('Remove this PTO entry?')) return;
-  if(!DB.timePTO) DB.timePTO={};
-  DB.timePTO[empId] = (DB.timePTO[empId]||[]).filter(p=>p.id!==ptoId);
-  saveDB();
-  tcRenderTimecard(empId);
+  try {
+    await authFetch(ARK_SERVER + '/time/pto/' + ptoId + '?empId=' + encodeURIComponent(empId), { method: 'DELETE' });
+    if(!DB.timePTO) DB.timePTO={};
+    DB.timePTO[empId] = (DB.timePTO[empId]||[]).filter(p=>p.id!==ptoId);
+    tcRenderTimecard(empId);
+  } catch(_) { tcMsg('Failed to delete PTO','#c0392b'); }
 }
 
 // ── Edit / Delete punch ──
-function tcEditPunch(empId, punchId){
+async function tcEditPunch(empId, punchId){
   const punches = DB.timePunches[empId]||[];
   const p = punches.find(x=>x.id===punchId); if(!p) return;
   const newTime = prompt(`Edit ${p.type==='in'?'Clock In':'Clock Out'} time for ${p.date}\nCurrent: ${tcFmtTime(p.time)}\n\nEnter new time (HH:MM 24-hour):`, p.time);
   if(newTime===null) return;
   const valid = /^\d{1,2}:\d{2}$/.test(newTime.trim());
   if(!valid){ alert('Invalid time format. Use HH:MM (e.g. 08:30 or 17:45)'); return; }
-  p.time = newTime.trim().padStart(5,'0');
-  p.override = true;
-  p.loggedAt = new Date().toISOString();
-  p.enteredBy = tcEnteredBy();
-  DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  saveDB();
-  tcRenderTimecard(empId);
+  try {
+    await authFetch(ARK_SERVER + '/time/punches/' + punchId, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ empId, time: newTime.trim().padStart(5,'0') }),
+    });
+    p.time = newTime.trim().padStart(5,'0');
+    p.override = true;
+    DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+    tcRenderTimecard(empId);
+  } catch(_) { tcMsg('Failed to edit punch','#c0392b'); }
 }
 
-function tcDeletePunch(empId, punchId){
+async function tcDeletePunch(empId, punchId){
   if(!confirm('Delete this punch? This cannot be undone.')) return;
-  DB.timePunches[empId] = (DB.timePunches[empId]||[]).filter(p=>p.id!==punchId);
-  saveDB();
-  tcRenderTimecard(empId);
+  try {
+    await authFetch(ARK_SERVER + '/time/punches/' + punchId + '?empId=' + encodeURIComponent(empId), { method: 'DELETE' });
+    DB.timePunches[empId] = (DB.timePunches[empId]||[]).filter(p=>p.id!==punchId);
+    tcRenderTimecard(empId);
+  } catch(_) { tcMsg('Failed to delete punch','#c0392b'); }
 }
 
 function tcEditShift(empId, inId, outId, date) {
@@ -15153,42 +15197,46 @@ function tcEditShift(empId, inId, outId, date) {
   setTimeout(() => document.getElementById('tc-edit-in')?.focus(), 100);
 }
 
-function tcSaveShiftEdit(empId, inId, outId) {
+async function tcSaveShiftEdit(empId, inId, outId) {
   const punches = DB.timePunches[empId] || [];
   const inP = inId ? punches.find(x => x.id === inId) : null;
   const outP = outId ? punches.find(x => x.id === outId) : null;
-  const msg = document.getElementById('tc-edit-msg');
 
   const newIn = document.getElementById('tc-edit-in')?.value || '';
   const newOut = document.getElementById('tc-edit-out')?.value || '';
 
-  if (newIn && inP) {
-    inP.time = newIn;
-    inP.override = true;
-    inP.loggedAt = new Date().toISOString();
-    inP.enteredBy = tcEnteredBy();
-  }
-  if (newOut && outP) {
-    outP.time = newOut;
-    outP.override = true;
-    outP.loggedAt = new Date().toISOString();
-    outP.enteredBy = tcEnteredBy();
-  }
+  try {
+    if (newIn && inP) {
+      await authFetch(ARK_SERVER + '/time/punches/' + inId, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ empId, time: newIn }),
+      });
+      inP.time = newIn; inP.override = true;
+    }
+    if (newOut && outP) {
+      await authFetch(ARK_SERVER + '/time/punches/' + outId, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ empId, time: newOut }),
+      });
+      outP.time = newOut; outP.override = true;
+    }
+    DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    tcRenderTimecard(empId);
+  } catch(_) { tcMsg('Failed to save shift edit','#c0392b'); }
 
-  DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-  saveDB();
-  tcRenderTimecard(empId);
-
-  // Close the overlay
   document.getElementById('tc-edit-in')?.closest('[style*="fixed"]')?.remove();
 }
 
-function tcDeleteShift(empId, inId, outId) {
+async function tcDeleteShift(empId, inId, outId) {
   if (!confirm('Delete this shift? This cannot be undone.')) return;
-  const ids = [inId, outId].filter(Boolean);
-  DB.timePunches[empId] = (DB.timePunches[empId] || []).filter(p => !ids.includes(p.id));
-  saveDB();
-  tcRenderTimecard(empId);
+  try {
+    const ids = [inId, outId].filter(Boolean);
+    for (const id of ids) {
+      await authFetch(ARK_SERVER + '/time/punches/' + id + '?empId=' + encodeURIComponent(empId), { method: 'DELETE' });
+    }
+    DB.timePunches[empId] = (DB.timePunches[empId] || []).filter(p => !ids.includes(p.id));
+    tcRenderTimecard(empId);
+  } catch(_) { tcMsg('Failed to delete shift','#c0392b'); }
 }
 
 // ── Print timecard ──
