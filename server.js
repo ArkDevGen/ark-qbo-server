@@ -1846,6 +1846,18 @@ const upload = multer({
 // ─────────────────────────────────────────────────────────────────
 // SHAREFILE: OAuth2 Flow
 // ─────────────────────────────────────────────────────────────────
+// Set ShareFile token directly (for manual token entry)
+app.post('/sharefile/set-token', requireAuth, (req, res) => {
+  try {
+    const { access_token } = req.body;
+    if (!access_token) return res.status(400).json({ error: 'access_token required' });
+    sfTokens = { access_token, token_type: 'bearer', subdomain: SF_SUBDOMAIN };
+    saveSfTokens();
+    console.log('ShareFile: token set manually');
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/sharefile/auth', (req, res) => {
   const authUrl = `https://${SF_SUBDOMAIN}.sharefile.com/oauth/authorize?` +
     `response_type=code` +
