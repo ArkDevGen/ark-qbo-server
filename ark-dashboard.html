@@ -7272,6 +7272,7 @@ async function loginAs(userId){
   document.getElementById('sidebar-footer').textContent = `Logged in: ${u.fname}`;
   if(typeof notifInit === 'function') notifInit();
   if(typeof chatInitBadge === 'function') chatInitBadge();
+  if(typeof versionInit === 'function') versionInit();
 
   // Persist session so refresh keeps you logged in
   sessionStorage.setItem('ark_session', JSON.stringify({
@@ -7336,6 +7337,7 @@ async function loginWithCredentials(){
       document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
       if(typeof notifInit === 'function') notifInit();
   if(typeof chatInitBadge === 'function') chatInitBadge();
+  if(typeof versionInit === 'function') versionInit();
       sessionStorage.setItem('ark_session', JSON.stringify({
         userId: currentUser.id,
         token: _serverToken,
@@ -12747,6 +12749,7 @@ renderLoginScreen();
       document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
       if(typeof notifInit === 'function') notifInit();
   if(typeof chatInitBadge === 'function') chatInitBadge();
+  if(typeof versionInit === 'function') versionInit();
       await refreshServerUsersCache();
       await loadDB();
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
@@ -25073,6 +25076,88 @@ function ccChatHandleSSE(msg) {
   if (document.getElementById('view-commcenter')?.classList.contains('active')) {
     ccChatInit();
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VERSION CHECK — "Update Available" notification system
+//  - Polls /version every 60 seconds
+//  - When server version differs from loaded version, shows update banner
+//  - User clicks to refresh and get the latest code
+// ══════════════════════════════════════════════════════════════════
+
+let _appVersion = null;       // version when page loaded
+let _versionPollTimer = null;
+
+async function versionInit() {
+  // Get current version on page load
+  try {
+    const resp = await fetch(ARK_SERVER + '/version');
+    if (resp.ok) {
+      const data = await resp.json();
+      _appVersion = data.version;
+    }
+  } catch (_) {}
+
+  // Start polling every 60 seconds
+  versionStartPoll();
+}
+
+function versionStartPoll() {
+  if (_versionPollTimer) clearInterval(_versionPollTimer);
+  _versionPollTimer = setInterval(versionCheck, 60000);
+}
+
+async function versionCheck() {
+  if (!_appVersion) return;
+  try {
+    const resp = await fetch(ARK_SERVER + '/version');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.version && data.version !== _appVersion) {
+      versionShowBanner();
+    }
+  } catch (_) {}
+}
+
+function versionShowBanner() {
+  // Don't show if already showing
+  if (document.getElementById('update-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  Object.assign(banner.style, {
+    position: 'fixed',
+    bottom: '24px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'var(--navy)',
+    color: '#fff',
+    padding: '12px 24px',
+    borderRadius: '12px',
+    boxShadow: '0 8px 32px rgba(0,0,0,.3)',
+    zIndex: '9999',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: '13px',
+    fontWeight: '500',
+    animation: 'slideUp .3s ease both',
+  });
+
+  banner.innerHTML = `
+    <span style="font-size:18px;">✨</span>
+    <span>A new update is available</span>
+    <button onclick="location.reload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">
+      Update Now
+    </button>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+  `;
+
+  document.body.appendChild(banner);
+
+  // Stop polling once we've shown the banner
+  if (_versionPollTimer) { clearInterval(_versionPollTimer); _versionPollTimer = null; }
 }
 
 // ══════════════════════════════════════════════════════════════════

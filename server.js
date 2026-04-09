@@ -20,6 +20,9 @@ const { google }       = require('googleapis');
 
 const app = express();
 
+// Build version — set at server startup, used for update notifications
+const BUILD_VERSION = new Date().toISOString();
+
 // ─────────────────────────────────────────────────────────────────
 // Persistent data directory
 // On Render with a persistent disk mounted at /data, files survive deploys.
@@ -5658,7 +5661,12 @@ app.get('/sw-push.js', (req, res) => {
 // HEALTH CHECK — Render uses this for zero-downtime deploys
 // ─────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime(), dataDir: DATA_DIR });
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), dataDir: DATA_DIR, version: BUILD_VERSION });
+});
+
+// Version check — lightweight endpoint for client polling
+app.get('/version', (req, res) => {
+  res.json({ version: BUILD_VERSION });
 });
 
 // ─────────────────────────────────────────────────────────────────
