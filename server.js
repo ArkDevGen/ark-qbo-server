@@ -4424,6 +4424,25 @@ function _saveTimePTO(data) { fs.writeFileSync(TIME_PTO_FILE, JSON.stringify(dat
   } catch (e) { console.log('Time punch migration error:', e.message); }
 })();
 
+// Force re-migrate from ark-db.json (temp endpoint)
+app.post('/time/force-migrate', (req, res) => {
+  try {
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'No ark-db.json found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    let punchCount = 0, ptoCount = 0;
+    if (db.timePunches && Object.keys(db.timePunches).length > 0) {
+      _saveTimePunches(db.timePunches);
+      punchCount = Object.keys(db.timePunches).length;
+    }
+    if (db.timePTO && Object.keys(db.timePTO).length > 0) {
+      _saveTimePTO(db.timePTO);
+      ptoCount = Object.keys(db.timePTO).length;
+    }
+    console.log(`Force migrate: ${punchCount} employees punches, ${ptoCount} employees PTO`);
+    res.json({ ok: true, punchEmployees: punchCount, ptoEmployees: ptoCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /time/punches — get punches for an employee
 app.get('/time/punches', requireAuth, (req, res) => {
   try {
