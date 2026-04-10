@@ -857,32 +857,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
   .wg-grid{grid-template-columns:repeat(2,1fr);}
 }
 
-/* ════════════════════════════════════════
-   RECONNECT OVERLAY — shown during deploys
-   ════════════════════════════════════════ */
-#reconnect-overlay{
-  position:fixed;inset:0;z-index:99999;
-  background:rgba(244,242,238,.92);backdrop-filter:blur(6px);
-  display:flex;align-items:center;justify-content:center;
-  animation:fadeIn .3s ease;
-}
-#reconnect-overlay .rc-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:16px;
-  padding:48px 56px;text-align:center;box-shadow:var(--shadow-lg);max-width:400px;
-}
-#reconnect-overlay .rc-spinner{
-  width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--gold);
-  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px;
-}
-#reconnect-overlay .rc-title{
-  font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;
-  color:var(--navy);margin-bottom:8px;
-}
-#reconnect-overlay .rc-msg{font-size:13px;color:var(--text-m);line-height:1.5;}
-#reconnect-overlay .rc-status{font-size:11px;color:var(--text-d);margin-top:16px;}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-
 </style>
 </head>
 <body>
@@ -26036,67 +26010,6 @@ function ccChatHandleSSE(msg) {
 //  - When server version differs from loaded version, shows update banner
 //  - User clicks to refresh and get the latest code
 // ══════════════════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════════
-//  RECONNECT OVERLAY — graceful deploy handling
-//  Shows a branded overlay instead of raw 502 when server is down
-// ══════════════════════════════════════════════════════════════════
-let _serverDownCount = 0;
-let _reconnectPollTimer = null;
-let _reconnectShowing = false;
-
-function showReconnectOverlay(reason){
-  if(_reconnectShowing) return;
-  _reconnectShowing = true;
-  let overlay = document.getElementById('reconnect-overlay');
-  if(!overlay){
-    overlay = document.createElement('div');
-    overlay.id = 'reconnect-overlay';
-    overlay.innerHTML = `<div class="rc-card">
-      <div class="rc-spinner"></div>
-      <div class="rc-title">Reconnecting</div>
-      <div class="rc-msg">The server is updating. You'll be back in a moment.</div>
-      <div class="rc-status" id="rc-status">Checking server...</div>
-    </div>`;
-    document.body.appendChild(overlay);
-  }
-  overlay.style.display = '';
-  // Start polling /health
-  _reconnectStartPoll();
-}
-
-function hideReconnectOverlay(){
-  _reconnectShowing = false;
-  const overlay = document.getElementById('reconnect-overlay');
-  if(overlay) overlay.style.display = 'none';
-  if(_reconnectPollTimer){ clearInterval(_reconnectPollTimer); _reconnectPollTimer = null; }
-}
-
-function _reconnectStartPoll(){
-  if(_reconnectPollTimer) clearInterval(_reconnectPollTimer);
-  let attempts = 0;
-  const statusEl = () => document.getElementById('rc-status');
-  _reconnectPollTimer = setInterval(async ()=>{
-    attempts++;
-    const el = statusEl();
-    if(el) el.textContent = `Waiting for server... (attempt ${attempts})`;
-    try {
-      const resp = await fetch(ARK_SERVER + '/health?t=' + Date.now(), { cache:'no-store' });
-      if(resp.ok){
-        if(el) el.textContent = 'Server is back! Reloading...';
-        clearInterval(_reconnectPollTimer);
-        _reconnectPollTimer = null;
-        setTimeout(()=> location.reload(), 500);
-      }
-    } catch(_){}
-    if(attempts >= 60){
-      // 3 minutes — give up auto-polling, show manual option
-      clearInterval(_reconnectPollTimer);
-      _reconnectPollTimer = null;
-      if(el) el.innerHTML = 'Taking longer than expected. <a href="javascript:location.reload()" style="color:var(--gold);font-weight:600;">Try refreshing manually</a>';
-    }
-  }, 3000);
-}
 
 // Smart reload — wait for server to be healthy before refreshing
 function smartReload(){
