@@ -2,39 +2,44 @@
 // 1. Push notifications for background/closed-tab delivery
 // 2. Offline-resilient page cache — serves cached dashboard during deploys
 
-const CACHE_NAME = 'ark-shell-v1';
+const CACHE_NAME = 'ark-shell-v2';
 const SHELL_URL = '/';
 
 // ── Install: pre-cache nothing, just activate immediately ──
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
+    ).then(() => self.clients.claim())
+  );
 });
 
-// ── Fetch: network-first for the main page, cache as fallback ──
+// ── Fetch: network-first for root page ONLY, cache as fallback ──
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Only intercept navigation requests to our origin's root page
+  // Only intercept navigation requests to the root page specifically
   if (event.request.mode !== 'navigate') return;
   if (url.origin !== self.location.origin) return;
+  if (url.pathname !== '/') return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // If server returned a good response, cache it for next time
+        // Only cache the root page response, and only if it's the dashboard
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(SHELL_URL, clone));
         }
-        // If server returned 502/503, serve from cache instead
+        // If server returned 502/503, serve cached dashboard
         if (response.status === 502 || response.status === 503) {
           return caches.match(SHELL_URL).then((cached) => cached || response);
         }
         return response;
       })
       .catch(() => {
-        // Network error (server completely unreachable) — serve from cache
+        // Network error (server completely unreachable) — serve cached dashboard
         return caches.match(SHELL_URL).then((cached) => {
           if (cached) return cached;
           // No cache available — return a minimal offline page
