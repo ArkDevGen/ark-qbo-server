@@ -26159,6 +26159,11 @@ async function versionInit() {
 // Auto-start version polling on page load (doesn't need auth)
 setTimeout(versionInit, 3000);
 
+// Register service worker for deploy resilience (caches page for 502 fallback)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register(ARK_SERVER + '/sw-push.js', { scope: '/' }).catch(()=>{});
+}
+
 function versionStartPoll() {
   if (_versionPollTimer) clearInterval(_versionPollTimer);
   _versionPollTimer = setInterval(versionCheck, 30000);
@@ -26175,19 +26180,25 @@ async function versionCheck() {
   }
   try {
     const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
-    // Non-200 = server is mid-deploy — don't show banner, don't panic
+    // Non-200 = server is mid-deploy
     if (!resp.ok) {
-      console.log('Version poll: server returned', resp.status, '— likely mid-deploy, skipping');
+      console.log('Version poll: server returned', resp.status, '— likely mid-deploy');
+      _serverDownCount++;
+      if(_serverDownCount >= 2) showReconnectOverlay('version-poll');
       return;
     }
+    // Server is healthy — reset down counter
+    if(_serverDownCount > 0){ _serverDownCount = 0; hideReconnectOverlay(); }
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
       console.log('New version available:', data.version, '(current:', _appVersion + ')');
       versionShowBanner();
     }
   } catch (e) {
-    // Network error = server is down (deploy in progress) — skip silently
+    // Network error = server is down (deploy in progress)
     console.log('Version poll: network error — server likely restarting');
+    _serverDownCount++;
+    if(_serverDownCount >= 2) showReconnectOverlay('version-poll');
   }
 }
 
