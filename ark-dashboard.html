@@ -7396,28 +7396,7 @@ async function authFetch(url, options = {}) {
     if (!options.headers) options.headers = {};
     options.headers['Authorization'] = 'Bearer ' + _serverToken;
   }
-  let resp;
-  try {
-    resp = await fetch(url, options);
-  } catch(e) {
-    // Network error — server is unreachable (deploy in progress)
-    _serverDownCount = (typeof _serverDownCount !== 'undefined' ? _serverDownCount : 0) + 1;
-    if(_serverDownCount >= 2 && typeof showReconnectOverlay === 'function') showReconnectOverlay('network');
-    throw e;
-  }
-  // Detect 502/503 — server is mid-deploy
-  if (resp.status === 502 || resp.status === 503) {
-    _serverDownCount = (typeof _serverDownCount !== 'undefined' ? _serverDownCount : 0) + 1;
-    if(_serverDownCount >= 2 && typeof showReconnectOverlay === 'function') showReconnectOverlay('502');
-    return resp;
-  }
-  // Successful response — reset down counter, hide overlay if showing
-  if (resp.ok) {
-    if(typeof _serverDownCount !== 'undefined' && _serverDownCount > 0){
-      _serverDownCount = 0;
-      if(typeof hideReconnectOverlay === 'function') hideReconnectOverlay();
-    }
-  }
+  const resp = await fetch(url, options);
   // If 401, try re-authenticating once and retry
   if (resp.status === 401 && currentUser) {
     const ok = await _reAuth();
@@ -26191,25 +26170,19 @@ async function versionCheck() {
   }
   try {
     const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
-    // Non-200 = server is mid-deploy
+    // Non-200 = server is mid-deploy — skip silently
     if (!resp.ok) {
-      console.log('Version poll: server returned', resp.status, '— likely mid-deploy');
-      _serverDownCount++;
-      if(_serverDownCount >= 2) showReconnectOverlay('version-poll');
+      console.log('Version poll: server returned', resp.status, '— likely mid-deploy, skipping');
       return;
     }
-    // Server is healthy — reset down counter
-    if(_serverDownCount > 0){ _serverDownCount = 0; hideReconnectOverlay(); }
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
       console.log('New version available:', data.version, '(current:', _appVersion + ')');
       versionShowBanner();
     }
   } catch (e) {
-    // Network error = server is down (deploy in progress)
+    // Network error = server is down (deploy in progress) — skip silently
     console.log('Version poll: network error — server likely restarting');
-    _serverDownCount++;
-    if(_serverDownCount >= 2) showReconnectOverlay('version-poll');
   }
 }
 
