@@ -8523,8 +8523,7 @@ async function wgResolveData(w){
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
   const onClick = w.onClick ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
-  const delBtn = w.locked ? '' : `<button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button>`;
-  const editBtns = `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button>${delBtn}</div>`;
+  const editBtns = w.locked ? '' : `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
   const dragHandle = `<span class="wg-drag-handle" title="Drag to reorder">⠿</span>`;
 
   if(w.type==='kpi'){
