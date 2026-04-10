@@ -8403,7 +8403,8 @@ const DEFAULT_WIDGETS = [
 
 // ── Computed widget handlers ──
 const WIDGET_COMPUTED = {
-  activeAMs(){
+  async activeAMs(){
+    if(!(_cachedServerUsers||[]).length) await refreshServerUsersCache();
     const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
     return { value: amList.filter(a=>a.status==='Active'||!a.status).length };
   },
@@ -8749,19 +8750,27 @@ async function renderWidgets(){
   }
   let html = '';
   for(const w of widgets){
-    const data = await wgResolveData(w);
-    html += wgRenderWidget(w, data);
+    try {
+      const data = await wgResolveData(w);
+      html += wgRenderWidget(w, data);
+    } catch(e){
+      console.warn('Widget render error for', w.id, w.title, e);
+      html += wgRenderWidget(w, {value:'—', sub:'Error loading'});
+    }
   }
   grid.innerHTML = html;
   if(_wgEditMode) grid.classList.add('wg-edit-mode'); else grid.classList.remove('wg-edit-mode');
   // Post-render: calendar
   const calWidget = widgets.find(w=>w.type==='calendar');
   if(calWidget){
-    renderCalWidget();
-    fetchCalendarEvents().then(()=>{ renderCalWidget(); renderCalHeaderActions(); });
+    try { renderCalWidget(); } catch(_){}
+    fetchCalendarEvents().then(()=>{ try { renderCalWidget(); renderCalHeaderActions(); } catch(_){} }).catch(_=>{});
   }
   // Attach drag listeners if in edit mode
   if(_wgEditMode) wgAttachDrag();
+  // Refresh topbar actions (edit/add buttons)
+  const ta = document.getElementById('topbar-actions');
+  if(ta && PAGE_ACTIONS.dashboard) ta.innerHTML = PAGE_ACTIONS.dashboard();
 }
 
 function renderDashboard(){
