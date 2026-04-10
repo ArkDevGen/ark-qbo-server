@@ -1733,14 +1733,15 @@ app.get('/sms/inbox', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // SHAREFILE — File Storage via ShareFile REST API
-// Replaces Backblaze B2. Uses OAuth2 for auth, folder IDs for nav.
-// Dashboard sends/receives files via /files/* endpoints.
+// Uses password-based token auth (no OAuth redirect needed)
 // ─────────────────────────────────────────────────────────────────
-const SF_SUBDOMAIN   = process.env.SHAREFILE_SUBDOMAIN || '';
-const SF_CLIENT_ID   = process.env.SHAREFILE_CLIENT_ID || '';
+const SF_SUBDOMAIN     = process.env.SHAREFILE_SUBDOMAIN || '';
+const SF_CLIENT_ID     = process.env.SHAREFILE_CLIENT_ID || '';
 const SF_CLIENT_SECRET = process.env.SHAREFILE_CLIENT_SECRET || '';
-const SF_API_BASE    = SF_SUBDOMAIN ? `https://${SF_SUBDOMAIN}.sf-api.com/sf/v3` : '';
-const SF_TOKEN_FILE  = path.join(DATA_DIR, 'sharefile-tokens.json');
+const SF_USERNAME      = process.env.SHAREFILE_USERNAME || '';
+const SF_PASSWORD      = process.env.SHAREFILE_PASSWORD || '';
+const SF_API_BASE      = SF_SUBDOMAIN ? `https://${SF_SUBDOMAIN}.sf-api.com/sf/v3` : '';
+const SF_TOKEN_FILE    = path.join(DATA_DIR, 'sharefile-tokens.json');
 
 // Load saved ShareFile tokens
 let sfTokens = null;
@@ -1754,50 +1755,57 @@ if (fs.existsSync(SF_TOKEN_FILE)) {
 }
 
 function sfReady() {
-  return !!(SF_CLIENT_ID && SF_CLIENT_SECRET && SF_SUBDOMAIN && sfTokens);
+  return !!(SF_CLIENT_ID && SF_SUBDOMAIN && sfTokens && sfTokens.access_token);
 }
 
 function saveSfTokens() {
   fs.writeFileSync(SF_TOKEN_FILE, JSON.stringify(sfTokens, null, 2));
 }
 
-// Auto-refresh ShareFile access token if expired
-async function sfGetHeaders() {
-  if (!sfTokens) throw new Error('ShareFile not connected — run the auth flow first');
+// Get a fresh token using password grant (no OAuth redirect needed)
+async function sfPasswordAuth() {
+  if (!SF_CLIENT_ID || !SF_CLIENT_SECRET || !SF_SUBDOMAIN || !SF_USERNAME || !SF_PASSWORD) {
+    throw new Error('ShareFile credentials not configured');
+  }
+  const params = new URLSearchParams({
+    grant_type:    'password',
+    client_id:     SF_CLIENT_ID,
+    client_secret: SF_CLIENT_SECRET,
+    username:      SF_USERNAME,
+    password:      SF_PASSWORD,
+  });
+  const resp = await fetch(`https://${SF_SUBDOMAIN}.sharefile.com/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error('ShareFile password auth failed: ' + errText);
+  }
+  const data = await resp.json();
+  sfTokens = {
+    access_token:  data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at:    Date.now() + ((data.expires_in || 28800) * 1000),
+    subdomain:     data.subdomain || SF_SUBDOMAIN,
+  };
+  saveSfTokens();
+  console.log('✓ ShareFile token obtained via password auth');
+  return sfTokens;
+}
 
-  // Check if token is expired (with 5 min buffer)
+// Auto-refresh ShareFile access token if expired (uses password auth, no OAuth redirect)
+async function sfGetHeaders() {
+  // If no token at all, get one via password auth
+  if (!sfTokens || !sfTokens.access_token) {
+    await sfPasswordAuth();
+  }
+
+  // Check if token is expired (with 5 min buffer) — re-auth via password
   if (sfTokens.expires_at && Date.now() > sfTokens.expires_at - 300000) {
-    console.log('ShareFile token expired, refreshing...');
-    try {
-      const params = new URLSearchParams({
-        grant_type:    'refresh_token',
-        refresh_token: sfTokens.refresh_token,
-        client_id:     SF_CLIENT_ID,
-        client_secret: SF_CLIENT_SECRET,
-      });
-      const resp = await fetch(`https://${SF_SUBDOMAIN}.sharefile.com/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-      });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        sfTokens = null;
-        saveSfTokens();
-        throw new Error('Token refresh failed: ' + errText);
-      }
-      const data = await resp.json();
-      sfTokens = {
-        access_token:  data.access_token,
-        refresh_token: data.refresh_token || sfTokens.refresh_token,
-        expires_at:    Date.now() + (data.expires_in * 1000),
-        subdomain:     data.subdomain || SF_SUBDOMAIN,
-      };
-      saveSfTokens();
-      console.log('✓ ShareFile token refreshed');
-    } catch(e) {
-      throw new Error('ShareFile token refresh failed — please reconnect');
-    }
+    console.log('ShareFile token expired, re-authenticating...');
+    await sfPasswordAuth();
   }
 
   return {
@@ -1861,52 +1869,10 @@ app.post('/sharefile/set-token', requireAuth, (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/sharefile/auth', (req, res) => {
-  const authUrl = `https://${SF_SUBDOMAIN}.sharefile.com/oauth/authorize?` +
-    `response_type=code` +
-    `&client_id=${SF_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(process.env.SHAREFILE_REDIRECT_URI || `https://ark-qbo-server.onrender.com/sharefile/callback`)}` +
-    `&state=ark-sf-${Date.now()}`;
-  console.log('Redirecting to ShareFile auth:', authUrl);
-  res.redirect(authUrl);
-});
-
-app.get('/sharefile/callback', async (req, res) => {
+// Connect to ShareFile using password auth (no OAuth redirect needed)
+app.get('/sharefile/auth', async (req, res) => {
   try {
-    const { code } = req.query;
-    if (!code) throw new Error('No authorization code received');
-
-    const params = new URLSearchParams({
-      grant_type:    'authorization_code',
-      code,
-      client_id:     SF_CLIENT_ID,
-      client_secret: SF_CLIENT_SECRET,
-      redirect_uri:  process.env.SHAREFILE_REDIRECT_URI || 'https://ark-qbo-server.onrender.com/sharefile/callback',
-    });
-
-    const resp = await fetch(`https://${SF_SUBDOMAIN}.sharefile.com/oauth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error('Token exchange failed: ' + errText);
-    }
-
-    const data = await resp.json();
-    sfTokens = {
-      access_token:  data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at:    Date.now() + (data.expires_in * 1000),
-      subdomain:     data.subdomain || SF_SUBDOMAIN,
-    };
-    saveSfTokens();
-
-    console.log('✓ ShareFile connected successfully');
-    console.log('  Subdomain:', sfTokens.subdomain);
-
+    await sfPasswordAuth();
     res.send(`<!DOCTYPE html>
 <html>
 <head><title>ShareFile Connected</title></head>
@@ -1917,9 +1883,7 @@ app.get('/sharefile/callback', async (req, res) => {
     <p style="color:#8bafc8;">This window will close automatically.</p>
   </div>
   <script>
-    if (window.opener) {
-      window.opener.postMessage({ type: 'sharefile-connected' }, '*');
-    }
+    if (window.opener) window.opener.postMessage({ type: 'sharefile-connected' }, '*');
     setTimeout(() => window.close(), 3000);
   </script>
 </body>
