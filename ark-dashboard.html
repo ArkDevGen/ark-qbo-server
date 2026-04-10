@@ -8391,7 +8391,7 @@ const DEFAULT_WIDGETS = [
   {id:'dw1',type:'kpi',title:'Total Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'all accounts',accentColor:'var(--gold)'},filters:[],grid:{col:1,row:1,colSpan:3,rowSpan:1}},
   {id:'dw2',type:'kpi',title:'Active Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'currently engaged',accentColor:'var(--gold)'},filters:[{field:'status',op:'eq',value:'Active'}],grid:{col:4,row:1,colSpan:3,rowSpan:1}},
   {id:'dw3',type:'kpi',title:'AM Center',source:{type:'computed',compute:'activeAMs'},display:{metric:'count',subtitle:'team members',accentColor:'var(--gold)'},filters:[],grid:{col:7,row:1,colSpan:3,rowSpan:1}},
-  {id:'dw4',type:'kpi',title:'Next Banking Holiday',source:{type:'computed',compute:'bankingHoliday'},display:{metric:'custom',accentColor:'var(--gold)'},filters:[],grid:{col:10,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw4',type:'kpi',title:'Next Banking Holiday',source:{type:'computed',compute:'bankingHoliday'},display:{metric:'custom',accentColor:'var(--gold)'},filters:[],grid:{col:10,row:1,colSpan:3,rowSpan:1},locked:true},
   {id:'dw5',type:'kpi',title:'Clocked In Now',source:{type:'computed',compute:'clockedIn'},display:{metric:'custom',subtitle:'no open punches',accentColor:'#6b3fa0',valueColor:'#6b3fa0'},filters:[],grid:{col:1,row:2,colSpan:3,rowSpan:1}},
   {id:'dw6',type:'kpi',title:'1099s Issued',source:{type:'collection',collection:'form1099s'},display:{metric:'count',subtitle:'tax year',accentColor:'var(--green)'},filters:[{field:'year',op:'eq',value:'$prevYear'}],grid:{col:4,row:2,colSpan:2,rowSpan:1}},
   {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
@@ -8522,7 +8522,8 @@ async function wgResolveData(w){
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
   const onClick = w.onClick ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
-  const editBtns = `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
+  const delBtn = w.locked ? '' : `<button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button>`;
+  const editBtns = `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button>${delBtn}</div>`;
   const dragHandle = `<span class="wg-drag-handle" title="Drag to reorder">⠿</span>`;
 
   if(w.type==='kpi'){
@@ -8569,7 +8570,7 @@ function wgRenderWidget(w, data){
     return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
       <div class="wg-header" style="border-bottom:1px solid var(--border);padding:16px 24px;">
         <div style="display:flex;align-items:center;">${dragHandle}<div>
-          <div class="card-title">📅 ${currentUser?currentUser.fname+"'s":'My'} Schedule</div>
+          <div class="card-title">📅 Jacob's Schedule</div>
           <div class="card-subtitle" id="cal-date-label"></div>
         </div></div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -8815,6 +8816,8 @@ function wgAttachDrag(){
 
 // ── Widget CRUD ──
 function wgDeleteWidget(id){
+  const w = _userWidgets.find(w=>w.id===id);
+  if(w?.locked) return;
   if(!confirm('Remove this widget from your dashboard?')) return;
   _userWidgets = _userWidgets.filter(w=>w.id!==id);
   wgSaveWidgets();
