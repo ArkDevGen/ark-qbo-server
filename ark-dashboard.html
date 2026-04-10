@@ -16127,6 +16127,17 @@ async function tcSaveShiftEdit(empId, inId, outId) {
         body: JSON.stringify({ empId, time: newOut }),
       });
       outP.time = newOut; outP.override = true;
+    } else if (newOut && !outP && inP) {
+      // Open shift — create a new clock-out punch
+      const resp = await authFetch(ARK_SERVER + '/time/punches', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ empId, type:'out', date: inP.date, time: newOut, override: true }),
+      });
+      if(resp.ok){
+        const newPunch = await resp.json();
+        if(!DB.timePunches[empId]) DB.timePunches[empId] = [];
+        DB.timePunches[empId].push(newPunch);
+      }
     }
     DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     tcRenderTimecard(empId);
