@@ -722,6 +722,141 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .c360-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--text-d);}
 .c360-row span:last-child{color:var(--text);font-weight:500;text-align:right;}
 
+/* ════════════════════════════════════════
+   WIDGET SYSTEM
+   ════════════════════════════════════════ */
+.wg-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;grid-auto-rows:minmax(120px,auto);}
+.wg-widget{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm);
+  overflow:visible;position:relative;
+  transition:var(--transition);display:flex;flex-direction:column;
+}
+.wg-widget:hover{box-shadow:var(--shadow);}
+.wg-widget::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:4px;
+  background:var(--wg-accent,var(--gold));
+  border-radius:var(--radius) var(--radius) 0 0;z-index:1;
+}
+.wg-header{
+  padding:14px 20px 10px;display:flex;align-items:center;justify-content:space-between;
+  min-height:0;flex-shrink:0;
+}
+.wg-title{font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:1.8px;font-weight:600;}
+.wg-body{padding:0 20px 16px;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;}
+.wg-kpi-value{
+  font-family:'Cormorant Garamond',serif;font-size:42px;font-weight:700;
+  color:var(--navy);line-height:1;letter-spacing:-.02em;
+  animation:numberPop .4s cubic-bezier(.4,0,.2,1) both;
+}
+.wg-kpi-sub{font-size:12px;color:var(--text-m);margin-top:4px;}
+.wg-actions{display:flex;align-items:center;gap:4px;opacity:0;transition:opacity .15s;}
+.wg-widget:hover .wg-actions{opacity:1;}
+.wg-action-btn{
+  background:none;border:none;cursor:pointer;padding:4px;border-radius:var(--radius-sm);
+  color:var(--text-d);font-size:14px;display:flex;align-items:center;justify-content:center;
+  transition:var(--transition);
+}
+.wg-action-btn:hover{background:var(--surface2);color:var(--navy);}
+
+/* Widget drag handles — only visible in edit mode */
+.wg-drag-handle{display:none;cursor:grab;padding:4px;color:var(--text-d);font-size:14px;margin-right:4px;}
+.wg-edit-mode .wg-drag-handle{display:flex;align-items:center;}
+.wg-edit-mode .wg-widget{border-style:dashed;border-color:var(--border2);}
+.wg-edit-mode .wg-actions{opacity:1;}
+.wg-widget.wg-dragging{opacity:.5;transform:scale(.97);}
+.wg-widget.wg-drop-target{border-color:var(--gold);box-shadow:0 0 0 2px rgba(184,146,42,.25);}
+
+/* Widget grid overlay in edit mode */
+.wg-edit-mode::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(90deg,rgba(26,36,64,.03) 0,rgba(26,36,64,.03) calc(100%/12 - 16px),transparent calc(100%/12 - 16px),transparent calc(100%/12));
+}
+.wg-edit-mode{position:relative;}
+
+/* Widget quick actions row */
+.wg-qa-row{display:flex;gap:14px;flex-wrap:wrap;padding:10px 0;}
+.wg-qa-btn{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:18px 24px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);cursor:pointer;min-width:110px;
+  box-shadow:var(--shadow);transition:all .15s;text-decoration:none;color:inherit;
+}
+.wg-qa-btn:hover{transform:translateY(-2px);}
+.wg-qa-icon{
+  width:44px;height:44px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;color:#fff;
+}
+.wg-qa-label{font-size:12px;font-weight:600;color:var(--navy);text-align:center;}
+.wg-qa-sublabel{font-size:10px;color:var(--text-d);text-align:center;}
+
+/* Widget chart containers */
+.wg-chart-wrap{width:100%;height:100%;min-height:120px;}
+.wg-chart-wrap svg{width:100%;height:100%;}
+
+/* Widget table */
+.wg-table{width:100%;border-collapse:collapse;font-size:12px;}
+.wg-table th{padding:6px 10px;text-align:left;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid var(--border);font-weight:600;background:var(--surface2);}
+.wg-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;}
+.wg-table tbody tr:hover td{background:rgba(26,36,64,.025);}
+
+/* Widget list */
+.wg-list-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);}
+.wg-list-item:last-child{border-bottom:none;}
+
+/* Widget builder modal steps */
+.wg-step{display:none;}
+.wg-step.active{display:block;}
+.wg-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;}
+.wg-type-card{
+  padding:20px 16px;border:2px solid var(--border);border-radius:var(--radius);
+  cursor:pointer;text-align:center;transition:var(--transition);
+}
+.wg-type-card:hover{border-color:var(--navy);background:rgba(26,36,64,.02);}
+.wg-type-card.selected{border-color:var(--gold);background:var(--gold-pale);}
+.wg-type-card .wg-type-icon{font-size:28px;margin-bottom:8px;}
+.wg-type-card .wg-type-name{font-size:13px;font-weight:600;color:var(--navy);}
+.wg-type-card .wg-type-desc{font-size:11px;color:var(--text-d);margin-top:4px;}
+
+/* Filter builder */
+.wg-filter-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.wg-filter-row select,.wg-filter-row input{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-family:inherit;}
+.wg-filter-remove{background:none;border:none;cursor:pointer;color:var(--red);font-size:16px;padding:4px;}
+
+/* Color swatches */
+.wg-swatch-row{display:flex;gap:8px;margin-top:8px;}
+.wg-swatch{
+  width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+  transition:var(--transition);
+}
+.wg-swatch:hover{transform:scale(1.15);}
+.wg-swatch.selected{border-color:var(--navy);box-shadow:0 0 0 2px rgba(26,36,64,.2);}
+
+/* Size selector */
+.wg-size-grid{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;}
+.wg-size-opt{
+  padding:10px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);
+  cursor:pointer;font-size:12px;font-weight:600;color:var(--text-m);transition:var(--transition);
+}
+.wg-size-opt:hover{border-color:var(--navy);}
+.wg-size-opt.selected{border-color:var(--gold);background:var(--gold-pale);color:var(--navy);}
+
+/* Widget empty state */
+.wg-empty{
+  grid-column:1/-1;padding:60px;text-align:center;
+  color:var(--text-d);font-size:14px;
+}
+.wg-empty-icon{font-size:48px;margin-bottom:16px;opacity:.4;}
+
+/* Responsive */
+@media(max-width:900px){
+  .wg-grid{grid-template-columns:repeat(4,1fr);}
+  .wg-type-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:600px){
+  .wg-grid{grid-template-columns:repeat(2,1fr);}
+}
+
 </style>
 </head>
 <body>
@@ -759,6 +894,133 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
     <!-- Legacy user-pick-grid kept hidden for backward compat -->
     <div class="user-pick-grid" id="user-pick-grid" style="display:none;">
+    </div>
+  </div>
+</div>
+
+<!-- ════ WIDGET BUILDER MODAL ════ -->
+<div class="overlay" id="modal-widget-builder" style="display:none" onclick="overlayClose(event,'modal-widget-builder')">
+  <div class="modal" style="width:640px;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-head">
+      <div class="modal-title" id="wgb-title">Add Widget</div>
+      <span class="modal-x" onclick="wgbClose()">&times;</span>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;">
+      <!-- Step 1: Choose Type -->
+      <div class="wg-step active" id="wgb-step-1">
+        <div style="font-size:13px;color:var(--text-m);margin-bottom:4px;">What kind of widget?</div>
+        <div class="wg-type-grid" id="wgb-type-grid">
+          <div class="wg-type-card" data-type="kpi" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">🔢</div>
+            <div class="wg-type-name">KPI / Number</div>
+            <div class="wg-type-desc">Single big metric</div>
+          </div>
+          <div class="wg-type-card" data-type="chart-bar" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">📊</div>
+            <div class="wg-type-name">Bar Chart</div>
+            <div class="wg-type-desc">Compare categories</div>
+          </div>
+          <div class="wg-type-card" data-type="chart-pie" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">🥧</div>
+            <div class="wg-type-name">Pie Chart</div>
+            <div class="wg-type-desc">Show proportions</div>
+          </div>
+          <div class="wg-type-card" data-type="chart-line" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">📈</div>
+            <div class="wg-type-name">Line Chart</div>
+            <div class="wg-type-desc">Trends over time</div>
+          </div>
+          <div class="wg-type-card" data-type="table" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">📋</div>
+            <div class="wg-type-name">Table</div>
+            <div class="wg-type-desc">Data rows &amp; columns</div>
+          </div>
+          <div class="wg-type-card" data-type="list" onclick="wgbSelectType(this)">
+            <div class="wg-type-icon">📝</div>
+            <div class="wg-type-name">List</div>
+            <div class="wg-type-desc">Simple item list</div>
+          </div>
+        </div>
+      </div>
+      <!-- Step 2: Configure Data -->
+      <div class="wg-step" id="wgb-step-2">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Data Source</label>
+            <select id="wgb-source" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);" onchange="wgbSourceChanged()">
+              <optgroup label="Collections">
+                <option value="clients">Clients</option>
+                <option value="employees">New Hires / Employees</option>
+                <option value="vendors">Vendors</option>
+                <option value="form1099s">1099s</option>
+                <option value="w2s">W-2s</option>
+                <option value="tasks">Tasks</option>
+                <option value="leads">Leads</option>
+                <option value="proposals">Proposals</option>
+                <option value="meetings">Meetings</option>
+                <option value="activity">Activity Log</option>
+              </optgroup>
+              <optgroup label="Computed">
+                <option value="computed:bankingHoliday">Next Banking Holiday</option>
+                <option value="computed:clockedIn">Clocked In Now</option>
+                <option value="computed:activeAMs">Active Account Managers</option>
+                <option value="computed:onboarding">Incomplete Onboarding</option>
+              </optgroup>
+            </select>
+          </div>
+          <div id="wgb-metric-wrap">
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Metric</label>
+            <select id="wgb-metric" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);">
+              <option value="count">Count</option>
+              <option value="sum">Sum</option>
+              <option value="avg">Average</option>
+            </select>
+          </div>
+          <div id="wgb-field-wrap" style="display:none;">
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Field</label>
+            <select id="wgb-field" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);"></select>
+          </div>
+          <div id="wgb-groupby-wrap" style="display:none;">
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Group By</label>
+            <select id="wgb-groupby" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);"></select>
+          </div>
+          <div id="wgb-columns-wrap" style="display:none;">
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Columns</label>
+            <div id="wgb-columns" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Filters</label>
+            <div id="wgb-filters" style="margin-top:6px;"></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="wgbAddFilter()">+ Add Filter</button>
+          </div>
+        </div>
+      </div>
+      <!-- Step 3: Appearance -->
+      <div class="wg-step" id="wgb-step-3">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Title</label>
+            <input id="wgb-widget-title" type="text" placeholder="Widget title" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Subtitle</label>
+            <input id="wgb-widget-sub" type="text" placeholder="Optional subtitle" style="width:100%;margin-top:4px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Accent Color</label>
+            <div class="wg-swatch-row" id="wgb-swatches"></div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Size</label>
+            <div class="wg-size-grid" id="wgb-sizes"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:space-between;">
+      <button class="btn btn-ghost" id="wgb-back" onclick="wgbBack()" style="display:none;">Back</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary" id="wgb-next" onclick="wgbNext()">Next</button>
     </div>
   </div>
 </div>
@@ -986,120 +1248,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   <!-- ══ DASHBOARD ══ -->
   <div class="view active content" id="view-dashboard">
-
-    <!-- STAT CARDS ROW 1 -->
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-label">Total Clients</div><div class="stat-value" id="s-clients">0</div><div class="stat-sub">all accounts</div></div>
-      <div class="stat-card"><div class="stat-label">Active Clients</div><div class="stat-value" id="s-active">0</div><div class="stat-sub">currently engaged</div></div>
-      <div class="stat-card"><div class="stat-label">AM Center</div><div class="stat-value" id="s-ams">0</div><div class="stat-sub">team members</div></div>
-      <div class="stat-card" id="banking-holiday-card">
-        <div class="stat-label">Next Banking Holiday</div>
-        <div class="stat-value" id="s-holiday-days" style="font-size:28px;"></div>
-        <div class="stat-sub" id="s-holiday-name"></div>
-      </div>
-    </div>
-
-    <!-- STAT CARDS ROW 2 -->
-    <div class="stats-row" style="margin-bottom:28px;grid-template-columns:repeat(5,1fr);">
-      <div class="stat-card" style="--card-accent:#6b3fa0;">
-        <div class="stat-label">Clocked In Now</div>
-        <div class="stat-value" id="s-clockedin-count" style="color:#6b3fa0;">0</div>
-        <div class="stat-sub" id="s-clockedin-sub">no open punches</div>
-        <div id="s-clockedin-avatars" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
-      </div>
-      <div class="stat-card" style="--card-accent:#2e7d5e;">
-        <div class="stat-label">1099s Issued</div>
-        <div class="stat-value" id="s-1099s">0</div>
-        <div class="stat-sub" id="s-1099s-sub">current year</div>
-      </div>
-      <div class="stat-card" style="--card-accent:#b8922a;">
-        <div class="stat-label">Vendor Library</div>
-        <div class="stat-value" id="s-vendors">0</div>
-        <div class="stat-sub">w-9s on file</div>
-      </div>
-      <div class="stat-card" style="--card-accent:#2c7be5;cursor:pointer;" onclick="nav('clients')" title="Click to view clients">
-        <div class="stat-label">Incomplete Onboarding</div>
-        <div class="stat-value" id="s-onboarding" style="color:#2c7be5;">0</div>
-        <div class="stat-sub" id="s-onboarding-sub">clients need attention</div>
-      </div>
-      <div class="stat-card" style="--card-accent:#b03a3a;">
-        <div class="stat-label" style="display:flex;align-items:center;">Unfiled NH Reports<span id="s-unfiled-dot" style="display:none;" class="blink-dot" title="One or more hires unfiled for 15+ days"></span></div>
-        <div class="stat-value" id="s-unfiled">0</div>
-        <div class="stat-sub" id="s-unfiled-sub">need to be filed</div>
-      </div>
-    </div>
-
-
-
-    <!-- QUICK ACTIONS -->
-    <div style="margin-bottom:22px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">Quick Actions</div>
-      <div style="display:flex;gap:14px;flex-wrap:wrap;">
-
-        <div onclick="openAddEmp()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;" onmouseover="this.style.borderColor='var(--navy)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:var(--green);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">📋</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">Add New Hire</div>
-        </div>
-
-        <a href="https://qbo.intuit.com" target="_blank" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;text-decoration:none;" onmouseover="this.style.borderColor='#2ca01c';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:#2ca01c;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">💼</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">QuickBooks</div>
-        </a>
-
-        <a href="https://secure.surepayroll.com/SPF/Login/AccountantAuth1.aspx" target="_blank" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;text-decoration:none;" onmouseover="this.style.borderColor='#0070c0';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:#0070c0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">💰</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">SurePayroll</div>
-        </a>
-
-        <a href="https://www.patriotsoftware.com/" target="_blank" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;text-decoration:none;" onmouseover="this.style.borderColor='#c0392b';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:#c0392b;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">🦅</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">Patriot</div>
-        </a>
-
-        <a href="https://id.mypatriot.com/#/" target="_blank" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;text-decoration:none;" onmouseover="this.style.borderColor='#b8922a';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:var(--gold);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">💵</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">My Time Punch</div>
-          <div style="font-size:10px;color:var(--text-d);text-align:center;">Log in with Identity</div>
-        </a>
-
-        <div onclick="openAddClient()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;" onmouseover="this.style.borderColor='var(--navy)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:var(--navy);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">👤</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">Add Client</div>
-        </div>
-
-        <div onclick="openPostage()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;" onmouseover="this.style.borderColor='#6b3fa0';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:#6b3fa0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">📬</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">Add Postage</div>
-        </div>
-
-        <div onclick="open1099Modal()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;min-width:110px;box-shadow:var(--shadow);transition:all .15s;" onmouseover="this.style.borderColor='#2e7d5e';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="width:44px;height:44px;background:#2e7d5e;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">📋</div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy);text-align:center;">Add 1099</div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- TODAY'S SCHEDULE -->
-    <div class="card" style="margin-bottom:22px;">
-      <div class="card-header">
-        <div>
-          <div class="card-title">📅 Jacob's Schedule</div>
-          <div class="card-subtitle" id="cal-date-label"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="display:flex;align-items:center;gap:2px;">
-            <button onclick="calNavWeek(-7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Previous week">◀</button>
-            <button onclick="calNavWeek(0)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:0 10px;height:28px;cursor:pointer;font-size:10px;font-weight:600;color:var(--text-d);letter-spacing:.03em;" title="Back to today">Today</button>
-            <button onclick="calNavWeek(7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Next week">▶</button>
-          </div>
-          <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
-        </div>
-      </div>
-      <div id="cal-widget" style="padding:0 4px 16px;overflow:hidden;"></div>
-    </div>
-
-
+    <div id="widget-grid" class="wg-grid"></div>
   </div>
 
   <!-- ══ CLIENTS ══ -->
@@ -7989,6 +8138,7 @@ addrStateEl.innerHTML = '<option value="">— Select —</option>' + US_STATES.m
 //  NAV
 // ══════════════════════════════════════════════
 const PAGE_ACTIONS = {
+  dashboard: ()=>`<button class="btn btn-ghost btn-sm" onclick="wgToggleEdit()" title="Toggle edit mode">${_wgEditMode?'Done Editing':'Edit Layout'}</button> <button class="btn btn-primary btn-sm" onclick="wgbOpen()">+ Add Widget</button> <button class="btn btn-ghost btn-sm" onclick="wgResetWidgets()" title="Reset to defaults">Reset</button>`,
   clients: ()=>`<button class="btn btn-primary" onclick="openAddClient()">+ Add Client</button>`,
   acctmgrs: ()=>`<button class="btn btn-primary" onclick="openAddAM()">+ Add Account Manager</button>`,
   employees: ()=>`<button class="btn btn-primary" onclick="openAddEmp()">+ Add New Hire</button>`,
@@ -8141,51 +8291,740 @@ function getAMName(id){
 }
 
 // ══════════════════════════════════════════════
-//  RENDER DASHBOARD
+//  WIDGET SYSTEM
 // ══════════════════════════════════════════════
+
+// ── Field definitions per collection ──
+const WIDGET_FIELDS = {
+  clients:    [{f:'status',label:'Status'},{f:'entity',label:'Entity Type'},{f:'am',label:'Account Manager'},{f:'prPlatform',label:'Payroll Platform'},{f:'prScript',label:'Payroll Script'},{f:'services',label:'Services'}],
+  employees:  [{f:'reportPrinted',label:'Report Filed'},{f:'state',label:'State'},{f:'hiredate',label:'Hire Date'}],
+  vendors:    [{f:'type',label:'Type'},{f:'state',label:'State'}],
+  form1099s:  [{f:'year',label:'Year'},{f:'type',label:'Form Type'},{f:'status',label:'Status'}],
+  w2s:        [{f:'year',label:'Year'},{f:'status',label:'Status'}],
+  tasks:      [{f:'status',label:'Status'},{f:'priority',label:'Priority'},{f:'assignee',label:'Assignee'},{f:'category',label:'Category'}],
+  leads:      [{f:'stage',label:'Stage'},{f:'source',label:'Source'},{f:'status',label:'Status'}],
+  proposals:  [{f:'status',label:'Status'},{f:'stage',label:'Stage'}],
+  meetings:   [{f:'status',label:'Status'},{f:'type',label:'Type'}],
+  activity:   [{f:'type',label:'Type'},{f:'user',label:'User'}],
+};
+
+// ── Filter operators ──
+const WG_OPS = [
+  {v:'eq',l:'equals'},{v:'neq',l:'not equals'},{v:'gt',l:'greater than'},{v:'lt',l:'less than'},
+  {v:'contains',l:'contains'},{v:'exists',l:'exists'},{v:'notExists',l:'not exists'}
+];
+
+// ── Accent color palette ──
+const WG_COLORS = [
+  {v:'var(--gold)',l:'Gold',hex:'#b8922a'},
+  {v:'var(--navy)',l:'Navy',hex:'#1a2440'},
+  {v:'var(--green)',l:'Green',hex:'#2e7d5e'},
+  {v:'var(--red)',l:'Red',hex:'#b03a3a'},
+  {v:'var(--blue)',l:'Blue',hex:'#2c5fa1'},
+  {v:'#6b3fa0',l:'Purple',hex:'#6b3fa0'},
+  {v:'var(--amber)',l:'Amber',hex:'#b06a1a'},
+  {v:'#2c7be5',l:'Sky',hex:'#2c7be5'},
+];
+
+// ── Size presets (colSpan x rowSpan on 12-col grid) ──
+const WG_SIZES = [
+  {v:'3x1',l:'Small',cs:3,rs:1},
+  {v:'4x1',l:'Medium',cs:4,rs:1},
+  {v:'6x1',l:'Wide',cs:6,rs:1},
+  {v:'12x1',l:'Full Width',cs:12,rs:1},
+  {v:'6x2',l:'Large',cs:6,rs:2},
+  {v:'12x2',l:'XL',cs:12,rs:2},
+];
+
+// ── Chart color palette ──
+const WG_CHART_COLORS = ['#1a2440','#b8922a','#2e7d5e','#b03a3a','#2c5fa1','#6b3fa0','#b06a1a','#2c7be5','#5a6a9e','#3a7a5a'];
+
+// ── Default widgets matching the original hardcoded dashboard ──
+const DEFAULT_WIDGETS = [
+  {id:'dw1',type:'kpi',title:'Total Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'all accounts',accentColor:'var(--gold)'},filters:[],grid:{col:1,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw2',type:'kpi',title:'Active Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'currently engaged',accentColor:'var(--gold)'},filters:[{field:'status',op:'eq',value:'Active'}],grid:{col:4,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw3',type:'kpi',title:'AM Center',source:{type:'computed',compute:'activeAMs'},display:{metric:'count',subtitle:'team members',accentColor:'var(--gold)'},filters:[],grid:{col:7,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw4',type:'kpi',title:'Next Banking Holiday',source:{type:'computed',compute:'bankingHoliday'},display:{metric:'custom',accentColor:'var(--gold)'},filters:[],grid:{col:10,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw5',type:'kpi',title:'Clocked In Now',source:{type:'computed',compute:'clockedIn'},display:{metric:'custom',subtitle:'no open punches',accentColor:'#6b3fa0',valueColor:'#6b3fa0'},filters:[],grid:{col:1,row:2,colSpan:3,rowSpan:1}},
+  {id:'dw6',type:'kpi',title:'1099s Issued',source:{type:'collection',collection:'form1099s'},display:{metric:'count',subtitle:'tax year',accentColor:'var(--green)'},filters:[{field:'year',op:'eq',value:'$prevYear'}],grid:{col:4,row:2,colSpan:2,rowSpan:1}},
+  {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
+  {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:3,rowSpan:1}},
+  {id:'dw9',type:'kpi',title:'Unfiled NH Reports',source:{type:'collection',collection:'employees'},display:{metric:'count',subtitle:'need to be filed',accentColor:'var(--red)'},filters:[{field:'reportPrinted',op:'eq',value:false}],grid:{col:11,row:2,colSpan:2,rowSpan:1}},
+  {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:1}},
+  {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:2}},
+];
+
+// ── Computed widget handlers ──
+const WIDGET_COMPUTED = {
+  activeAMs(){
+    const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+    return { value: amList.filter(a=>a.status==='Active'||!a.status).length };
+  },
+  bankingHoliday(){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const months2 = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const next = (typeof BANKING_HOLIDAYS!=='undefined'?BANKING_HOLIDAYS:[]).find(h=>{ const d=new Date(h.date+'T00:00:00'); return d>=today; });
+    if(!next) return {value:'—',sub:'No upcoming holidays',html:null};
+    const hDate = new Date(next.date+'T00:00:00');
+    const diffDays = Math.round((hDate-today)/(1000*60*60*24));
+    const label = `${days[hDate.getDay()]}, ${months2[hDate.getMonth()]} ${hDate.getDate()}`;
+    // Count business days
+    let bizDays=0; const cur=new Date(today); while(cur<hDate){if(cur.getDay()!==0&&cur.getDay()!==6)bizDays++;cur.setDate(cur.getDate()+1);}
+    let val, sub, style='';
+    if(diffDays===0){ val='TODAY'; sub=next.name; style='background:linear-gradient(135deg,#b03a3a,#8b2a2a);'; }
+    else if(bizDays<=3){ val=bizDays===1?'1 business day':`${bizDays} business days`; sub=`${next.name} · ${label}`; style='background:linear-gradient(135deg,#b03a3a,#8b2a2a);'; }
+    else if(diffDays<=7){ val=`${diffDays} days`; sub=`${next.name} · ${label}`; style='background:linear-gradient(135deg,#b8922a,#9a7520);'; }
+    else { val=`${diffDays} days`; sub=`${next.name} · ${label}`; }
+    return {value:val, sub, cardStyle:style, whiteText:diffDays<=7};
+  },
+  async clockedIn(){
+    const todayStr = new Date().toISOString().slice(0,10);
+    const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
+    let punches = DB.timePunches||{};
+    if(_serverToken){try{const r=await authFetch(ARK_SERVER+'/time/punches/all');if(r.ok)punches=await r.json();}catch(_){}}
+    const clockedIn=[];
+    users.forEach(u=>{
+      const up=(punches[u.id]||[]).filter(p=>p.date===todayStr);
+      const ins=up.filter(p=>p.type==='in').sort((a,b)=>a.time.localeCompare(b.time));
+      const outs=up.filter(p=>p.type==='out').sort((a,b)=>a.time.localeCompare(b.time));
+      if(ins.length>outs.length) clockedIn.push({user:u,since:ins[ins.length-1].time});
+    });
+    const count=clockedIn.length;
+    let avatarsHtml='';
+    if(count>0){
+      avatarsHtml=clockedIn.map(({user,since})=>{
+        const name=`${user.fname} ${user.lname||''}`.trim();
+        const ini=(user.fname[0]+(user.lname?user.lname[0]:'')).toUpperCase();
+        const color=user.color||'#1a2440';
+        const tip=since?`${name} · in since ${typeof tcFmtTime==='function'?tcFmtTime(since):since}`:name;
+        return `<div title="${tip}" onclick="nav('timecenter')" style="width:36px;height:36px;border-radius:50%;background:${color};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15);transition:transform .15s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">${ini}</div>`;
+      }).join('');
+    }
+    return {value:count,sub:count===0?'no open punches today':`${count} employee${count!==1?'s':''} on the clock`,extraHtml:`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">${avatarsHtml||'<span style="font-size:12px;color:var(--text-d);font-style:italic;">No one clocked in</span>'}</div>`};
+  },
+  onboarding(){
+    const incomplete=(DB.clients||[]).filter(c=>{const p=obGetProgress(c);return p.total>0&&p.done<p.total;}).length;
+    return {value:incomplete,sub:incomplete===1?'client needs attention':'clients need attention',valueColor:incomplete>0?'#2c7be5':'var(--green)'};
+  },
+};
+
+// ── Resolve dynamic filter values ──
+function wgResolveDynamic(v){
+  if(v==='$currentYear') return new Date().getFullYear();
+  if(v==='$prevYear') return new Date().getFullYear()-1;
+  if(v==='$today') return new Date().toISOString().slice(0,10);
+  if(v==='$currentUserId') return currentUser?.id;
+  return v;
+}
+
+// ── Apply filters to a collection ──
+function wgApplyFilters(items, filters){
+  if(!filters||!filters.length) return items;
+  return items.filter(item=>{
+    return filters.every(f=>{
+      const val = item[f.field];
+      const target = wgResolveDynamic(f.value);
+      switch(f.op){
+        case 'eq': return Array.isArray(val)?val.includes(target):val==target;
+        case 'neq': return Array.isArray(val)?!val.includes(target):val!=target;
+        case 'gt': return val>target;
+        case 'lt': return val<target;
+        case 'contains': return String(val||'').toLowerCase().includes(String(target).toLowerCase());
+        case 'exists': return val!==undefined&&val!==null&&val!=='';
+        case 'notExists': return val===undefined||val===null||val==='';
+        default: return true;
+      }
+    });
+  });
+}
+
+// ── Resolve widget data ──
+async function wgResolveData(w){
+  const src = w.source;
+  if(src.type==='static') return null;
+  if(src.type==='computed'){
+    const fn = WIDGET_COMPUTED[src.compute];
+    if(!fn) return {value:'?',sub:'Unknown compute'};
+    const result = fn();
+    return (result instanceof Promise) ? await result : result;
+  }
+  if(src.type==='collection'){
+    const items = wgApplyFilters(DB[src.collection]||[], w.filters);
+    const d = w.display||{};
+    if(d.metric==='count') return {value:items.length};
+    if(d.metric==='sum'&&d.field) return {value:items.reduce((s,i)=>s+(parseFloat(i[d.field])||0),0)};
+    if(d.metric==='avg'&&d.field){const vals=items.map(i=>parseFloat(i[d.field])||0);return {value:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*100)/100:0};}
+    if(d.groupBy){
+      const groups={};
+      items.forEach(i=>{
+        let key=i[d.groupBy];
+        if(Array.isArray(key)) key.forEach(k=>{groups[k||'(none)']=(groups[k||'(none)']||0)+1;});
+        else groups[key||'(none)']=(groups[key||'(none)']||0)+1;
+      });
+      return {groups:Object.entries(groups).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)};
+    }
+    // For table/list, return filtered items
+    return {items, value:items.length};
+  }
+  if(src.type==='api') return null; // handled specially (calendar)
+  return {value:'?'};
+}
+
+// ── Render a single widget HTML ──
+function wgRenderWidget(w, data){
+  const accent = w.display?.accentColor||'var(--gold)';
+  const onClick = w.onClick ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
+  const editBtns = `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
+  const dragHandle = `<span class="wg-drag-handle" title="Drag to reorder">⠿</span>`;
+
+  if(w.type==='kpi'){
+    const val = data?.value??'—';
+    const sub = data?.sub || w.display?.subtitle || '';
+    const extra = data?.extraHtml||'';
+    const vColor = data?.valueColor || w.display?.valueColor || 'var(--navy)';
+    const cardStyle = data?.cardStyle||'';
+    const whiteText = data?.whiteText||false;
+    const textStyle = whiteText ? 'color:rgba(255,255,255,.7);' : '';
+    const valStyle = whiteText ? `color:#fff;` : `color:${vColor};`;
+    const subStyle = whiteText ? 'color:rgba(255,255,255,.85);' : '';
+    return `<div class="wg-widget" ${onClick} style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};${cardStyle}" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title" style="${textStyle}">${w.title}</div></div>${w.isDefault?'':editBtns}</div>
+      <div class="wg-body"><div class="wg-kpi-value" style="${valStyle};${String(val).length>4?'font-size:28px;':''}">${val}</div><div class="wg-kpi-sub" style="${subStyle}">${sub}</div>${extra}</div>
+    </div>`;
+  }
+
+  if(w.type==='quickActions'){
+    const actions = [
+      {label:'Add New Hire',icon:'📋',bg:'var(--green)',fn:'openAddEmp()'},
+      {label:'QuickBooks',icon:'💼',bg:'#2ca01c',href:'https://qbo.intuit.com'},
+      {label:'SurePayroll',icon:'💰',bg:'#0070c0',href:'https://secure.surepayroll.com/SPF/Login/AccountantAuth1.aspx'},
+      {label:'Patriot',icon:'🦅',bg:'#c0392b',href:'https://www.patriotsoftware.com/'},
+      {label:'My Time Punch',icon:'💵',bg:'var(--gold)',href:'https://id.mypatriot.com/#/',sub:'Log in with Identity'},
+      {label:'Add Client',icon:'👤',bg:'var(--navy)',fn:'openAddClient()'},
+      {label:'Add Postage',icon:'📬',bg:'#6b3fa0',fn:'openPostage()'},
+      {label:'Add 1099',icon:'📋',bg:'#2e7d5e',fn:'open1099Modal()'},
+    ];
+    const btns = actions.map(a=>{
+      const tag = a.href?'a':'div';
+      const hrefAttr = a.href?` href="${a.href}" target="_blank"`:'';
+      const clickAttr = a.fn?` onclick="${a.fn}"`:'';
+      const subHtml = a.sub?`<div class="wg-qa-sublabel">${a.sub}</div>`:'';
+      return `<${tag} class="wg-qa-btn"${hrefAttr}${clickAttr}><div class="wg-qa-icon" style="background:${a.bg};">${a.icon}</div><div class="wg-qa-label">${a.label}</div>${subHtml}</${tag}>`;
+    }).join('');
+    return `<div class="wg-widget" style="--wg-accent:var(--navy);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};overflow:visible;" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${w.isDefault?'':editBtns}</div>
+      <div class="wg-body" style="padding:0 20px 16px;"><div class="wg-qa-row">${btns}</div></div>
+    </div>`;
+  }
+
+  if(w.type==='calendar'){
+    return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:16px 24px;">
+        <div style="display:flex;align-items:center;">${dragHandle}<div>
+          <div class="card-title">📅 ${currentUser?currentUser.fname+"'s":'My'} Schedule</div>
+          <div class="card-subtitle" id="cal-date-label"></div>
+        </div></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:2px;">
+            <button onclick="calNavWeek(-7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Previous week">◀</button>
+            <button onclick="calNavWeek(0)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:0 10px;height:28px;cursor:pointer;font-size:10px;font-weight:600;color:var(--text-d);letter-spacing:.03em;" title="Back to today">Today</button>
+            <button onclick="calNavWeek(7)" style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text-d);display:flex;align-items:center;justify-content:center;" title="Next week">▶</button>
+          </div>
+          <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
+        </div>
+      </div>
+      <div id="cal-widget" style="padding:0 4px 16px;overflow:hidden;flex:1;"></div>
+    </div>`;
+  }
+
+  if(w.type==='chart'){
+    const chartType = w.display?.chartType||'bar';
+    const groups = data?.groups||[];
+    let chartHtml = '';
+    if(groups.length===0){
+      chartHtml = '<div style="padding:20px;text-align:center;color:var(--text-d);font-size:12px;">No data</div>';
+    } else {
+      if(chartType==='bar') chartHtml = wgBarChart(groups, w);
+      else if(chartType==='pie') chartHtml = wgPieChart(groups, w);
+      else if(chartType==='line') chartHtml = wgLineChart(groups, w);
+    }
+    return `<div class="wg-widget" style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${editBtns}</div>
+      <div class="wg-body"><div class="wg-chart-wrap">${chartHtml}</div></div>
+    </div>`;
+  }
+
+  if(w.type==='table'){
+    const items = data?.items||[];
+    const cols = w.display?.columns||[];
+    if(!cols.length) return `<div class="wg-widget" style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${editBtns}</div>
+      <div class="wg-body"><div class="empty">No columns configured</div></div></div>`;
+    const ths = cols.map(c=>`<th>${c.label||c.field}</th>`).join('');
+    const rows = items.slice(0,20).map(item=>`<tr>${cols.map(c=>`<td>${item[c.field]??'—'}</td>`).join('')}</tr>`).join('');
+    return `<div class="wg-widget" style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${editBtns}</div>
+      <div class="wg-body" style="overflow:auto;"><table class="wg-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }
+
+  if(w.type==='list'){
+    const items = data?.items||[];
+    const field = w.display?.listField||'biz';
+    const listHtml = items.slice(0,15).map(i=>`<div class="wg-list-item">${i[field]||'—'}</div>`).join('');
+    return `<div class="wg-widget" style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${editBtns}</div>
+      <div class="wg-body" style="overflow:auto;">${listHtml||'<div class="empty">No items</div>'}</div>
+    </div>`;
+  }
+
+  return '';
+}
+
+// ── SVG Chart renderers ──
+function wgBarChart(groups, w){
+  const max = Math.max(...groups.map(g=>g.value),1);
+  const barH = 22, gap = 6, labelW = 90, pad = 10;
+  const h = groups.length*(barH+gap)+pad*2;
+  const chartW = 300;
+  let svg = `<svg viewBox="0 0 ${chartW+labelW+40} ${h}" style="width:100%;height:${Math.max(h,80)}px;">`;
+  groups.forEach((g,i)=>{
+    const y = pad+i*(barH+gap);
+    const bw = (g.value/max)*(chartW-20);
+    const color = WG_CHART_COLORS[i%WG_CHART_COLORS.length];
+    svg+=`<text x="${labelW-4}" y="${y+barH/2+4}" text-anchor="end" font-size="11" fill="#6a6560" font-family="DM Sans,sans-serif">${g.label.length>12?g.label.slice(0,12)+'…':g.label}</text>`;
+    svg+=`<rect x="${labelW}" y="${y}" width="${bw}" height="${barH}" rx="4" fill="${color}" opacity=".85"/>`;
+    svg+=`<text x="${labelW+bw+6}" y="${y+barH/2+4}" font-size="11" fill="#1a1916" font-weight="600" font-family="DM Sans,sans-serif">${g.value}</text>`;
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+function wgPieChart(groups, w){
+  const total = groups.reduce((s,g)=>s+g.value,0)||1;
+  const cx=80, cy=80, r=70;
+  let svg = `<svg viewBox="0 0 300 180" style="width:100%;height:100%;">`;
+  let angle = -Math.PI/2;
+  groups.slice(0,8).forEach((g,i)=>{
+    const slice = (g.value/total)*Math.PI*2;
+    const x1=cx+r*Math.cos(angle), y1=cy+r*Math.sin(angle);
+    angle+=slice;
+    const x2=cx+r*Math.cos(angle), y2=cy+r*Math.sin(angle);
+    const large=slice>Math.PI?1:0;
+    const color=WG_CHART_COLORS[i%WG_CHART_COLORS.length];
+    svg+=`<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${color}" opacity=".85"/>`;
+  });
+  // Legend
+  let ly = 10;
+  groups.slice(0,8).forEach((g,i)=>{
+    const color=WG_CHART_COLORS[i%WG_CHART_COLORS.length];
+    const pct = Math.round(g.value/total*100);
+    svg+=`<rect x="175" y="${ly}" width="10" height="10" rx="2" fill="${color}"/>`;
+    svg+=`<text x="190" y="${ly+9}" font-size="10" fill="#6a6560" font-family="DM Sans,sans-serif">${g.label.length>14?g.label.slice(0,14)+'…':g.label} (${pct}%)</text>`;
+    ly+=18;
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+function wgLineChart(groups, w){
+  const max = Math.max(...groups.map(g=>g.value),1);
+  const pad=30, chartW=300, chartH=120;
+  const stepX = groups.length>1?(chartW-pad*2)/(groups.length-1):0;
+  let svg = `<svg viewBox="0 0 ${chartW} ${chartH+pad}" style="width:100%;height:100%;">`;
+  // Grid lines
+  for(let i=0;i<=4;i++){
+    const y=pad+((chartH-pad)/4)*i;
+    svg+=`<line x1="${pad}" y1="${y}" x2="${chartW-10}" y2="${y}" stroke="#ddd9d2" stroke-width=".5"/>`;
+  }
+  // Line
+  const points = groups.map((g,i)=>{
+    const x=pad+i*stepX;
+    const y=pad+(chartH-pad)*(1-g.value/max);
+    return `${x},${y}`;
+  }).join(' ');
+  svg+=`<polyline points="${points}" fill="none" stroke="#1a2440" stroke-width="2" stroke-linejoin="round"/>`;
+  // Dots + labels
+  groups.forEach((g,i)=>{
+    const x=pad+i*stepX;
+    const y=pad+(chartH-pad)*(1-g.value/max);
+    svg+=`<circle cx="${x}" cy="${y}" r="3.5" fill="#1a2440"/>`;
+    svg+=`<text x="${x}" y="${chartH+pad-4}" text-anchor="middle" font-size="9" fill="#9e9890" font-family="DM Sans,sans-serif">${g.label.length>6?g.label.slice(0,6):g.label}</text>`;
+  });
+  svg+='</svg>';
+  return svg;
+}
+
+// ── Widget state ──
+let _userWidgets = null;
+let _wgEditMode = false;
+let _wgDragId = null;
+
+function wgLoadWidgets(){
+  if(currentUser?.prefs?.dashboardWidgets){
+    _userWidgets = JSON.parse(JSON.stringify(currentUser.prefs.dashboardWidgets));
+  } else {
+    // Try localStorage cache
+    const cached = currentUser ? localStorage.getItem('ark_widgets_'+currentUser.id) : null;
+    if(cached){ try{ _userWidgets=JSON.parse(cached); }catch(e){ _userWidgets=null; } }
+  }
+  if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+  return _userWidgets;
+}
+
+let _wgSaveTimer=null;
+function wgSaveWidgets(){
+  if(!currentUser) return;
+  // Cache locally
+  localStorage.setItem('ark_widgets_'+currentUser.id, JSON.stringify(_userWidgets));
+  // Debounce server save
+  clearTimeout(_wgSaveTimer);
+  _wgSaveTimer = setTimeout(async()=>{
+    try{
+      await authFetch(ARK_SERVER+'/users/'+currentUser.id+'/prefs',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({dashboardWidgets:_userWidgets})
+      });
+    }catch(e){console.warn('Widget save failed:',e);}
+  },1000);
+}
+
+// ── Main render ──
+async function renderWidgets(){
+  const grid = document.getElementById('widget-grid');
+  if(!grid) return;
+  const widgets = wgLoadWidgets();
+  if(!widgets.length){
+    grid.innerHTML = `<div class="wg-empty"><div class="wg-empty-icon">📊</div>No widgets yet.<br><button class="btn btn-primary" style="margin-top:12px;" onclick="wgbOpen()">+ Add Your First Widget</button></div>`;
+    return;
+  }
+  let html = '';
+  for(const w of widgets){
+    const data = await wgResolveData(w);
+    html += wgRenderWidget(w, data);
+  }
+  grid.innerHTML = html;
+  if(_wgEditMode) grid.classList.add('wg-edit-mode'); else grid.classList.remove('wg-edit-mode');
+  // Post-render: calendar
+  const calWidget = widgets.find(w=>w.type==='calendar');
+  if(calWidget){
+    renderCalWidget();
+    fetchCalendarEvents().then(()=>{ renderCalWidget(); renderCalHeaderActions(); });
+  }
+  // Attach drag listeners if in edit mode
+  if(_wgEditMode) wgAttachDrag();
+}
+
 function renderDashboard(){
-  document.getElementById('s-clients').textContent=DB.clients.length;
-  document.getElementById('s-active').textContent=DB.clients.filter(c=>c.status==='Active').length;
-  // AM count: prefer server users, fallback to local
-  const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
-  document.getElementById('s-ams').textContent=amList.filter(a=>a.status==='Active'||!a.status).length;
-  renderBankingHoliday();
-  renderClockedIn();
+  renderWidgets();
+}
 
-  // Row 2 KPIs
-  const curYear = new Date().getFullYear();
-  const issues1099  = (DB.form1099s||[]).filter(f => f.year === curYear-1).length;
-  const vendors     = (DB.vendors||[]).length;
-  const unfiled     = (DB.employees||[]).filter(e => !e.reportPrinted).length;
-  const today       = new Date(); today.setHours(0,0,0,0);
-  const overdue     = (DB.employees||[]).filter(e => {
-    if(e.reportPrinted || !e.hiredate) return false;
-    const hired = new Date(e.hiredate + 'T00:00:00');
-    return (today - hired) / 86400000 >= 15;
-  }).length;
-  document.getElementById('s-1099s').textContent    = issues1099;
-  document.getElementById('s-1099s-sub').textContent = `${curYear-1} tax year`;
-  document.getElementById('s-vendors').textContent  = vendors;
-  document.getElementById('s-unfiled').textContent  = unfiled;
-  document.getElementById('s-unfiled-sub').textContent = unfiled === 1 ? 'needs to be filed' : 'need to be filed';
-  const dot = document.getElementById('s-unfiled-dot');
-  if(dot){ dot.style.display = overdue > 0 ? 'inline-block' : 'none'; dot.title = overdue > 0 ? `${overdue} hire${overdue>1?'s':''} unfiled for 15+ days` : ''; }
-  // Render calendar immediately (empty/cached), then fetch live data from Google Calendar
-  renderCalWidget();
-  fetchCalendarEvents().then(() => { renderCalWidget(); renderCalHeaderActions(); });
+// ── Drag and drop ──
+function wgToggleEdit(){
+  _wgEditMode = !_wgEditMode;
+  renderWidgets();
+}
 
-  // Onboarding KPI
-  const incompleteOb = (DB.clients||[]).filter(c => {
-    const p = obGetProgress(c);
-    return p.total > 0 && p.done < p.total;
-  }).length;
-  const obEl  = document.getElementById('s-onboarding');
-  const obSub = document.getElementById('s-onboarding-sub');
-  if(obEl)  obEl.textContent  = incompleteOb;
-  if(obSub) obSub.textContent = incompleteOb === 1 ? 'client needs attention' : 'clients need attention';
-  if(obEl)  obEl.style.color  = incompleteOb > 0 ? '#2c7be5' : 'var(--green)';
+function wgAttachDrag(){
+  const grid = document.getElementById('widget-grid');
+  if(!grid) return;
+  grid.querySelectorAll('.wg-widget').forEach(el=>{
+    el.setAttribute('draggable','true');
+    el.addEventListener('dragstart',e=>{
+      _wgDragId = el.dataset.wid;
+      el.classList.add('wg-dragging');
+      e.dataTransfer.effectAllowed='move';
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('wg-dragging');
+      grid.querySelectorAll('.wg-drop-target').forEach(t=>t.classList.remove('wg-drop-target'));
+      _wgDragId=null;
+    });
+    el.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      if(el.dataset.wid!==_wgDragId) el.classList.add('wg-drop-target');
+    });
+    el.addEventListener('dragleave',()=>{el.classList.remove('wg-drop-target');});
+    el.addEventListener('drop',e=>{
+      e.preventDefault();
+      el.classList.remove('wg-drop-target');
+      const targetId = el.dataset.wid;
+      if(!_wgDragId||_wgDragId===targetId) return;
+      // Swap grid positions
+      const wA = _userWidgets.find(w=>w.id===_wgDragId);
+      const wB = _userWidgets.find(w=>w.id===targetId);
+      if(wA&&wB){
+        const tmpGrid = {...wA.grid};
+        wA.grid = {...wB.grid};
+        wB.grid = {...tmpGrid};
+        wgSaveWidgets();
+        renderWidgets();
+      }
+    });
+  });
+}
 
-  // Intelligence strip → Insights tiles
+// ── Widget CRUD ──
+function wgDeleteWidget(id){
+  if(!confirm('Remove this widget from your dashboard?')) return;
+  _userWidgets = _userWidgets.filter(w=>w.id!==id);
+  wgSaveWidgets();
+  renderWidgets();
+}
+
+function wgDuplicateWidget(id){
+  const src = _userWidgets.find(w=>w.id===id);
+  if(!src) return;
+  const dup = JSON.parse(JSON.stringify(src));
+  dup.id = 'w_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  dup.isDefault = false;
+  dup.title = src.title+' (copy)';
+  // Place after source
+  const maxRow = Math.max(..._userWidgets.map(w=>w.grid.row+w.grid.rowSpan),1);
+  dup.grid.row = maxRow;
+  dup.grid.col = 1;
+  _userWidgets.push(dup);
+  wgSaveWidgets();
+  renderWidgets();
+}
+
+function wgResetWidgets(){
+  if(!confirm('Reset dashboard to default widgets? Your customizations will be lost.')) return;
+  _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+  wgSaveWidgets();
+  renderWidgets();
+}
+
+// ══════════════════════════════════════════════
+//  WIDGET BUILDER MODAL
+// ══════════════════════════════════════════════
+let _wgbStep = 1;
+let _wgbState = {};
+let _wgbEditId = null;
+
+function wgbOpen(editId){
+  _wgbStep = 1;
+  _wgbEditId = editId||null;
+  if(editId){
+    const w = _userWidgets.find(x=>x.id===editId);
+    if(!w) return;
+    document.getElementById('wgb-title').textContent = 'Edit Widget';
+    _wgbState = JSON.parse(JSON.stringify(w));
+    // Map chart subtypes
+    if(w.type==='chart') _wgbState._uiType='chart-'+(w.display?.chartType||'bar');
+    else _wgbState._uiType = w.type;
+  } else {
+    document.getElementById('wgb-title').textContent = 'Add Widget';
+    _wgbState = {type:null,_uiType:null,title:'',source:{type:'collection',collection:'clients'},display:{metric:'count',accentColor:'var(--gold)',subtitle:''},filters:[],grid:{col:1,row:1,colSpan:3,rowSpan:1}};
+  }
+  wgbRenderStep();
+  document.getElementById('modal-widget-builder').style.display='flex';
+}
+function wgEditWidget(id){ wgbOpen(id); }
+function wgbClose(){ document.getElementById('modal-widget-builder').style.display='none'; }
+
+function wgbRenderStep(){
+  document.querySelectorAll('.wg-step').forEach(s=>s.classList.remove('active'));
+  document.getElementById('wgb-step-'+_wgbStep).classList.add('active');
+  document.getElementById('wgb-back').style.display = _wgbStep>1?'':'none';
+  document.getElementById('wgb-next').textContent = _wgbStep===3?(_wgbEditId?'Save':'Create'):'Next';
+
+  if(_wgbStep===1){
+    // Highlight selected type
+    document.querySelectorAll('#wgb-type-grid .wg-type-card').forEach(c=>{
+      c.classList.toggle('selected', c.dataset.type===_wgbState._uiType);
+    });
+  }
+  if(_wgbStep===2){
+    wgbRenderDataStep();
+  }
+  if(_wgbStep===3){
+    wgbRenderAppearanceStep();
+  }
+}
+
+function wgbSelectType(el){
+  document.querySelectorAll('#wgb-type-grid .wg-type-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  _wgbState._uiType = el.dataset.type;
+}
+
+function wgbNext(){
+  if(_wgbStep===1){
+    if(!_wgbState._uiType) return alert('Please select a widget type.');
+    // Map UI type to internal type
+    if(_wgbState._uiType.startsWith('chart-')){
+      _wgbState.type='chart';
+      _wgbState.display = _wgbState.display||{};
+      _wgbState.display.chartType = _wgbState._uiType.replace('chart-','');
+    } else {
+      _wgbState.type = _wgbState._uiType;
+    }
+    _wgbStep=2;
+    wgbRenderStep();
+  } else if(_wgbStep===2){
+    wgbCollectDataStep();
+    _wgbStep=3;
+    wgbRenderStep();
+  } else if(_wgbStep===3){
+    wgbCollectAppearanceStep();
+    wgbSave();
+  }
+}
+
+function wgbBack(){
+  if(_wgbStep>1){_wgbStep--;wgbRenderStep();}
+}
+
+function wgbRenderDataStep(){
+  const src = _wgbState.source||{};
+  const isComputed = (src.type==='computed')||(document.getElementById('wgb-source').value||'').startsWith('computed:');
+  const isChart = _wgbState.type==='chart';
+  const isTable = _wgbState.type==='table';
+  const isList = _wgbState.type==='list';
+  const isKpi = _wgbState.type==='kpi';
+
+  // Set source dropdown
+  const sel = document.getElementById('wgb-source');
+  if(src.type==='computed') sel.value='computed:'+src.compute;
+  else sel.value = src.collection||'clients';
+
+  // Show/hide fields based on type
+  document.getElementById('wgb-metric-wrap').style.display = (isKpi&&!isComputed)?'':'none';
+  document.getElementById('wgb-field-wrap').style.display = 'none';
+  document.getElementById('wgb-groupby-wrap').style.display = isChart?'':'none';
+  document.getElementById('wgb-columns-wrap').style.display = isTable?'':'none';
+
+  if(isChart||isTable||isList) wgbPopulateFieldDropdowns();
+  wgbRenderFilters();
+}
+
+function wgbSourceChanged(){
+  const val = document.getElementById('wgb-source').value;
+  if(val.startsWith('computed:')){
+    _wgbState.source = {type:'computed',compute:val.replace('computed:','')};
+  } else {
+    _wgbState.source = {type:'collection',collection:val};
+  }
+  wgbRenderDataStep();
+}
+
+function wgbPopulateFieldDropdowns(){
+  const col = _wgbState.source?.collection;
+  const fields = WIDGET_FIELDS[col]||[];
+  const groupSel = document.getElementById('wgb-groupby');
+  groupSel.innerHTML = fields.map(f=>`<option value="${f.f}"${_wgbState.display?.groupBy===f.f?' selected':''}>${f.label}</option>`).join('');
+  if(_wgbState.type==='table'){
+    const colsWrap = document.getElementById('wgb-columns');
+    const selected = (_wgbState.display?.columns||[]).map(c=>c.field);
+    colsWrap.innerHTML = fields.map(f=>`<label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 8px;background:var(--surface2);border-radius:var(--radius-sm);cursor:pointer;"><input type="checkbox" value="${f.f}" ${selected.includes(f.f)?'checked':''}> ${f.label}</label>`).join('');
+  }
+}
+
+function wgbAddFilter(){
+  _wgbState.filters = _wgbState.filters||[];
+  _wgbState.filters.push({field:'',op:'eq',value:''});
+  wgbRenderFilters();
+}
+
+function wgbRenderFilters(){
+  const wrap = document.getElementById('wgb-filters');
+  const col = _wgbState.source?.collection;
+  const fields = WIDGET_FIELDS[col]||[];
+  const filters = _wgbState.filters||[];
+  if(!filters.length){wrap.innerHTML='<div style="font-size:12px;color:var(--text-d);font-style:italic;">No filters — showing all data</div>';return;}
+  wrap.innerHTML = filters.map((f,i)=>`<div class="wg-filter-row">
+    <select onchange="_wgbState.filters[${i}].field=this.value" style="flex:1;">${fields.map(fd=>`<option value="${fd.f}"${fd.f===f.field?' selected':''}>${fd.label}</option>`).join('')}</select>
+    <select onchange="_wgbState.filters[${i}].op=this.value">${WG_OPS.map(o=>`<option value="${o.v}"${o.v===f.op?' selected':''}>${o.l}</option>`).join('')}</select>
+    <input type="text" value="${f.value===false?'false':f.value===true?'true':(f.value||'')}" onchange="_wgbState.filters[${i}].value=this.value" placeholder="Value" style="flex:1;">
+    <button class="wg-filter-remove" onclick="_wgbState.filters.splice(${i},1);wgbRenderFilters();">&times;</button>
+  </div>`).join('');
+}
+
+function wgbCollectDataStep(){
+  const d = _wgbState.display = _wgbState.display||{};
+  if(_wgbState.type==='kpi'){
+    d.metric = document.getElementById('wgb-metric').value;
+  }
+  if(_wgbState.type==='chart'){
+    d.groupBy = document.getElementById('wgb-groupby').value;
+  }
+  if(_wgbState.type==='table'){
+    const checks = document.querySelectorAll('#wgb-columns input[type=checkbox]:checked');
+    d.columns = Array.from(checks).map(cb=>{
+      const f=cb.value;
+      const label=(WIDGET_FIELDS[_wgbState.source?.collection]||[]).find(x=>x.f===f)?.label||f;
+      return {field:f,label};
+    });
+  }
+  // Parse filter values (handle booleans)
+  (_wgbState.filters||[]).forEach(f=>{
+    if(f.value==='true') f.value=true;
+    else if(f.value==='false') f.value=false;
+    else if(!isNaN(f.value)&&f.value!=='') f.value=Number(f.value);
+  });
+}
+
+function wgbRenderAppearanceStep(){
+  const d = _wgbState.display||{};
+  document.getElementById('wgb-widget-title').value = _wgbState.title||'';
+  document.getElementById('wgb-widget-sub').value = d.subtitle||'';
+  // Swatches
+  const swatchWrap = document.getElementById('wgb-swatches');
+  swatchWrap.innerHTML = WG_COLORS.map(c=>`<div class="wg-swatch${(d.accentColor||'var(--gold)')===c.v?' selected':''}" style="background:${c.hex};" data-color="${c.v}" onclick="wgbPickColor(this)" title="${c.l}"></div>`).join('');
+  // Sizes
+  const sizeWrap = document.getElementById('wgb-sizes');
+  const curSize = `${_wgbState.grid?.colSpan||3}x${_wgbState.grid?.rowSpan||1}`;
+  sizeWrap.innerHTML = WG_SIZES.map(s=>`<div class="wg-size-opt${curSize===s.v?' selected':''}" data-cs="${s.cs}" data-rs="${s.rs}" onclick="wgbPickSize(this)">${s.l}<br><span style="font-size:10px;color:var(--text-d);">${s.cs} col × ${s.rs} row</span></div>`).join('');
+}
+
+function wgbPickColor(el){
+  document.querySelectorAll('.wg-swatch').forEach(s=>s.classList.remove('selected'));
+  el.classList.add('selected');
+  _wgbState.display = _wgbState.display||{};
+  _wgbState.display.accentColor = el.dataset.color;
+}
+
+function wgbPickSize(el){
+  document.querySelectorAll('.wg-size-opt').forEach(s=>s.classList.remove('selected'));
+  el.classList.add('selected');
+  _wgbState.grid = _wgbState.grid||{};
+  _wgbState.grid.colSpan = parseInt(el.dataset.cs);
+  _wgbState.grid.rowSpan = parseInt(el.dataset.rs);
+}
+
+function wgbCollectAppearanceStep(){
+  _wgbState.title = document.getElementById('wgb-widget-title').value.trim()||'Untitled Widget';
+  _wgbState.display = _wgbState.display||{};
+  _wgbState.display.subtitle = document.getElementById('wgb-widget-sub').value.trim();
+}
+
+function wgbSave(){
+  if(_wgbEditId){
+    // Update existing
+    const idx = _userWidgets.findIndex(w=>w.id===_wgbEditId);
+    if(idx>=0){
+      const old = _userWidgets[idx];
+      _wgbState.id = old.id;
+      _wgbState.grid = _wgbState.grid||old.grid;
+      _userWidgets[idx] = _wgbState;
+    }
+  } else {
+    // Create new
+    _wgbState.id = 'w_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    _wgbState.isDefault = false;
+    // Auto-place: find next available row
+    const maxRow = _userWidgets.length ? Math.max(..._userWidgets.map(w=>(w.grid?.row||1)+(w.grid?.rowSpan||1))) : 1;
+    _wgbState.grid = _wgbState.grid||{};
+    _wgbState.grid.col = _wgbState.grid.col||1;
+    _wgbState.grid.row = maxRow;
+    _userWidgets.push(_wgbState);
+  }
+  wgSaveWidgets();
+  wgbClose();
+  renderWidgets();
 }
 
 // ══════════════════════════════════════════════
@@ -24489,13 +25328,15 @@ function chatRenderChannelList() {
       // DM — find the other user
       const parts = _chatParseDmIds(ch.channelId);
       const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
-      const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
-      let name = otherId;
-      if (other && other.fname) {
-        name = `${other.fname} ${other.lname || ''}`.trim();
-      } else if (ch.lastMessage) {
-        // Fallback: resolve name from the other person's messages in this channel
-        name = _chatSenderName(ch.lastMessage.senderId !== currentUser?.id ? ch.lastMessage : { senderId: otherId, senderName: otherId });
+      // Use server-resolved participants first, then local lookup
+      let name = (ch.participants && ch.participants[otherId]) || otherId;
+      if (name === otherId) {
+        const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
+        if (other && other.fname) {
+          name = `${other.fname} ${other.lname || ''}`.trim();
+        } else if (ch.lastMessage && ch.lastMessage.senderId !== currentUser?.id) {
+          name = ch.lastMessage.senderName || otherId;
+        }
       }
       const preview = ch.lastMessage ? ch.lastMessage.text.slice(0, 45) : '';
       return chatChannelItem(ch.channelId, name, preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
@@ -24897,8 +25738,10 @@ function ccChatRenderChannelList(channels) {
     } else {
       const parts = _chatParseDmIds(ch.channelId);
       const otherId = parts.find(p => p !== currentUser?.id) || parts[0];
+      // Use server-resolved participants first, then local lookup
+      const serverName = ch.participants && ch.participants[otherId];
       const other = teamList.find(u => (u.id || u._id) === otherId || u.username === otherId);
-      name = (other && other.fname) ? `${other.fname} ${other.lname || ''}`.trim() : _chatSenderName(ch.lastMessage || { senderId: otherId, senderName: otherId });
+      name = serverName || ((other && other.fname) ? `${other.fname} ${other.lname || ''}`.trim() : (ch.lastMessage && ch.lastMessage.senderId !== currentUser?.id ? (ch.lastMessage.senderName || otherId) : otherId));
       initial = name.charAt(0).toUpperCase();
       preview = ch.lastMessage ? ch.lastMessage.text.slice(0, 35) : '';
     }

@@ -395,6 +395,16 @@ app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   res.json({ success: true, user: safeUser(user) });
 });
 
+// ─── User prefs (self-service, no admin required) ────────────────
+app.put('/users/:id/prefs', requireAuth, (req, res) => {
+  if (req.arkUser.userId !== req.params.id) return res.status(403).json({ error: 'Can only update your own prefs' });
+  const user = _users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.prefs = { ...(user.prefs || {}), ...req.body };
+  saveUsers();
+  res.json({ success: true, prefs: user.prefs });
+});
+
 app.delete('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   const user = _users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -5584,11 +5594,23 @@ app.get('/chat/channels', requireAuth, (req, res) => {
     // Always include general even if empty
     if (!channelMap['general']) channelMap['general'] = { channelId: 'general', messages: 0, lastMessage: null };
 
-    // Calculate unread counts
+    // Calculate unread counts + resolve DM participant names
     const channels = Object.values(channelMap).map(ch => {
       const lastRead = userRead[ch.channelId] || '1970-01-01T00:00:00Z';
       const unread = messages.filter(m => m.channelId === ch.channelId && m.createdAt > lastRead && m.senderId !== userId).length;
-      return { ...ch, unread };
+      // For DM channels, resolve participant names
+      let participants = null;
+      if (ch.channelId !== 'general' && (ch.channelId.startsWith('dm_') || ch.channelId.startsWith('dm~'))) {
+        let parts;
+        if (ch.channelId.includes('~')) parts = ch.channelId.replace(/^dm~/, '').split('~');
+        else { const m2 = ch.channelId.match(/usr_[a-f0-9]+/g); parts = m2 && m2.length >= 2 ? m2 : ch.channelId.replace(/^dm_/, '').split('_'); }
+        participants = {};
+        for (const pid of parts) {
+          const u = _users.find(x => x.id === pid || x.username === pid);
+          participants[pid] = u ? `${u.fname || ''} ${u.lname || ''}`.trim() || u.username : pid;
+        }
+      }
+      return { ...ch, unread, participants };
     });
 
     // Sort: general first, then by last message time
