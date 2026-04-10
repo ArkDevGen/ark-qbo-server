@@ -857,6 +857,32 @@ input[type="checkbox"]{accent-color:var(--navy);}
   .wg-grid{grid-template-columns:repeat(2,1fr);}
 }
 
+/* ════════════════════════════════════════
+   RECONNECT OVERLAY — shown during deploys
+   ════════════════════════════════════════ */
+#reconnect-overlay{
+  position:fixed;inset:0;z-index:99999;
+  background:rgba(244,242,238,.92);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeIn .3s ease;
+}
+#reconnect-overlay .rc-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:48px 56px;text-align:center;box-shadow:var(--shadow-lg);max-width:400px;
+}
+#reconnect-overlay .rc-spinner{
+  width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--gold);
+  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px;
+}
+#reconnect-overlay .rc-title{
+  font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;
+  color:var(--navy);margin-bottom:8px;
+}
+#reconnect-overlay .rc-msg{font-size:13px;color:var(--text-m);line-height:1.5;}
+#reconnect-overlay .rc-status{font-size:11px;color:var(--text-d);margin-top:16px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
 </style>
 </head>
 <body>
@@ -7364,13 +7390,34 @@ async function _reAuth() {
   return false;
 }
 
-// Authenticated fetch — adds Bearer token, auto-retries on 401
+// Authenticated fetch — adds Bearer token, auto-retries on 401, detects server-down
 async function authFetch(url, options = {}) {
   if (_serverToken) {
     if (!options.headers) options.headers = {};
     options.headers['Authorization'] = 'Bearer ' + _serverToken;
   }
-  const resp = await fetch(url, options);
+  let resp;
+  try {
+    resp = await fetch(url, options);
+  } catch(e) {
+    // Network error — server is unreachable (deploy in progress)
+    _serverDownCount = (typeof _serverDownCount !== 'undefined' ? _serverDownCount : 0) + 1;
+    if(_serverDownCount >= 2 && typeof showReconnectOverlay === 'function') showReconnectOverlay('network');
+    throw e;
+  }
+  // Detect 502/503 — server is mid-deploy
+  if (resp.status === 502 || resp.status === 503) {
+    _serverDownCount = (typeof _serverDownCount !== 'undefined' ? _serverDownCount : 0) + 1;
+    if(_serverDownCount >= 2 && typeof showReconnectOverlay === 'function') showReconnectOverlay('502');
+    return resp;
+  }
+  // Successful response — reset down counter, hide overlay if showing
+  if (resp.ok) {
+    if(typeof _serverDownCount !== 'undefined' && _serverDownCount > 0){
+      _serverDownCount = 0;
+      if(typeof hideReconnectOverlay === 'function') hideReconnectOverlay();
+    }
+  }
   // If 401, try re-authenticating once and retry
   if (resp.status === 401 && currentUser) {
     const ok = await _reAuth();
@@ -25989,6 +26036,95 @@ function ccChatHandleSSE(msg) {
 //  - User clicks to refresh and get the latest code
 // ══════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════
+//  RECONNECT OVERLAY — graceful deploy handling
+//  Shows a branded overlay instead of raw 502 when server is down
+// ══════════════════════════════════════════════════════════════════
+let _serverDownCount = 0;
+let _reconnectPollTimer = null;
+let _reconnectShowing = false;
+
+function showReconnectOverlay(reason){
+  if(_reconnectShowing) return;
+  _reconnectShowing = true;
+  let overlay = document.getElementById('reconnect-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'reconnect-overlay';
+    overlay.innerHTML = `<div class="rc-card">
+      <div class="rc-spinner"></div>
+      <div class="rc-title">Reconnecting</div>
+      <div class="rc-msg">The server is updating. You'll be back in a moment.</div>
+      <div class="rc-status" id="rc-status">Checking server...</div>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = '';
+  // Start polling /health
+  _reconnectStartPoll();
+}
+
+function hideReconnectOverlay(){
+  _reconnectShowing = false;
+  const overlay = document.getElementById('reconnect-overlay');
+  if(overlay) overlay.style.display = 'none';
+  if(_reconnectPollTimer){ clearInterval(_reconnectPollTimer); _reconnectPollTimer = null; }
+}
+
+function _reconnectStartPoll(){
+  if(_reconnectPollTimer) clearInterval(_reconnectPollTimer);
+  let attempts = 0;
+  const statusEl = () => document.getElementById('rc-status');
+  _reconnectPollTimer = setInterval(async ()=>{
+    attempts++;
+    const el = statusEl();
+    if(el) el.textContent = `Waiting for server... (attempt ${attempts})`;
+    try {
+      const resp = await fetch(ARK_SERVER + '/health?t=' + Date.now(), { cache:'no-store' });
+      if(resp.ok){
+        if(el) el.textContent = 'Server is back! Reloading...';
+        clearInterval(_reconnectPollTimer);
+        _reconnectPollTimer = null;
+        setTimeout(()=> location.reload(), 500);
+      }
+    } catch(_){}
+    if(attempts >= 60){
+      // 3 minutes — give up auto-polling, show manual option
+      clearInterval(_reconnectPollTimer);
+      _reconnectPollTimer = null;
+      if(el) el.innerHTML = 'Taking longer than expected. <a href="javascript:location.reload()" style="color:var(--gold);font-weight:600;">Try refreshing manually</a>';
+    }
+  }, 3000);
+}
+
+// Smart reload — wait for server to be healthy before refreshing
+function smartReload(){
+  const banner = document.getElementById('update-banner');
+  if(banner){
+    const btn = banner.querySelector('button');
+    if(btn){ btn.textContent = 'Updating...'; btn.disabled = true; btn.style.opacity = '.7'; }
+  }
+  let attempts = 0;
+  const poll = setInterval(async ()=>{
+    attempts++;
+    try{
+      const resp = await fetch(ARK_SERVER + '/health?t=' + Date.now(), { cache:'no-store' });
+      if(resp.ok){
+        clearInterval(poll);
+        location.reload();
+      }
+    }catch(_){}
+    if(attempts >= 15){
+      // 30 seconds timeout
+      clearInterval(poll);
+      if(banner){
+        const btn = banner.querySelector('button');
+        if(btn){ btn.textContent = 'Retry'; btn.disabled = false; btn.style.opacity = ''; btn.onclick = ()=> location.reload(); }
+      }
+    }
+  }, 2000);
+}
+
 let _appVersion = null;       // version when page loaded
 let _versionPollTimer = null;
 
@@ -26028,13 +26164,20 @@ async function versionCheck() {
   }
   try {
     const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
-    if (!resp.ok) return;
+    // Non-200 = server is mid-deploy — don't show banner, don't panic
+    if (!resp.ok) {
+      console.log('Version poll: server returned', resp.status, '— likely mid-deploy, skipping');
+      return;
+    }
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
       console.log('New version available:', data.version, '(current:', _appVersion + ')');
       versionShowBanner();
     }
-  } catch (_) {}
+  } catch (e) {
+    // Network error = server is down (deploy in progress) — skip silently
+    console.log('Version poll: network error — server likely restarting');
+  }
 }
 
 function versionShowBanner() {
@@ -26066,7 +26209,7 @@ function versionShowBanner() {
   banner.innerHTML = `
     <span style="font-size:18px;">✨</span>
     <span>A new update is available</span>
-    <button onclick="location.reload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">
+    <button onclick="smartReload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">
       Update Now
     </button>
     <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
@@ -26360,18 +26503,27 @@ function _urlBase64ToUint8Array(base64String){
   return arr;
 }
 
-// ── SSE real-time notification listener ──────────────────────────
+// ── SSE real-time notification listener (with backoff reconnect) ──
 let _notifSSE = null;
+let _sseBackoff = 2000;       // start at 2s, doubles up to 15s
+let _sseReconnectTimer = null;
+const SSE_MAX_BACKOFF = 15000;
+
 function notifConnectSSE(){
-  if(_notifSSE){ try{_notifSSE.close();}catch(_){} }
+  if(_notifSSE){ try{_notifSSE.close();}catch(_){} _notifSSE = null; }
+  if(_sseReconnectTimer){ clearTimeout(_sseReconnectTimer); _sseReconnectTimer = null; }
   if(!currentUser) return;
   try {
-    // EventSource doesn't support custom headers, so pass token as query param
     _notifSSE = new EventSource(ARK_SERVER + '/notifications/stream?token=' + encodeURIComponent(_serverToken || ''));
     _notifSSE.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if(data.type === 'connected') return; // initial handshake
+        if(data.type === 'connected'){
+          // Successfully connected — reset backoff
+          _sseBackoff = 2000;
+          console.log('SSE: connected');
+          return;
+        }
 
         // ── Chat messages ──
         if(data.type === 'chat' && data.message) {
@@ -26393,18 +26545,25 @@ function notifConnectSSE(){
         notifUpdateBadge();
         if(_notifOpen) notifRenderList();
         notifFireDesktop(notif);
-        // Refresh DB from server so new tasks/changes are available
         _notifRefreshDB();
       } catch(_){}
     };
     _notifSSE.onerror = () => {
-      // EventSource auto-reconnects; just log for debugging
-      console.log('SSE: connection error, will auto-reconnect');
+      // Close and manually reconnect with backoff (don't let EventSource hammer the server)
+      console.log(`SSE: error — reconnecting in ${_sseBackoff/1000}s`);
+      try{ _notifSSE.close(); }catch(_){}
+      _notifSSE = null;
+      _sseReconnectTimer = setTimeout(()=>{
+        _sseReconnectTimer = null;
+        notifConnectSSE();
+      }, _sseBackoff);
+      _sseBackoff = Math.min(_sseBackoff * 2, SSE_MAX_BACKOFF);
     };
   } catch(e){ console.log('SSE: failed to connect', e); }
 }
 
 function notifDisconnectSSE(){
+  if(_sseReconnectTimer){ clearTimeout(_sseReconnectTimer); _sseReconnectTimer = null; }
   if(_notifSSE){ try{_notifSSE.close();}catch(_){} _notifSSE = null; }
 }
 
