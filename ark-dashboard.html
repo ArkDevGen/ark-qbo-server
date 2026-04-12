@@ -29928,6 +29928,7 @@ let plOverrides = {};          // { accountName: { expectedAmount, tolerance, no
 let plReviewState = {};        // { decisions: {}, notes: {}, completedAt }
 let plStoreBenchmarks = {};    // auto-learned from store history { accountName: { avg, stdDev, months } }
 let plAllAccounts = [];        // all parsed accounts for current run (for review mode)
+let plFleetSalesTrends = null; // { momPct, yoyPct, currentMonth, ... }
 
 // ── Scooters COA Rule Engine ─────────────────────────────────────
 const PL_ALWAYS_FLAG = ['Uncategorized Expense','Uncategorized Income','Uncategorized Asset','Ask My Accountant','Reconciliation Discrepancies'];
@@ -30356,9 +30357,13 @@ async function plRunDigest() {
     // ── Step 6: Load fleet data ────────────────────────────────
     plProgress(38, 'Loading fleet data...');
     try {
-      const fleetRes = await fetch(`${QBO_SERVER}/pl/fleet`).then(r => r.json());
+      const [fleetRes, trendsRes] = await Promise.all([
+        fetch(`${QBO_SERVER}/pl/fleet`).then(r => r.json()),
+        fetch(`${QBO_SERVER}/pl/fleet/sales-trends`).then(r => r.json()).catch(() => null),
+      ]);
       plFleetData = fleetRes.fleet;
-    } catch(e) { plFleetData = null; }
+      plFleetSalesTrends = trendsRes;
+    } catch(e) { plFleetData = null; plFleetSalesTrends = null; }
 
     // ── Step 7: Run enhanced local rule engine ─────────────────
     plProgress(42, 'Running rule engine + pattern analysis...');
@@ -30407,7 +30412,7 @@ async function plRunDigest() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           findings: plStructuralFindings || {},
-          summary: plCurrentSummary,
+          summary: { ...plCurrentSummary, fleetSalesTrends: plFleetSalesTrends || {} },
           clientName: plSelectedClient.biz,
           period: `${startDate} to ${endDate}`,
         }),
@@ -30825,12 +30830,17 @@ function plRenderReviewMode() {
   // Quick stats
   const s = plCurrentSummary || {};
   const sales = s.sales || 0;
+  const fmtTrend = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const trendColor = (v) => v == null ? 'var(--text-d)' : v >= 0 ? 'var(--green)' : 'var(--red)';
+  const ft = plFleetSalesTrends || {};
   document.getElementById('pl-review-stats').innerHTML = [
     { label: 'Revenue', val: fmt$(sales) },
     { label: 'COGS', val: sales ? `${((s.cogs/sales)*100).toFixed(1)}%` : '—' },
     { label: 'Payroll', val: sales ? `${((s.payroll/sales)*100).toFixed(1)}%` : '—' },
     { label: 'Net Income', val: fmt$(s.netIncome || 0) },
-  ].map(m => `<div style="font-size:11px;"><span style="color:var(--text-d);font-weight:600;">${m.label}:</span> <span style="color:var(--navy);font-weight:700;font-family:'DM Mono',monospace;">${m.val}</span></div>`).join('');
+    { label: 'Fleet MOM', val: fmtTrend(ft.momPct), color: trendColor(ft.momPct) },
+    { label: 'Fleet YOY', val: fmtTrend(ft.yoyPct), color: trendColor(ft.yoyPct) },
+  ].map(m => `<div style="font-size:11px;"><span style="color:var(--text-d);font-weight:600;">${m.label}:</span> <span style="color:${m.color || 'var(--navy)'};font-weight:700;font-family:'DM Mono',monospace;">${m.val}</span></div>`).join('');
 
   // Update status badge
   const badge = document.getElementById('pl-status-badge');
@@ -31031,7 +31041,7 @@ async function plGenerateClientReport() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           findings: plStructuralFindings || {},
-          summary: plCurrentSummary,
+          summary: { ...plCurrentSummary, fleetSalesTrends: plFleetSalesTrends || {} },
           clientName: plSelectedClient?.biz,
           period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
         }),
@@ -31190,6 +31200,7 @@ function plClearResults() {
   plStructuralFindings = null;
   plCurrentSummary = null;
   plPrevSummary = null;
+  plFleetSalesTrends = null;
   plAllAccounts = [];
   plReviewState = { decisions: {}, notes: {}, completedAt: null };
   document.getElementById('pl-results-wrap').style.display = 'none';
@@ -31372,13 +31383,15 @@ async function plGenerateMeetingPDF() {
 
   const metricBoxW = (MR - ML - 20) / 3;
   const metricBoxH = 60;
+  const ft = plFleetSalesTrends || {};
+  const fmtTrend = (v) => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
   const metricsGrid = [
     { label: 'Gross Sales', value: fmt$(sales), sub: plPrevSummary ? `MoM: ${((sales - plPrevSummary.sales) / (plPrevSummary.sales || 1) * 100).toFixed(1)}%` : '' },
     { label: 'COGS %', value: fmtPct(summary.cogs / sales), sub: `${fmt$(summary.cogs)}` },
     { label: 'Total Payroll %', value: fmtPct(summary.payroll / sales), sub: `${fmt$(summary.payroll)}` },
     { label: 'Net Income', value: fmt$(summary.netIncome), sub: `${fmtPct(summary.netIncome / sales)} margin` },
-    { label: 'Rent', value: fmt$(summary.rent), sub: `${fmtPct(summary.rent / sales)} of sales` },
-    { label: 'Flags', value: `${plFlags.length} total`, sub: `${plFlags.filter(f => f.severity === 'CRITICAL').length} critical` },
+    { label: 'Fleet MOM Sales', value: fmtTrend(ft.momPct), sub: ft.currentStoreCount ? `${ft.currentStoreCount} stores reporting` : '' },
+    { label: 'Fleet YOY Sales', value: fmtTrend(ft.yoyPct), sub: ft.yoyPrevSales ? `vs ${ft.yoyPrevMonth}` : '' },
   ];
 
   for (let i = 0; i < metricsGrid.length; i++) {

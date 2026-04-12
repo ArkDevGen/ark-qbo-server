@@ -3318,6 +3318,86 @@ app.post('/pl/fleet/contribute', (req, res) => {
   res.json({ success: true, storeCount: fleetData.storeCount });
 });
 
+// ── Fleet Sales Trends (MOM & YOY) ──────────────────────────────
+app.get('/pl/fleet/sales-trends', (req, res) => {
+  // Compute fleet-wide MOM and YOY sales % from all stores' history
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+
+  // Build monthly fleet totals: { "2026-03": { totalSales: X, storeCount: N }, ... }
+  const monthlyTotals = {};
+
+  for (const [realmId, periods] of Object.entries(plHistory)) {
+    for (const [periodKey, data] of Object.entries(periods)) {
+      const sales = data.metrics?.sales;
+      if (!sales || sales <= 0) continue;
+
+      // Period key is "YYYY-MM-DD_YYYY-MM-DD" — extract the month from start date
+      const startDate = periodKey.split('_')[0];
+      if (!startDate) continue;
+      const month = startDate.slice(0, 7); // "YYYY-MM"
+
+      if (!monthlyTotals[month]) monthlyTotals[month] = { totalSales: 0, storeCount: 0, stores: [] };
+      // Avoid double-counting same store in same month
+      if (!monthlyTotals[month].stores.includes(realmId)) {
+        monthlyTotals[month].totalSales += sales;
+        monthlyTotals[month].storeCount++;
+        monthlyTotals[month].stores.push(realmId);
+      }
+    }
+  }
+
+  // Current month and comparison months
+  const curMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  const prevMonth = now.getMonth() === 0
+    ? `${now.getFullYear() - 1}-12`
+    : `${now.getFullYear()}-${pad(now.getMonth())}`;
+  const yoyMonth = `${now.getFullYear() - 1}-${pad(now.getMonth() + 1)}`;
+
+  // Also check last completed month if current month has no data yet
+  const cur = monthlyTotals[curMonth];
+  const prev = monthlyTotals[prevMonth];
+  const useMonth = cur ? curMonth : prevMonth;
+  const usePrev = cur ? prevMonth : (now.getMonth() <= 1
+    ? `${now.getFullYear() - 1}-${pad(now.getMonth() === 0 ? 11 : now.getMonth() - 1 + 1)}`
+    : `${now.getFullYear()}-${pad(now.getMonth() - 1)}`);
+  const useYoy = cur
+    ? `${now.getFullYear() - 1}-${pad(now.getMonth() + 1)}`
+    : `${now.getFullYear() - 1}-${pad(now.getMonth())}`;
+
+  const currentData = monthlyTotals[useMonth];
+  const prevData = monthlyTotals[usePrev];
+  const yoyData = monthlyTotals[useYoy];
+
+  const result = {
+    currentMonth: useMonth,
+    currentSales: currentData?.totalSales || 0,
+    currentStoreCount: currentData?.storeCount || 0,
+    momPct: null,
+    momPrevMonth: usePrev,
+    momPrevSales: prevData?.totalSales || 0,
+    yoyPct: null,
+    yoyPrevMonth: useYoy,
+    yoyPrevSales: yoyData?.totalSales || 0,
+  };
+
+  // MOM: compare per-store average (handles different store counts)
+  if (currentData && prevData && prevData.storeCount > 0 && currentData.storeCount > 0) {
+    const curAvg = currentData.totalSales / currentData.storeCount;
+    const prevAvg = prevData.totalSales / prevData.storeCount;
+    if (prevAvg > 0) result.momPct = ((curAvg - prevAvg) / prevAvg) * 100;
+  }
+
+  // YOY: compare per-store average
+  if (currentData && yoyData && yoyData.storeCount > 0 && currentData.storeCount > 0) {
+    const curAvg = currentData.totalSales / currentData.storeCount;
+    const yoyAvg = yoyData.totalSales / yoyData.storeCount;
+    if (yoyAvg > 0) result.yoyPct = ((curAvg - yoyAvg) / yoyAvg) * 100;
+  }
+
+  res.json(result);
+});
+
 // ── Variance Thresholds ──────────────────────────────────────────
 app.get('/pl/thresholds', (req, res) => {
   res.json({ thresholds: plThresholds });
@@ -3695,8 +3775,9 @@ Your job is to take the forensic analysis findings and translate them into:
 
 1. EXECUTIVE SUMMARY: 2-3 sentences that give the owner the big picture. Start with the headline (good month? bad month? something needs attention?). Include the key numbers they care about: sales, net income, and the most important variance.
 
-2. TALKING POINTS: 5-8 bullet points the ARK account manager should bring up in the meeting. Each should be specific, actionable, and include dollar amounts. Frame negatives as opportunities. Examples:
+2. TALKING POINTS: 5-8 bullet points the ARK account manager should bring up in the meeting. Each should be specific, actionable, and include dollar amounts. Frame negatives as opportunities. If fleet sales trends (MOM% and YOY%) are provided in the summary, ALWAYS include a talking point about how the fleet is trending overall — this gives the owner context on how the brand is performing, not just their store. Examples:
    - "Sales were $52,400, up 8% from last month — great momentum heading into summer"
+   - "Across the Scooters fleet, sales are up 4.2% month-over-month and 12.1% year-over-year — the brand is growing"
    - "COGS hit 34% this month vs your usual 28% — that's an extra $3,120. Let's review vendor invoices"
    - "Rent didn't post this month — this is likely a timing issue but let's confirm with the landlord"
 
