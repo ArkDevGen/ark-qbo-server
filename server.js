@@ -3199,6 +3199,7 @@ const PL_THRESHOLDS_FILE = path.join(DATA_DIR, 'pl-thresholds.json');
 const PL_ANTICIPATED_FILE = path.join(DATA_DIR, 'pl-anticipated.json');
 const PL_OVERRIDES_FILE = path.join(DATA_DIR, 'pl-overrides.json');
 const PL_REVIEWS_FILE = path.join(DATA_DIR, 'pl-reviews.json');
+const CLOSE_TRACKER_FILE = path.join(DATA_DIR, 'close-tracker.json');
 
 // Load persisted data
 let plHistory = {};       // { [realmId]: { [period]: { metrics, accounts, savedAt } } }
@@ -3207,6 +3208,7 @@ let plThresholds = {};    // { _global: {...}, [realmId]: {...} }
 let plAnticipated = {};   // { _templates: { scooters: [...] }, [realmId]: [...] }
 let plOverrides = {};     // { [realmId]: { [accountName]: { expectedAmount, tolerance, note, expiresAt, setBy, setAt } } }
 let plReviews = {};       // { [realmId:period]: { decisions, notes, completedAt } }
+let closeTracker = {};    // { [realmId:YYYY-MM]: { realmId, clientId, clientName, period, checklist, status, flagCount, ... } }
 
 function loadJsonFile(filepath, fallback) {
   if (!fs.existsSync(filepath)) return fallback;
@@ -3218,6 +3220,7 @@ fleetData    = loadJsonFile(FLEET_DATA_FILE, { accounts: {}, storeCount: 0 });
 plThresholds = loadJsonFile(PL_THRESHOLDS_FILE, { _global: {} });
 plOverrides  = loadJsonFile(PL_OVERRIDES_FILE, {});
 plReviews    = loadJsonFile(PL_REVIEWS_FILE, {});
+closeTracker = loadJsonFile(CLOSE_TRACKER_FILE, {});
 plAnticipated = loadJsonFile(PL_ANTICIPATED_FILE, {
   _templates: {
     scooters: [
@@ -3241,6 +3244,7 @@ function savePlThresholds() { fs.writeFileSync(PL_THRESHOLDS_FILE, JSON.stringif
 function savePlAnticipated(){ fs.writeFileSync(PL_ANTICIPATED_FILE, JSON.stringify(plAnticipated, null, 2)); }
 function savePlOverrides()  { fs.writeFileSync(PL_OVERRIDES_FILE, JSON.stringify(plOverrides, null, 2)); }
 function savePlReviews()    { fs.writeFileSync(PL_REVIEWS_FILE, JSON.stringify(plReviews, null, 2)); }
+function saveCloseTracker() { fs.writeFileSync(CLOSE_TRACKER_FILE, JSON.stringify(closeTracker, null, 2)); }
 
 // ── P&L History CRUD ─────────────────────────────────────────────
 app.get('/pl/history/:realmId', (req, res) => {
@@ -3596,6 +3600,183 @@ app.post('/pl/review/:realmId/:period', (req, res) => {
   plReviews[key] = { decisions: decisions || {}, notes: notes || {}, completedAt: completedAt || null, savedAt: new Date().toISOString() };
   savePlReviews();
   res.json({ success: true });
+});
+
+// ── Monthly Close Tracker ───────────────────────────────────────
+
+// Get all close-tracker entries, optionally filtered by period
+app.get('/pl/close-tracker', (req, res) => {
+  const period = req.query.period; // YYYY-MM
+  if (period) {
+    const filtered = {};
+    for (const [key, entry] of Object.entries(closeTracker)) {
+      if (entry.period === period) filtered[key] = entry;
+    }
+    return res.json({ entries: filtered });
+  }
+  res.json({ entries: closeTracker });
+});
+
+// Get single store close-tracker entry
+app.get('/pl/close-tracker/:realmId/:period', (req, res) => {
+  const key = `${req.params.realmId}:${req.params.period}`;
+  res.json({ entry: closeTracker[key] || null });
+});
+
+// Create or update a store's close-tracker entry (partial merge)
+app.post('/pl/close-tracker/:realmId/:period', (req, res) => {
+  const { realmId, period } = req.params;
+  const key = `${realmId}:${period}`;
+  const existing = closeTracker[key] || {
+    realmId,
+    clientId: null,
+    clientName: null,
+    period,
+    checklist: {
+      salesJE:     { checked: false, checkedBy: null, checkedAt: null },
+      cogsJE:      { checked: false, checkedBy: null, checkedAt: null },
+      payroll:     { checked: false, checkedBy: null, checkedAt: null },
+      recurringJE: { checked: false, checkedBy: null, checkedAt: null },
+      bankRec:     { checked: false, checkedBy: null, checkedAt: null },
+    },
+    status: 'closing',
+    flagCount: 0,
+    criticalCount: 0,
+    revenue: null,
+    cogsPct: null,
+    payrollPct: null,
+    netPct: null,
+    lastReviewedAt: null,
+    lastReviewedBy: null,
+  };
+  // Merge incoming fields (shallow merge, deep merge checklist)
+  const body = req.body;
+  if (body.clientId !== undefined)       existing.clientId = body.clientId;
+  if (body.clientName !== undefined)     existing.clientName = body.clientName;
+  if (body.status !== undefined)         existing.status = body.status;
+  if (body.flagCount !== undefined)      existing.flagCount = body.flagCount;
+  if (body.criticalCount !== undefined)  existing.criticalCount = body.criticalCount;
+  if (body.revenue !== undefined)        existing.revenue = body.revenue;
+  if (body.cogsPct !== undefined)        existing.cogsPct = body.cogsPct;
+  if (body.payrollPct !== undefined)     existing.payrollPct = body.payrollPct;
+  if (body.netPct !== undefined)         existing.netPct = body.netPct;
+  if (body.lastReviewedAt !== undefined) existing.lastReviewedAt = body.lastReviewedAt;
+  if (body.lastReviewedBy !== undefined) existing.lastReviewedBy = body.lastReviewedBy;
+  if (body.checklist) {
+    for (const [item, val] of Object.entries(body.checklist)) {
+      if (existing.checklist[item]) Object.assign(existing.checklist[item], val);
+    }
+  }
+  existing.updatedAt = new Date().toISOString();
+  closeTracker[key] = existing;
+  saveCloseTracker();
+  res.json({ success: true, entry: existing });
+});
+
+// Toggle a single checklist item
+app.post('/pl/close-tracker/:realmId/:period/check', (req, res) => {
+  const { realmId, period } = req.params;
+  const key = `${realmId}:${period}`;
+  const { item, checked, checkedBy } = req.body;
+  if (!item) return res.status(400).json({ error: 'item required' });
+
+  // Auto-create entry if it doesn't exist
+  if (!closeTracker[key]) {
+    closeTracker[key] = {
+      realmId, clientId: null, clientName: null, period,
+      checklist: {
+        salesJE:     { checked: false, checkedBy: null, checkedAt: null },
+        cogsJE:      { checked: false, checkedBy: null, checkedAt: null },
+        payroll:     { checked: false, checkedBy: null, checkedAt: null },
+        recurringJE: { checked: false, checkedBy: null, checkedAt: null },
+        bankRec:     { checked: false, checkedBy: null, checkedAt: null },
+      },
+      status: 'closing', flagCount: 0, criticalCount: 0,
+      revenue: null, cogsPct: null, payrollPct: null, netPct: null,
+      lastReviewedAt: null, lastReviewedBy: null,
+    };
+  }
+
+  const entry = closeTracker[key];
+  if (!entry.checklist[item]) return res.status(400).json({ error: 'unknown checklist item' });
+
+  entry.checklist[item].checked = !!checked;
+  entry.checklist[item].checkedBy = checked ? (checkedBy || null) : null;
+  entry.checklist[item].checkedAt = checked ? new Date().toISOString() : null;
+
+  // Recalculate status
+  const allDone = Object.values(entry.checklist).every(c => c.checked);
+  if (allDone && entry.status === 'closing') {
+    entry.status = 'ready';
+  } else if (!allDone) {
+    entry.status = 'closing';
+  }
+  entry.updatedAt = new Date().toISOString();
+  saveCloseTracker();
+  res.json({ success: true, allDone, entry });
+});
+
+// Fleet Scoreboard — aggregated view across all stores for a period
+app.get('/pl/fleet/scoreboard', (req, res) => {
+  const now = new Date();
+  const period = req.query.period || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const rows = [];
+
+  for (const [key, entry] of Object.entries(closeTracker)) {
+    if (entry.period !== period) continue;
+
+    const checkedCount = Object.values(entry.checklist).filter(c => c.checked).length;
+    const totalItems = Object.keys(entry.checklist).length;
+
+    // Enrich with P&L history if available
+    let revenue = entry.revenue, cogsPct = entry.cogsPct, payrollPct = entry.payrollPct, netPct = entry.netPct;
+    if (revenue === null && entry.realmId && plHistory[entry.realmId]) {
+      const periods = Object.keys(plHistory[entry.realmId]).sort();
+      const latest = periods[periods.length - 1];
+      if (latest) {
+        const m = plHistory[entry.realmId][latest]?.metrics;
+        if (m) {
+          revenue = m.sales || m.revenue || null;
+          cogsPct = m.cogsPct || null;
+          payrollPct = m.payrollPct || null;
+          netPct = m.netPct || null;
+        }
+      }
+    }
+
+    // Enrich with review flag counts
+    let flagCount = entry.flagCount || 0;
+    let criticalCount = entry.criticalCount || 0;
+    const reviewKey = `${entry.realmId}:${period}`;
+    // plReviews may have been populated after digest
+    if (plReviews[reviewKey] && plReviews[reviewKey].completedAt && entry.status === 'ready') {
+      // Review was completed but status wasn't updated yet
+    }
+
+    rows.push({
+      realmId: entry.realmId,
+      clientId: entry.clientId,
+      clientName: entry.clientName,
+      period: entry.period,
+      status: entry.status,
+      checkedCount,
+      totalItems,
+      revenue,
+      cogsPct,
+      payrollPct,
+      netPct,
+      flagCount,
+      criticalCount,
+      lastReviewedAt: entry.lastReviewedAt,
+      lastReviewedBy: entry.lastReviewedBy,
+    });
+  }
+
+  // Sort: needs-action first, then ready, then closing, then clean/reviewed
+  const statusOrder = { 'needs-action': 0, 'ready': 1, 'closing': 2, 'reviewed': 3, 'clean': 4 };
+  rows.sort((a, b) => (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5) || (a.clientName || '').localeCompare(b.clientName || ''));
+
+  res.json({ period, rows, total: rows.length });
 });
 
 // ── Auto-Learned Benchmarks ─────────────────────────────────────

@@ -4271,6 +4271,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;">COGS JE</button>
           <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Report</button>
           <button class="btn btn-sm" id="sje-mode-review" onclick="sjeMode('review')" style="font-size:12px;border-color:#2ca01c;color:#2ca01c;">☑ P&L Review</button>
+          <button class="btn btn-sm" id="sje-mode-fleet" onclick="sjeMode('fleet')" style="font-size:12px;border-color:#f0b429;color:#f0b429;">🏆 Fleet Scoreboard</button>
         </div>
       </div>
 
@@ -4569,6 +4570,48 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ═══ FLEET SCOREBOARD PANEL ═══ -->
+      <div id="sje-fleet-panel" style="display:none;">
+
+        <!-- Period selector + summary bar -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+          <label style="font-size:12px;font-weight:600;color:var(--text-d);">Period:</label>
+          <input type="month" id="fleet-period-input" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:12px;" onchange="fleetScoreboardLoad(this.value)">
+          <button class="btn btn-sm" onclick="fleetScoreboardLoad()" style="font-size:11px;">Refresh</button>
+          <div id="fleet-summary-bar" style="margin-left:auto;display:flex;gap:10px;font-size:11px;font-weight:600;"></div>
+        </div>
+
+        <!-- Stats cards -->
+        <div id="fleet-stats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;">
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Closing</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#888;" id="fleet-stat-closing">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Ready</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#6ea8fe;" id="fleet-stat-ready">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Reviewed</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);" id="fleet-stat-reviewed">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Clean</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#2ca01c;" id="fleet-stat-clean">0</div>
+          </div>
+          <div class="card" style="padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Needs Action</div>
+            <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#ff6b6b;" id="fleet-stat-action">0</div>
+          </div>
+        </div>
+
+        <!-- Scoreboard table -->
+        <div id="fleet-scoreboard-body" style="font-size:12px;">
+          <div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">Select a period and click Refresh to load the fleet scoreboard.</div>
+        </div>
+
       </div>
 
     </div><!-- /qbo-tab-scooters -->
@@ -13633,6 +13676,9 @@ function plAutoGenerateMonthlyReviewTasks(){
     );
     if(exists) continue;
 
+    // Resolve the QBO realm ID for this client
+    const realmId = client.qboRealmId || (client.franchises||[]).find(f => f.qboRealmId)?.qboRealmId || '';
+
     DB.tasks.push({
       id: uid(),
       name: `P&L Review — ${client.biz}`,
@@ -13664,7 +13710,26 @@ function plAutoGenerateMonthlyReviewTasks(){
       parentTaskId: null,
       type: 'task',
       parentId: null,
+      triggerDigest: true,
+      qboRealmId: realmId,
+      closeChecklist: [
+        { id: 'salesJE',     label: 'Sales JE posted',                              checked: false, checkedBy: null, checkedAt: null },
+        { id: 'cogsJE',      label: 'COGS JE posted',                               checked: false, checkedBy: null, checkedAt: null },
+        { id: 'payroll',     label: 'Payroll entries posted',                        checked: false, checkedBy: null, checkedAt: null },
+        { id: 'recurringJE', label: 'Recurring JEs posted (royalties, rent, etc.)',  checked: false, checkedBy: null, checkedAt: null },
+        { id: 'bankRec',     label: 'Bank reconciliation complete',                  checked: false, checkedBy: null, checkedAt: null },
+      ],
     });
+
+    // Initialize server-side close tracker entry
+    if (realmId) {
+      fetch(`${ARK_SERVER}/pl/close-tracker/${realmId}/${monthKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id, clientName: client.biz }),
+      }).catch(e => console.warn('[CloseTracker] Init failed:', e.message));
+    }
+
     created++;
   }
   if(created){
@@ -19557,6 +19622,15 @@ function tcToggleComplete(id){
   const who  = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
   const when = new Date().toISOString();
 
+  // ── Guard: close checklist must be complete before marking done ────
+  if (t.closeChecklist && t.status !== 'completed' && t.status !== 'review') {
+    const checkedCount = t.closeChecklist.filter(c => c.checked).length;
+    if (checkedCount < t.closeChecklist.length) {
+      showToast(`Complete all close checklist items first (${checkedCount}/${t.closeChecklist.length})`);
+      return;
+    }
+  }
+
   // ── Un-complete / reopen ──────────────────────────────────────────
   if(t.status === 'completed' || t.status === 'review'){
     t.status = 'open';
@@ -19660,6 +19734,23 @@ function tcToggleComplete(id){
       status:'open', noteLog:[], createdAt:when, updatedAt:when,
       createdBy:who, completedAt:null, completedBy:null,
     };
+    // Carry over close checklist fields for P&L Review tasks (reset checked state)
+    if (t.triggerDigest) {
+      next.triggerDigest = true;
+      next.qboRealmId = t.qboRealmId || '';
+      next.closeChecklist = (t.closeChecklist || []).map(c => ({
+        id: c.id, label: c.label, checked: false, checkedBy: null, checkedAt: null,
+      }));
+      // Initialize server-side close tracker for the new period
+      const newPeriod = nextDue ? nextDue.slice(0, 7) : '';
+      if (next.qboRealmId && newPeriod) {
+        fetch(`${ARK_SERVER}/pl/close-tracker/${next.qboRealmId}/${newPeriod}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: next.clientId, clientName: next.clientName }),
+        }).catch(e => console.warn('[CloseTracker] Spawn init failed:', e.message));
+      }
+    }
     DB.tasks.push(next);
     logAct(`Task "${t.name}" auto-spawned next due ${nextDue} (${t.clientName})`);
   }
@@ -19731,6 +19822,57 @@ function plAutoRunDigest(clientId) {
       setTimeout(() => { plRunDigest(); }, 300);
     }
   }, 200);
+}
+
+// ── Toggle close checklist item on a P&L Review task ────────────────
+function twfToggleCloseItem(taskId, itemId) {
+  const t = (DB.tasks||[]).find(x => x.id === taskId);
+  if (!t || !t.closeChecklist) return;
+  const item = t.closeChecklist.find(c => c.id === itemId);
+  if (!item) return;
+
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
+  const now = new Date().toISOString();
+
+  // Toggle
+  item.checked = !item.checked;
+  item.checkedBy = item.checked ? who : null;
+  item.checkedAt = item.checked ? now : null;
+  t.updatedAt = now;
+
+  const checkedCount = t.closeChecklist.filter(c => c.checked).length;
+  const total = t.closeChecklist.length;
+
+  // Sync to server close tracker
+  const realmId = t.qboRealmId || '';
+  const period = t.dueDate ? t.dueDate.slice(0, 7) : '';
+  if (realmId && period) {
+    fetch(`${ARK_SERVER}/pl/close-tracker/${realmId}/${period}/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item: itemId, checked: item.checked, checkedBy: who }),
+    }).catch(e => console.warn('[CloseTracker] Check sync failed:', e.message));
+  }
+
+  saveDB();
+
+  // Re-render the workflow modal if open
+  const client = (DB.clients||[]).find(c => c.id === t.clientId);
+  document.getElementById('twf-workflow').innerHTML = twfWorkflowHtml(t, client);
+
+  // If all items checked → auto-trigger digest
+  if (checkedCount === total) {
+    if (!t.noteLog) t.noteLog = [];
+    t.noteLog.unshift({ id: uid(), text: '📋 Close checklist complete — P&L Digest triggered', author: who, at: now, type: 'note' });
+    saveDB();
+    showToast(`All close items done for ${t.clientName || 'store'} — running P&L Digest...`);
+    setTimeout(() => plAutoRunDigest(t.clientId), 500);
+  } else {
+    showToast(`Close checklist: ${checkedCount}/${total}`);
+  }
+
+  // Update task card in list if visible
+  if (typeof tcRender === 'function') tcRender();
 }
 
 // ── Reviewer approves a review task ──────────────────────────────────
@@ -20164,6 +20306,7 @@ function tcTaskCard(t, today, todayStr){
         ${t.recurring?'<span style="font-size:10px;font-weight:600;color:var(--text-d);padding:1px 6px;border-radius:8px;background:var(--surface);border:1px solid var(--border);">🔁 '+tcRecurLabel(t.recurFreq,t.recurCustomN,t.recurBmDay1,t.recurBmDay2)+'</span>':''}
         <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:${priColor}22;color:${priColor};">${(t.priority||'medium').toUpperCase()}</span>
         ${reviewBadge}
+        ${t.closeChecklist ? (()=>{ const ck=t.closeChecklist.filter(c=>c.checked).length, tot=t.closeChecklist.length, done=ck===tot; return `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:${done?'rgba(44,160,28,.12)':'rgba(240,180,41,.12)'};color:${done?'#2ca01c':'#f0b429'};border:1px solid ${done?'rgba(44,160,28,.3)':'rgba(240,180,41,.3)'};">📋 ${ck}/${tot}</span>`; })() : ''}
       </div>
       <div style="display:flex;align-items:center;gap:16px;margin-top:4px;flex-wrap:wrap;">
         <span style="font-size:11px;color:${isOverdue?'#ff6b6b':isToday?'#f0b429':isReview?'#6ea8fe':'var(--text-d)'};">${dueLabel}</span>
@@ -22419,6 +22562,44 @@ function twfWorkflowHtml(t, client){
 
   // ── BOOKKEEPING ──────────────────────────────────────────────────
   else if(cat === 'Bookkeeping'){
+    // ── Close Checklist (for P&L Review tasks with triggerDigest) ──
+    if(t.closeChecklist && t.closeChecklist.length){
+      const checkedCount = t.closeChecklist.filter(c=>c.checked).length;
+      const total = t.closeChecklist.length;
+      const allDone = checkedCount === total;
+      const pct = Math.round(checkedCount/total*100);
+      const barColor = allDone ? '#2ca01c' : '#f0b429';
+      html += `<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius);overflow:visible;">
+        <div style="padding:9px 14px;background:#0a1a0a;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+          <span style="font-size:16px;">📋</span>
+          <span style="font-size:12px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.06em;">Monthly Close Checklist</span>
+          <span style="margin-left:auto;font-size:12px;font-weight:700;color:${barColor};">${checkedCount}/${total}</span>
+        </div>
+        <div style="height:3px;background:var(--surface2);">
+          <div style="height:100%;width:${pct}%;background:${barColor};transition:width .3s;"></div>
+        </div>
+        <div style="padding:6px 14px 10px;">`;
+      for(const item of t.closeChecklist){
+        const checkId = `twf-cl-${t.id}-${item.id}`;
+        const ts = item.checkedAt ? new Date(item.checkedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+        const byLine = item.checked ? `<span style="font-size:10px;color:var(--text-d);margin-left:8px;">${item.checkedBy||''} ${ts}</span>` : '';
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);${item.checked?'opacity:.6':''}">
+          <input type="checkbox" id="${checkId}" ${item.checked?'checked':''} onclick="twfToggleCloseItem('${t.id}','${item.id}')"
+            style="accent-color:#2ca01c;cursor:pointer;flex-shrink:0;">
+          <label for="${checkId}" style="font-size:12px;color:var(--text);cursor:pointer;flex:1;${item.checked?'text-decoration:line-through;':''}">
+            ${item.label}
+          </label>
+          ${byLine}
+        </div>`;
+      }
+      if(allDone){
+        html += `<div style="margin-top:10px;padding:8px 12px;background:rgba(44,160,28,.08);border:1px solid rgba(44,160,28,.25);border-radius:var(--radius);font-size:11px;color:#2ca01c;font-weight:600;text-align:center;">
+          All items complete — P&L Digest ready to run
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+
     const qbUrl = client?.qbType === 'Online' ? 'https://qbo.intuit.com' : null;
     html += section('📚','QuickBooks',[
       ['QB Type', client?.qbType || null],
@@ -30443,6 +30624,27 @@ async function plRunDigest() {
     await plLoadHistoryPanel();
     qboLog('success', `P&L Review: <strong>${plFlags.length} items need attention</strong> for ${plSelectedClient.biz}`);
 
+    // ── Update Close Tracker — digest complete, mark "reviewed" ──
+    if (effectiveKey && startDate) {
+      const ctPeriod = startDate.slice(0, 7);
+      const s = plCurrentSummary || {};
+      fetch(`${ARK_SERVER}/pl/close-tracker/${effectiveKey}/${ctPeriod}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: plSelectedClient?.id || null,
+          clientName: plSelectedClient?.biz || null,
+          status: 'reviewed',
+          flagCount: plFlags.length,
+          criticalCount: plFlags.filter(f => f.severity === 'CRITICAL').length,
+          revenue: s.sales || null,
+          cogsPct: s.sales ? (s.cogs || 0) / s.sales : null,
+          payrollPct: s.sales ? (s.payroll || 0) / s.sales : null,
+          netPct: s.sales ? (s.netIncome || 0) / s.sales : null,
+        }),
+      }).catch(e => console.warn('[CloseTracker] Digest update failed:', e.message));
+    }
+
   } catch (e) {
     progWrap.style.display = 'none';
     showToast('Error: ' + e.message);
@@ -31062,6 +31264,32 @@ function plMarkReviewComplete() {
   plSaveReviewState();
   plSaveToClient();
   showToast('Review marked complete and saved');
+
+  // Update close tracker with review results
+  const realmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '';
+  const startDate = document.getElementById('pl-start-date')?.value || '';
+  const period = startDate ? startDate.slice(0, 7) : '';
+  if (realmId && period) {
+    const s = plCurrentSummary || {};
+    const flagCount = (plFlags || []).length;
+    const criticalCount = (plFlags || []).filter(f => f.severity === 'CRITICAL').length;
+    const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
+    fetch(`${ARK_SERVER}/pl/close-tracker/${realmId}/${period}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: criticalCount > 0 ? 'needs-action' : flagCount > 0 ? 'needs-action' : 'clean',
+        flagCount,
+        criticalCount,
+        revenue: s.sales || null,
+        cogsPct: s.sales ? (s.cogs || 0) / s.sales : null,
+        payrollPct: s.sales ? (s.payroll || 0) / s.sales : null,
+        netPct: s.sales ? (s.netIncome || 0) / s.sales : null,
+        lastReviewedAt: new Date().toISOString(),
+        lastReviewedBy: who,
+      }),
+    }).catch(e => console.warn('[CloseTracker] Review update failed:', e.message));
+  }
 }
 
 // ── Legacy render functions (kept for PDF/export compatibility) ──
@@ -32868,6 +33096,8 @@ function sjeMode(mode) {
   document.getElementById('sje-sales-panel').style.display = mode === 'sales' ? '' : 'none';
   document.getElementById('sje-cogs-panel').style.display = mode === 'cogs' ? '' : 'none';
   document.getElementById('scoots-pl-panel').style.display = mode === 'pl' ? '' : 'none';
+  const fleetPanel = document.getElementById('sje-fleet-panel');
+  if (fleetPanel) fleetPanel.style.display = mode === 'fleet' ? '' : 'none';
 
   // Show/hide the P&L Review workspace (lives in general tools area but displayed here)
   const plWs = document.getElementById('qbo-pl-workspace');
@@ -32877,8 +33107,9 @@ function sjeMode(mode) {
   const cogsBtn = document.getElementById('sje-mode-cogs');
   const plBtn = document.getElementById('sje-mode-pl');
   const reviewBtn = document.getElementById('sje-mode-review');
+  const fleetBtn = document.getElementById('sje-mode-fleet');
   // Reset all buttons
-  [salesBtn, cogsBtn, plBtn, reviewBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
+  [salesBtn, cogsBtn, plBtn, reviewBtn, fleetBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
   if (mode === 'sales') {
     salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
   } else if (mode === 'cogs') {
@@ -32889,7 +33120,147 @@ function sjeMode(mode) {
     reviewBtn.style.background = '#2ca01c'; reviewBtn.style.color = '#fff'; reviewBtn.style.borderColor = '#2ca01c'; reviewBtn.style.fontWeight = '600';
     // Auto-filter client picker to Scooters clients and populate
     plPopulateClients(true); // pass true to filter Scooters only
+  } else if (mode === 'fleet') {
+    fleetBtn.style.background = '#f0b429'; fleetBtn.style.color = '#000'; fleetBtn.style.borderColor = '#f0b429'; fleetBtn.style.fontWeight = '600';
+    // Set default period to last month and load
+    const pi = document.getElementById('fleet-period-input');
+    if (pi && !pi.value) {
+      const now = new Date();
+      const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      pi.value = `${lm.getFullYear()}-${String(lm.getMonth()+1).padStart(2,'0')}`;
+    }
+    fleetScoreboardLoad();
   }
+}
+
+// ── Fleet Scoreboard ─────────────────────────────────────────────
+
+async function fleetScoreboardLoad(periodOverride) {
+  const pi = document.getElementById('fleet-period-input');
+  const period = periodOverride || (pi ? pi.value : '') || (() => {
+    const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+  })();
+  if (pi && !pi.value) pi.value = period;
+
+  const body = document.getElementById('fleet-scoreboard-body');
+  body.innerHTML = '<div style="text-align:center;padding:32px 0;color:var(--text-d);font-size:12px;">Loading fleet scoreboard...</div>';
+
+  try {
+    const resp = await fetch(`${ARK_SERVER}/pl/fleet/scoreboard?period=${period}`);
+    const data = await resp.json();
+    fleetScoreboardRender(data.rows || [], data.period);
+  } catch(e) {
+    body.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--red);font-size:12px;">Failed to load scoreboard: ${e.message}</div>`;
+  }
+}
+
+function fleetScoreboardRender(rows, period) {
+  // Update stat cards
+  const counts = { closing: 0, ready: 0, reviewed: 0, clean: 0, 'needs-action': 0 };
+  rows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
+  document.getElementById('fleet-stat-closing').textContent = counts.closing;
+  document.getElementById('fleet-stat-ready').textContent = counts.ready;
+  document.getElementById('fleet-stat-reviewed').textContent = counts.reviewed;
+  document.getElementById('fleet-stat-clean').textContent = counts.clean;
+  document.getElementById('fleet-stat-action').textContent = counts['needs-action'];
+
+  const body = document.getElementById('fleet-scoreboard-body');
+  if (!rows.length) {
+    body.innerHTML = `<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">
+      No stores found for this period. Tasks are auto-generated on the 5th of each month.<br>
+      <span style="font-size:11px;">Ensure Scooters clients have QBO linked and P&L Review tasks exist.</span>
+    </div>`;
+    return;
+  }
+
+  const statusBadge = (status) => {
+    const map = {
+      'closing':      { bg: '#88888822', color: '#888',    border: '#88888844', label: 'CLOSING' },
+      'ready':        { bg: '#6ea8fe22', color: '#6ea8fe', border: '#6ea8fe44', label: 'READY' },
+      'reviewed':     { bg: '#1a2440',   color: '#a0c4ff', border: '#2e5fa144', label: 'REVIEWED' },
+      'clean':        { bg: '#1a3a1a',   color: '#2ca01c', border: '#2e7d5e44', label: 'CLEAN' },
+      'needs-action': { bg: '#3a1a1a',   color: '#ff6b6b', border: '#5a2a2a',   label: 'NEEDS ACTION' },
+    };
+    const s = map[status] || map['closing'];
+    return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:${s.bg};color:${s.color};border:1px solid ${s.border};white-space:nowrap;">${s.label}</span>`;
+  };
+
+  const pct = (v) => v !== null && v !== undefined ? (v * 100).toFixed(1) + '%' : '—';
+  const money = (v) => v !== null && v !== undefined ? '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—';
+
+  const rowColor = (status) => {
+    if (status === 'clean')        return 'background:rgba(46,125,94,.04);border-color:rgba(46,125,94,.2);';
+    if (status === 'needs-action') return 'background:rgba(255,107,107,.04);border-color:rgba(255,107,107,.2);';
+    if (status === 'ready')        return 'background:rgba(110,168,254,.04);border-color:rgba(110,168,254,.2);';
+    return '';
+  };
+
+  let html = `<table style="width:100%;border-collapse:separate;border-spacing:0 4px;font-size:12px;">
+    <thead>
+      <tr style="color:var(--text-d);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">
+        <th style="text-align:left;padding:6px 10px;">Store</th>
+        <th style="text-align:center;padding:6px 8px;">Status</th>
+        <th style="text-align:center;padding:6px 8px;">Close</th>
+        <th style="text-align:right;padding:6px 8px;">Revenue</th>
+        <th style="text-align:right;padding:6px 8px;">COGS%</th>
+        <th style="text-align:right;padding:6px 8px;">Payroll%</th>
+        <th style="text-align:right;padding:6px 8px;">Net%</th>
+        <th style="text-align:center;padding:6px 8px;">Flags</th>
+        <th style="text-align:right;padding:6px 8px;">Reviewed</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  for (const r of rows) {
+    const progress = `${r.checkedCount}/${r.totalItems}`;
+    const progressPct = Math.round((r.checkedCount / r.totalItems) * 100);
+    const progressColor = r.checkedCount === r.totalItems ? '#2ca01c' : '#f0b429';
+    const flagBadge = r.flagCount > 0
+      ? `<span style="font-weight:700;color:${r.criticalCount > 0 ? '#ff6b6b' : '#f0b429'};">${r.flagCount}${r.criticalCount ? ` (${r.criticalCount}!)` : ''}</span>`
+      : '<span style="color:var(--text-d);">—</span>';
+    const reviewed = r.lastReviewedAt
+      ? `<span style="font-size:10px;">${new Date(r.lastReviewedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>`
+      : '<span style="color:var(--text-d);font-size:10px;">—</span>';
+
+    html += `<tr onclick="fleetScoreboardOpenStore('${r.clientId}')" style="cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);${rowColor(r.status)}transition:all .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <td style="padding:10px;font-weight:600;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.clientName || '—'}</td>
+      <td style="padding:8px;text-align:center;">${statusBadge(r.status)}</td>
+      <td style="padding:8px;text-align:center;">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
+          <div style="width:40px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${progressPct}%;background:${progressColor};"></div>
+          </div>
+          <span style="font-size:10px;font-weight:600;color:${progressColor};">${progress}</span>
+        </div>
+      </td>
+      <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--text);">${money(r.revenue)}</td>
+      <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;color:${r.cogsPct > 0.35 ? '#ff6b6b' : 'var(--text-d)'};">${pct(r.cogsPct)}</td>
+      <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;color:${r.payrollPct > 0.30 ? '#ff6b6b' : 'var(--text-d)'};">${pct(r.payrollPct)}</td>
+      <td style="padding:8px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${r.netPct !== null && r.netPct < 0 ? '#ff6b6b' : '#2ca01c'};">${pct(r.netPct)}</td>
+      <td style="padding:8px;text-align:center;">${flagBadge}</td>
+      <td style="padding:8px;text-align:right;">${reviewed}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function fleetScoreboardOpenStore(clientId) {
+  if (!clientId) return;
+  // Navigate to QBO > Scooters > Review mode with that client selected (without auto-running digest)
+  nav('qbo');
+  qboNavTab('scooters');
+  sjeMode('review');
+
+  setTimeout(() => {
+    const sel = document.getElementById('pl-client-select');
+    if (sel) {
+      sel.value = clientId;
+      plOnClientChange();
+      plSetQuickPeriod('last-month');
+    }
+  }, 200);
 }
 
 function cogsHandleDrop(e) {
