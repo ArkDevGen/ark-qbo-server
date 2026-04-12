@@ -29871,13 +29871,20 @@ const PL_BENCHMARKS = {
 function plPopulateClients() {
   const sel = document.getElementById('pl-client-select');
   if (!sel) return;
-  const clients = (DB.clients||[]).filter(c => c.qbType === 'QBO' && c.qboRealmId);
+  // Include clients with direct qboRealmId OR any franchise with a qboRealmId
+  const hasQBO = (c) => c.qboRealmId || (c.franchises || []).some(f => f.qboRealmId);
+  const clients = (DB.clients||[]).filter(c => c.qbType === 'QBO' && hasQBO(c));
   sel.innerHTML = '<option value="">Select a client…</option>' +
     clients.sort((a,b) => (a.biz||'').localeCompare(b.biz||''))
-      .map(c => `<option value="${c.id}">${c.biz}${c.qboRealmId ? ' ('+c.qboRealmId.slice(0,8)+'…)' : ''}</option>`)
+      .map(c => {
+        const linkedCount = (c.franchises || []).filter(f => f.qboRealmId).length;
+        const badge = linkedCount > 1 ? ` (${linkedCount} stores)` : c.qboRealmId ? ' ('+c.qboRealmId.slice(0,8)+'…)' : '';
+        const brand = c.franchiseBrand ? ` ☕` : '';
+        return `<option value="${c.id}">${c.biz}${badge}${brand}</option>`;
+      })
       .join('');
-  // Also show clients without realm for awareness
-  const noRealm = (DB.clients||[]).filter(c => c.qbType === 'QBO' && !c.qboRealmId);
+  // Also show QBO clients without any realm for awareness
+  const noRealm = (DB.clients||[]).filter(c => c.qbType === 'QBO' && !hasQBO(c));
   if (noRealm.length) {
     sel.innerHTML += '<optgroup label="Missing QBO Realm ID">' +
       noRealm.map(c => `<option value="" disabled style="color:var(--text-d);">${c.biz} — needs Realm ID</option>`).join('') +
@@ -29894,14 +29901,23 @@ function plOnClientChange() {
   const infoBar = document.getElementById('pl-client-info');
   const runBtn = document.getElementById('pl-run-btn');
   if (client) {
+    // Resolve effective realmId: direct > first linked franchise
+    const linkedFranchises = (client.franchises || []).filter(f => f.qboRealmId);
+    const effectiveRealm = client.qboRealmId || (linkedFranchises[0]?.qboRealmId) || '';
+    // Ensure the client object has a usable qboRealmId for the pipeline
+    if (!client.qboRealmId && effectiveRealm) {
+      client._plRealmId = effectiveRealm; // temporary — don't mutate the stored field
+    }
+
     infoBar.style.display = '';
     document.getElementById('pl-client-name').textContent = client.biz;
-    document.getElementById('pl-client-realm').textContent = client.qboRealmId || '—';
-    document.getElementById('pl-client-qb-badge').textContent = client.qboRealmId ? 'QBO Connected' : 'No Realm ID';
-    document.getElementById('pl-client-qb-badge').style.color = client.qboRealmId ? '#2ca01c' : 'var(--red)';
-    document.getElementById('pl-client-qb-badge').style.background = client.qboRealmId ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
-    runBtn.disabled = !client.qboRealmId;
-    // Show brand badge if Scooters
+    document.getElementById('pl-client-realm').textContent = effectiveRealm ? effectiveRealm.slice(0, 12) + '…' : '—';
+    document.getElementById('pl-client-qb-badge').textContent = effectiveRealm ? 'QBO Connected' : 'No Realm ID';
+    document.getElementById('pl-client-qb-badge').style.color = effectiveRealm ? '#2ca01c' : 'var(--red)';
+    document.getElementById('pl-client-qb-badge').style.background = effectiveRealm ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
+    runBtn.disabled = !effectiveRealm;
+
+    // Show brand badge
     const brandBadge = document.getElementById('pl-client-brand-badge');
     if (client.franchiseBrand) {
       brandBadge.style.display = '';
@@ -29909,17 +29925,25 @@ function plOnClientChange() {
     } else {
       brandBadge.style.display = 'none';
     }
-    // Show class selector if client has franchises or might use class tracking
+
+    // Show class selector if multiple franchises linked or has brand
     const classWrap = document.getElementById('pl-class-selector-wrap');
-    if (client.franchises?.length > 1 || client.franchiseBrand) {
+    if (linkedFranchises.length > 1 || client.franchiseBrand) {
       classWrap.style.display = '';
+      // Pre-populate franchise selector if they have distinct realms
+      if (linkedFranchises.length > 1) {
+        const classSel = document.getElementById('pl-class-select');
+        classSel.innerHTML = '<option value="">All Stores (Combined)</option>' +
+          linkedFranchises.map(f => `<option value="${f.qboRealmId}" data-name="${f.name || f.storeNumber || ''}">${f.name || f.storeNumber || 'Store'} (${(f.qboRealmId||'').slice(0,8)}…)</option>`).join('');
+      }
     } else {
       classWrap.style.display = 'none';
     }
-    // Load anticipated expenses + overrides + benchmarks for this client
-    plLoadAnticipated(client.qboRealmId);
-    plLoadOverrides(client.qboRealmId);
-    plLoadBenchmarks(client.qboRealmId);
+
+    // Load anticipated expenses + overrides + benchmarks
+    plLoadAnticipated(effectiveRealm);
+    plLoadOverrides(effectiveRealm);
+    plLoadBenchmarks(effectiveRealm);
   } else {
     infoBar.style.display = 'none';
     runBtn.disabled = true;
@@ -29969,7 +29993,7 @@ async function plApplyTemplate(templateName) {
     const res = await fetch(`${QBO_SERVER}/pl/anticipated/apply-template`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, templateName }),
+      body: JSON.stringify({ realmId: plGetEffectiveRealmKey(), templateName }),
     }).then(r => r.json());
     if (res.success) {
       plAnticipatedExpenses = res.expenses || [];
@@ -29982,7 +30006,7 @@ async function plApplyTemplate(templateName) {
 async function plSaveAnticipated() {
   if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
   try {
-    await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`, {
+    await fetch(`${QBO_SERVER}/pl/anticipated/${plGetEffectiveRealmKey()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expenses: plAnticipatedExpenses }),
@@ -30001,9 +30025,10 @@ async function plLoadOverrides(realmId) {
 }
 
 async function plSaveOverride(account, override) {
-  if (!plSelectedClient?.qboRealmId) return;
+  const realmKey = plGetEffectiveRealmKey();
+  if (!realmKey) return;
   try {
-    await fetch(`${QBO_SERVER}/pl/overrides/${plSelectedClient.qboRealmId}`, {
+    await fetch(`${QBO_SERVER}/pl/overrides/${realmKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ account, override }),
@@ -30013,9 +30038,10 @@ async function plSaveOverride(account, override) {
 }
 
 async function plRemoveOverride(account) {
-  if (!plSelectedClient?.qboRealmId) return;
+  const realmKey = plGetEffectiveRealmKey();
+  if (!realmKey) return;
   try {
-    await fetch(`${QBO_SERVER}/pl/overrides/${plSelectedClient.qboRealmId}/${encodeURIComponent(account)}`, { method: 'DELETE' });
+    await fetch(`${QBO_SERVER}/pl/overrides/${realmKey}/${encodeURIComponent(account)}`, { method: 'DELETE' });
     delete plOverrides[account];
   } catch(e) {}
 }
@@ -30069,7 +30095,7 @@ async function plLoadClasses() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'getProfitAndLoss',
-        realmId: plSelectedClient.qboRealmId,
+        realmId: plSelectedClient.qboRealmId || plSelectedClient._plRealmId,
         payload: { startDate: start.toISOString().slice(0,10), endDate: end.toISOString().slice(0,10), summarize_column_by: 'Class' },
       }),
     }).then(r => r.json());
@@ -30093,7 +30119,7 @@ function plOnClassChange() {
 }
 
 function plGetEffectiveRealmKey() {
-  const base = plSelectedClient?.qboRealmId || '';
+  const base = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '';
   return plSelectedClass ? `${base}:${plSelectedClass}` : base;
 }
 
@@ -30139,7 +30165,8 @@ function plSetQuickPeriod(val) {
 
 // ── Run the full v2 digest (12-step pipeline) ───────────────────
 async function plRunDigest() {
-  if (!plSelectedClient?.qboRealmId) { showToast('Select a client with a QBO Realm ID'); return; }
+  const plRealmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '';
+  if (!plRealmId) { showToast('Select a client with a QBO Realm ID'); return; }
   const startDate = document.getElementById('pl-start-date').value;
   const endDate   = document.getElementById('pl-end-date').value;
   if (!startDate || !endDate) { showToast('Select a date range'); return; }
@@ -30169,7 +30196,7 @@ async function plRunDigest() {
     const detailRes = await fetch(`${QBO_SERVER}/qbo/api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType: 'detail', ...plPayloadBase } }),
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plRealmId, payload: { startDate, endDate, reportType: 'detail', ...plPayloadBase } }),
     }).then(r => r.json());
     plDetailReport = detailRes.success ? detailRes.report : null;
 
@@ -30178,7 +30205,7 @@ async function plRunDigest() {
     const plRes = await fetch(`${QBO_SERVER}/qbo/api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType, ...plPayloadBase } }),
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plRealmId, payload: { startDate, endDate, reportType, ...plPayloadBase } }),
     }).then(r => r.json());
     if (!plRes.success) throw new Error(plRes.error || 'Failed to fetch P&L');
     plRawReport = plRes.report;
@@ -30197,7 +30224,7 @@ async function plRunDigest() {
       const histBatch = await fetch(`${QBO_SERVER}/qbo/api`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getProfitAndLossHistory', realmId: plSelectedClient.qboRealmId, payload: { periods: histPeriods } }),
+        body: JSON.stringify({ action: 'getProfitAndLossHistory', realmId: plRealmId, payload: { periods: histPeriods } }),
       }).then(r => r.json());
       if (histBatch.success) {
         for (const result of histBatch.results) {
@@ -30207,7 +30234,7 @@ async function plRunDigest() {
           trailingHistory[period] = { metrics, accounts: accts, savedAt: new Date().toISOString() };
           // Save to server history
           try {
-            await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+            await fetch(`${QBO_SERVER}/pl/history/${plRealmId}`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ period, metrics, accounts: accts }),
             });
@@ -30242,7 +30269,7 @@ async function plRunDigest() {
       plAnticipatedExpenses = antRes.expenses || [];
       // Fallback to base realm if no class-specific anticipated
       if (!plAnticipatedExpenses.length && plSelectedClass) {
-        const baseRes = await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`).then(r => r.json());
+        const baseRes = await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId || plSelectedClient._plRealmId}`).then(r => r.json());
         plAnticipatedExpenses = baseRes.expenses || [];
       }
     } catch(e) {}
@@ -30987,7 +31014,7 @@ function plFilterFlags() {}
 
 // ── Get 12 months of history ─────────────────────────────────────
 async function plGetHistory() {
-  if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
+  if (!plGetEffectiveRealmKey()) { showToast('Select a client first'); return; }
   const progWrap = document.getElementById('pl-progress-wrap');
   progWrap.style.display = '';
 
@@ -31011,7 +31038,7 @@ async function plGetHistory() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'getProfitAndLossHistory',
-        realmId: plSelectedClient.qboRealmId,
+        realmId: plGetEffectiveRealmKey(),
         payload: { periods },
       }),
     }).then(r => r.json());
@@ -31025,7 +31052,7 @@ async function plGetHistory() {
       const metrics = plBuildSummary(accounts);
       const period = `${result.startDate}_${result.endDate}`;
       plProgress(10 + (saved/res.results.length)*80, `Saving ${result.label}...`);
-      await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+      await fetch(`${QBO_SERVER}/pl/history/${plGetEffectiveRealmKey()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, metrics, accounts }),
@@ -31052,9 +31079,10 @@ async function plGetHistory() {
 }
 
 async function plLoadHistoryPanel() {
-  if (!plSelectedClient?.qboRealmId) return;
+  const realmKey = plGetEffectiveRealmKey();
+  if (!realmKey) return;
   try {
-    const res = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
+    const res = await fetch(`${QBO_SERVER}/pl/history/${realmKey}`).then(r => r.json());
     const history = res.history || {};
     const periods = Object.keys(history).sort().reverse();
     const wrap = document.getElementById('pl-history-wrap');
