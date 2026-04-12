@@ -128,7 +128,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .topbar-left{display:flex;align-items:center;gap:14px;}
 .topbar-title{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;}
+.topbar-right{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex-shrink:1;min-width:0;overflow:hidden;}
 
 /* ════════════════════════════════════════
    BUTTONS — Intentional, satisfying
@@ -591,6 +591,9 @@ textarea.field-input{resize:vertical;min-height:72px;}
 #topbar-clock .tz-others{display:flex;gap:8px;padding-left:8px;border-left:1px solid var(--border);}
 #topbar-clock .tz-sm{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;letter-spacing:.3px;line-height:1;text-align:center;}
 #topbar-clock .tz-sm .tz-label{font-size:7px;color:var(--border2);letter-spacing:.06em;text-transform:uppercase;display:block;margin-top:2px;font-family:'DM Sans',sans-serif;}
+
+/* Hide secondary timezones when viewport is tight */
+@media(max-width:1280px){#topbar-clock .tz-others{display:none;}}
 
 /* Nav badge refinement */
 .nav-badge{font-size:9px;background:var(--gold);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:700;letter-spacing:.04em;}
@@ -1185,7 +1188,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
     <div class="topbar-right">
       <div id="topbar-clock"></div>
-      <div id="topbar-actions" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;"></div>
+      <div id="topbar-actions" style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;flex-shrink:0;"></div>
 
       <!-- ── Chat Icon ── -->
       <div style="position:relative;" id="chat-icon-wrap">
@@ -1222,19 +1225,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
       <!-- Data persistence controls -->
-      <div style="display:flex;align-items:center;gap:6px;">
-        <button onclick="exportDBBackup()" title="Download a JSON backup of all data"
-          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button onclick="exportDBBackup()" title="Download backup"
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:14px;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;"
           onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
-          ⬇ Backup
-        </button>
-        <label title="Restore from a JSON backup file"
-          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">⬇</button>
+        <label title="Restore from backup"
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:14px;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;"
           onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
-          ⬆ Restore
-          <input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0])">
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">⬆<input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0])">
         </label>
       </div>
       <div id="current-user-pill" style="position:relative;cursor:pointer;" onclick="document.getElementById('user-menu').style.display=document.getElementById('user-menu').style.display==='none'?'block':'none'">
