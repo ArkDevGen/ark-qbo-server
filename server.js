@@ -3197,12 +3197,16 @@ const PL_HISTORY_FILE = path.join(DATA_DIR, 'pl-history.json');
 const FLEET_DATA_FILE = path.join(DATA_DIR, 'fleet-data.json');
 const PL_THRESHOLDS_FILE = path.join(DATA_DIR, 'pl-thresholds.json');
 const PL_ANTICIPATED_FILE = path.join(DATA_DIR, 'pl-anticipated.json');
+const PL_OVERRIDES_FILE = path.join(DATA_DIR, 'pl-overrides.json');
+const PL_REVIEWS_FILE = path.join(DATA_DIR, 'pl-reviews.json');
 
 // Load persisted data
 let plHistory = {};       // { [realmId]: { [period]: { metrics, accounts, savedAt } } }
 let fleetData = {};       // { accounts: { [name]: { storeCount, stores, amounts, avgPct, minPct, maxPct } }, storeCount: 0 }
 let plThresholds = {};    // { _global: {...}, [realmId]: {...} }
 let plAnticipated = {};   // { _templates: { scooters: [...] }, [realmId]: [...] }
+let plOverrides = {};     // { [realmId]: { [accountName]: { expectedAmount, tolerance, note, expiresAt, setBy, setAt } } }
+let plReviews = {};       // { [realmId:period]: { decisions, notes, completedAt } }
 
 function loadJsonFile(filepath, fallback) {
   if (!fs.existsSync(filepath)) return fallback;
@@ -3212,6 +3216,8 @@ function loadJsonFile(filepath, fallback) {
 plHistory    = loadJsonFile(PL_HISTORY_FILE, {});
 fleetData    = loadJsonFile(FLEET_DATA_FILE, { accounts: {}, storeCount: 0 });
 plThresholds = loadJsonFile(PL_THRESHOLDS_FILE, { _global: {} });
+plOverrides  = loadJsonFile(PL_OVERRIDES_FILE, {});
+plReviews    = loadJsonFile(PL_REVIEWS_FILE, {});
 plAnticipated = loadJsonFile(PL_ANTICIPATED_FILE, {
   _templates: {
     scooters: [
@@ -3233,6 +3239,8 @@ function savePlHistory()    { fs.writeFileSync(PL_HISTORY_FILE, JSON.stringify(p
 function saveFleetData()    { fs.writeFileSync(FLEET_DATA_FILE, JSON.stringify(fleetData, null, 2)); }
 function savePlThresholds() { fs.writeFileSync(PL_THRESHOLDS_FILE, JSON.stringify(plThresholds, null, 2)); }
 function savePlAnticipated(){ fs.writeFileSync(PL_ANTICIPATED_FILE, JSON.stringify(plAnticipated, null, 2)); }
+function savePlOverrides()  { fs.writeFileSync(PL_OVERRIDES_FILE, JSON.stringify(plOverrides, null, 2)); }
+function savePlReviews()    { fs.writeFileSync(PL_REVIEWS_FILE, JSON.stringify(plReviews, null, 2)); }
 
 // ── P&L History CRUD ─────────────────────────────────────────────
 app.get('/pl/history/:realmId', (req, res) => {
@@ -3461,6 +3469,88 @@ app.post('/pl/anticipated/:realmId', (req, res) => {
   res.json({ success: true });
 });
 
+// ── AM Overrides ────────────────────────────────────────────────
+app.get('/pl/overrides/:realmId', (req, res) => {
+  const overrides = plOverrides[req.params.realmId] || {};
+  // Filter out expired overrides
+  const now = new Date().toISOString();
+  const active = {};
+  for (const [acct, ov] of Object.entries(overrides)) {
+    if (!ov.expiresAt || ov.expiresAt > now) active[acct] = ov;
+  }
+  res.json({ overrides: active });
+});
+
+app.post('/pl/overrides/:realmId', (req, res) => {
+  const rid = req.params.realmId;
+  const { account, override } = req.body;
+  if (!account) return res.status(400).json({ error: 'account required' });
+  if (!plOverrides[rid]) plOverrides[rid] = {};
+  plOverrides[rid][account] = {
+    ...override,
+    setAt: new Date().toISOString(),
+  };
+  savePlOverrides();
+  res.json({ success: true });
+});
+
+app.delete('/pl/overrides/:realmId/:account', (req, res) => {
+  const rid = req.params.realmId;
+  const account = decodeURIComponent(req.params.account);
+  if (plOverrides[rid]) {
+    delete plOverrides[rid][account];
+    savePlOverrides();
+  }
+  res.json({ success: true });
+});
+
+// ── Review State Persistence ────────────────────────────────────
+app.get('/pl/review/:realmId/:period', (req, res) => {
+  const key = `${req.params.realmId}:${req.params.period}`;
+  res.json({ review: plReviews[key] || null });
+});
+
+app.post('/pl/review/:realmId/:period', (req, res) => {
+  const key = `${req.params.realmId}:${req.params.period}`;
+  const { decisions, notes, completedAt } = req.body;
+  plReviews[key] = { decisions: decisions || {}, notes: notes || {}, completedAt: completedAt || null, savedAt: new Date().toISOString() };
+  savePlReviews();
+  res.json({ success: true });
+});
+
+// ── Auto-Learned Benchmarks ─────────────────────────────────────
+app.get('/pl/benchmarks/:realmId', (req, res) => {
+  const rid = req.params.realmId;
+  const history = plHistory[rid] || {};
+  const periods = Object.keys(history).sort().slice(-12); // last 12 months
+  if (periods.length < 3) return res.json({ benchmarks: {}, periods: periods.length });
+
+  const accountData = {};
+  for (const p of periods) {
+    const accts = history[p]?.accounts || [];
+    const metrics = history[p]?.metrics || {};
+    const sales = metrics.sales || 1;
+    for (const a of accts) {
+      if (!a.name || Math.abs(a.amount) < 1) continue;
+      if (!accountData[a.name]) accountData[a.name] = [];
+      accountData[a.name].push({ amount: Math.abs(a.amount), pctOfSales: Math.abs(a.amount) / sales });
+    }
+  }
+
+  const benchmarks = {};
+  for (const [name, data] of Object.entries(accountData)) {
+    if (data.length < 3) continue;
+    const amounts = data.map(d => d.amount);
+    const pcts = data.map(d => d.pctOfSales);
+    const avg = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    const stdDev = Math.sqrt(amounts.reduce((s, a) => s + (a - avg) ** 2, 0) / amounts.length);
+    const pctAvg = pcts.reduce((s, p) => s + p, 0) / pcts.length;
+    benchmarks[name] = { avg, stdDev, min: Math.min(...amounts), max: Math.max(...amounts), pctAvg, months: data.length };
+  }
+
+  res.json({ benchmarks, periods: periods.length });
+});
+
 // ── Two-Pass AI Analysis (v2) ────────────────────────────────────
 
 // Pass 1: Structural Analysis — forensic bookkeeper findings
@@ -3468,7 +3558,7 @@ app.post('/pl/digest/analyze', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period } = req.body;
+  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period, overrides } = req.body;
 
   const systemPrompt = `You are a senior forensic bookkeeper and financial analyst reviewing a monthly P&L for a Scooters Coffee franchise store. You work for ARK Financial Services. Your job is to find EVERYTHING that is wrong, missing, unusual, or noteworthy.
 
@@ -3478,6 +3568,7 @@ You have access to:
 - Fleet-wide averages across all Scooters stores ARK manages
 - A list of anticipated/expected monthly expenses configured for this store
 - Pre-flags from our automated rule engine
+- AM overrides (accounts the AM has previously reviewed and marked as acceptable — DO NOT re-flag these unless the amount has changed significantly beyond the override tolerance)
 
 YOUR ANALYSIS MUST COVER:
 
@@ -3542,6 +3633,9 @@ ${JSON.stringify(history, null, 2)}` : 'No historical data available.'}
 
 ${fleetContext ? `FLEET DATA (all Scooters stores):
 ${JSON.stringify(fleetContext, null, 2)}` : 'No fleet data available.'}
+
+${overrides && Object.keys(overrides).length ? `AM OVERRIDES (previously approved — skip these unless amount changed significantly):
+${JSON.stringify(overrides, null, 2)}` : ''}
 
 Analyze this P&L thoroughly and return the structured JSON object.`;
 

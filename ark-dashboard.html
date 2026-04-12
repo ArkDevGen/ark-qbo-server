@@ -3771,9 +3771,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
                   <div>
                     <span id="pl-client-name" style="font-weight:600;font-size:13px;color:var(--navy);"></span>
                     <span id="pl-client-realm" style="font-size:11px;color:var(--text-d);margin-left:8px;font-family:'DM Mono',monospace;"></span>
+                    <span id="pl-client-brand-badge" style="display:none;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(162,89,41,.12);color:#a2592a;letter-spacing:.04em;margin-left:6px;"></span>
                   </div>
                   <div style="display:flex;gap:6px;">
                     <span id="pl-client-qb-badge" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:rgba(44,160,28,.12);color:#2ca01c;letter-spacing:.04em;text-transform:uppercase;"></span>
+                  </div>
+                </div>
+                <!-- Class/Store selector (for multi-store QBO files) -->
+                <div id="pl-class-selector-wrap" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="font-size:10px;font-weight:600;color:var(--text-d);">Store/Class:</label>
+                    <select id="pl-class-select" class="field-input" style="font-size:11px;flex:1;" onchange="plOnClassChange()">
+                      <option value="">All Stores (Combined)</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="plLoadClasses()" style="font-size:9px;">Load Classes</button>
                   </div>
                 </div>
               </div>
@@ -3856,83 +3867,52 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
           </div>
 
-          <!-- Results -->
+          <!-- Review Mode Results -->
           <div id="pl-results-wrap" style="display:none;margin-top:12px;">
-            <!-- Stats row -->
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
-              <div class="stat-card" style="padding:14px 16px;">
-                <div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Total Flags</div>
-                <div id="pl-stat-total" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--navy);">0</div>
-              </div>
-              <div class="stat-card" style="padding:14px 16px;">
-                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Critical</div>
-                <div id="pl-stat-critical" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--red);">0</div>
-              </div>
-              <div class="stat-card" style="padding:14px 16px;">
-                <div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Warnings</div>
-                <div id="pl-stat-warnings" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--amber);">0</div>
-              </div>
-              <div class="stat-card" style="padding:14px 16px;">
-                <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Resolved</div>
-                <div id="pl-stat-resolved" style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--green);">0</div>
+            <!-- Quick Header -->
+            <div id="pl-review-header" class="card" style="margin-bottom:12px;overflow:visible;">
+              <div style="padding:16px 18px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                  <div>
+                    <span id="pl-review-client" style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);"></span>
+                    <span id="pl-review-period" style="font-size:11px;color:var(--text-d);margin-left:10px;font-family:'DM Mono',monospace;"></span>
+                  </div>
+                  <div id="pl-review-problem-count" style="font-size:13px;font-weight:700;padding:4px 14px;border-radius:12px;"></div>
+                </div>
+                <!-- Quick stats row -->
+                <div id="pl-review-stats" style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;"></div>
               </div>
             </div>
 
-            <!-- Meeting Prep Card -->
-            <div id="pl-meeting-prep-card" style="display:none;margin-bottom:12px;">
-              <div class="card" style="border-left:4px solid var(--navy);overflow:visible;">
-                <div class="card-header" style="padding:12px 16px;">
-                  <div class="card-title" style="font-size:12px;">Meeting Prep</div>
-                  <button class="btn btn-primary btn-sm" onclick="plGenerateMeetingPDF()" style="font-size:10px;background:#2ca01c;border-color:#2ca01c;">
-                    Generate Meeting PDF
-                  </button>
-                </div>
-                <div style="padding:0 16px 14px;">
-                  <div id="pl-exec-summary" style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);"></div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                    <div>
-                      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Talking Points</div>
-                      <ul id="pl-talking-points" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
-                    </div>
-                    <div>
-                      <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Action Items</div>
-                      <ul id="pl-action-items" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
-                    </div>
-                  </div>
-                  <div id="pl-client-insights-wrap" style="margin-top:12px;">
-                    <div style="font-size:9px;font-weight:700;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Client Insights</div>
-                    <ul id="pl-client-insights" style="font-size:11px;color:var(--text-m);line-height:1.6;margin:0;padding-left:16px;"></ul>
+            <!-- Problem Cards Container -->
+            <div id="pl-review-cards"></div>
+
+            <!-- Completion Footer -->
+            <div id="pl-review-footer" style="display:none;margin-top:12px;">
+              <div class="card" style="border-left:4px solid var(--green);overflow:visible;">
+                <div style="padding:16px 18px;">
+                  <div id="pl-review-summary" style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;"></div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-sm" onclick="plCreateTasksFromFlags()" style="font-size:11px;">Create Tasks for Flagged Items</button>
+                    <button class="btn btn-sm" onclick="plGenerateClientReport()" style="font-size:11px;background:var(--navy);color:#fff;border-color:var(--navy);">Generate Client Summary</button>
+                    <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:11px;">Export Audit Trail</button>
+                    <div style="flex:1;"></div>
+                    <button class="btn btn-sm" onclick="plMarkReviewComplete()" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--green);">Mark Review Complete</button>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Fleet Comparison Card -->
-            <div id="pl-fleet-card" style="display:none;margin-bottom:12px;">
-              <div class="card" style="overflow:visible;">
-                <div class="card-header" style="padding:10px 16px;">
-                  <div class="card-title" style="font-size:12px;">Fleet Comparison</div>
-                  <span id="pl-fleet-store-count" style="font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;"></span>
-                </div>
-                <div id="pl-fleet-body" style="padding:8px 16px 14px;"></div>
-              </div>
+            <!-- Hidden: legacy elements needed by existing functions -->
+            <div style="display:none;">
+              <div id="pl-stat-total">0</div><div id="pl-stat-critical">0</div>
+              <div id="pl-stat-warnings">0</div><div id="pl-stat-resolved">0</div>
+              <div id="pl-meeting-prep-card"></div><div id="pl-fleet-card"></div>
+              <div id="pl-fleet-store-count"></div><div id="pl-fleet-body"></div>
+              <div id="pl-exec-summary"></div><ul id="pl-talking-points"></ul>
+              <ul id="pl-action-items"></ul><ul id="pl-client-insights"></ul>
+              <div id="pl-flags-list"></div>
             </div>
-
-            <!-- Filter bar -->
-            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-              <button class="btn btn-sm pl-filter-btn active" onclick="plFilterFlags('all')" data-filter="all" style="font-size:10px;">All</button>
-              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('CRITICAL')" data-filter="CRITICAL" style="font-size:10px;color:var(--red);">Critical</button>
-              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('WARNING')" data-filter="WARNING" style="font-size:10px;color:var(--amber);">Warning</button>
-              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('INFO')" data-filter="INFO" style="font-size:10px;color:var(--blue);">Info</button>
-              <button class="btn btn-sm pl-filter-btn" onclick="plFilterFlags('resolved')" data-filter="resolved" style="font-size:10px;color:var(--green);">Resolved</button>
-              <div style="flex:1;"></div>
-              <button class="btn btn-ghost btn-sm" onclick="plExportReport('exception')" style="font-size:10px;">Exceptions</button>
-              <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:10px;">Audit Trail</button>
-              <button class="btn btn-primary btn-sm" onclick="plSaveToClient()" style="font-size:10px;">Save to Client</button>
-            </div>
-
-            <!-- Flags list -->
-            <div id="pl-flags-list"></div>
           </div>
 
           <!-- History panel -->
@@ -29872,6 +29852,10 @@ let plCurrentSummary = null;   // summary metrics for current run
 let plPrevSummary = null;      // prior month summary for MoM comparison
 let plFleetData = null;        // fleet data for current run
 let plAnticipatedExpenses = []; // loaded anticipated expenses for selected client
+let plOverrides = {};          // { accountName: { expectedAmount, tolerance, note, expiresAt, setBy, setAt } }
+let plReviewState = {};        // { decisions: {}, notes: {}, completedAt }
+let plStoreBenchmarks = {};    // auto-learned from store history { accountName: { avg, stdDev, months } }
+let plAllAccounts = [];        // all parsed accounts for current run (for review mode)
 
 // ── Scooters COA Rule Engine ─────────────────────────────────────
 const PL_ALWAYS_FLAG = ['Uncategorized Expense','Uncategorized Income','Uncategorized Asset','Ask My Accountant','Reconciliation Discrepancies'];
@@ -29917,12 +29901,31 @@ function plOnClientChange() {
     document.getElementById('pl-client-qb-badge').style.color = client.qboRealmId ? '#2ca01c' : 'var(--red)';
     document.getElementById('pl-client-qb-badge').style.background = client.qboRealmId ? 'rgba(44,160,28,.12)' : 'rgba(176,58,58,.12)';
     runBtn.disabled = !client.qboRealmId;
-    // Load anticipated expenses for this client
+    // Show brand badge if Scooters
+    const brandBadge = document.getElementById('pl-client-brand-badge');
+    if (client.franchiseBrand) {
+      brandBadge.style.display = '';
+      brandBadge.textContent = client.franchiseBrand;
+    } else {
+      brandBadge.style.display = 'none';
+    }
+    // Show class selector if client has franchises or might use class tracking
+    const classWrap = document.getElementById('pl-class-selector-wrap');
+    if (client.franchises?.length > 1 || client.franchiseBrand) {
+      classWrap.style.display = '';
+    } else {
+      classWrap.style.display = 'none';
+    }
+    // Load anticipated expenses + overrides + benchmarks for this client
     plLoadAnticipated(client.qboRealmId);
+    plLoadOverrides(client.qboRealmId);
+    plLoadBenchmarks(client.qboRealmId);
   } else {
     infoBar.style.display = 'none';
     runBtn.disabled = true;
     plAnticipatedExpenses = [];
+    plOverrides = {};
+    plStoreBenchmarks = {};
     plRenderAnticipated();
   }
 }
@@ -29988,6 +29991,128 @@ async function plSaveAnticipated() {
   } catch(e) { showToast('Failed to save'); }
 }
 
+// ── Load AM Overrides ───────────────────────────────────────────
+async function plLoadOverrides(realmId) {
+  if (!realmId) return;
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/overrides/${realmId}`).then(r => r.json());
+    plOverrides = res.overrides || {};
+  } catch(e) { plOverrides = {}; }
+}
+
+async function plSaveOverride(account, override) {
+  if (!plSelectedClient?.qboRealmId) return;
+  try {
+    await fetch(`${QBO_SERVER}/pl/overrides/${plSelectedClient.qboRealmId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account, override }),
+    });
+    plOverrides[account] = { ...override, setAt: new Date().toISOString() };
+  } catch(e) { showToast('Failed to save override'); }
+}
+
+async function plRemoveOverride(account) {
+  if (!plSelectedClient?.qboRealmId) return;
+  try {
+    await fetch(`${QBO_SERVER}/pl/overrides/${plSelectedClient.qboRealmId}/${encodeURIComponent(account)}`, { method: 'DELETE' });
+    delete plOverrides[account];
+  } catch(e) {}
+}
+
+// ── Load Auto-Learned Benchmarks ────────────────────────────────
+async function plLoadBenchmarks(realmId) {
+  if (!realmId) return;
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/benchmarks/${realmId}`).then(r => r.json());
+    plStoreBenchmarks = res.benchmarks || {};
+  } catch(e) { plStoreBenchmarks = {}; }
+}
+
+// ── Save Review State ───────────────────────────────────────────
+async function plSaveReviewState() {
+  if (!plSelectedClient?.qboRealmId) return;
+  const key = plGetEffectiveRealmKey();
+  const period = `${document.getElementById('pl-start-date').value}_${document.getElementById('pl-end-date').value}`;
+  try {
+    await fetch(`${QBO_SERVER}/pl/review/${key}/${period}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(plReviewState),
+    });
+  } catch(e) {}
+}
+
+async function plLoadReviewState() {
+  if (!plSelectedClient?.qboRealmId) return null;
+  const key = plGetEffectiveRealmKey();
+  const period = `${document.getElementById('pl-start-date').value}_${document.getElementById('pl-end-date').value}`;
+  try {
+    const res = await fetch(`${QBO_SERVER}/pl/review/${key}/${period}`).then(r => r.json());
+    return res.review;
+  } catch(e) { return null; }
+}
+
+// ── Class Tracking (multi-store per QBO file) ───────────────────
+let plSelectedClass = ''; // empty = all stores combined
+
+async function plLoadClasses() {
+  if (!plSelectedClient?.qboRealmId) return;
+  showToast('Loading QBO classes...');
+  try {
+    // Pull a P&L with class breakout for last month to discover classes
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    const res = await fetch(`${QBO_SERVER}/qbo/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'getProfitAndLoss',
+        realmId: plSelectedClient.qboRealmId,
+        payload: { startDate: start.toISOString().slice(0,10), endDate: end.toISOString().slice(0,10), summarize_column_by: 'Class' },
+      }),
+    }).then(r => r.json());
+
+    if (res.success && res.report?.Columns?.Column) {
+      const cols = res.report.Columns.Column;
+      const classes = cols.filter(c => c.ColType === 'Money' && c.ColTitle && c.ColTitle !== 'Total').map(c => c.ColTitle);
+      const sel = document.getElementById('pl-class-select');
+      sel.innerHTML = '<option value="">All Stores (Combined)</option>' +
+        classes.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (classes.length) showToast(`Found ${classes.length} classes`);
+      else showToast('No classes found in QBO');
+    }
+  } catch(e) {
+    showToast('Failed to load classes: ' + e.message);
+  }
+}
+
+function plOnClassChange() {
+  plSelectedClass = document.getElementById('pl-class-select')?.value || '';
+}
+
+function plGetEffectiveRealmKey() {
+  const base = plSelectedClient?.qboRealmId || '';
+  return plSelectedClass ? `${base}:${plSelectedClass}` : base;
+}
+
+// ── Check if override applies to a flag ─────────────────────────
+function plIsOverridden(accountName, amount) {
+  const ov = plOverrides[accountName];
+  if (!ov) return false;
+  // Check expiry
+  if (ov.expiresAt && new Date(ov.expiresAt) < new Date()) return false;
+  // If override has an expected amount, check tolerance
+  if (ov.expectedAmount && amount != null) {
+    const tolerance = ov.tolerance || 0.15;
+    const diff = Math.abs((Math.abs(amount) - ov.expectedAmount) / ov.expectedAmount);
+    return diff <= tolerance;
+  }
+  // Override exists and hasn't expired — applies
+  return true;
+}
+
 // ── Quick period selector ────────────────────────────────────────
 function plSetQuickPeriod(val) {
   const v = val || document.getElementById('pl-quick-period')?.value;
@@ -30028,17 +30153,23 @@ async function plRunDigest() {
   plStructuralFindings = null;
   plDetailReport = null;
   plPrevSummary = null;
+  plAllAccounts = [];
+  plReviewState = { decisions: {}, notes: {}, completedAt: null };
 
   const progWrap = document.getElementById('pl-progress-wrap');
   progWrap.style.display = '';
 
   try {
+    // Build payload with optional class filter
+    const plPayloadBase = plSelectedClass ? { summarize_column_by: 'Class' } : {};
+    const effectiveKey = plGetEffectiveRealmKey();
+
     // ── Step 1: Pull P&L Detail for current month ──────────────
-    plProgress(5, 'Pulling P&L detail from QBO...');
+    plProgress(5, plSelectedClass ? `Pulling P&L detail for ${plSelectedClass}...` : 'Pulling P&L detail from QBO...');
     const detailRes = await fetch(`${QBO_SERVER}/qbo/api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType: 'detail' } }),
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType: 'detail', ...plPayloadBase } }),
     }).then(r => r.json());
     plDetailReport = detailRes.success ? detailRes.report : null;
 
@@ -30047,7 +30178,7 @@ async function plRunDigest() {
     const plRes = await fetch(`${QBO_SERVER}/qbo/api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType } }),
+      body: JSON.stringify({ action: 'getProfitAndLoss', realmId: plSelectedClient.qboRealmId, payload: { startDate, endDate, reportType, ...plPayloadBase } }),
     }).then(r => r.json());
     if (!plRes.success) throw new Error(plRes.error || 'Failed to fetch P&L');
     plRawReport = plRes.report;
@@ -30085,9 +30216,9 @@ async function plRunDigest() {
       }
     } catch(e) { console.log('History batch failed:', e.message); }
 
-    // Also load any existing server history
+    // Also load any existing server history (use effective key for class-specific)
     try {
-      const existingHist = await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`).then(r => r.json());
+      const existingHist = await fetch(`${QBO_SERVER}/pl/history/${effectiveKey}`).then(r => r.json());
       plHistoryData = { ...existingHist.history, ...trailingHistory };
     } catch(e) { plHistoryData = trailingHistory; }
 
@@ -30101,14 +30232,26 @@ async function plRunDigest() {
 
     // ── Step 4: Parse current month + build summary ────────────
     const accounts = plParseReport(plRes.report);
+    plAllAccounts = accounts;
     plCurrentSummary = plBuildSummary(accounts);
 
-    // ── Step 5: Load anticipated expenses ──────────────────────
-    plProgress(35, 'Loading expected expenses...');
+    // ── Step 5: Load anticipated expenses + overrides + benchmarks ──
+    plProgress(35, 'Loading intelligence...');
     try {
-      const antRes = await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`).then(r => r.json());
+      const antRes = await fetch(`${QBO_SERVER}/pl/anticipated/${effectiveKey}`).then(r => r.json());
       plAnticipatedExpenses = antRes.expenses || [];
+      // Fallback to base realm if no class-specific anticipated
+      if (!plAnticipatedExpenses.length && plSelectedClass) {
+        const baseRes = await fetch(`${QBO_SERVER}/pl/anticipated/${plSelectedClient.qboRealmId}`).then(r => r.json());
+        plAnticipatedExpenses = baseRes.expenses || [];
+      }
     } catch(e) {}
+    await plLoadOverrides(effectiveKey);
+    await plLoadBenchmarks(effectiveKey);
+
+    // Load any existing review state for this period
+    const existingReview = await plLoadReviewState();
+    if (existingReview) plReviewState = existingReview;
 
     // ── Step 6: Load fleet data ────────────────────────────────
     plProgress(38, 'Loading fleet data...');
@@ -30139,6 +30282,7 @@ async function plRunDigest() {
           history: plHistoryData,
           fleetContext: plFleetData,
           anticipated: plAnticipatedExpenses,
+          overrides: plOverrides,
           clientName: plSelectedClient.biz,
           period: `${startDate} to ${endDate}`,
         }),
@@ -30175,7 +30319,7 @@ async function plRunDigest() {
     plProgress(90, 'Saving data...');
     try {
       const period = `${startDate}_${endDate}`;
-      await fetch(`${QBO_SERVER}/pl/history/${plSelectedClient.qboRealmId}`, {
+      await fetch(`${QBO_SERVER}/pl/history/${effectiveKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period, metrics: plCurrentSummary, accounts }),
       });
@@ -30183,18 +30327,16 @@ async function plRunDigest() {
     try {
       await fetch(`${QBO_SERVER}/pl/fleet/contribute`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ realmId: plSelectedClient.qboRealmId, accounts, revenue: plCurrentSummary.sales }),
+        body: JSON.stringify({ realmId: effectiveKey, accounts, revenue: plCurrentSummary.sales }),
       });
     } catch(e) {}
 
-    // ── Step 12: Render everything ─────────────────────────────
+    // ── Step 12: Render Review Mode ─────────────────────────────
     plProgress(100, 'Done!');
     setTimeout(() => { progWrap.style.display = 'none'; }, 600);
-    plRenderResults();
-    plRenderMeetingPrep();
-    plRenderFleetComparison();
+    plRenderReviewMode();
     await plLoadHistoryPanel();
-    qboLog('success', `P&L Digest v2 complete: <strong>${plFlags.length} flags</strong> for ${plSelectedClient.biz}`);
+    qboLog('success', `P&L Review: <strong>${plFlags.length} items need attention</strong> for ${plSelectedClient.biz}`);
 
   } catch (e) {
     progWrap.style.display = 'none';
@@ -30286,10 +30428,10 @@ function plAnalyzePatterns(currentAccounts, historyData) {
   const currentNames = new Set(currentAccounts.map(a => a.name.toLowerCase()));
   const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-  // Check for missing recurring accounts
+  // Check for missing recurring accounts — skip overridden
   for (const [name, history] of Object.entries(accountHistory)) {
+    if (plIsOverridden(name, null)) continue;
     const appearedCount = history.filter(h => h.amount > 0).length;
-    // If account appeared in 4+ of last 6 months but not this month
     if (appearedCount >= Math.min(4, periods.length) && !currentNames.has(name.toLowerCase())) {
       const avgAmount = history.reduce((s, h) => s + h.amount, 0) / history.length;
       flags.push({
@@ -30297,7 +30439,7 @@ function plAnalyzePatterns(currentAccounts, historyData) {
         category: 'Missing Recurring',
         account: name,
         amount: null,
-        message: `"${name}" appeared in ${appearedCount} of the last ${periods.length} months (avg ${fmt$(avgAmount)}/mo) but is MISSING this month. This may indicate a missed posting.`,
+        message: `"${name}" appeared in ${appearedCount} of the last ${periods.length} months (avg ${fmt$(avgAmount)}/mo) but is MISSING this month.`,
         suggestedAccount: null,
         variance: 'MISSING',
         source: 'pattern',
@@ -30305,14 +30447,15 @@ function plAnalyzePatterns(currentAccounts, historyData) {
     }
   }
 
-  // Check for significant variance from historical average
+  // Check for significant variance from historical average — skip overridden
   for (const acct of currentAccounts) {
+    if (plIsOverridden(acct.name, acct.amount)) continue;
     const history = accountHistory[acct.name];
     if (!history || history.length < 3) continue;
     const amounts = history.map(h => h.amount).filter(a => a > 0);
     if (amounts.length < 2) continue;
     const avg = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-    if (avg < 50) continue; // skip tiny accounts
+    if (avg < 50) continue;
     const currentAmt = Math.abs(acct.amount);
     const variancePct = avg > 0 ? ((currentAmt - avg) / avg) * 100 : 0;
 
@@ -30320,7 +30463,7 @@ function plAnalyzePatterns(currentAccounts, historyData) {
       flags.push({
         severity: 'CRITICAL', category: 'Historical Variance', account: acct.name,
         amount: acct.amount,
-        message: `${acct.name} is ${fmt$(currentAmt)} this month vs ${fmt$(avg)} average (${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}% variance). This is a significant deviation from the ${amounts.length}-month pattern.`,
+        message: `${acct.name} is ${fmt$(currentAmt)} this month vs ${fmt$(avg)} average (${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}% variance).`,
         suggestedAccount: null, variance: `${variancePct > 0 ? '+' : ''}${variancePct.toFixed(0)}%`, source: 'pattern',
       });
     } else if (Math.abs(variancePct) > 25) {
@@ -30385,16 +30528,16 @@ function plCheckAnticipated(accounts, summary) {
 
   for (const exp of plAnticipatedExpenses) {
     if (!exp.name) continue;
+    if (plIsOverridden(exp.name, null)) continue;
     const tolerance = exp.tolerance || 0.15;
     const match = accounts.find(a => a.name.toLowerCase().includes(exp.name.toLowerCase()));
 
     if (!match) {
-      // Expected expense is completely missing
       const expectedAmt = exp.amount || (exp.pctOfSales ? exp.pctOfSales * sales : null);
       flags.push({
         severity: 'CRITICAL', category: 'Missing Expected', account: exp.name,
         amount: null,
-        message: `Expected monthly expense "${exp.name}"${expectedAmt ? ` of ~${fmt$(expectedAmt)}` : ''} is NOT on this month's P&L. This likely needs to be posted.`,
+        message: `Expected monthly expense "${exp.name}"${expectedAmt ? ` of ~${fmt$(expectedAmt)}` : ''} is NOT on this month's P&L.`,
         suggestedAccount: null, variance: 'MISSING', source: 'anticipated',
       });
     } else {
@@ -30468,9 +30611,9 @@ function plFindingsToFlags(findings) {
 function plRunRuleEngine(accounts) {
   const flags = [];
   const summary = plBuildSummary(accounts);
-  const sales = summary.sales || 1; // avoid div by zero
+  const sales = summary.sales || 1;
 
-  // Always-flag accounts
+  // Always-flag accounts (never skip these — always need recategorization)
   for (const acct of accounts) {
     for (const bad of PL_ALWAYS_FLAG) {
       if (acct.name.toLowerCase().includes(bad.toLowerCase()) && acct.amount !== 0) {
@@ -30483,23 +30626,43 @@ function plRunRuleEngine(accounts) {
     }
   }
 
-  // Missing expected accounts
+  // Missing expected accounts — skip if overridden
   for (const expected of PL_EXPECTED_MONTHLY) {
+    if (plIsOverridden(expected, null)) continue;
     const found = accounts.some(a => a.name.toLowerCase().includes(expected.toLowerCase()));
     if (!found) {
+      // Check store benchmark for context
+      const bench = plStoreBenchmarks[expected];
+      const avgMsg = bench ? ` (store avg: $${bench.avg.toLocaleString('en-US',{minimumFractionDigits:0})}/mo over ${bench.months} months)` : '';
       flags.push({
         severity: 'WARNING', category: 'Missing Account', account: expected,
-        amount: null, message: `Expected monthly account "${expected}" has no balance this period. Verify this is correct.`,
+        amount: null, message: `Expected monthly account "${expected}" has no balance this period${avgMsg}.`,
         suggestedAccount: null, variance: 'MISSING', source: 'rule',
       });
     }
   }
 
-  // Benchmark checks
+  // Benchmark checks — skip if overridden and within override tolerance
   for (const [name, bench] of Object.entries(PL_BENCHMARKS)) {
     const acct = accounts.find(a => a.name.toLowerCase().includes(name.toLowerCase()));
     if (acct) {
+      if (plIsOverridden(acct.name, acct.amount)) continue;
       const pct = (Math.abs(acct.amount) / sales) * 100;
+      // Use store benchmark if available (tighter, learned from same store)
+      const storeBench = plStoreBenchmarks[acct.name];
+      if (storeBench && storeBench.months >= 3) {
+        const diff = Math.abs(Math.abs(acct.amount) - storeBench.avg);
+        if (diff > storeBench.stdDev * 2) {
+          flags.push({
+            severity: diff > storeBench.stdDev * 3 ? 'CRITICAL' : 'WARNING',
+            category: 'Store Trend Variance', account: acct.name,
+            amount: acct.amount,
+            message: `${acct.name} is $${Math.abs(acct.amount).toLocaleString('en-US',{minimumFractionDigits:2})} — store avg is $${storeBench.avg.toLocaleString('en-US',{minimumFractionDigits:0})} over ${storeBench.months} months (±$${storeBench.stdDev.toLocaleString('en-US',{minimumFractionDigits:0})}).`,
+            suggestedAccount: null, variance: `$${Math.abs(acct.amount).toLocaleString('en-US',{minimumFractionDigits:0})} vs $${storeBench.avg.toLocaleString('en-US',{minimumFractionDigits:0})} avg`, source: 'rule',
+          });
+          continue; // don't double-flag with hardcoded benchmark
+        }
+      }
       if (pct < bench.pctOfSales[0] || pct > bench.pctOfSales[1]) {
         flags.push({
           severity: pct > bench.pctOfSales[1] * 1.5 ? 'CRITICAL' : 'WARNING',
@@ -30532,170 +30695,295 @@ function plMergeFlags(ruleFlags, aiFlags) {
   return merged;
 }
 
-// ── Render results ───────────────────────────────────────────────
-function plRenderResults() {
+// ══════════════════════════════════════════════════════════════════
+//  REVIEW MODE — Speed-first AM experience (only show problems)
+// ══════════════════════════════════════════════════════════════════
+
+function plRenderReviewMode() {
   document.getElementById('pl-results-wrap').style.display = '';
-  plUpdateStats();
-  plRenderFlags();
-}
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const fmt$2 = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-// ── Render meeting prep card ─────────────────────────────────────
-function plRenderMeetingPrep() {
-  const card = document.getElementById('pl-meeting-prep-card');
-  if (!card) return;
-  if (!plMeetingPrep) { card.style.display = 'none'; return; }
-  card.style.display = '';
+  // ── Header ──
+  document.getElementById('pl-review-client').textContent = plSelectedClient?.biz || '';
+  document.getElementById('pl-review-period').textContent = `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`;
 
-  const esc = (s) => s ? s.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
-  document.getElementById('pl-exec-summary').innerHTML = esc(plMeetingPrep.executiveSummary || 'No summary available.');
-
-  const tpList = document.getElementById('pl-talking-points');
-  tpList.innerHTML = (plMeetingPrep.talkingPoints || []).map(tp => `<li style="margin-bottom:4px;">${esc(tp)}</li>`).join('');
-
-  const aiList = document.getElementById('pl-action-items');
-  aiList.innerHTML = (plMeetingPrep.actionItems || []).map(ai => `<li style="margin-bottom:4px;">${esc(ai)}</li>`).join('');
-
-  const ciList = document.getElementById('pl-client-insights');
-  ciList.innerHTML = (plMeetingPrep.clientInsights || []).map(ci => `<li style="margin-bottom:4px;">${esc(ci)}</li>`).join('');
-}
-
-// ── Render fleet comparison ──────────────────────────────────────
-function plRenderFleetComparison() {
-  const card = document.getElementById('pl-fleet-card');
-  if (!card || !plFleetData || !plCurrentSummary) { if (card) card.style.display = 'none'; return; }
-  const storeCount = plFleetData.storeCount || 0;
-  if (storeCount < 2) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  document.getElementById('pl-fleet-store-count').textContent = `${storeCount} stores`;
-
-  const sales = plCurrentSummary.sales || 1;
-  const metrics = [
-    { label: 'COGS', value: plCurrentSummary.cogs, search: 'Cost of Goods Sold' },
-    { label: 'Payroll', value: plCurrentSummary.payroll, search: 'Payroll' },
-    { label: 'Royalty', value: plCurrentSummary.royalty, search: 'Royalty Fees' },
-    { label: 'Rent', value: plCurrentSummary.rent, search: 'Rent' },
-  ];
-
-  const body = document.getElementById('pl-fleet-body');
-  body.innerHTML = metrics.map(m => {
-    const storePct = (m.value / sales) * 100;
-    const fleetAcct = Object.entries(plFleetData.accounts || {}).find(([name]) => name.toLowerCase().includes(m.search.toLowerCase()));
-    const fleetPct = fleetAcct ? (fleetAcct[1].avgPct || 0) * 100 : null;
-    if (fleetPct === null) return '';
-    const diff = storePct - fleetPct;
-    const color = Math.abs(diff) < 3 ? 'var(--green)' : diff > 0 ? 'var(--red)' : 'var(--blue)';
-    const barMax = Math.max(storePct, fleetPct, 50);
-    return `<div style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
-        <span style="font-weight:600;color:var(--text);">${m.label}</span>
-        <span style="color:${color};font-weight:600;">${storePct.toFixed(1)}% vs ${fleetPct.toFixed(1)}% fleet avg</span>
-      </div>
-      <div style="display:flex;gap:4px;height:6px;">
-        <div style="flex:${storePct/barMax};background:var(--navy);border-radius:3px;"></div>
-        <div style="flex:${(barMax-storePct)/barMax};background:var(--surface2);border-radius:3px;"></div>
-      </div>
-      <div style="display:flex;gap:4px;height:4px;margin-top:2px;">
-        <div style="flex:${fleetPct/barMax};background:var(--text-d);border-radius:2px;opacity:.4;"></div>
-        <div style="flex:${(barMax-fleetPct)/barMax};"></div>
-      </div>
-    </div>`;
-  }).filter(Boolean).join('');
-}
-
-function plUpdateStats() {
-  const resolved = Object.keys(plResolvedFlags).length;
+  const unresolved = plFlags.filter((f, i) => !plReviewState.decisions[f.account + '::' + i]);
   const critical = plFlags.filter(f => f.severity === 'CRITICAL').length;
   const warnings = plFlags.filter(f => f.severity === 'WARNING').length;
-  document.getElementById('pl-stat-total').textContent = plFlags.length;
-  document.getElementById('pl-stat-critical').textContent = critical;
-  document.getElementById('pl-stat-warnings').textContent = warnings;
-  document.getElementById('pl-stat-resolved').textContent = resolved;
+  const pcEl = document.getElementById('pl-review-problem-count');
+  if (plFlags.length === 0) {
+    pcEl.textContent = 'All clear — nothing flagged';
+    pcEl.style.background = 'rgba(46,125,94,.12)';
+    pcEl.style.color = 'var(--green)';
+  } else {
+    pcEl.textContent = `${unresolved.length} of ${plFlags.length} items need attention`;
+    pcEl.style.background = critical > 0 ? 'rgba(176,58,58,.12)' : 'rgba(176,106,26,.12)';
+    pcEl.style.color = critical > 0 ? 'var(--red)' : 'var(--amber)';
+  }
 
+  // Quick stats
+  const s = plCurrentSummary || {};
+  const sales = s.sales || 0;
+  document.getElementById('pl-review-stats').innerHTML = [
+    { label: 'Revenue', val: fmt$(sales) },
+    { label: 'COGS', val: sales ? `${((s.cogs/sales)*100).toFixed(1)}%` : '—' },
+    { label: 'Payroll', val: sales ? `${((s.payroll/sales)*100).toFixed(1)}%` : '—' },
+    { label: 'Net Income', val: fmt$(s.netIncome || 0) },
+  ].map(m => `<div style="font-size:11px;"><span style="color:var(--text-d);font-weight:600;">${m.label}:</span> <span style="color:var(--navy);font-weight:700;font-family:'DM Mono',monospace;">${m.val}</span></div>`).join('');
+
+  // Update status badge
   const badge = document.getElementById('pl-status-badge');
   if (badge) {
     if (critical > 0) { badge.textContent = `${critical} Critical`; badge.style.background = 'rgba(176,58,58,.12)'; badge.style.color = 'var(--red)'; }
     else if (warnings > 0) { badge.textContent = `${warnings} Warnings`; badge.style.background = 'rgba(176,106,26,.12)'; badge.style.color = 'var(--amber)'; }
     else { badge.textContent = 'Clean'; badge.style.background = 'rgba(46,125,94,.12)'; badge.style.color = 'var(--green)'; }
   }
+
+  // ── Problem Cards ──
+  plRenderProblemCards();
+  plCheckReviewCompletion();
 }
 
-function plRenderFlags() {
-  const list = document.getElementById('pl-flags-list');
-  if (!list) return;
+function plRenderProblemCards() {
+  const container = document.getElementById('pl-review-cards');
+  if (!container) return;
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-  const filtered = plFlags.filter((f, i) => {
-    if (plCurrentFilter === 'all') return true;
-    if (plCurrentFilter === 'resolved') return !!plResolvedFlags[i];
-    return f.severity === plCurrentFilter;
-  });
-
-  if (!filtered.length) {
-    list.innerHTML = '<div class="card" style="padding:32px;text-align:center;"><div style="font-size:13px;color:var(--text-d);">No flags match this filter.</div></div>';
+  if (!plFlags.length) {
+    container.innerHTML = `<div class="card" style="padding:32px;text-align:center;">
+      <div style="font-size:36px;margin-bottom:8px;">&#10003;</div>
+      <div style="font-size:14px;font-weight:600;color:var(--green);">All Clear</div>
+      <div style="font-size:12px;color:var(--text-d);margin-top:4px;">No issues found — all ${plAllAccounts.length} accounts look good.</div>
+    </div>`;
     return;
   }
 
-  list.innerHTML = filtered.map((f, _fi) => {
-    const i = plFlags.indexOf(f);
-    const resolved = plResolvedFlags[i];
-    const sevColor = f.severity === 'CRITICAL' ? 'var(--red)' : f.severity === 'WARNING' ? 'var(--amber)' : 'var(--blue)';
-    const sevBg = f.severity === 'CRITICAL' ? 'var(--red-bg)' : f.severity === 'WARNING' ? 'var(--amber-bg)' : 'var(--blue-bg)';
-    const srcIcon = f.source === 'ai' ? '🤖' : '📋';
+  container.innerHTML = plFlags.map((f, i) => {
+    const key = f.account + '::' + i;
+    const decision = plReviewState.decisions[key];
+    if (decision) return ''; // Already addressed — hide it
 
-    return `<div class="card" style="margin-bottom:8px;${resolved?'opacity:.55;':''}overflow:visible;">
-      <div style="padding:12px 16px;cursor:pointer;" onclick="plToggleFlag(${i})">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${sevBg};color:${sevColor};letter-spacing:.04em;text-transform:uppercase;">${f.severity}</span>
-          <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--surface2);color:var(--text-d);">${f.category}</span>
-          <span title="${f.source === 'ai' ? 'AI Analysis' : 'Rule Engine'}" style="font-size:11px;">${srcIcon}</span>
-          ${f.amount != null ? `<span style="font-size:11px;font-weight:600;color:var(--navy);font-family:'DM Mono',monospace;">$${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}</span>` : ''}
-          ${f.variance ? `<span style="font-size:10px;color:${sevColor};font-family:'DM Mono',monospace;">${f.variance}</span>` : ''}
-          ${resolved ? '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--green-bg);color:var(--green);">RESOLVED</span>' : ''}
-          <div style="flex:1;"></div>
-          <span style="font-size:11px;color:var(--text-d);">▾</span>
+    const isCritical = f.severity === 'CRITICAL';
+    const isWarning = f.severity === 'WARNING';
+    const borderColor = isCritical ? 'var(--red)' : isWarning ? 'var(--amber)' : 'var(--blue)';
+    const icon = isCritical ? '&#x1F534;' : isWarning ? '&#x26A0;&#xFE0F;' : '&#x2139;&#xFE0F;';
+    const sevLabel = f.variance === 'MISSING' ? 'MISSING' : f.variance === 'NEW' ? 'NEW' : f.severity;
+
+    // Build trend context line
+    let trendLine = '';
+    const bench = plStoreBenchmarks[f.account];
+    if (bench && bench.months >= 3) {
+      trendLine = `<span style="font-size:10px;color:var(--text-d);">Store avg: ${fmt$(bench.avg)}/mo over ${bench.months} months</span>`;
+    } else if (f.variance && f.variance !== 'MISSING' && f.variance !== 'NEW') {
+      trendLine = `<span style="font-size:10px;color:${borderColor};font-family:'DM Mono',monospace;">${f.variance}</span>`;
+    }
+
+    return `<div class="card pl-problem-card" id="pl-card-${i}" style="margin-bottom:8px;border-left:4px solid ${borderColor};overflow:visible;transition:opacity .3s,transform .3s;">
+      <div style="padding:12px 16px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${isCritical?'rgba(176,58,58,.12)':isWarning?'rgba(176,106,26,.12)':'rgba(37,99,235,.1)'};color:${borderColor};letter-spacing:.04em;text-transform:uppercase;">${sevLabel}</span>
+              ${f.amount != null ? `<span style="font-size:12px;font-weight:700;color:var(--navy);font-family:'DM Mono',monospace;">${fmt$(f.amount)}</span>` : ''}
+              ${f.source === 'ai' ? '<span title="AI flagged" style="font-size:10px;opacity:.5;">&#x1F916;</span>' : ''}
+            </div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">${f.account || '—'}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px;line-height:1.5;">${f.message}</div>
+            ${trendLine ? `<div style="margin-top:4px;">${trendLine}</div>` : ''}
+            ${f.suggestedAccount ? `<div style="font-size:10px;margin-top:4px;color:var(--green);"><strong>Suggested:</strong> ${f.suggestedAccount}</div>` : ''}
+          </div>
         </div>
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:6px;">${f.account || '—'}</div>
-        <div style="font-size:11px;color:var(--text-m);margin-top:3px;line-height:1.5;">${f.message}</div>
-      </div>
-      <div id="pl-flag-detail-${i}" style="display:none;padding:0 16px 12px;border-top:1px solid var(--border);">
-        <div style="padding-top:10px;">
-          ${f.suggestedAccount ? `<div style="font-size:11px;margin-bottom:8px;"><strong style="color:var(--green);">Suggested account:</strong> ${f.suggestedAccount}</div>` : ''}
-          <div style="display:flex;gap:8px;align-items:flex-start;">
-            <textarea id="pl-note-${i}" class="field-input" rows="2" placeholder="Override note…" style="font-size:11px;flex:1;resize:vertical;">${resolved?.note||''}</textarea>
-            <button class="btn btn-sm" onclick="plResolveFlag(${i})" style="font-size:10px;white-space:nowrap;${resolved?'background:var(--green-bg);color:var(--green);':''}">
-              ${resolved ? '✓ Resolved' : 'Mark Resolved'}
-            </button>
+        <!-- Action buttons -->
+        <div style="display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="plReviewAction(${i},'ok')" style="font-size:10px;background:rgba(46,125,94,.08);color:var(--green);border-color:rgba(46,125,94,.2);">&#10003; Looks OK</button>
+          <button class="btn btn-sm" onclick="plShowOverrideForm(${i})" style="font-size:10px;background:rgba(37,99,235,.08);color:var(--blue);border-color:rgba(37,99,235,.2);">&#x1F4CC; Override</button>
+          <button class="btn btn-sm" onclick="plReviewAction(${i},'flag')" style="font-size:10px;background:rgba(176,58,58,.08);color:var(--red);border-color:rgba(176,58,58,.2);">&#x1F527; Flag for Fix</button>
+        </div>
+        <!-- Override form (hidden) -->
+        <div id="pl-override-form-${i}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);">
+          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:6px;">Why is this expected?</div>
+          <textarea id="pl-override-note-${i}" class="field-input" rows="2" placeholder="e.g., Landlord gave discount through Dec 2026" style="font-size:11px;width:100%;resize:vertical;margin-bottom:6px;"></textarea>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:10px;color:var(--text-d);">Expires:</label>
+            <input type="date" id="pl-override-exp-${i}" class="field-input" style="font-size:11px;width:auto;">
+            ${f.amount != null ? `<label style="font-size:10px;color:var(--text-d);margin-left:8px;">Expected $:</label><input type="number" id="pl-override-amt-${i}" class="field-input" value="${Math.abs(f.amount)}" style="font-size:11px;width:80px;">` : ''}
+            <div style="flex:1;"></div>
+            <button class="btn btn-sm" onclick="plSubmitOverride(${i})" style="font-size:10px;background:var(--blue);color:#fff;border-color:var(--blue);">Save Override</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pl-override-form-${i}').style.display='none'" style="font-size:10px;">Cancel</button>
           </div>
         </div>
       </div>
     </div>`;
-  }).join('');
-}
+  }).filter(Boolean).join('');
 
-function plToggleFlag(i) {
-  const el = document.getElementById(`pl-flag-detail-${i}`);
-  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
-}
-
-function plResolveFlag(i) {
-  const note = document.getElementById(`pl-note-${i}`)?.value || '';
-  if (plResolvedFlags[i]) {
-    delete plResolvedFlags[i]; // unresolve
-  } else {
-    plResolvedFlags[i] = { note, resolvedAt: new Date().toISOString() };
+  if (!container.innerHTML.trim()) {
+    container.innerHTML = `<div class="card" style="padding:24px;text-align:center;">
+      <div style="font-size:14px;font-weight:600;color:var(--green);">&#10003; All items addressed</div>
+      <div style="font-size:11px;color:var(--text-d);margin-top:4px;">Review the summary below to finalize.</div>
+    </div>`;
   }
-  plUpdateStats();
-  plRenderFlags();
 }
 
-function plFilterFlags(filter) {
-  plCurrentFilter = filter;
-  document.querySelectorAll('.pl-filter-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.filter === filter);
-    b.style.background = b.dataset.filter === filter ? 'var(--navy)' : '';
-    b.style.color = b.dataset.filter === filter ? '#fff' : '';
-  });
-  plRenderFlags();
+function plShowOverrideForm(i) {
+  document.getElementById(`pl-override-form-${i}`).style.display = '';
 }
+
+function plReviewAction(i, action) {
+  const f = plFlags[i];
+  if (!f) return;
+  const key = f.account + '::' + i;
+  plReviewState.decisions[key] = action;
+
+  // Animate card out
+  const card = document.getElementById(`pl-card-${i}`);
+  if (card) {
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(40px)';
+    setTimeout(() => {
+      card.style.display = 'none';
+      plCheckReviewCompletion();
+      plRenderProblemCards();
+    }, 300);
+  }
+
+  // Auto-save review state
+  plSaveReviewState();
+}
+
+async function plSubmitOverride(i) {
+  const f = plFlags[i];
+  if (!f) return;
+  const note = document.getElementById(`pl-override-note-${i}`)?.value || '';
+  const expiresAt = document.getElementById(`pl-override-exp-${i}`)?.value || null;
+  const amtEl = document.getElementById(`pl-override-amt-${i}`);
+  const expectedAmount = amtEl ? parseFloat(amtEl.value) || null : null;
+
+  const override = {
+    expectedAmount,
+    tolerance: 0.15,
+    note,
+    expiresAt: expiresAt || null,
+    setBy: 'AM',
+  };
+
+  await plSaveOverride(f.account, override);
+  plReviewAction(i, 'override');
+  showToast(`Override saved for ${f.account}`);
+}
+
+function plCheckReviewCompletion() {
+  const total = plFlags.length;
+  if (!total) return;
+  const addressed = Object.keys(plReviewState.decisions).length;
+  const footer = document.getElementById('pl-review-footer');
+  const pcEl = document.getElementById('pl-review-problem-count');
+
+  if (addressed >= total) {
+    // All addressed — show completion footer
+    footer.style.display = '';
+    const okCount = Object.values(plReviewState.decisions).filter(d => d === 'ok').length;
+    const flagCount = Object.values(plReviewState.decisions).filter(d => d === 'flag').length;
+    const overrideCount = Object.values(plReviewState.decisions).filter(d => d === 'override').length;
+    document.getElementById('pl-review-summary').textContent =
+      `Review complete — ${okCount} approved, ${flagCount} flagged for fix, ${overrideCount} overridden`;
+    pcEl.textContent = 'Review complete';
+    pcEl.style.background = 'rgba(46,125,94,.12)';
+    pcEl.style.color = 'var(--green)';
+  } else {
+    footer.style.display = 'none';
+    pcEl.textContent = `${total - addressed} of ${total} items need attention`;
+  }
+}
+
+function plCreateTasksFromFlags() {
+  const flagged = plFlags.filter((f, i) => plReviewState.decisions[f.account + '::' + i] === 'flag');
+  if (!flagged.length) { showToast('No items flagged for fix'); return; }
+  const client = plSelectedClient;
+  if (!client) return;
+
+  for (const f of flagged) {
+    const task = {
+      id: uid(),
+      title: `P&L Fix: ${f.account}`,
+      desc: f.message + (f.suggestedAccount ? ` — Suggested: ${f.suggestedAccount}` : ''),
+      client: client.id,
+      clientName: client.biz,
+      status: 'todo',
+      priority: f.severity === 'CRITICAL' ? 'high' : 'medium',
+      due: null,
+      created: new Date().toISOString(),
+      tags: ['p&l-review'],
+    };
+    if (!DB.tasks) DB.tasks = [];
+    DB.tasks.push(task);
+  }
+  saveDB();
+  showToast(`${flagged.length} task(s) created`);
+}
+
+async function plGenerateClientReport() {
+  // Generate meeting prep if not already done
+  if (!plMeetingPrep) {
+    try {
+      const prepRes = await fetch(`${QBO_SERVER}/pl/digest/meeting-prep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          findings: plStructuralFindings || {},
+          summary: plCurrentSummary,
+          clientName: plSelectedClient?.biz,
+          period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
+        }),
+      }).then(r => r.json());
+      if (prepRes.success) plMeetingPrep = prepRes.prep;
+    } catch(e) {}
+  }
+  if (plMeetingPrep) {
+    plRenderMeetingPrep();
+    plGenerateMeetingPDF();
+  } else {
+    showToast('Failed to generate report');
+  }
+}
+
+function plMarkReviewComplete() {
+  plReviewState.completedAt = new Date().toISOString();
+  plSaveReviewState();
+  plSaveToClient();
+  showToast('Review marked complete and saved');
+}
+
+// ── Legacy render functions (kept for PDF/export compatibility) ──
+function plRenderResults() {
+  document.getElementById('pl-results-wrap').style.display = '';
+  plRenderReviewMode();
+}
+
+function plRenderMeetingPrep() {
+  // Populate hidden legacy elements for PDF generation
+  const esc = (s) => s ? s.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+  if (plMeetingPrep) {
+    document.getElementById('pl-exec-summary').innerHTML = esc(plMeetingPrep.executiveSummary || '');
+    document.getElementById('pl-talking-points').innerHTML = (plMeetingPrep.talkingPoints || []).map(tp => `<li>${esc(tp)}</li>`).join('');
+    document.getElementById('pl-action-items').innerHTML = (plMeetingPrep.actionItems || []).map(ai => `<li>${esc(ai)}</li>`).join('');
+    document.getElementById('pl-client-insights').innerHTML = (plMeetingPrep.clientInsights || []).map(ci => `<li>${esc(ci)}</li>`).join('');
+  }
+}
+
+function plRenderFleetComparison() { /* fleet data used in reports only now */ }
+
+function plUpdateStats() {
+  document.getElementById('pl-stat-total').textContent = plFlags.length;
+  document.getElementById('pl-stat-critical').textContent = plFlags.filter(f => f.severity === 'CRITICAL').length;
+  document.getElementById('pl-stat-warnings').textContent = plFlags.filter(f => f.severity === 'WARNING').length;
+  document.getElementById('pl-stat-resolved').textContent = Object.keys(plResolvedFlags).length;
+}
+
+function plRenderFlags() { plRenderProblemCards(); }
+function plToggleFlag() {}
+function plResolveFlag() {}
+function plFilterFlags() {}
 
 // ── Get 12 months of history ─────────────────────────────────────
 async function plGetHistory() {
@@ -30801,10 +31089,11 @@ function plClearResults() {
   plStructuralFindings = null;
   plCurrentSummary = null;
   plPrevSummary = null;
+  plAllAccounts = [];
+  plReviewState = { decisions: {}, notes: {}, completedAt: null };
   document.getElementById('pl-results-wrap').style.display = 'none';
   document.getElementById('pl-progress-wrap').style.display = 'none';
-  document.getElementById('pl-meeting-prep-card').style.display = 'none';
-  document.getElementById('pl-fleet-card').style.display = 'none';
+  document.getElementById('pl-review-footer') && (document.getElementById('pl-review-footer').style.display = 'none');
   document.getElementById('pl-status-badge').textContent = 'Ready';
   document.getElementById('pl-status-badge').style.background = 'var(--surface2)';
   document.getElementById('pl-status-badge').style.color = 'var(--text-d)';
@@ -30816,23 +31105,31 @@ function plSaveToClient() {
   const client = DB.clients.find(c => c.id === plSelectedClient.id);
   if (!client) return;
 
+  const okCount = Object.values(plReviewState.decisions).filter(d => d === 'ok').length;
+  const flagCount = Object.values(plReviewState.decisions).filter(d => d === 'flag').length;
+  const overrideCount = Object.values(plReviewState.decisions).filter(d => d === 'override').length;
+
   if (!client.plReports) client.plReports = [];
   client.plReports.push({
     date: new Date().toISOString(),
     period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
+    className: plSelectedClass || null,
     totalFlags: plFlags.length,
     critical: plFlags.filter(f => f.severity === 'CRITICAL').length,
     warnings: plFlags.filter(f => f.severity === 'WARNING').length,
-    resolved: Object.keys(plResolvedFlags).length,
+    approved: okCount,
+    flagged: flagCount,
+    overridden: overrideCount,
+    reviewComplete: !!plReviewState.completedAt,
     flags: plFlags.map((f, i) => ({
       ...f,
-      resolved: plResolvedFlags[i] || null,
+      decision: plReviewState.decisions[f.account + '::' + i] || null,
     })),
   });
 
   saveDB();
-  showToast(`✓ Report saved to ${client.biz}`);
-  qboLog('info', `P&L report saved to client record: ${client.biz}`);
+  showToast(`Report saved to ${client.biz}`);
+  qboLog('info', `P&L review saved to client record: ${client.biz}`);
 }
 
 // ── Export reports ────────────────────────────────────────────────
@@ -30843,9 +31140,11 @@ function plExportReport(type) {
   const header = `${title}\nPeriod: ${period}\nGenerated: ${new Date().toLocaleString()}\n${'═'.repeat(60)}\n\n`;
 
   if (type === 'exception') {
-    content = header + 'EXCEPTION REPORT — Unresolved Flags Only\n\n';
+    content = header + 'EXCEPTION REPORT — Flagged for Fix\n\n';
     plFlags.forEach((f, i) => {
-      if (!plResolvedFlags[i]) {
+      const key = f.account + '::' + i;
+      const decision = plReviewState.decisions[key];
+      if (decision === 'flag' || !decision) {
         content += `[${f.severity}] ${f.account || '—'}\n  ${f.message}\n`;
         if (f.amount != null) content += `  Amount: $${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}\n`;
         if (f.suggestedAccount) content += `  Suggested: ${f.suggestedAccount}\n`;
@@ -30853,26 +31152,35 @@ function plExportReport(type) {
       }
     });
   } else if (type === 'summary') {
-    content = header + 'SUMMARY REPORT\n\n';
-    content += `Total Flags: ${plFlags.length}\n`;
-    content += `  Critical: ${plFlags.filter(f => f.severity === 'CRITICAL').length}\n`;
-    content += `  Warnings: ${plFlags.filter(f => f.severity === 'WARNING').length}\n`;
-    content += `  Info:     ${plFlags.filter(f => f.severity === 'INFO').length}\n`;
-    content += `  Resolved: ${Object.keys(plResolvedFlags).length}\n\n`;
-    content += 'Top Issues:\n';
-    plFlags.filter(f => f.severity === 'CRITICAL').forEach(f => {
-      content += `  • ${f.account}: ${f.message}\n`;
+    const okCount = Object.values(plReviewState.decisions).filter(d => d === 'ok').length;
+    const flagCount = Object.values(plReviewState.decisions).filter(d => d === 'flag').length;
+    const overrideCount = Object.values(plReviewState.decisions).filter(d => d === 'override').length;
+    content = header + 'REVIEW SUMMARY\n\n';
+    content += `Total Issues: ${plFlags.length}\n`;
+    content += `  Critical:   ${plFlags.filter(f => f.severity === 'CRITICAL').length}\n`;
+    content += `  Warnings:   ${plFlags.filter(f => f.severity === 'WARNING').length}\n`;
+    content += `  Approved:   ${okCount}\n`;
+    content += `  Flagged:    ${flagCount}\n`;
+    content += `  Overridden: ${overrideCount}\n\n`;
+    content += 'Flagged Items:\n';
+    plFlags.forEach((f, i) => {
+      if (plReviewState.decisions[f.account + '::' + i] === 'flag') {
+        content += `  • ${f.account}: ${f.message}\n`;
+      }
     });
   } else if (type === 'audit') {
     content = header + 'FULL AUDIT TRAIL\n\n';
     plFlags.forEach((f, i) => {
-      const res = plResolvedFlags[i];
-      content += `[${f.severity}] ${f.account || '—'} (${f.source === 'ai' ? 'AI' : 'Rule Engine'})\n`;
+      const key = f.account + '::' + i;
+      const decision = plReviewState.decisions[key] || 'pending';
+      content += `[${f.severity}] ${f.account || '—'} (${f.source === 'ai' ? 'AI' : 'Rule Engine'}) — ${decision.toUpperCase()}\n`;
       content += `  ${f.message}\n`;
       if (f.amount != null) content += `  Amount: $${Math.abs(f.amount).toLocaleString('en-US',{minimumFractionDigits:2})}\n`;
       if (f.suggestedAccount) content += `  Suggested: ${f.suggestedAccount}\n`;
       if (f.variance) content += `  Variance: ${f.variance}\n`;
-      if (res) content += `  ✓ RESOLVED: ${res.note || '(no note)'} — ${new Date(res.resolvedAt).toLocaleString()}\n`;
+      if (decision === 'override' && plOverrides[f.account]) {
+        content += `  Override: ${plOverrides[f.account].note || '(no note)'}\n`;
+      }
       content += '\n';
     });
   }
