@@ -128,7 +128,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .topbar-left{display:flex;align-items:center;gap:14px;}
 .topbar-title{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.topbar-right{display:flex;align-items:center;gap:10px;}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;}
 
 /* ════════════════════════════════════════
    BUTTONS — Intentional, satisfying
@@ -585,12 +585,12 @@ textarea.field-input{resize:vertical;min-height:72px;}
 .quick-action-card{transition:all .2s cubic-bezier(.4,0,.2,1) !important;}
 
 /* Topbar clock */
-#topbar-clock{display:flex;align-items:center;gap:12px;white-space:nowrap;user-select:none;}
-#topbar-clock .tz-main{font-size:14px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;letter-spacing:.5px;line-height:1;}
-#topbar-clock .tz-main .tz-label{font-size:8px;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:.08em;text-transform:uppercase;display:block;margin-top:1px;font-family:'DM Sans',sans-serif;}
-#topbar-clock .tz-others{display:flex;gap:10px;padding-left:10px;border-left:1px solid rgba(255,255,255,.1);}
-#topbar-clock .tz-sm{font-size:10px;color:rgba(255,255,255,.35);font-family:'DM Mono',monospace;letter-spacing:.3px;line-height:1;text-align:center;}
-#topbar-clock .tz-sm .tz-label{font-size:7px;color:rgba(255,255,255,.22);letter-spacing:.06em;text-transform:uppercase;display:block;margin-top:2px;font-family:'DM Sans',sans-serif;}
+#topbar-clock{display:flex;align-items:center;gap:10px;white-space:nowrap;user-select:none;}
+#topbar-clock .tz-main{font-size:13px;font-weight:700;color:var(--navy);font-family:'DM Mono',monospace;letter-spacing:.5px;line-height:1;}
+#topbar-clock .tz-main .tz-label{font-size:8px;font-weight:600;color:var(--text-d);letter-spacing:.08em;text-transform:uppercase;display:block;margin-top:1px;font-family:'DM Sans',sans-serif;}
+#topbar-clock .tz-others{display:flex;gap:8px;padding-left:8px;border-left:1px solid var(--border);}
+#topbar-clock .tz-sm{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;letter-spacing:.3px;line-height:1;text-align:center;}
+#topbar-clock .tz-sm .tz-label{font-size:7px;color:var(--border2);letter-spacing:.06em;text-transform:uppercase;display:block;margin-top:2px;font-family:'DM Sans',sans-serif;}
 
 /* Nav badge refinement */
 .nav-badge{font-size:9px;background:var(--gold);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:700;letter-spacing:.04em;}
@@ -1183,16 +1183,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="topbar-left">
       <div class="topbar-title" id="page-title">Dashboard</div>
     </div>
-    <div class="topbar-right" style="display:flex;align-items:center;gap:10px;">
+    <div class="topbar-right">
       <div id="topbar-clock"></div>
-      <div id="topbar-actions"></div>
+      <div id="topbar-actions" style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;"></div>
 
       <!-- ── Chat Icon ── -->
       <div style="position:relative;" id="chat-icon-wrap">
         <button id="chat-icon-btn" onclick="chatTogglePanel()" title="Team Chat"
-          style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.55);font-size:22px;width:46px;height:46px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;position:relative;"
-          onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.9)'"
-          onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.55)'">
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:18px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;position:relative;"
+          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
           💬
           <span id="chat-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;font-family:'DM Sans',sans-serif;"></span>
         </button>
@@ -1201,9 +1201,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <!-- ── Notification Bell ── -->
       <div style="position:relative;" id="notif-bell-wrap">
         <button id="notif-bell-btn" onclick="notifToggle()" title="Notifications"
-          style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.55);font-size:22px;width:46px;height:46px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;position:relative;"
-          onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.9)'"
-          onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.55)'">
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:18px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;position:relative;"
+          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
           🔔
           <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;font-family:'DM Sans',sans-serif;"></span>
         </button>
@@ -1224,15 +1224,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <!-- Data persistence controls -->
       <div style="display:flex;align-items:center;gap:6px;">
         <button onclick="exportDBBackup()" title="Download a JSON backup of all data"
-          style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.45);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
-          onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.85)'"
-          onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.45)'">
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
+          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
           ⬇ Backup
         </button>
         <label title="Restore from a JSON backup file"
-          style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.45);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
-          onmouseover="this.style.borderColor='rgba(255,255,255,0.4)';this.style.color='rgba(255,255,255,0.85)'"
-          onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.45)'">
+          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;"
+          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
           ⬆ Restore
           <input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0])">
         </label>
