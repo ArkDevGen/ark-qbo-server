@@ -3604,7 +3604,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <!-- Reports group -->
       <div style="display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;">
         <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-d);padding:0 10px;">Reports</span>
-        <button onclick="qboOpenTool('pldigest')" id="qbo-tool-pldigest" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 P&amp;L Digest</button>
         <button onclick="qboOpenTool('plreport')" id="qbo-tool-plreport" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📈 P&amp;L Report</button>
         <button onclick="qboOpenTool('balsheet')" id="qbo-tool-balsheet" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">📊 Balance Sheet</button>
         <button onclick="qboOpenTool('araging')" id="qbo-tool-araging" class="btn btn-sm" style="font-size:12px;padding:6px 12px;border-radius:6px;">⏳ AR Aging</button>
@@ -4270,7 +4269,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="display:flex;gap:4px;">
           <button class="btn btn-sm" id="sje-mode-sales" onclick="sjeMode('sales')" style="font-size:12px;font-weight:600;background:var(--accent);color:#fff;border-color:var(--accent);">Sales JE</button>
           <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;">COGS JE</button>
-          <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Review</button>
+          <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Report</button>
+          <button class="btn btn-sm" id="sje-mode-review" onclick="sjeMode('review')" style="font-size:12px;border-color:#2ca01c;color:#2ca01c;">☑ P&L Review</button>
         </div>
       </div>
 
@@ -7428,6 +7428,7 @@ async function loginAs(userId){
       saveDB();
     }
   }
+  plAutoGenerateMonthlyReviewTasks();
 }
 
 async function loginWithCredentials(){
@@ -13590,6 +13591,7 @@ renderLoginScreen();
   if(typeof versionInit === 'function') versionInit();
       await refreshServerUsersCache();
       await loadDB();
+      plAutoGenerateMonthlyReviewTasks();
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
     } else if (saved && saved.userId) {
       // Legacy fallback: old session with userId — re-login via loginAs
@@ -13602,6 +13604,74 @@ renderLoginScreen();
 })();
 
 // Default: auto-generate on nav to this page is handled in nav()
+
+// ── Monthly P&L Review Task Auto-Generator ──────────────
+function plAutoGenerateMonthlyReviewTasks(){
+  if(!DB.clients || !DB.tasks) return;
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const dueDate = `${yyyy}-${mm}-05`;
+  const monthKey = `${yyyy}-${mm}`;
+
+  const scootersClients = DB.clients.filter(c =>
+    c.qbType === 'QBO' &&
+    (c.franchiseBrand||'').toLowerCase().includes('scooter') &&
+    (c.qboRealmId || (c.franchises||[]).some(f => f.qboRealmId))
+  );
+
+  if(!scootersClients.length) return;
+
+  let created = 0;
+  for(const client of scootersClients){
+    const amId = client.am || '';
+    // Check if a P&L Review task already exists for this client this month
+    const exists = DB.tasks.some(t =>
+      t.clientId === client.id &&
+      t.name && t.name.startsWith('P&L Review') &&
+      t.dueDate && t.dueDate.startsWith(monthKey)
+    );
+    if(exists) continue;
+
+    DB.tasks.push({
+      id: uid(),
+      name: `P&L Review — ${client.biz}`,
+      clientId: client.id,
+      clientName: client.biz,
+      amId,
+      category: 'Bookkeeping',
+      dueDate,
+      recurring: true,
+      recurFreq: 'monthly',
+      recurCustomN: null,
+      recurBmDay1: null,
+      recurBmDay2: null,
+      showDaysAdvance: 3,
+      priority: 'medium',
+      notes: 'Monthly P&L review for Scooters store. Auto-generated.',
+      bankUrl: '',
+      status: 'open',
+      noteLog: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: 'System',
+      completedAt: null,
+      completedBy: null,
+      reviewType: null,
+      reviewerId: null,
+      reviewStatus: null,
+      reviewTaskId: null,
+      parentTaskId: null,
+      type: 'task',
+      parentId: null,
+    });
+    created++;
+  }
+  if(created){
+    saveDB();
+    console.log(`[P&L] Auto-generated ${created} monthly review task(s) for ${monthKey}`);
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 //  1099 + VENDOR SYSTEM
@@ -19616,7 +19686,8 @@ function plIsCloseTask(task) {
 // ── Prompt to run P&L Digest after close ─────────────────────────────
 function plPromptDigestAfterClose(task) {
   const client = (DB.clients || []).find(c => c.id === task.clientId);
-  if (!client || !client.qboRealmId) return; // can't run digest without QBO connection
+  const hasQBO = client && (client.qboRealmId || (client.franchises || []).some(f => f.qboRealmId));
+  if (!hasQBO) return; // can't run digest without QBO connection
 
   // Create a floating prompt
   const overlay = document.createElement('div');
@@ -19643,9 +19714,10 @@ function plAutoRunDigest(clientId) {
   const client = (DB.clients || []).find(c => c.id === clientId);
   if (!client) return;
 
-  // Navigate to QBO Center
+  // Navigate to QBO Center > Scooters tab > Review mode
   nav('qbo');
-  qboOpenTool('pldigest');
+  qboNavTab('scooters');
+  sjeMode('review');
 
   // Select client in dropdown
   setTimeout(() => {
@@ -29868,12 +29940,13 @@ const PL_BENCHMARKS = {
 };
 
 // ── Populate client dropdown ─────────────────────────────────────
-function plPopulateClients() {
+function plPopulateClients(scootersOnly) {
   const sel = document.getElementById('pl-client-select');
   if (!sel) return;
   // Include clients with direct qboRealmId OR any franchise with a qboRealmId
   const hasQBO = (c) => c.qboRealmId || (c.franchises || []).some(f => f.qboRealmId);
-  const clients = (DB.clients||[]).filter(c => c.qbType === 'QBO' && hasQBO(c));
+  let clients = (DB.clients||[]).filter(c => c.qbType === 'QBO' && hasQBO(c));
+  if (scootersOnly) clients = clients.filter(c => (c.franchiseBrand || '').toLowerCase().includes('scooter'));
   sel.innerHTML = '<option value="">Select a client…</option>' +
     clients.sort((a,b) => (a.biz||'').localeCompare(b.biz||''))
       .map(c => {
@@ -32782,17 +32855,27 @@ function sjeMode(mode) {
   document.getElementById('sje-sales-panel').style.display = mode === 'sales' ? '' : 'none';
   document.getElementById('sje-cogs-panel').style.display = mode === 'cogs' ? '' : 'none';
   document.getElementById('scoots-pl-panel').style.display = mode === 'pl' ? '' : 'none';
+
+  // Show/hide the P&L Review workspace (lives in general tools area but displayed here)
+  const plWs = document.getElementById('qbo-pl-workspace');
+  if (plWs) plWs.style.display = mode === 'review' ? '' : 'none';
+
   const salesBtn = document.getElementById('sje-mode-sales');
   const cogsBtn = document.getElementById('sje-mode-cogs');
   const plBtn = document.getElementById('sje-mode-pl');
+  const reviewBtn = document.getElementById('sje-mode-review');
   // Reset all buttons
-  [salesBtn, cogsBtn, plBtn].forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
+  [salesBtn, cogsBtn, plBtn, reviewBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
   if (mode === 'sales') {
     salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
   } else if (mode === 'cogs') {
     cogsBtn.style.background = 'var(--accent)'; cogsBtn.style.color = '#fff'; cogsBtn.style.borderColor = 'var(--accent)'; cogsBtn.style.fontWeight = '600';
   } else if (mode === 'pl') {
     plBtn.style.background = '#C8102E'; plBtn.style.color = '#fff'; plBtn.style.borderColor = '#C8102E'; plBtn.style.fontWeight = '600';
+  } else if (mode === 'review') {
+    reviewBtn.style.background = '#2ca01c'; reviewBtn.style.color = '#fff'; reviewBtn.style.borderColor = '#2ca01c'; reviewBtn.style.fontWeight = '600';
+    // Auto-filter client picker to Scooters clients and populate
+    plPopulateClients(true); // pass true to filter Scooters only
   }
 }
 
