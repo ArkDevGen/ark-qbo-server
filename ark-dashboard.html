@@ -12363,6 +12363,10 @@ function saveClient(){
     folderPath:    document.getElementById('mc-folder-path')?.value.trim()||'',
     foldersCreated: sfGetFolderChecklist(),
   };
+  // Stamp the edit time so the server-side merge can resolve conflicts
+  // between concurrent editors (newer _updatedAt wins at the record level)
+  obj._updatedAt = new Date().toISOString();
+  obj._updatedBy = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
   if(DB._editClient){
     const i=DB.clients.findIndex(x=>x.id===DB._editClient);
     // Preserve fields set by external tools (Entity Sync, etc.)

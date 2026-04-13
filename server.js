@@ -5271,6 +5271,58 @@ app.get('/db/load', requireAuth, (req, res) => {
   }
 });
 
+// Arrays that should be merged by record ID with per-record conflict resolution
+// (newer _updatedAt wins). Records only present on one side are preserved.
+// This prevents data loss when two users save concurrently with partially
+// overlapping edits.
+const _MERGE_ARRAYS_BY_ID = [
+  'clients', 'employees', 'vendors', 'form1099s', 'w2s', 'w2cs',
+  'tasks', 'meetings', 'proposals', 'leads', 'notebooks', 'notebookEntries',
+  'projectGroups', 'postage', 'ideas', 'accountManagers', 'users',
+];
+
+function _mergeArrayById(existing, incoming) {
+  if (!Array.isArray(existing)) return Array.isArray(incoming) ? incoming : [];
+  if (!Array.isArray(incoming)) return existing;
+  const byId = new Map();
+  // Seed with existing records
+  for (const rec of existing) {
+    if (!rec || !rec.id) continue;
+    byId.set(rec.id, rec);
+  }
+  // Merge in incoming — if same id, take the one with the newer _updatedAt
+  for (const rec of incoming) {
+    if (!rec || !rec.id) continue;
+    const current = byId.get(rec.id);
+    if (!current) {
+      byId.set(rec.id, rec);
+      continue;
+    }
+    const curTime = current._updatedAt ? new Date(current._updatedAt).getTime() : 0;
+    const incTime = rec._updatedAt ? new Date(rec._updatedAt).getTime() : 0;
+    // If incoming has a newer (or equal with tiebreak to incoming) timestamp, use it.
+    // If existing has a newer timestamp (meaning another user saved more recently),
+    // keep existing — prevents stale client from overwriting fresh edits.
+    if (incTime >= curTime) byId.set(rec.id, rec);
+  }
+  // Preserve order: incoming order first, then any existing-only records appended
+  const seen = new Set();
+  const result = [];
+  for (const rec of incoming) {
+    if (rec && rec.id && byId.has(rec.id) && !seen.has(rec.id)) {
+      result.push(byId.get(rec.id));
+      seen.add(rec.id);
+    }
+  }
+  for (const rec of existing) {
+    if (rec && rec.id && byId.has(rec.id) && !seen.has(rec.id)) {
+      result.push(byId.get(rec.id));
+      seen.add(rec.id);
+    }
+  }
+  return result;
+}
+
 app.post('/db/save', requireAuth, (req, res) => {
   try {
     const payload = req.body;
@@ -5278,23 +5330,37 @@ app.post('/db/save', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'Invalid DB payload' });
     }
 
-    // Conflict detection (informational — last write wins)
+    // Load existing server state so we can merge (not wholesale overwrite)
+    let existing = null;
     if (fs.existsSync(ARK_DB_FILE)) {
       try {
-        const existing = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
-        if (existing._savedAt && payload._savedAt &&
-            new Date(existing._savedAt) > new Date(payload._savedAt)) {
-          console.warn(`DB conflict: ${req.arkUser.userName} overwrote newer data ` +
-            `(server: ${existing._savedAt}, client: ${payload._savedAt})`);
-        }
-      } catch (_) { /* ignore parse errors on existing file */ }
+        existing = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+      } catch (_) { /* corrupt — fall through to fresh write */ }
     }
 
-    payload._savedAt = new Date().toISOString();
-    payload._savedBy = req.arkUser.userName;
-    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(payload));
-    console.log(`DB saved by ${req.arkUser.userName} at ${payload._savedAt} (${(JSON.stringify(payload).length / 1024).toFixed(1)} KB)`);
-    res.json({ success: true, savedAt: payload._savedAt });
+    let merged = payload;
+    if (existing) {
+      merged = { ...existing, ...payload };
+      // Merge id-keyed arrays per-record instead of wholesale replacement so
+      // concurrent editors don't clobber each other's changes.
+      for (const key of _MERGE_ARRAYS_BY_ID) {
+        if (Array.isArray(existing[key]) || Array.isArray(payload[key])) {
+          merged[key] = _mergeArrayById(existing[key], payload[key]);
+        }
+      }
+      // Log merge activity so we can spot concurrent edits in the console
+      if (existing._savedAt && payload._savedAt &&
+          new Date(existing._savedAt) > new Date(payload._savedAt)) {
+        console.log(`DB merge: ${req.arkUser.userName} saved over a newer server state ` +
+          `(server: ${existing._savedAt}, client: ${payload._savedAt}) — records preserved via per-record merge`);
+      }
+    }
+
+    merged._savedAt = new Date().toISOString();
+    merged._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(merged));
+    console.log(`DB saved by ${req.arkUser.userName} at ${merged._savedAt} (${(JSON.stringify(merged).length / 1024).toFixed(1)} KB)`);
+    res.json({ success: true, savedAt: merged._savedAt });
   } catch (e) {
     console.error('DB save error:', e.message);
     res.status(500).json({ error: 'Failed to save database' });
