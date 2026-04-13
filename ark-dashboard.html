@@ -8330,10 +8330,7 @@ function nav(page){
   if(page==='commcenter'){ ccInit(); ccLoadChatPreview(); }
   if(page==='meetings'){ mtgInit(); }
   if(page==='payrollcenter'){
-    const iframe = document.getElementById('payroll-admin-iframe');
-    if (iframe && !iframe.src.includes('payroll-admin')) {
-      iframe.src = '/payroll-admin?token=' + encodeURIComponent(_serverToken || '');
-    }
+    loadPayrollAdminIframe();
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){
@@ -8885,6 +8882,74 @@ async function renderWidgets(){
 
 function renderDashboard(){
   renderWidgets();
+}
+
+// ══════════════════════════════════════════════
+//  PAYROLL ADMIN IFRAME — resilient loader
+// ══════════════════════════════════════════════
+// Checks server health before loading iframe so users don't see a raw
+// "connection closed" page during a deploy cycle. Retries with backoff.
+async function loadPayrollAdminIframe(){
+  const iframe = document.getElementById('payroll-admin-iframe');
+  if(!iframe) return;
+  if(iframe.src.includes('payroll-admin') && !iframe.dataset.hadError) return; // already loaded
+
+  const setLoadingUI = () => {
+    iframe.style.display = 'none';
+    let loader = document.getElementById('payroll-admin-loader');
+    if(!loader){
+      loader = document.createElement('div');
+      loader.id = 'payroll-admin-loader';
+      Object.assign(loader.style, {
+        width:'100%', height:'calc(100vh - 60px)', background:'#0d1b2a',
+        display:'flex', alignItems:'center', justifyContent:'center',
+        flexDirection:'column', gap:'14px', color:'rgba(255,255,255,.7)',
+        fontFamily:"'DM Sans',sans-serif",
+      });
+      loader.innerHTML = `
+        <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+        <div style="font-size:14px;font-weight:600;color:#fff;">Loading Payroll Center</div>
+        <div id="payroll-admin-status" style="font-size:12px;color:rgba(255,255,255,.5);">Connecting to server…</div>
+      `;
+      iframe.parentNode.insertBefore(loader, iframe);
+    }
+    loader.style.display = 'flex';
+  };
+  const hideLoadingUI = () => {
+    const loader = document.getElementById('payroll-admin-loader');
+    if(loader) loader.style.display = 'none';
+    iframe.style.display = 'block';
+  };
+  const setStatus = (text) => {
+    const el = document.getElementById('payroll-admin-status');
+    if(el) el.textContent = text;
+  };
+
+  setLoadingUI();
+  // Health-check before setting iframe src — avoids raw 502 page during deploys
+  let attempts = 0;
+  while(attempts < 20){ // ~60s total retries
+    try{
+      const resp = await fetch('/health?t=' + Date.now(), { cache:'no-store' });
+      if(resp.ok){
+        // Server is up — load the iframe
+        iframe.onload = () => { hideLoadingUI(); iframe.dataset.hadError=''; };
+        iframe.onerror = () => { iframe.dataset.hadError='1'; };
+        iframe.src = '/payroll-admin?token=' + encodeURIComponent(_serverToken || '');
+        // Give it 4s to load; if still showing loader, something's wrong
+        setTimeout(()=>{
+          if(iframe.contentDocument === null || iframe.contentDocument?.location?.href === 'about:blank'){
+            // Still blank — probably OK, browser just hasn't finished
+          }
+        }, 4000);
+        return;
+      }
+    } catch(_){}
+    attempts++;
+    setStatus(`Server unavailable — retrying (attempt ${attempts})…`);
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  setStatus('Server is taking longer than usual. Try refreshing in a moment.');
 }
 
 // ── Drag and drop ──
