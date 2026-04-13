@@ -7602,6 +7602,7 @@ async function loginWithCredentials(){
       if(typeof notifInit === 'function') notifInit();
   if(typeof chatInitBadge === 'function') chatInitBadge();
   if(typeof versionInit === 'function') versionInit();
+  if(typeof scheduleClockReminders === 'function') scheduleClockReminders();
       sessionStorage.setItem('ark_session', JSON.stringify({
         userId: currentUser.id,
         token: _serverToken,
@@ -13995,6 +13996,7 @@ renderLoginScreen();
       if(typeof notifInit === 'function') notifInit();
   if(typeof chatInitBadge === 'function') chatInitBadge();
   if(typeof versionInit === 'function') versionInit();
+  if(typeof scheduleClockReminders === 'function') scheduleClockReminders();
       await refreshServerUsersCache();
       await loadDB();
       plAutoGenerateMonthlyReviewTasks();
@@ -27128,6 +27130,144 @@ function _urlBase64ToUint8Array(base64String){
   const arr = new Uint8Array(raw.length);
   for(let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
   return arr;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CLOCK-IN / CLOCK-OUT REMINDERS
+//  - Reminds the logged-in user to clock in by 8:30am and clock out by 4:30pm
+//  - Weekdays only (Mon-Fri)
+//  - Shows in-app banner + browser notification
+//  - Won't fire twice for same reminder on same day
+// ══════════════════════════════════════════════════════════════════
+const CLOCK_IN_HOUR = 8, CLOCK_IN_MIN = 30;
+const CLOCK_OUT_HOUR = 16, CLOCK_OUT_MIN = 30;
+const _clockReminderTimers = [];
+
+function _clearClockReminderTimers(){
+  _clockReminderTimers.forEach(t => clearTimeout(t));
+  _clockReminderTimers.length = 0;
+}
+
+function scheduleClockReminders(){
+  _clearClockReminderTimers();
+  if(!currentUser) return;
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun, 6=Sat
+
+  // Schedule today's reminders if it's a weekday
+  if(dow >= 1 && dow <= 5){
+    const clockInTime = new Date(now); clockInTime.setHours(CLOCK_IN_HOUR, CLOCK_IN_MIN, 0, 0);
+    const clockOutTime = new Date(now); clockOutTime.setHours(CLOCK_OUT_HOUR, CLOCK_OUT_MIN, 0, 0);
+
+    // Clock-in reminder
+    if(clockInTime > now){
+      _clockReminderTimers.push(setTimeout(() => clockReminderCheck('in'), clockInTime - now));
+    } else {
+      // Already past 8:30am — check now (in case page loaded after the trigger time)
+      clockReminderCheck('in');
+    }
+
+    // Clock-out reminder
+    if(clockOutTime > now){
+      _clockReminderTimers.push(setTimeout(() => clockReminderCheck('out'), clockOutTime - now));
+    } else {
+      clockReminderCheck('out');
+    }
+  }
+
+  // Re-schedule at next midnight (so tomorrow's reminders get armed)
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 1, 0, 0);
+  _clockReminderTimers.push(setTimeout(scheduleClockReminders, tomorrow - now));
+}
+
+async function clockReminderCheck(type){
+  if(!currentUser) return;
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+  const lastShownKey = 'clock_reminder_'+currentUser.id+'_'+todayStr;
+  const lastShown = JSON.parse(localStorage.getItem(lastShownKey)||'{}');
+  // Already shown this reminder today? skip
+  if(type === 'in' && lastShown.clockIn) return;
+  if(type === 'out' && lastShown.clockOut) return;
+
+  // Fetch today's punches from server (always fresh)
+  let punches = [];
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(currentUser.id));
+    if(!resp.ok) return; // fail silently — can't tell, don't nag
+    const all = await resp.json();
+    punches = all.filter(p => p.date === todayStr);
+  } catch(_) { return; }
+
+  const ins = punches.filter(p => p.type === 'in');
+  const outs = punches.filter(p => p.type === 'out');
+
+  if(type === 'in'){
+    if(ins.length === 0){
+      showClockReminder('in', "Don't forget to clock in!");
+      lastShown.clockIn = true;
+      localStorage.setItem(lastShownKey, JSON.stringify(lastShown));
+    }
+  } else if(type === 'out'){
+    // Only remind if there's an open shift (more ins than outs)
+    if(ins.length > outs.length){
+      showClockReminder('out', "Don't forget to clock out!");
+      lastShown.clockOut = true;
+      localStorage.setItem(lastShownKey, JSON.stringify(lastShown));
+    }
+  }
+}
+
+function showClockReminder(type, message){
+  // Browser notification (system-level)
+  if('Notification' in window && Notification.permission === 'granted'){
+    try {
+      const n = new Notification('ARK Time Reminder', {
+        body: message,
+        icon: '/favicon.ico',
+        tag: 'clock-reminder-' + type,
+        requireInteraction: true,
+      });
+      n.onclick = () => { window.focus(); nav('timecenter'); n.close(); };
+    } catch(_){}
+  }
+
+  // In-app banner — prominent, dismissable, with action button
+  const existing = document.getElementById('clock-reminder-banner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'clock-reminder-banner';
+  const accent = type === 'in' ? '#2e7d5e' : '#b03a3a';
+  Object.assign(banner.style, {
+    position:'fixed', top:'80px', left:'50%', transform:'translateX(-50%)',
+    background:'#fff', color:'var(--text)',
+    border:`2px solid ${accent}`, borderLeft:`6px solid ${accent}`,
+    padding:'14px 20px', borderRadius:'12px',
+    boxShadow:'0 8px 32px rgba(0,0,0,.22)',
+    zIndex:'9999',
+    fontFamily:"'DM Sans',sans-serif", fontSize:'14px',
+    display:'flex', alignItems:'center', gap:'14px',
+    animation:'slideUp .3s ease both',
+    maxWidth:'500px',
+  });
+  const icon = type === 'in' ? '⏰' : '🏁';
+  const btnLabel = type === 'in' ? 'Clock In Now' : 'Clock Out Now';
+  banner.innerHTML = `
+    <span style="font-size:24px;">${icon}</span>
+    <div style="flex:1;">
+      <div style="font-weight:700;color:var(--navy);font-size:15px;">${message}</div>
+      <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Reminder from ARK Dashboard</div>
+    </div>
+    <button onclick="nav('timecenter');this.closest('#clock-reminder-banner').remove();"
+      style="background:${accent};color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">
+      ${btnLabel}
+    </button>
+    <button onclick="this.closest('#clock-reminder-banner').remove();"
+      style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:18px;padding:0 4px;">✕</button>
+  `;
+  document.body.appendChild(banner);
 }
 
 // ── SSE real-time notification listener (with backoff reconnect) ──
