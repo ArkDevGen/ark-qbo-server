@@ -8830,6 +8830,10 @@ function wgLoadWidgets(){
 let _wgSaveTimer=null;
 function wgSaveWidgets(){
   if(!currentUser) return;
+  // Keep currentUser.prefs in sync with in-memory state so any subsequent
+  // call to wgLoadWidgets (after invalidation) picks up the latest sizes.
+  currentUser.prefs = currentUser.prefs || {};
+  currentUser.prefs.dashboardWidgets = JSON.parse(JSON.stringify(_userWidgets));
   // Cache locally
   localStorage.setItem('ark_widgets_'+currentUser.id, JSON.stringify(_userWidgets));
   // Debounce server save
@@ -8954,6 +8958,20 @@ async function loadPayrollAdminIframe(){
 
 // ── Drag and drop ──
 function wgToggleEdit(){
+  // Flush any pending save when leaving edit mode so the state is
+  // persisted before rendering the main view
+  if(_wgEditMode && _wgSaveTimer){
+    clearTimeout(_wgSaveTimer);
+    _wgSaveTimer = null;
+    if(currentUser){
+      try {
+        authFetch(ARK_SERVER+'/users/'+currentUser.id+'/prefs',{
+          method:'PUT',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({dashboardWidgets:_userWidgets})
+        }).catch(()=>{});
+      } catch(_){}
+    }
+  }
   _wgEditMode = !_wgEditMode;
   renderWidgets();
 }
@@ -9040,7 +9058,18 @@ function wgDuplicateWidget(id){
 
 function wgResetWidgets(){
   if(!confirm('Reset dashboard to default widgets? Your customizations will be lost.')) return;
+  _userWidgets = null; // clear cache
+  wgLoadWidgets(); // reload fresh from DEFAULT_WIDGETS
   _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+  // Re-run sync/pack on fresh defaults
+  const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
+  _userWidgets.forEach(w=>{
+    const def = defaultsById[w.id];
+    if(!def) return;
+    if(def.onClick) w.onClick = def.onClick;
+    if(def.locked) w.locked = true;
+  });
+  _wgPackLayout(_userWidgets);
   wgSaveWidgets();
   renderWidgets();
 }
