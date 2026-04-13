@@ -1202,6 +1202,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="topbar-clock"></div>
       <div id="topbar-actions" style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;flex-shrink:0;"></div>
 
+      <!-- ── Refresh Icon ── -->
+      <button onclick="hardReload()" title="Refresh (clears cache &amp; reloads)"
+        style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:16px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;"
+        onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">↻</button>
+
       <!-- ── Chat Icon ── -->
       <div style="position:relative;" id="chat-icon-wrap">
         <button id="chat-icon-btn" onclick="chatTogglePanel()" title="Team Chat"
@@ -26397,6 +26403,27 @@ function ccChatHandleSSE(msg) {
 // ══════════════════════════════════════════════════════════════════
 
 // Smart reload — wait for server to be healthy before refreshing
+// Hard reload — clears service-worker caches AND browser caches, then reloads
+// with a cache-buster so we always get the latest HTML/JS
+async function hardReload(){
+  try {
+    // Clear all SW caches so the next navigation hits the network
+    if('caches' in window){
+      const names = await caches.keys();
+      await Promise.all(names.map(n => caches.delete(n)));
+    }
+    // Unregister service workers so they re-install with the new shell
+    if('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch(_){}
+  // Cache-buster reload — ensures CDN/proxy caches are bypassed too
+  const url = new URL(location.href);
+  url.searchParams.set('_v', Date.now().toString());
+  location.replace(url.toString());
+}
+
 function smartReload(){
   const banner = document.getElementById('update-banner');
   if(banner){
@@ -26410,7 +26437,7 @@ function smartReload(){
       const resp = await fetch(ARK_SERVER + '/health?t=' + Date.now(), { cache:'no-store' });
       if(resp.ok){
         clearInterval(poll);
-        location.reload();
+        hardReload();
       }
     }catch(_){}
     if(attempts >= 15){
@@ -26418,7 +26445,7 @@ function smartReload(){
       clearInterval(poll);
       if(banner){
         const btn = banner.querySelector('button');
-        if(btn){ btn.textContent = 'Retry'; btn.disabled = false; btn.style.opacity = ''; btn.onclick = ()=> location.reload(); }
+        if(btn){ btn.textContent = 'Retry'; btn.disabled = false; btn.style.opacity = ''; btn.onclick = hardReload; }
       }
     }
   }, 2000);
