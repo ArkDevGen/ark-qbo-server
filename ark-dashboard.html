@@ -8598,7 +8598,12 @@ async function wgResolveData(w){
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
   const onClick = (w.onClick && !_wgEditMode) ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
-  const editBtns = w.locked ? '' : `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Resize">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
+  // Full-locked widgets (Quick Actions, Calendar) — no buttons at all.
+  // Locked KPI widgets (Banking Holiday, Clocked In Now) — resize only, no delete.
+  const FULL_LOCKED_IDS = new Set(['dw10','dw11']);
+  const isFullLocked = FULL_LOCKED_IDS.has(w.id);
+  const delBtn = w.locked ? '' : `<button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button>`;
+  const editBtns = isFullLocked ? '' : `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Resize">✏️</button>${delBtn}</div>`;
   const dragHandle = `<span class="wg-drag-handle" title="Drag to reorder">⠿</span>`;
 
   if(w.type==='kpi'){
@@ -8785,34 +8790,43 @@ let _wgEditMode = false;
 let _wgDragId = null;
 
 function wgLoadWidgets(){
+  // Use in-memory cache so layout stays identical between renders
+  // (e.g., normal view → edit view toggle). Only rebuild on first load
+  // or after an explicit reset.
+  if(_userWidgets) return _userWidgets;
+
   if(currentUser?.prefs?.dashboardWidgets){
     _userWidgets = JSON.parse(JSON.stringify(currentUser.prefs.dashboardWidgets));
   } else {
-    // Try localStorage cache
     const cached = currentUser ? localStorage.getItem('ark_widgets_'+currentUser.id) : null;
     if(cached){ try{ _userWidgets=JSON.parse(cached); }catch(e){ _userWidgets=null; } }
   }
   if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
-  // Pack once on load so any legacy overlapping layouts get cleaned up
-  _wgPackLayout(_userWidgets);
-  // Re-apply locked flag + onClick from defaults (covers existing users whose
-  // saved layouts pre-date these being added to a given default widget).
-  // For locked widgets, also sync grid sizes (rowSpan/colSpan) since users
-  // can't customize them anyway — ensures Quick Actions / Calendar always
-  // have the right dimensions for their content.
+
+  // Re-apply flags from defaults FIRST, before packing, so packing sees
+  // the final intended sizes. Covers existing users whose saved layouts
+  // pre-date flags being added.
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
+  const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar — full width
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
     if(!def) return;
     if(def.onClick && !w.onClick) w.onClick = def.onClick;
     if(def.locked){
       w.locked = true;
-      // Sync grid dimensions for locked widgets so content fits
-      w.grid = w.grid || {};
-      w.grid.colSpan = def.grid.colSpan;
-      w.grid.rowSpan = def.grid.rowSpan;
+      // Only force size sync for widgets that MUST be a specific size
+      // (Quick Actions and Calendar). For Banking Holiday + Clocked In Now,
+      // respect the user's chosen size so they can resize them.
+      if(FULL_LOCKED.has(w.id)){
+        w.grid = w.grid || {};
+        w.grid.colSpan = def.grid.colSpan;
+        w.grid.rowSpan = def.grid.rowSpan;
+      }
     }
   });
+
+  // Pack AFTER syncing so the final sizes are placed correctly
+  _wgPackLayout(_userWidgets);
   return _userWidgets;
 }
 
