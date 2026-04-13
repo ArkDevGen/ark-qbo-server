@@ -17758,16 +17758,26 @@ function prPrepImportTips(file) {
       const wb=XLSX.read(data,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws);
+      if(!rows.length){ throw new Error('No rows found in the file.'); }
+      // Flexible header matching — find the store + tips columns by name variants
+      const headers = Object.keys(rows[0]);
+      const norm = s => String(s||'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+      const storeKey = headers.find(h => ['store','stores','storenumber','storeno','storeid','location','locationnumber'].includes(norm(h)));
+      const tipKey   = headers.find(h => ['tip','tips','tipamount','tipstotal','totaltips','amount'].includes(norm(h)));
+      if(!storeKey){ throw new Error(`Missing "Store" column. Found: ${headers.join(', ')}`); }
+      if(!tipKey){ throw new Error(`Missing "Tip" (or "Tips") column. Found: ${headers.join(', ')}`); }
       _prPrepTips={}; let totalTips=0;
       for(const row of rows){
-        const storeVal=String(row['Store']||'');
-        if(storeVal==='Total'||!storeVal) continue;
+        const storeVal=String(row[storeKey]||'');
+        if(storeVal.toLowerCase()==='total'||!storeVal) continue;
         const match=storeVal.replace(/[^\d\s-]/g,'').trim().match(/^(\d+)/);
         if(!match) continue;
-        const tips=parseFloat(row['Tip'])||0;
+        const rawTip=String(row[tipKey]||'').replace(/[$,]/g,'').trim();
+        const tips=parseFloat(rawTip)||0;
         _prPrepTips[match[1]]=tips; totalTips+=tips;
       }
       const sc=Object.keys(_prPrepTips).length;
+      if(sc===0){ throw new Error('No store rows recognized. Make sure Store column has numbers.'); }
       statusEl.innerHTML=`<span style="color:#2e7d32;">✓ ${sc} store${sc!==1?'s':''} · $${totalTips.toFixed(2)} tips</span>`;
       document.getElementById('pr-prep-tips-input').value='';
       prPrepBuildPreview(); prPrepUpdateSaveBtn();
