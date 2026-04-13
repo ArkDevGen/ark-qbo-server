@@ -2,7 +2,7 @@
 // 1. Push notifications for background/closed-tab delivery
 // 2. Offline-resilient page cache — serves cached dashboard during deploys
 
-const CACHE_NAME = 'ark-shell-v2';
+const CACHE_NAME = 'ark-shell-v3';
 const SHELL_URL = '/';
 
 // ── Install: pre-cache nothing, just activate immediately ──

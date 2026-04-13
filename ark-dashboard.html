@@ -8595,6 +8595,12 @@ async function wgResolveData(w){
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
   const onClick = (w.onClick && !_wgEditMode) ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
+  // Safety normalization: ensure grid has valid values
+  w.grid = w.grid || {};
+  w.grid.col = w.grid.col || 1;
+  w.grid.row = w.grid.row || 1;
+  w.grid.colSpan = w.grid.colSpan || 3;
+  w.grid.rowSpan = w.grid.rowSpan || 1;
   // Full-locked widgets (Quick Actions, Calendar) — no buttons at all.
   // Locked KPI widgets (Banking Holiday, Clocked In Now) — resize only, no delete.
   const FULL_LOCKED_IDS = new Set(['dw10','dw11']);
@@ -8787,33 +8793,31 @@ let _wgEditMode = false;
 let _wgDragId = null;
 
 function wgLoadWidgets(){
-  // Use in-memory cache so layout stays identical between renders
-  // (e.g., normal view → edit view toggle). Only rebuild on first load
-  // or after an explicit reset.
+  // If we already have in-memory state, just return it — any mutations
+  // (resize, drag, delete) happen directly on _userWidgets so it's the
+  // source of truth for this session.
   if(_userWidgets) return _userWidgets;
 
-  if(currentUser?.prefs?.dashboardWidgets){
+  // First load: hydrate from localStorage first (fastest + freshest),
+  // fall back to currentUser.prefs, then DEFAULT_WIDGETS.
+  const cached = currentUser ? localStorage.getItem('ark_widgets_'+currentUser.id) : null;
+  if(cached){
+    try{ _userWidgets = JSON.parse(cached); }catch(e){ _userWidgets = null; }
+  }
+  if(!_userWidgets && currentUser?.prefs?.dashboardWidgets){
     _userWidgets = JSON.parse(JSON.stringify(currentUser.prefs.dashboardWidgets));
-  } else {
-    const cached = currentUser ? localStorage.getItem('ark_widgets_'+currentUser.id) : null;
-    if(cached){ try{ _userWidgets=JSON.parse(cached); }catch(e){ _userWidgets=null; } }
   }
   if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
 
-  // Re-apply flags from defaults FIRST, before packing, so packing sees
-  // the final intended sizes. Covers existing users whose saved layouts
-  // pre-date flags being added.
+  // Sync flags from defaults (once, on first load)
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
-  const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar — full width
+  const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
     if(!def) return;
     if(def.onClick && !w.onClick) w.onClick = def.onClick;
     if(def.locked){
       w.locked = true;
-      // Only force size sync for widgets that MUST be a specific size
-      // (Quick Actions and Calendar). For Banking Holiday + Clocked In Now,
-      // respect the user's chosen size so they can resize them.
       if(FULL_LOCKED.has(w.id)){
         w.grid = w.grid || {};
         w.grid.colSpan = def.grid.colSpan;
@@ -8822,7 +8826,7 @@ function wgLoadWidgets(){
     }
   });
 
-  // Pack AFTER syncing so the final sizes are placed correctly
+  // Pack once to resolve any overlaps from legacy saved layouts
   _wgPackLayout(_userWidgets);
   return _userWidgets;
 }
