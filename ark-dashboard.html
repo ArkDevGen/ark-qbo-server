@@ -2009,8 +2009,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 onmouseover="this.style.background='#243058'" onmouseout="this.style.background='var(--navy)'">
                 + Save Shift
               </button>
-              <div style="font-size:11px;color:var(--text-d);margin-top:6px;text-align:center;">
-                Leave Clock Out blank to save an open punch
+              <div style="font-size:11px;color:var(--text-d);margin-top:6px;text-align:center;line-height:1.5;">
+                Leave Clock Out blank to save an open punch.<br>
+                <strong style="color:var(--gold);">Need to add hours from a past day?</strong> Just pick the date above.
               </div>
             </div>
 
@@ -16093,6 +16094,11 @@ async function _tcManualEntryCore(afterMeta){
   document.getElementById('tc-manual-in').value  = '';
   document.getElementById('tc-manual-out').value = '';
   document.getElementById('tc-manual-preview').textContent = '';
+  // Reload from server to verify save and ensure UI matches DB
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+    if (resp.ok) DB.timePunches[empId] = await resp.json();
+  } catch(_){}
   tcRenderTimecard(empId);
 }
 
@@ -16478,15 +16484,32 @@ async function tcEditPunch(empId, punchId){
   const valid = /^\d{1,2}:\d{2}$/.test(newTime.trim());
   if(!valid){ alert('Invalid time format. Use HH:MM (e.g. 08:30 or 17:45)'); return; }
   try {
-    await authFetch(ARK_SERVER + '/time/punches/' + punchId, {
+    const r = await authFetch(ARK_SERVER + '/time/punches/' + punchId, {
       method: 'PUT', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ empId, time: newTime.trim().padStart(5,'0') }),
     });
-    p.time = newTime.trim().padStart(5,'0');
-    p.override = true;
-    DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+    if (!r.ok) {
+      alert(`Save failed (${r.status}). The punch was NOT updated. Please try again.`);
+      // Reload from server to discard local mutation
+      try {
+        const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+        if (resp.ok) DB.timePunches[empId] = await resp.json();
+      } catch(_){}
+      tcRenderTimecard(empId);
+      return;
+    }
+    // Reload from server to verify
+    try {
+      const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+      if (resp.ok) DB.timePunches[empId] = await resp.json();
+    } catch(_){}
+    if (DB.timePunches[empId]) DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
     tcRenderTimecard(empId);
-  } catch(_) { tcMsg('Failed to edit punch','#c0392b'); }
+    tcMsg('✓ Punch updated','#2e7d5e');
+  } catch(_) {
+    alert('Network error — your edit was NOT saved. Please try again.');
+    tcRenderTimecard(empId);
+  }
 }
 
 async function tcDeletePunch(empId, punchId){
@@ -16543,20 +16566,24 @@ async function tcSaveShiftEdit(empId, inId, outId) {
   const newIn = document.getElementById('tc-edit-in')?.value || '';
   const newOut = document.getElementById('tc-edit-out')?.value || '';
 
+  // Track which writes succeeded so we can surface a clear error otherwise
+  const errors = [];
   try {
     if (newIn && inP) {
-      await authFetch(ARK_SERVER + '/time/punches/' + inId, {
+      const r = await authFetch(ARK_SERVER + '/time/punches/' + inId, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ empId, time: newIn }),
       });
-      inP.time = newIn; inP.override = true;
+      if (!r.ok) errors.push(`Clock in update failed (${r.status})`);
+      else { inP.time = newIn; inP.override = true; }
     }
     if (newOut && outP) {
-      await authFetch(ARK_SERVER + '/time/punches/' + outId, {
+      const r = await authFetch(ARK_SERVER + '/time/punches/' + outId, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ empId, time: newOut }),
       });
-      outP.time = newOut; outP.override = true;
+      if (!r.ok) errors.push(`Clock out update failed (${r.status})`);
+      else { outP.time = newOut; outP.override = true; }
     } else if (newOut && !outP && inP) {
       // Open shift — create a new clock-out punch
       const resp = await authFetch(ARK_SERVER + '/time/punches', {
@@ -16567,12 +16594,33 @@ async function tcSaveShiftEdit(empId, inId, outId) {
         const newPunch = await resp.json();
         if(!DB.timePunches[empId]) DB.timePunches[empId] = [];
         DB.timePunches[empId].push(newPunch);
+      } else {
+        errors.push(`Clock out add failed (${resp.status})`);
       }
     }
-    DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-    tcRenderTimecard(empId);
-  } catch(_) { tcMsg('Failed to save shift edit','#c0392b'); }
+  } catch(e) {
+    errors.push('Network error — your edit was NOT saved. Try again.');
+  }
 
+  if (errors.length) {
+    alert('Edit not saved:\n\n' + errors.join('\n') + '\n\nNothing was changed on the server. Please try again.');
+    // Reload from server to discard any partial local mutations
+    try {
+      const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+      if (resp.ok) DB.timePunches[empId] = await resp.json();
+    } catch(_) {}
+    tcRenderTimecard(empId);
+    return; // keep modal open so user can retry
+  }
+
+  // Success — reload from server to ensure local state matches saved state
+  try {
+    const resp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+    if (resp.ok) DB.timePunches[empId] = await resp.json();
+  } catch(_) {}
+  if (DB.timePunches[empId]) DB.timePunches[empId].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  tcRenderTimecard(empId);
+  tcMsg('✓ Shift saved','#2e7d5e');
   document.getElementById('tc-edit-in')?.closest('[style*="fixed"]')?.remove();
 }
 
