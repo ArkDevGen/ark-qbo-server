@@ -8596,7 +8596,12 @@ async function wgResolveData(w){
 // ── Render a single widget HTML ──
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
-  const onClick = (w.onClick && !_wgEditMode) ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
+  // Only the onclick attribute here — any cursor:pointer gets merged into
+  // the main inline style below so we never produce two style="" attributes
+  // (browsers use the first and ignore the rest — a MAJOR bug that was
+  // causing widgets with onClick to ignore their grid-column sizing!)
+  const onClickAttr = (w.onClick && !_wgEditMode) ? `onclick="nav('${w.onClick}')"` : '';
+  const cursorStyle = (w.onClick && !_wgEditMode) ? 'cursor:pointer;' : '';
   // Safety normalization: ensure grid has valid values
   w.grid = w.grid || {};
   w.grid.col = w.grid.col || 1;
@@ -8621,7 +8626,7 @@ function wgRenderWidget(w, data){
     const textStyle = whiteText ? 'color:rgba(255,255,255,.7);' : '';
     const valStyle = whiteText ? `color:#fff;` : `color:${vColor};`;
     const subStyle = whiteText ? 'color:rgba(255,255,255,.85);' : '';
-    return `<div class="wg-widget" ${onClick} style="--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};${cardStyle}" data-wid="${w.id}" draggable="false">
+    return `<div class="wg-widget" ${onClickAttr} style="${cursorStyle}--wg-accent:${accent};grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};${cardStyle}" data-wid="${w.id}" draggable="false">
       <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title" style="${textStyle}">${w.title}</div></div>${w.isDefault?'':editBtns}</div>
       <div class="wg-body"><div class="wg-kpi-value" style="${valStyle};${String(val).length>4?'font-size:28px;':''}">${val}</div><div class="wg-kpi-sub" style="${subStyle}">${sub}</div>${extra}</div>
     </div>`;
