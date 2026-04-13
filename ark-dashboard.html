@@ -8817,20 +8817,25 @@ function wgLoadWidgets(){
   }
   if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
 
-  // Sync flags from defaults (once, on first load)
+  // Sync flags from defaults (authoritative — overrides any stale locked state
+  // that may have been written to a user's saved layout by a prior version)
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
   const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
-    if(!def) return;
+    if(!def){
+      // Not a default widget — keep whatever state it has (user-created)
+      return;
+    }
     if(def.onClick && !w.onClick) w.onClick = def.onClick;
-    if(def.locked){
-      w.locked = true;
-      if(FULL_LOCKED.has(w.id)){
-        w.grid = w.grid || {};
-        w.grid.colSpan = def.grid.colSpan;
-        w.grid.rowSpan = def.grid.rowSpan;
-      }
+    // Explicitly mirror the default's locked state so non-locked defaults
+    // like Incomplete Onboarding can never accidentally stay locked from
+    // a stale saved layout.
+    w.locked = !!def.locked;
+    if(def.locked && FULL_LOCKED.has(w.id)){
+      w.grid = w.grid || {};
+      w.grid.colSpan = def.grid.colSpan;
+      w.grid.rowSpan = def.grid.rowSpan;
     }
   });
 
