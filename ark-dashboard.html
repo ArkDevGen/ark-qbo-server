@@ -8862,9 +8862,11 @@ async function renderWidgets(){
   }
   // Attach drag listeners if in edit mode
   if(_wgEditMode) wgAttachDrag();
-  // Refresh topbar actions (edit/add buttons)
+  // Refresh topbar actions ONLY if the dashboard view is currently active
+  // (renderWidgets is async — user may have navigated away before it finished)
+  const dashActive = document.getElementById('view-dashboard')?.classList.contains('active');
   const ta = document.getElementById('topbar-actions');
-  if(ta && PAGE_ACTIONS.dashboard) ta.innerHTML = PAGE_ACTIONS.dashboard();
+  if(dashActive && ta && PAGE_ACTIONS.dashboard) ta.innerHTML = PAGE_ACTIONS.dashboard();
 }
 
 function renderDashboard(){
