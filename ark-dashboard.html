@@ -8846,6 +8846,7 @@ function wgDeleteWidget(id){
   if(w?.locked) return;
   if(!confirm('Remove this widget from your dashboard?')) return;
   _userWidgets = _userWidgets.filter(w=>w.id!==id);
+  _wgPackLayout(_userWidgets);
   wgSaveWidgets();
   renderWidgets();
 }
@@ -8857,11 +8858,12 @@ function wgDuplicateWidget(id){
   dup.id = 'w_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   dup.isDefault = false;
   dup.title = src.title+' (copy)';
-  // Place after source
+  // Place after source (packing will find a real spot)
   const maxRow = Math.max(..._userWidgets.map(w=>w.grid.row+w.grid.rowSpan),1);
   dup.grid.row = maxRow;
   dup.grid.col = 1;
   _userWidgets.push(dup);
+  _wgPackLayout(_userWidgets);
   wgSaveWidgets();
   renderWidgets();
 }
@@ -8903,9 +8905,9 @@ function wgEditWidget(id){
   if(!w) return;
   // Simple size picker — 3 options only
   const SIZES = [
-    {label:'Small', cs:3, rs:1, desc:'1/4 width'},
-    {label:'Medium', cs:6, rs:1, desc:'1/2 width'},
-    {label:'Large', cs:12, rs:2, desc:'Full width · tall'},
+    {label:'Small', cs:3, rs:1, desc:'1/4 width · compact'},
+    {label:'Medium', cs:4, rs:1, desc:'1/3 width'},
+    {label:'Large', cs:6, rs:1, desc:'1/2 width'},
   ];
   const curKey = `${w.grid.colSpan||3}x${w.grid.rowSpan||1}`;
   const overlay = document.createElement('div');
@@ -8941,11 +8943,66 @@ function wgEditWidget(id){
 function wgApplySize(id, cs, rs){
   const w = _userWidgets.find(x=>x.id===id);
   if(!w) return;
+  if(cs > 12){
+    alert('There is no space on the dashboard for a widget that size.');
+    return;
+  }
   w.grid = w.grid || {};
   w.grid.colSpan = cs;
   w.grid.rowSpan = rs;
+  // Repack all widgets so the new size doesn't overlap others
+  const result = _wgPackLayout(_userWidgets);
+  if(!result.ok){
+    // Revert the size change
+    alert('There is no space on the dashboard for this widget at the selected size.');
+    return;
+  }
   wgSaveWidgets();
   renderWidgets();
+}
+
+// Greedy 2D bin-pack: walk widgets in current (row,col) order and place each
+// at the first available (row,col) where it fits in the 12-column grid.
+// Mutates widget.grid.col and widget.grid.row. Rows can extend infinitely.
+function _wgPackLayout(widgets){
+  const COLS = 12;
+  // Sort by current position so the reading order is preserved
+  const list = widgets.slice().sort((a,b)=>{
+    const ra = a.grid?.row||1, rb = b.grid?.row||1;
+    if(ra !== rb) return ra - rb;
+    return (a.grid?.col||1) - (b.grid?.col||1);
+  });
+  const occupied = new Set();
+  const mark = (row,col,cs,rs,val)=>{
+    for(let r=row; r<row+rs; r++)
+      for(let c=col; c<col+cs; c++)
+        val ? occupied.add(r+':'+c) : occupied.delete(r+':'+c);
+  };
+  const fits = (row,col,cs,rs)=>{
+    if(col+cs-1 > COLS) return false;
+    for(let r=row; r<row+rs; r++)
+      for(let c=col; c<col+cs; c++)
+        if(occupied.has(r+':'+c)) return false;
+    return true;
+  };
+  for(const w of list){
+    const cs = w.grid?.colSpan||3;
+    const rs = w.grid?.rowSpan||1;
+    if(cs > COLS) return {ok:false, error:'Widget wider than grid'};
+    let placed = false;
+    for(let row=1; row<500 && !placed; row++){
+      for(let col=1; col<=COLS-cs+1 && !placed; col++){
+        if(fits(row,col,cs,rs)){
+          w.grid.row = row;
+          w.grid.col = col;
+          mark(row,col,cs,rs,true);
+          placed = true;
+        }
+      }
+    }
+    if(!placed) return {ok:false, error:'Could not place widget'};
+  }
+  return {ok:true};
 }
 function wgbClose(){ document.getElementById('modal-widget-builder').style.display='none'; }
 
@@ -9145,6 +9202,12 @@ function wgbSave(){
     _wgbState.grid.col = _wgbState.grid.col||1;
     _wgbState.grid.row = maxRow;
     _userWidgets.push(_wgbState);
+  }
+  // Repack so no overlaps regardless of edit or create
+  const result = _wgPackLayout(_userWidgets);
+  if(!result.ok){
+    alert('There is no space on the dashboard for this widget at the selected size.');
+    return;
   }
   wgSaveWidgets();
   wgbClose();
