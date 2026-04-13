@@ -8791,17 +8791,23 @@ function wgLineChart(groups, w){
 
 // ── Widget state ──
 let _userWidgets = null;
+let _userWidgetsCachedFor = null; // tracks which user._userWidgets was loaded for
 let _wgEditMode = false;
 let _wgDragId = null;
 
 function wgLoadWidgets(){
-  // If we already have in-memory state, just return it — any mutations
-  // (resize, drag, delete) happen directly on _userWidgets so it's the
-  // source of truth for this session.
-  if(_userWidgets) return _userWidgets;
+  // Only return cached state if it was loaded for the CURRENT user.
+  // (Critical: if renderWidgets is called before login completes, currentUser
+  // is null and we'd cache DEFAULT_WIDGETS — then never re-load, causing
+  // user's saved layout to disappear and any subsequent save to wipe it.)
+  const userId = currentUser?.id || null;
+  if(_userWidgets && _userWidgetsCachedFor === userId) return _userWidgets;
 
-  // First load: hydrate from localStorage first (fastest + freshest),
-  // fall back to currentUser.prefs, then DEFAULT_WIDGETS.
+  // Reset cache and reload fresh
+  _userWidgets = null;
+  _userWidgetsCachedFor = userId;
+
+  // Hydrate from localStorage first (latest user state), then prefs, then defaults
   const cached = currentUser ? localStorage.getItem('ark_widgets_'+currentUser.id) : null;
   if(cached){
     try{ _userWidgets = JSON.parse(cached); }catch(e){ _userWidgets = null; }
@@ -14000,7 +14006,11 @@ renderLoginScreen();
       await refreshServerUsersCache();
       await loadDB();
       plAutoGenerateMonthlyReviewTasks();
+      // If resuming on a non-dashboard view, navigate there (which calls its render).
+      // Otherwise, dashboard is the default-active view but renderDashboard ran before
+      // currentUser was set — re-render now that we have the user's saved layout.
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
+      else if (typeof renderDashboard === 'function') renderDashboard();
     } else if (saved && saved.userId) {
       // Legacy fallback: old session with userId — re-login via loginAs
       await loginAs(saved.userId);

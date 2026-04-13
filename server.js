@@ -6242,6 +6242,115 @@ app.get('/sw-push.js', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
+// CLOCK-IN / CLOCK-OUT REMINDERS — server-side scheduled push
+// Runs every minute, fires at 8:30am and 4:30pm America/Chicago on weekdays.
+// Sends Web Push to subscribed users who haven't clocked in/out by the trigger.
+// ─────────────────────────────────────────────────────────────────
+const REMINDER_TZ = 'America/Chicago';
+const REMINDER_CLOCK_IN  = { hour: 8,  minute: 30 };
+const REMINDER_CLOCK_OUT = { hour: 16, minute: 30 };
+
+// Track which reminders we've already sent today (per user) so we don't spam
+// across the every-minute polling. Keyed by `${userId}:${date}:${type}`.
+let _reminderSentToday = new Set();
+let _reminderSentDate = null;
+
+function _resetRemindersIfNewDay(localDate) {
+  if (_reminderSentDate !== localDate) {
+    _reminderSentDate = localDate;
+    _reminderSentToday = new Set();
+  }
+}
+
+// Get the current time components in REMINDER_TZ
+function _getLocalNow() {
+  // en-CA gives YYYY-MM-DD format
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: REMINDER_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    weekday: 'short', hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: parseInt(parts.hour, 10) % 24, // sometimes returns "24"
+    minute: parseInt(parts.minute, 10),
+    weekday: parts.weekday, // Mon, Tue, Wed, Thu, Fri, Sat, Sun
+  };
+}
+
+async function _sendClockReminder(userId, type, message) {
+  if (!webpush) return;
+  const subs = _loadPushSubscriptions(userId);
+  if (!subs.length) return;
+  const payload = JSON.stringify({
+    title: 'ARK Time Reminder',
+    body: message,
+    tag: 'clock-reminder-' + type,
+    id: 'clock-reminder-' + type + '-' + Date.now(),
+  });
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub.subscription, payload);
+    } catch (e) {
+      // Subscription expired or invalid — clean it up
+      if (e.statusCode === 404 || e.statusCode === 410) {
+        _removePushSubscription(userId, sub.subscription.endpoint);
+      } else {
+        console.warn(`Push reminder failed for ${userId}:`, e.statusCode || e.message);
+      }
+    }
+  }
+}
+
+async function _checkClockReminders() {
+  if (!webpush) return;
+  const now = _getLocalNow();
+  _resetRemindersIfNewDay(now.date);
+  // Skip weekends
+  if (now.weekday === 'Sat' || now.weekday === 'Sun') return;
+
+  // Determine if we're in a reminder window (within 5 min after the trigger)
+  const isClockInWindow = (now.hour === REMINDER_CLOCK_IN.hour && now.minute >= REMINDER_CLOCK_IN.minute && now.minute < REMINDER_CLOCK_IN.minute + 5);
+  const isClockOutWindow = (now.hour === REMINDER_CLOCK_OUT.hour && now.minute >= REMINDER_CLOCK_OUT.minute && now.minute < REMINDER_CLOCK_OUT.minute + 5);
+  if (!isClockInWindow && !isClockOutWindow) return;
+
+  const allPunches = _loadTimePunches();
+  const allSubs = _loadAllPushSubscriptions();
+
+  // Check every user with at least one push subscription (active employees only)
+  for (const userId of Object.keys(allSubs)) {
+    if (!allSubs[userId] || !allSubs[userId].length) continue;
+    const user = _users.find(u => u.id === userId);
+    if (!user || (user.status && user.status.toLowerCase() !== 'active')) continue;
+    const todayPunches = (allPunches[userId] || []).filter(p => p.date === now.date);
+    const ins = todayPunches.filter(p => p.type === 'in');
+    const outs = todayPunches.filter(p => p.type === 'out');
+
+    if (isClockInWindow) {
+      const key = `${userId}:${now.date}:in`;
+      if (!_reminderSentToday.has(key) && ins.length === 0) {
+        await _sendClockReminder(userId, 'in', "Don't forget to clock in!");
+        _reminderSentToday.add(key);
+      }
+    }
+    if (isClockOutWindow) {
+      const key = `${userId}:${now.date}:out`;
+      // Open shift = more clock-ins than clock-outs
+      if (!_reminderSentToday.has(key) && ins.length > outs.length) {
+        await _sendClockReminder(userId, 'out', "Don't forget to clock out!");
+        _reminderSentToday.add(key);
+      }
+    }
+  }
+}
+
+// Poll every minute — only fires push during the 5-min window after trigger time
+setInterval(() => { _checkClockReminders().catch(e => console.warn('Clock reminder check error:', e.message)); }, 60 * 1000);
+console.log('Clock reminders scheduled: 8:30am/4:30pm America/Chicago (weekdays)');
+
+// ─────────────────────────────────────────────────────────────────
 // HEALTH CHECK — Render uses this for zero-downtime deploys
 // ─────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
