@@ -1120,7 +1120,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   </div>
   <nav class="nav">
     <div class="nav-section">Overview</div>
-    <div class="nav-item active" onclick="nav('dashboard')"><span class="ni">◈</span>Dashboard</div>
+    <div class="nav-item active" onclick="nav('dashboard')"><span class="ni">🏠</span>Dashboard</div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Clients <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
@@ -8371,7 +8371,7 @@ const DEFAULT_WIDGETS = [
   {id:'dw2',type:'kpi',title:'Active Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'currently engaged',accentColor:'var(--gold)'},filters:[{field:'status',op:'eq',value:'Active'}],grid:{col:4,row:1,colSpan:3,rowSpan:1}},
   {id:'dw3',type:'kpi',title:'AM Center',source:{type:'computed',compute:'activeAMs'},display:{metric:'count',subtitle:'team members',accentColor:'var(--gold)'},filters:[],grid:{col:7,row:1,colSpan:3,rowSpan:1}},
   {id:'dw4',type:'kpi',title:'Next Banking Holiday',source:{type:'computed',compute:'bankingHoliday'},display:{metric:'custom',accentColor:'var(--gold)'},filters:[],grid:{col:10,row:1,colSpan:3,rowSpan:1},locked:true},
-  {id:'dw5',type:'kpi',title:'Clocked In Now',source:{type:'computed',compute:'clockedIn'},display:{metric:'custom',subtitle:'no open punches',accentColor:'#6b3fa0',valueColor:'#6b3fa0'},filters:[],grid:{col:1,row:2,colSpan:3,rowSpan:1},locked:true},
+  {id:'dw5',type:'kpi',title:'Clocked In Now',source:{type:'computed',compute:'clockedIn'},display:{metric:'custom',subtitle:'no open punches',accentColor:'#6b3fa0',valueColor:'#6b3fa0'},filters:[],grid:{col:1,row:2,colSpan:3,rowSpan:1},locked:true,onClick:'timecenter'},
   {id:'dw6',type:'kpi',title:'1099s Issued',source:{type:'collection',collection:'form1099s'},display:{metric:'count',subtitle:'tax year',accentColor:'var(--green)'},filters:[{field:'year',op:'eq',value:'$prevYear'}],grid:{col:4,row:2,colSpan:2,rowSpan:1}},
   {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
   {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:3,rowSpan:1}},
@@ -8697,10 +8697,15 @@ function wgLoadWidgets(){
     if(cached){ try{ _userWidgets=JSON.parse(cached); }catch(e){ _userWidgets=null; } }
   }
   if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
-  // Re-apply locked flag from defaults (covers existing users whose saved
-  // layouts pre-date the lock being added to a given default widget)
-  const lockedIds = DEFAULT_WIDGETS.filter(d=>d.locked).map(d=>d.id);
-  _userWidgets.forEach(w=>{ if(lockedIds.includes(w.id)) w.locked = true; });
+  // Re-apply locked flag + onClick from defaults (covers existing users whose
+  // saved layouts pre-date these being added to a given default widget)
+  const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
+  _userWidgets.forEach(w=>{
+    const def = defaultsById[w.id];
+    if(!def) return;
+    if(def.locked) w.locked = true;
+    if(def.onClick && !w.onClick) w.onClick = def.onClick;
+  });
   return _userWidgets;
 }
 
