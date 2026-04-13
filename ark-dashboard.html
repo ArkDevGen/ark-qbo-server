@@ -730,7 +730,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 /* ════════════════════════════════════════
    WIDGET SYSTEM
    ════════════════════════════════════════ */
-.wg-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;grid-auto-rows:minmax(120px,auto);}
+.wg-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;grid-auto-rows:160px;}
 .wg-widget{
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius);box-shadow:var(--shadow-sm);
@@ -8465,8 +8465,8 @@ const DEFAULT_WIDGETS = [
   {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
   {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:2,rowSpan:1}},
   {id:'dw9',type:'kpi',title:'Unfiled NH Reports',source:{type:'collection',collection:'employees'},display:{metric:'count',subtitle:'need to be filed',accentColor:'var(--red)'},filters:[{field:'reportPrinted',op:'eq',value:false}],grid:{col:11,row:2,colSpan:2,rowSpan:1}},
-  {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:1}},
-  {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:2}},
+  {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:2},locked:true},
+  {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:5,colSpan:12,rowSpan:4},locked:true},
 ];
 
 // ── Computed widget handlers ──
@@ -8597,8 +8597,8 @@ async function wgResolveData(w){
 // ── Render a single widget HTML ──
 function wgRenderWidget(w, data){
   const accent = w.display?.accentColor||'var(--gold)';
-  const onClick = w.onClick ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
-  const editBtns = w.locked ? '' : `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Edit">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDuplicateWidget('${w.id}')" title="Duplicate">📋</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
+  const onClick = (w.onClick && !_wgEditMode) ? `onclick="nav('${w.onClick}')" style="cursor:pointer;"` : '';
+  const editBtns = w.locked ? '' : `<div class="wg-actions"><button class="wg-action-btn" onclick="event.stopPropagation();wgEditWidget('${w.id}')" title="Resize">✏️</button><button class="wg-action-btn" onclick="event.stopPropagation();wgDeleteWidget('${w.id}')" title="Delete">🗑️</button></div>`;
   const dragHandle = `<span class="wg-drag-handle" title="Drag to reorder">⠿</span>`;
 
   if(w.type==='kpi'){
@@ -8793,14 +8793,25 @@ function wgLoadWidgets(){
     if(cached){ try{ _userWidgets=JSON.parse(cached); }catch(e){ _userWidgets=null; } }
   }
   if(!_userWidgets) _userWidgets = JSON.parse(JSON.stringify(DEFAULT_WIDGETS));
+  // Pack once on load so any legacy overlapping layouts get cleaned up
+  _wgPackLayout(_userWidgets);
   // Re-apply locked flag + onClick from defaults (covers existing users whose
-  // saved layouts pre-date these being added to a given default widget)
+  // saved layouts pre-date these being added to a given default widget).
+  // For locked widgets, also sync grid sizes (rowSpan/colSpan) since users
+  // can't customize them anyway — ensures Quick Actions / Calendar always
+  // have the right dimensions for their content.
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
     if(!def) return;
-    if(def.locked) w.locked = true;
     if(def.onClick && !w.onClick) w.onClick = def.onClick;
+    if(def.locked){
+      w.locked = true;
+      // Sync grid dimensions for locked widgets so content fits
+      w.grid = w.grid || {};
+      w.grid.colSpan = def.grid.colSpan;
+      w.grid.rowSpan = def.grid.rowSpan;
+    }
   });
   return _userWidgets;
 }
@@ -8871,10 +8882,18 @@ function wgAttachDrag(){
   if(!grid) return;
   grid.querySelectorAll('.wg-widget').forEach(el=>{
     el.setAttribute('draggable','true');
+    // In edit mode, suppress the widget's onclick nav so clicks don't
+    // navigate instead of dragging. Restore on dragend / edit-mode exit.
+    if(el.hasAttribute('onclick')){
+      el.dataset._origOnclick = el.getAttribute('onclick');
+      el.removeAttribute('onclick');
+      el.style.cursor = 'grab';
+    }
     el.addEventListener('dragstart',e=>{
       _wgDragId = el.dataset.wid;
       el.classList.add('wg-dragging');
       e.dataTransfer.effectAllowed='move';
+      try { e.dataTransfer.setData('text/plain', el.dataset.wid); } catch(_){}
     });
     el.addEventListener('dragend',()=>{
       el.classList.remove('wg-dragging');
@@ -8889,18 +8908,22 @@ function wgAttachDrag(){
     el.addEventListener('dragleave',()=>{el.classList.remove('wg-drop-target');});
     el.addEventListener('drop',e=>{
       e.preventDefault();
+      e.stopPropagation();
       el.classList.remove('wg-drop-target');
       const targetId = el.dataset.wid;
-      if(!_wgDragId||_wgDragId===targetId) return;
-      // Swap grid positions
-      const wA = _userWidgets.find(w=>w.id===_wgDragId);
+      const draggedId = _wgDragId || e.dataTransfer.getData('text/plain');
+      if(!draggedId || draggedId===targetId) return;
+      const wA = _userWidgets.find(w=>w.id===draggedId);
       const wB = _userWidgets.find(w=>w.id===targetId);
-      if(wA&&wB){
-        const tmpGrid = {...wA.grid};
-        wA.grid = {...wB.grid};
-        wB.grid = {...tmpGrid};
+      if(wA && wB){
+        // Swap grid positions (col/row), keep their own sizes
+        const tmpCol = wA.grid.col, tmpRow = wA.grid.row;
+        wA.grid.col = wB.grid.col; wA.grid.row = wB.grid.row;
+        wB.grid.col = tmpCol; wB.grid.row = tmpRow;
+        _wgPackLayout(_userWidgets);
         wgSaveWidgets();
-        renderWidgets();
+        // Defer re-render so the current drop event completes cleanly
+        setTimeout(()=> renderWidgets(), 0);
       }
     });
   });
