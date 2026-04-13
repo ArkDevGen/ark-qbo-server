@@ -23,6 +23,20 @@ const app = express();
 // Build version — set at server startup, used for update notifications
 const BUILD_VERSION = new Date().toISOString();
 
+// Recent changes — captured from git log at server startup so users see
+// a human summary of what changed when an update banner appears
+let BUILD_CHANGES = [];
+try {
+  const { execSync } = require('child_process');
+  const raw = execSync('git log -10 --pretty=format:"%s|%h|%cI"', { cwd: __dirname, encoding: 'utf8' });
+  BUILD_CHANGES = raw.split('\n').filter(Boolean).map(line => {
+    const [subject, hash, date] = line.split('|');
+    return { subject: subject.replace(/^"|"$/g, ''), hash, date };
+  });
+} catch (e) {
+  console.log('Could not read git log for changelog:', e.message);
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Persistent data directory
 // On Render with a persistent disk mounted at /data, files survive deploys.
@@ -6236,7 +6250,7 @@ app.get('/health', (req, res) => {
 
 // Version check — lightweight endpoint for client polling
 app.get('/version', (req, res) => {
-  res.json({ version: BUILD_VERSION });
+  res.json({ version: BUILD_VERSION, changes: BUILD_CHANGES });
 });
 
 // ─────────────────────────────────────────────────────────────────

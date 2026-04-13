@@ -1170,11 +1170,23 @@ input[type="checkbox"]{accent-color:var(--navy);}
       onmouseover="this.style.background='rgba(184,146,42,.22)'" onmouseout="this.style.background='rgba(184,146,42,.12)'">
       💡 <span>Ideas &amp; Feedback</span>
     </button>
-    <button onclick="exportAllData()"
-      style="width:100%;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);color:rgba(255,255,255,.45);font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;text-align:left;transition:all .15s;display:flex;align-items:center;gap:8px;"
-      onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='rgba(255,255,255,.7)'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='rgba(255,255,255,.45)'">
-      💾 <span>Export Backup</span>
-    </button>
+    <div id="sidebar-backup-wrap" style="position:relative;display:none;">
+      <button onclick="toggleBackupMenu(event)" id="sidebar-backup-btn"
+        style="width:100%;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);color:rgba(255,255,255,.45);font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;text-align:left;transition:all .15s;display:flex;align-items:center;gap:8px;justify-content:space-between;"
+        onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='rgba(255,255,255,.7)'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='rgba(255,255,255,.45)'">
+        <span style="display:flex;align-items:center;gap:8px;">💾 <span>Backup</span></span>
+        <span style="font-size:9px;opacity:.6;">▾</span>
+      </button>
+      <div id="sidebar-backup-menu" style="display:none;position:absolute;bottom:100%;left:0;right:0;margin-bottom:4px;background:#1e2536;border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);overflow:hidden;box-shadow:0 -4px 16px rgba(0,0,0,.3);z-index:100;">
+        <div onclick="exportAllData();closeBackupMenu()" style="padding:10px 14px;font-size:11px;color:rgba(255,255,255,.75);cursor:pointer;display:flex;align-items:center;gap:8px;font-weight:600;font-family:'DM Sans',sans-serif;border-bottom:1px solid rgba(255,255,255,.08);" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+          ⬇ <span>Export Backup</span>
+        </div>
+        <label style="padding:10px 14px;font-size:11px;color:rgba(255,255,255,.75);cursor:pointer;display:flex;align-items:center;gap:8px;font-weight:600;font-family:'DM Sans',sans-serif;" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+          ⬆ <span>Restore from Backup</span>
+          <input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0]);closeBackupMenu()">
+        </label>
+      </div>
+    </div>
   </div>
   <div class="sidebar-footer" id="sidebar-footer">ARK Financial · v1.0</div>
   <div id="sidebar-save-status" style="padding:0 24px 12px;font-size:10px;color:rgba(255,255,255,0.15);font-family:'DM Sans',sans-serif;"></div>
@@ -1223,18 +1235,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </button>
           </div>
         </div>
-      </div>
-      <!-- Data persistence controls -->
-      <div style="display:flex;align-items:center;gap:4px;">
-        <button onclick="exportDBBackup()" title="Download backup"
-          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:14px;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;"
-          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">⬇</button>
-        <label title="Restore from backup"
-          style="background:transparent;border:1px solid var(--border);color:var(--text-d);font-size:14px;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;"
-          onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">⬆<input type="file" accept=".json" style="display:none;" onchange="importDBBackup(this.files[0])">
-        </label>
       </div>
       <div id="current-user-pill" style="position:relative;cursor:pointer;" onclick="document.getElementById('user-menu').style.display=document.getElementById('user-menu').style.display==='none'?'block':'none'">
         <div class="pill-av" id="pill-av" style="background:var(--navy);">?</div>
@@ -7291,11 +7291,34 @@ function setNavVisible(id, visible){
   if(el) el.style.display = visible ? 'flex' : 'none';
 }
 
+function toggleBackupMenu(e){
+  e.stopPropagation();
+  const menu = document.getElementById('sidebar-backup-menu');
+  if(!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  if(menu.style.display === 'block'){
+    setTimeout(()=>{
+      document.addEventListener('click', closeBackupMenu, { once: true });
+    }, 0);
+  }
+}
+function closeBackupMenu(){
+  const menu = document.getElementById('sidebar-backup-menu');
+  if(menu) menu.style.display = 'none';
+}
+
 function applyRoleRestrictions(u){
   if(!u) return;
   const role = u.role || 'am';
-  // Admin: full access
-  if(role === 'admin') return;
+  // Admin: full access — show backup button
+  if(role === 'admin'){
+    const b = document.getElementById('sidebar-backup-wrap');
+    if(b) b.style.display = '';
+    return;
+  }
+  // Non-admin: hide sidebar backup dropdown
+  const backupWrap = document.getElementById('sidebar-backup-wrap');
+  if(backupWrap) backupWrap.style.display = 'none';
   // AM: hide Users nav and Export Backup
   if(role === 'am'){
     setNavVisible('nav-users', false);
@@ -8875,7 +8898,55 @@ function wgbOpen(editId){
   wgbRenderStep();
   document.getElementById('modal-widget-builder').style.display='flex';
 }
-function wgEditWidget(id){ wgbOpen(id); }
+function wgEditWidget(id){
+  const w = _userWidgets.find(x=>x.id===id);
+  if(!w) return;
+  // Simple size picker — 3 options only
+  const SIZES = [
+    {label:'Small', cs:3, rs:1, desc:'1/4 width'},
+    {label:'Medium', cs:6, rs:1, desc:'1/2 width'},
+    {label:'Large', cs:12, rs:2, desc:'Full width · tall'},
+  ];
+  const curKey = `${w.grid.colSpan||3}x${w.grid.rowSpan||1}`;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="card" style="width:380px;padding:0;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">Resize Widget</div>
+      <div style="font-size:12px;color:var(--text-d);">${w.title}</div>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px;">
+      ${SIZES.map(s=>{
+        const key = `${s.cs}x${s.rs}`;
+        const selected = key===curKey;
+        return `<button onclick="wgApplySize('${id}',${s.cs},${s.rs});this.closest('[style*=fixed]').remove();"
+          style="padding:14px 16px;border:2px solid ${selected?'var(--gold)':'var(--border)'};background:${selected?'var(--gold-pale)':'var(--surface)'};border-radius:var(--radius-sm);cursor:pointer;text-align:left;font-family:inherit;transition:var(--transition);display:flex;justify-content:space-between;align-items:center;"
+          onmouseover="if(!${selected})this.style.borderColor='var(--navy)'" onmouseout="if(!${selected})this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--navy);">${s.label}</div>
+            <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${s.desc}</div>
+          </div>
+          ${selected?'<span style="font-size:10px;color:var(--gold);font-weight:700;">CURRENT</span>':''}
+        </button>`;
+      }).join('')}
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('[style*=fixed]').remove()">Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function wgApplySize(id, cs, rs){
+  const w = _userWidgets.find(x=>x.id===id);
+  if(!w) return;
+  w.grid = w.grid || {};
+  w.grid.colSpan = cs;
+  w.grid.rowSpan = rs;
+  wgSaveWidgets();
+  renderWidgets();
+}
 function wgbClose(){ document.getElementById('modal-widget-builder').style.display='none'; }
 
 function wgbRenderStep(){
@@ -26291,6 +26362,8 @@ function smartReload(){
 }
 
 let _appVersion = null;       // version when page loaded
+let _appChanges = [];          // changelog at page load (baseline for "what's new")
+let _newChanges = [];          // changes added in the new deploy
 let _versionPollTimer = null;
 
 async function versionInit() {
@@ -26300,6 +26373,7 @@ async function versionInit() {
     if (resp.ok) {
       const data = await resp.json();
       _appVersion = data.version;
+      _appChanges = data.changes || [];
       console.log('Version system initialized:', _appVersion);
     } else {
       console.log('Version init failed:', resp.status);
@@ -26342,12 +26416,28 @@ async function versionCheck() {
     const data = await resp.json();
     if (data.version && data.version !== _appVersion) {
       console.log('New version available:', data.version, '(current:', _appVersion + ')');
+      // Compute diff: changes that are in the new list but not in the old
+      const oldHashes = new Set((_appChanges||[]).map(c=>c.hash));
+      _newChanges = (data.changes||[]).filter(c=>!oldHashes.has(c.hash));
       versionShowBanner();
     }
   } catch (e) {
     // Network error = server is down (deploy in progress) — skip silently
     console.log('Version poll: network error — server likely restarting');
   }
+}
+
+// Humanize commit subjects for display (strip conventional-commit prefixes,
+// hide trailing co-author noise, etc.)
+function _humanizeCommit(subject){
+  if(!subject) return '';
+  let s = subject.trim();
+  // Strip conventional prefixes: feat:, fix:, chore:, etc.
+  s = s.replace(/^(feat|fix|chore|docs|refactor|style|test|perf|build|ci)(\([^)]*\))?:\s*/i, '');
+  // Take only the part before an em-dash explanation for brevity? No, keep full subject.
+  // Capitalize first letter
+  if(s.length) s = s[0].toUpperCase() + s.slice(1);
+  return s;
 }
 
 function versionShowBanner() {
@@ -26363,26 +26453,33 @@ function versionShowBanner() {
     transform: 'translateX(-50%)',
     background: 'var(--navy)',
     color: '#fff',
-    padding: '12px 24px',
+    padding: '12px 20px',
     borderRadius: '12px',
     boxShadow: '0 8px 32px rgba(0,0,0,.3)',
     zIndex: '9999',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
     fontFamily: "'DM Sans', sans-serif",
     fontSize: '13px',
     fontWeight: '500',
     animation: 'slideUp .3s ease both',
+    maxWidth: '440px',
   });
 
+  const hasChanges = (_newChanges||[]).length > 0;
+  const changesList = hasChanges ? _newChanges.slice(0,6).map(c=>`<li style="padding:3px 0;color:rgba(255,255,255,.85);font-size:12px;line-height:1.4;">${_humanizeCommit(c.subject)}</li>`).join('') : '';
+  const moreCount = hasChanges && _newChanges.length > 6 ? `<li style="padding:3px 0;color:rgba(255,255,255,.5);font-size:11px;font-style:italic;">+${_newChanges.length - 6} more…</li>` : '';
+
   banner.innerHTML = `
-    <span style="font-size:18px;">✨</span>
-    <span>A new update is available</span>
-    <button onclick="smartReload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">
-      Update Now
-    </button>
-    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:18px;">✨</span>
+      <span style="flex:1;">A new update is available</span>
+      ${hasChanges?`<button onclick="document.getElementById('update-changes').style.display = document.getElementById('update-changes').style.display==='none'?'block':'none';this.textContent=this.textContent.includes('What')?'Hide':\"What's new?\"" style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">What's new?</button>`:''}
+      <button onclick="smartReload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Update Now</button>
+      <button onclick="this.closest('#update-banner').remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+    </div>
+    ${hasChanges?`<div id="update-changes" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.5);font-weight:700;margin-bottom:6px;">What changed</div>
+      <ul style="list-style:disc inside;padding:0;margin:0;">${changesList}${moreCount}</ul>
+    </div>`:''}
   `;
 
   document.body.appendChild(banner);
