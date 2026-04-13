@@ -8853,7 +8853,12 @@ function wgSaveWidgets(){
 }
 
 // ── Main render ──
+// Render token: only the most recent renderWidgets() call commits to the DOM.
+// Prevents race conditions where a slow async render (waiting on clockedIn
+// data) overwrites a faster, more recent render with stale state.
+let _renderToken = 0;
 async function renderWidgets(){
+  const myToken = ++_renderToken;
   const grid = document.getElementById('widget-grid');
   if(!grid) return;
   const widgets = wgLoadWidgets();
@@ -8861,28 +8866,30 @@ async function renderWidgets(){
     grid.innerHTML = `<div class="wg-empty"><div class="wg-empty-icon">📊</div>No widgets yet.<br><button class="btn btn-primary" style="margin-top:12px;" onclick="wgbOpen()">+ Add Your First Widget</button></div>`;
     return;
   }
+  // Resolve all widget data in parallel — keeps render fast and atomic
+  const allData = await Promise.all(widgets.map(w =>
+    Promise.resolve()
+      .then(() => wgResolveData(w))
+      .catch(e => { console.warn('Widget render error', w.id, e); return {value:'—', sub:'Error loading'}; })
+  ));
+  // Abort if a newer render has been requested while we were awaiting
+  if(myToken !== _renderToken) return;
+  // Build HTML synchronously — sizes are consistent at this point
   let html = '';
-  for(const w of widgets){
-    try {
-      const data = await wgResolveData(w);
-      html += wgRenderWidget(w, data);
-    } catch(e){
-      console.warn('Widget render error for', w.id, w.title, e);
-      html += wgRenderWidget(w, {value:'—', sub:'Error loading'});
-    }
+  for(let i=0; i<widgets.length; i++){
+    html += wgRenderWidget(widgets[i], allData[i]);
   }
   grid.innerHTML = html;
   if(_wgEditMode) grid.classList.add('wg-edit-mode'); else grid.classList.remove('wg-edit-mode');
-  // Post-render: calendar
   const calWidget = widgets.find(w=>w.type==='calendar');
   if(calWidget){
     try { renderCalWidget(); } catch(_){}
-    fetchCalendarEvents().then(()=>{ try { renderCalWidget(); renderCalHeaderActions(); } catch(_){} }).catch(_=>{});
+    fetchCalendarEvents().then(()=>{
+      if(myToken !== _renderToken) return;
+      try { renderCalWidget(); renderCalHeaderActions(); } catch(_){}
+    }).catch(_=>{});
   }
-  // Attach drag listeners if in edit mode
   if(_wgEditMode) wgAttachDrag();
-  // Refresh topbar actions ONLY if the dashboard view is currently active
-  // (renderWidgets is async — user may have navigated away before it finished)
   const dashActive = document.getElementById('view-dashboard')?.classList.contains('active');
   const ta = document.getElementById('topbar-actions');
   if(dashActive && ta && PAGE_ACTIONS.dashboard) ta.innerHTML = PAGE_ACTIONS.dashboard();
