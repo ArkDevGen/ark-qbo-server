@@ -7419,22 +7419,82 @@ async function _reAuth() {
 }
 
 // Authenticated fetch — adds Bearer token, auto-retries on 401, detects server-down
+// Tracks how many write requests are currently being retried
+let _saveRetryCount = 0;
+
+function _showSaveRetryBanner(){
+  if(document.getElementById('save-retry-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'save-retry-banner';
+  Object.assign(b.style, {
+    position:'fixed', bottom:'24px', right:'24px',
+    background:'var(--navy)', color:'#fff',
+    padding:'10px 16px', borderRadius:'10px',
+    boxShadow:'0 6px 24px rgba(0,0,0,.25)',
+    zIndex:'9998',
+    fontFamily:"'DM Sans',sans-serif", fontSize:'12px', fontWeight:'500',
+    display:'flex', alignItems:'center', gap:'10px',
+    animation:'slideUp .3s ease both',
+  });
+  b.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;"></span><span>Saving… the server is briefly unavailable, we'll keep trying.</span>`;
+  document.body.appendChild(b);
+}
+function _hideSaveRetryBanner(){
+  const b = document.getElementById('save-retry-banner');
+  if(b) b.remove();
+}
+
 async function authFetch(url, options = {}) {
   if (_serverToken) {
     if (!options.headers) options.headers = {};
     options.headers['Authorization'] = 'Bearer ' + _serverToken;
   }
-  const resp = await fetch(url, options);
-  // If 401, try re-authenticating once and retry
-  if (resp.status === 401 && currentUser) {
-    const ok = await _reAuth();
-    if (ok) {
-      if (!options.headers) options.headers = {};
-      options.headers['Authorization'] = 'Bearer ' + _serverToken;
-      return fetch(url, options);
+
+  const method = (options.method || 'GET').toUpperCase();
+  // Retry write operations on 502/503/network errors so in-flight saves
+  // survive a deploy cycle. Read-only GETs don't retry (they'll just fail
+  // visibly and the caller can re-trigger).
+  const isWrite = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const backoffs = [1500, 3000, 6000, 12000, 20000]; // ~43s total
+  let retryShown = false;
+
+  for (let attempt = 0; attempt <= (isWrite ? backoffs.length : 0); attempt++) {
+    let resp;
+    try {
+      resp = await fetch(url, options);
+    } catch (err) {
+      // Network error — if it's a write, retry with backoff
+      if (isWrite && attempt < backoffs.length) {
+        if(!retryShown){ retryShown = true; _saveRetryCount++; _showSaveRetryBanner(); }
+        await new Promise(r => setTimeout(r, backoffs[attempt]));
+        continue;
+      }
+      if(retryShown){ _saveRetryCount = Math.max(0, _saveRetryCount-1); if(_saveRetryCount===0) _hideSaveRetryBanner(); }
+      throw err;
     }
+
+    // 502/503: server mid-deploy — retry write operations
+    if ((resp.status === 502 || resp.status === 503) && isWrite && attempt < backoffs.length) {
+      if(!retryShown){ retryShown = true; _saveRetryCount++; _showSaveRetryBanner(); }
+      await new Promise(r => setTimeout(r, backoffs[attempt]));
+      continue;
+    }
+
+    // 401: session expired — try re-auth once
+    if (resp.status === 401 && currentUser) {
+      const ok = await _reAuth();
+      if (ok) {
+        if (!options.headers) options.headers = {};
+        options.headers['Authorization'] = 'Bearer ' + _serverToken;
+        resp = await fetch(url, options);
+      }
+    }
+
+    // Clean up retry banner if this request was retrying
+    if(retryShown){ _saveRetryCount = Math.max(0, _saveRetryCount-1); if(_saveRetryCount===0) _hideSaveRetryBanner(); }
+    return resp;
   }
-  return resp;
+  // Should never reach here — loop always returns or throws
 }
 
 async function loginAs(userId){
