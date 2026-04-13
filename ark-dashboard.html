@@ -8390,14 +8390,14 @@ const WG_CHART_COLORS = ['#1a2440','#b8922a','#2e7d5e','#b03a3a','#2c5fa1','#6b3
 
 // ── Default widgets matching the original hardcoded dashboard ──
 const DEFAULT_WIDGETS = [
-  {id:'dw1',type:'kpi',title:'Total Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'all accounts',accentColor:'var(--gold)'},filters:[],grid:{col:1,row:1,colSpan:3,rowSpan:1}},
+  {id:'dw1',type:'kpi',title:'Total Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'all accounts',accentColor:'var(--gold)'},filters:[],grid:{col:1,row:1,colSpan:6,rowSpan:1}},
   {id:'dw2',type:'kpi',title:'Active Clients',source:{type:'collection',collection:'clients'},display:{metric:'count',subtitle:'currently engaged',accentColor:'var(--gold)'},filters:[{field:'status',op:'eq',value:'Active'}],grid:{col:4,row:1,colSpan:3,rowSpan:1}},
   {id:'dw3',type:'kpi',title:'AM Center',source:{type:'computed',compute:'activeAMs'},display:{metric:'count',subtitle:'team members',accentColor:'var(--gold)'},filters:[],grid:{col:7,row:1,colSpan:3,rowSpan:1}},
   {id:'dw4',type:'kpi',title:'Next Banking Holiday',source:{type:'computed',compute:'bankingHoliday'},display:{metric:'custom',accentColor:'var(--gold)'},filters:[],grid:{col:10,row:1,colSpan:3,rowSpan:1},locked:true},
   {id:'dw5',type:'kpi',title:'Clocked In Now',source:{type:'computed',compute:'clockedIn'},display:{metric:'custom',subtitle:'no open punches',accentColor:'#6b3fa0',valueColor:'#6b3fa0'},filters:[],grid:{col:1,row:2,colSpan:3,rowSpan:1},locked:true,onClick:'timecenter'},
   {id:'dw6',type:'kpi',title:'1099s Issued',source:{type:'collection',collection:'form1099s'},display:{metric:'count',subtitle:'tax year',accentColor:'var(--green)'},filters:[{field:'year',op:'eq',value:'$prevYear'}],grid:{col:4,row:2,colSpan:2,rowSpan:1}},
   {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
-  {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:3,rowSpan:1}},
+  {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:2,rowSpan:1}},
   {id:'dw9',type:'kpi',title:'Unfiled NH Reports',source:{type:'collection',collection:'employees'},display:{metric:'count',subtitle:'need to be filed',accentColor:'var(--red)'},filters:[{field:'reportPrinted',op:'eq',value:false}],grid:{col:11,row:2,colSpan:2,rowSpan:1}},
   {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:1}},
   {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:2}},
@@ -8905,9 +8905,9 @@ function wgEditWidget(id){
   if(!w) return;
   // Simple size picker — 3 options only
   const SIZES = [
-    {label:'Small', cs:3, rs:1, desc:'1/4 width · compact'},
-    {label:'Medium', cs:4, rs:1, desc:'1/3 width'},
-    {label:'Large', cs:6, rs:1, desc:'1/2 width'},
+    {label:'Small', cs:2, rs:1, desc:'Compact · 1/6 width'},
+    {label:'Medium', cs:3, rs:1, desc:'Standard · 1/4 width'},
+    {label:'Large', cs:6, rs:1, desc:'Wide · 1/2 width'},
   ];
   const curKey = `${w.grid.colSpan||3}x${w.grid.rowSpan||1}`;
   const overlay = document.createElement('div');
