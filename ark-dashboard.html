@@ -26503,6 +26503,14 @@ function _humanizeCommit(subject){
   return s;
 }
 
+function toggleUpdateChanges(btn){
+  const panel = document.getElementById('update-changes');
+  if(!panel) return;
+  const isHidden = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = isHidden ? 'block' : 'none';
+  btn.textContent = isHidden ? 'Hide' : "What's new?";
+}
+
 function versionShowBanner() {
   // Don't show if already showing
   if (document.getElementById('update-banner')) return;
@@ -26535,7 +26543,7 @@ function versionShowBanner() {
     <div style="display:flex;align-items:center;gap:12px;">
       <span style="font-size:18px;">✨</span>
       <span style="flex:1;">A new update is available</span>
-      ${hasChanges?`<button onclick="document.getElementById('update-changes').style.display = document.getElementById('update-changes').style.display==='none'?'block':'none';this.textContent=this.textContent.includes('What')?'Hide':\"What's new?\"" style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">What's new?</button>`:''}
+      ${hasChanges?`<button onclick="toggleUpdateChanges(this)" style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">What&#39;s new?</button>`:''}
       <button onclick="smartReload()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Update Now</button>
       <button onclick="this.closest('#update-banner').remove()" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
     </div>
