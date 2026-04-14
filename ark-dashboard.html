@@ -20499,6 +20499,9 @@ function tcSaveTask(){
       parentId:     existing?.parentId || null,
     };
 
+    // Stamp _updatedAt for merge conflict resolution
+    task._updatedAt = new Date().toISOString();
+    task._updatedBy = who;
     const idx = DB.tasks.findIndex(x=>x.id===task.id);
     if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
     logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${clientName}`);
@@ -20531,6 +20534,10 @@ function tcToggleComplete(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
   const who  = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
   const when = new Date().toISOString();
+  // Stamp _updatedAt so the server-side merge preserves this change
+  // even if another user saves stale data concurrently
+  t._updatedAt = when;
+  t._updatedBy = who;
 
   // ── Guard: close checklist must be complete before marking done ────
   if (t.closeChecklist && t.status !== 'completed' && t.status !== 'review') {
@@ -20783,6 +20790,7 @@ function tcApproveReview(reviewTaskId){
   if(parent){
     parent.status = 'completed'; parent.completedAt = when; parent.completedBy = who;
     parent.reviewStatus = 'approved';
+    parent._updatedAt = when; parent._updatedBy = who;
     if(!parent.noteLog) parent.noteLog = [];
     parent.noteLog.unshift({ id:uid(), text:`✅ Approved by ${who}`, author:who, at:when, type:'review' });
     logAct(`Task "${parent.name}" approved by ${who} (${parent.clientName})`);
@@ -20828,6 +20836,7 @@ function tcRejectReview(reviewTaskId){
   if(parent){
     parent.status = 'open'; parent.completedAt = null; parent.completedBy = null;
     parent.reviewStatus = 'rejected'; parent.reviewTaskId = null;
+    parent._updatedAt = when; parent._updatedBy = who;
     if(!parent.noteLog) parent.noteLog = [];
     parent.noteLog.unshift({ id:uid(), text:`❌ Rejected by ${who}${reason?' — '+reason:''}`, author:who, at:when, type:'review' });
     logAct(`Task "${parent.name}" rejected by ${who} (${parent.clientName})`);
