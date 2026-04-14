@@ -868,7 +868,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .dh-tab{padding:10px 18px;font-size:12px;font-weight:600;color:var(--text-d);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;transition:var(--transition);}
 .dh-tab:hover{color:var(--navy);}
 .dh-tab.active{color:var(--navy);border-bottom-color:var(--gold);}
-.dh-kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;}
+.dh-kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start;}
 .dh-col{background:var(--surface2);border-radius:var(--radius);padding:10px;min-height:200px;}
 .dh-col-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
 .dh-col-count{background:var(--border);color:var(--text-m);font-size:9px;padding:1px 6px;border-radius:8px;}
@@ -37792,8 +37792,24 @@ function dhRenderBoard(){
     if(tagFilter && !(p.tags||[]).includes(tagFilter)) return false;
     return true;
   });
+  // Ideas inbox — open ideas that haven't been converted to projects yet
+  const openIdeas = (DB.ideas||[]).filter(i => i.status === 'open' || i.status === 'planned');
+  const ideasHtml = openIdeas.length ? openIdeas.map(i => `<div class="dh-card" style="border-left:3px solid var(--gold);" onclick="dhConvertIdea('${i.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-size:9px;font-weight:700;background:var(--gold-pale);color:var(--gold);padding:2px 7px;border-radius:10px;">💡 Idea</span>
+      <span style="font-size:9px;color:var(--text-d);">${i.category||''}</span>
+    </div>
+    <div class="dh-card-title">${i.title}</div>
+    <div class="dh-card-desc">${i.detail||''}</div>
+    <div style="font-size:10px;color:var(--text-d);margin-top:4px;">by ${i.submittedBy||'Unknown'} · <span style="color:var(--gold);font-weight:600;cursor:pointer;">Click to convert to project →</span></div>
+  </div>`).join('') : '<div style="font-size:11px;color:var(--text-d);font-style:italic;text-align:center;padding:20px 0;">No open ideas</div>';
+
   const cols = ['planning','in-progress','review','completed'];
-  board.innerHTML = cols.map(status=>{
+  // Ideas inbox column comes first
+  board.innerHTML = `<div class="dh-col" style="background:linear-gradient(180deg,var(--gold-pale) 0%,var(--surface2) 30%);">
+    <div class="dh-col-title"><span style="color:var(--gold);">💡 Ideas Inbox</span><span class="dh-col-count">${openIdeas.length}</span></div>
+    ${ideasHtml}
+  </div>` + cols.slice(0,3).map(status=>{
     const items = projects.filter(p=>p.status===status);
     return `<div class="dh-col">
       <div class="dh-col-title"><span style="color:${DH_STATUS_COLORS[status]};">${DH_STATUS_LABELS[status]}</span><span class="dh-col-count">${items.length}</span></div>
@@ -37801,6 +37817,14 @@ function dhRenderBoard(){
       ${!items.length?'<div style="font-size:11px;color:var(--text-d);font-style:italic;text-align:center;padding:20px 0;">No projects</div>':''}
     </div>`;
   }).join('');
+  // Completed row below (full width)
+  const completedItems = projects.filter(p=>p.status==='completed');
+  if(completedItems.length){
+    board.innerHTML += `<div style="grid-column:1/-1;margin-top:4px;"><div class="dh-col" style="opacity:.8;">
+      <div class="dh-col-title"><span style="color:var(--green);">Completed</span><span class="dh-col-count">${completedItems.length}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${completedItems.map(p=>dhRenderCard(p)).join('')}</div>
+    </div></div>`;
+  }
   // On-hold at bottom if any
   const onHold = projects.filter(p=>p.status==='on-hold');
   if(onHold.length){
@@ -38187,6 +38211,46 @@ function dhDeleteTemplate(id){
   saveDB();
   dhRenderTemplates();
   showToast('Template deleted');
+}
+
+function dhConvertIdea(ideaId){
+  const idea = (DB.ideas||[]).find(x=>x.id===ideaId);
+  if(!idea) return;
+  if(!confirm(`Convert idea "${idea.title}" into a Dev Hub project?`)) return;
+  // Create project from idea
+  if(!DB.devProjects) DB.devProjects=[];
+  const proj = {
+    id: uid(),
+    title: idea.title,
+    description: idea.detail || '',
+    status: 'planning',
+    priority: idea.priority || 'medium',
+    tags: [idea.category||'general'].map(t=>t.toLowerCase()),
+    needsHelp: false,
+    helpDescription: '',
+    createdBy: currentUser?.id,
+    createdAt: new Date().toISOString(),
+    assignees: currentUser ? [currentUser.id] : [],
+    comments: [{
+      id: uid(),
+      authorId: 'system',
+      authorName: 'System',
+      text: `Converted from idea submitted by ${idea.submittedBy||'Unknown'} on ${new Date(idea.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`,
+      createdAt: new Date().toISOString(),
+    }],
+    submittedForReview: false,
+    reviewStatus: null,
+    fromIdeaId: ideaId,
+    _updatedAt: new Date().toISOString(),
+  };
+  DB.devProjects.push(proj);
+  // Mark the idea as planned
+  idea.status = 'planned';
+  idea.adminNote = (idea.adminNote ? idea.adminNote + '\n' : '') + `Converted to project by ${_dhWho()}`;
+  idea._updatedAt = new Date().toISOString();
+  saveDB();
+  showToast(`"${idea.title}" is now a project in Planning`);
+  dhRenderBoard();
 }
 
 function dhCopyTemplate(id){
