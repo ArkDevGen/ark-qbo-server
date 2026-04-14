@@ -2118,15 +2118,19 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
         <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;flex:1;">
 
-          <!-- Mode toggle: Client vs Manual -->
+          <!-- Mode toggle: Client vs Team vs Manual -->
           <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:2px;">
             <button id="sms-mode-client-btn" onclick="smsSwitchMode('client')"
               style="flex:1;padding:7px;background:var(--navy);color:#fff;border:none;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;">
-              👤 Select Client
+              👤 Client
+            </button>
+            <button id="sms-mode-team-btn" onclick="smsSwitchMode('team')"
+              style="flex:1;padding:7px;background:none;color:var(--text-d);border:none;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;">
+              👥 Team
             </button>
             <button id="sms-mode-manual-btn" onclick="smsSwitchMode('manual')"
               style="flex:1;padding:7px;background:none;color:var(--text-d);border:none;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;">
-              ✏ Enter Number
+              ✏ Number
             </button>
           </div>
 
@@ -2151,6 +2155,23 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div id="sms-to-number-wrap" style="display:none;">
               <label class="field-label">Mobile Number</label>
               <div id="sms-to-number-display" style="font-family:monospace;font-size:13px;padding:8px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-m);"></div>
+            </div>
+          </div>
+
+          <!-- TEAM MODE -->
+          <div id="sms-mode-team" style="display:none;">
+            <div style="margin-bottom:8px;">
+              <label class="field-label">Team Member</label>
+              <select id="sms-team-sel" class="field-input" style="height:38px;padding:0 10px;" onchange="smsTeamSelected()">
+                <option value="">— Select team member —</option>
+              </select>
+            </div>
+            <div id="sms-team-number-wrap" style="display:none;">
+              <label class="field-label">Mobile Number</label>
+              <div id="sms-team-number-display" style="font-family:monospace;font-size:13px;padding:8px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-m);"></div>
+            </div>
+            <div id="sms-team-no-phone" style="display:none;font-size:12px;color:var(--red);margin-top:4px;">
+              No phone number on file for this team member. Add one in Team &amp; Users.
             </div>
           </div>
 
@@ -17588,29 +17609,96 @@ function smsCharCount(){
 
 function smsSwitchMode(mode){
   const clientDiv = document.getElementById('sms-mode-client');
+  const teamDiv   = document.getElementById('sms-mode-team');
   const manualDiv = document.getElementById('sms-mode-manual');
   const clientBtn = document.getElementById('sms-mode-client-btn');
+  const teamBtn   = document.getElementById('sms-mode-team-btn');
   const manualBtn = document.getElementById('sms-mode-manual-btn');
   if(!clientDiv||!manualDiv) return;
-  const isClient = mode === 'client';
-  clientDiv.style.display = isClient ? '' : 'none';
-  manualDiv.style.display = isClient ? 'none' : '';
-  clientBtn.style.background = isClient ? 'var(--navy)' : 'none';
-  clientBtn.style.color      = isClient ? '#fff' : 'var(--text-d)';
-  manualBtn.style.background = isClient ? 'none' : 'var(--navy)';
-  manualBtn.style.color      = isClient ? 'var(--text-d)' : '#fff';
+  // Hide all
+  clientDiv.style.display = 'none';
+  if(teamDiv) teamDiv.style.display = 'none';
+  manualDiv.style.display = 'none';
+  // Reset button styles
+  [clientBtn, teamBtn, manualBtn].forEach(b => {
+    if(!b) return;
+    b.style.background = 'none'; b.style.color = 'var(--text-d)';
+  });
+  // Show selected
+  if(mode === 'client'){
+    clientDiv.style.display = '';
+    if(clientBtn){ clientBtn.style.background = 'var(--navy)'; clientBtn.style.color = '#fff'; }
+  } else if(mode === 'team'){
+    if(teamDiv) teamDiv.style.display = '';
+    if(teamBtn){ teamBtn.style.background = 'var(--navy)'; teamBtn.style.color = '#fff'; }
+    smsPopulateTeam();
+  } else {
+    manualDiv.style.display = '';
+    if(manualBtn){ manualBtn.style.background = 'var(--navy)'; manualBtn.style.color = '#fff'; }
+  }
   smsStatus('', '');
+}
+
+function smsPopulateTeam(){
+  const sel = document.getElementById('sms-team-sel');
+  if(!sel) return;
+  const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
+  const active = users.filter(u => !u.status || u.status.toLowerCase() === 'active');
+  sel.innerHTML = '<option value="">— Select team member —</option>' +
+    active.map(u => {
+      const name = `${u.fname} ${u.lname||''}`.trim();
+      const phone = u.phone || '';
+      const hint = phone ? ` (${phone})` : ' (no phone)';
+      return `<option value="${u.id}" data-phone="${phone}">${name}${hint}</option>`;
+    }).join('');
+  // Reset display
+  const numWrap = document.getElementById('sms-team-number-wrap');
+  const noPhone = document.getElementById('sms-team-no-phone');
+  if(numWrap) numWrap.style.display = 'none';
+  if(noPhone) noPhone.style.display = 'none';
+}
+
+function smsTeamSelected(){
+  const sel = document.getElementById('sms-team-sel');
+  const opt = sel?.selectedOptions[0];
+  const phone = opt?.dataset?.phone || '';
+  const numWrap = document.getElementById('sms-team-number-wrap');
+  const numDisp = document.getElementById('sms-team-number-display');
+  const noPhone = document.getElementById('sms-team-no-phone');
+  if(!sel?.value){
+    if(numWrap) numWrap.style.display = 'none';
+    if(noPhone) noPhone.style.display = 'none';
+    return;
+  }
+  if(phone){
+    if(numWrap) numWrap.style.display = '';
+    if(numDisp) numDisp.textContent = phone;
+    if(noPhone) noPhone.style.display = 'none';
+  } else {
+    if(numWrap) numWrap.style.display = 'none';
+    if(noPhone) noPhone.style.display = '';
+  }
 }
 
 async function ccSendSMS(){
   const isManualMode = document.getElementById('sms-mode-manual')?.style.display !== 'none';
+  const isTeamMode   = document.getElementById('sms-mode-team')?.style.display !== 'none';
   const message = document.getElementById('sms-message').value.trim();
 
   let toNumber = '';
   let clientId = '';
   let clientName = '';
 
-  if(isManualMode){
+  if(isTeamMode){
+    // Team member mode
+    const sel = document.getElementById('sms-team-sel');
+    const opt = sel?.selectedOptions[0];
+    const phone = opt?.dataset?.phone || '';
+    if(!sel?.value){ smsStatus('Please select a team member.','#c0392b'); return; }
+    if(!phone){ smsStatus('No phone number on file for this team member.','#c0392b'); return; }
+    toNumber = phone.replace(/\D/g,'');
+    clientName = opt.textContent.split('(')[0].trim(); // name without the phone hint
+  } else if(isManualMode){
     // Manual number entry mode
     const raw = document.getElementById('sms-manual-number')?.value || '';
     toNumber   = raw.replace(/\D/g,'');
