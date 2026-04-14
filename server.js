@@ -5356,6 +5356,8 @@ const _MERGE_ARRAYS_BY_ID = [
   // Logs & messages (also need per-record merge to prevent overwrites)
   'activity', 'notifications', 'efw2Log', 'nachaLog',
   'faxOutbox', 'faxInbox', 'smsLog', 'smsMessages',
+  // Dev Hub
+  'devProjects', 'devTemplates',
 ];
 
 function _mergeArrayById(existing, incoming) {

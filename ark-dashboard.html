@@ -862,6 +862,39 @@ input[type="checkbox"]{accent-color:var(--navy);}
   .wg-grid{grid-template-columns:repeat(2,1fr);}
 }
 
+/* ════════════════════════════════════════
+   DEV HUB
+   ════════════════════════════════════════ */
+.dh-tab{padding:10px 18px;font-size:12px;font-weight:600;color:var(--text-d);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;transition:var(--transition);}
+.dh-tab:hover{color:var(--navy);}
+.dh-tab.active{color:var(--navy);border-bottom-color:var(--gold);}
+.dh-kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;}
+.dh-col{background:var(--surface2);border-radius:var(--radius);padding:10px;min-height:200px;}
+.dh-col-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.dh-col-count{background:var(--border);color:var(--text-m);font-size:9px;padding:1px 6px;border-radius:8px;}
+.dh-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;cursor:pointer;transition:var(--transition);box-shadow:var(--shadow-xs);}
+.dh-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+.dh-card-title{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+.dh-card-desc{font-size:11px;color:var(--text-m);line-height:1.4;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.dh-tag{display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--blue-bg);color:var(--blue);margin-right:4px;margin-bottom:3px;}
+.dh-badge-help{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--red-bg);color:var(--red);}
+.dh-badge-pri{display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;}
+.dh-badge-high{background:#fde8e8;color:#c0392b;}
+.dh-badge-medium{background:#fdf3e3;color:#b06a1a;}
+.dh-badge-low{background:#eaf4ef;color:#2e7d5e;}
+.dh-assignees{display:flex;gap:-4px;margin-top:6px;}
+.dh-avatar{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:2px solid var(--surface);margin-left:-6px;}
+.dh-avatar:first-child{margin-left:0;}
+.dh-comment{padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.dh-comment:last-child{border-bottom:none;}
+.dh-tpl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;transition:var(--transition);}
+.dh-tpl-card:hover{box-shadow:var(--shadow-sm);}
+.dh-tpl-code{background:#1a2440;color:#e0e0e0;border-radius:var(--radius-sm);padding:12px;font-family:monospace;font-size:11px;line-height:1.5;overflow-x:auto;max-height:200px;overflow-y:auto;white-space:pre;margin-top:8px;}
+.dh-tpl-copy{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:10px;padding:4px 10px;border-radius:var(--radius-sm);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:var(--transition);}
+.dh-tpl-copy:hover{background:rgba(255,255,255,.3);}
+@media(max-width:900px){.dh-kanban{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:600px){.dh-kanban{grid-template-columns:1fr;}}
+
 </style>
 </head>
 <body>
@@ -1161,6 +1194,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-group">
       <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Team & Users</div>
       <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
+    </div>
+
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Development <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-devhub" onclick="nav('devhub')"><span class="ni">🛠</span>Dev Hub</div>
     </div>
   </nav>
   <!-- Sidebar utility buttons -->
@@ -5531,6 +5569,168 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="integrations-root"></div>
   </div>
 
+  <!-- ══ DEV HUB ══ -->
+  <div class="view content" id="view-devhub">
+    <!-- Tab bar -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
+      <button class="dh-tab active" id="dh-tab-board" onclick="dhSwitchTab('board')">Project Board</button>
+      <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">Help Wanted</button>
+      <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">Templates</button>
+      <button class="dh-tab" id="dh-tab-mine" onclick="dhSwitchTab('mine')">My Work</button>
+    </div>
+
+    <!-- Project Board -->
+    <div id="dh-panel-board">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="dh-search" class="field-input" placeholder="Search projects..." style="width:240px;height:34px;font-size:12px;" oninput="dhRenderBoard()">
+          <select id="dh-filter-tag" class="field-input" style="height:34px;font-size:12px;width:140px;" onchange="dhRenderBoard()">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="dhOpenProjectModal()">+ New Project</button>
+      </div>
+      <div id="dh-board" class="dh-kanban"></div>
+    </div>
+
+    <!-- Help Wanted -->
+    <div id="dh-panel-help" style="display:none;">
+      <div id="dh-help-list"></div>
+    </div>
+
+    <!-- Templates -->
+    <div id="dh-panel-templates" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="dh-tpl-search" class="field-input" placeholder="Search templates..." style="width:240px;height:34px;font-size:12px;" oninput="dhRenderTemplates()">
+          <select id="dh-tpl-filter-tag" class="field-input" style="height:34px;font-size:12px;width:160px;" onchange="dhRenderTemplates()">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="dhOpenTemplateModal()">+ New Template</button>
+      </div>
+      <div id="dh-tpl-list"></div>
+    </div>
+
+    <!-- My Work -->
+    <div id="dh-panel-mine" style="display:none;">
+      <div id="dh-mine-list"></div>
+    </div>
+  </div>
+
+  <!-- DEV HUB: Project Modal -->
+  <div class="overlay" id="modal-dh-project" style="display:none" onclick="overlayClose(event,'modal-dh-project')">
+    <div class="modal" style="width:600px;max-height:85vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title" id="dh-proj-modal-title">New Project</div>
+        <span class="modal-x" onclick="closeModal('modal-dh-project')">&times;</span>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;">
+        <input type="hidden" id="dh-proj-id">
+        <div>
+          <label class="field-label">Project Title</label>
+          <input id="dh-proj-title" class="field-input" placeholder="e.g. Client Portal Redesign">
+        </div>
+        <div>
+          <label class="field-label">Description</label>
+          <textarea id="dh-proj-desc" class="field-input" rows="3" placeholder="What is this project about?"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="field-label">Status</label>
+            <select id="dh-proj-status" class="field-input" style="height:36px;">
+              <option value="planning">Planning</option>
+              <option value="in-progress">In Progress</option>
+              <option value="review">Review</option>
+              <option value="completed">Completed</option>
+              <option value="on-hold">On Hold</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Priority</label>
+            <select id="dh-proj-priority" class="field-input" style="height:36px;">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">Tags <span style="font-weight:400;color:var(--text-d);">(comma-separated)</span></label>
+          <input id="dh-proj-tags" class="field-input" placeholder="e.g. frontend, widget, dashboard">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="dh-proj-needshelp">
+          <label for="dh-proj-needshelp" style="font-size:12px;font-weight:600;color:var(--red);cursor:pointer;">Needs Help</label>
+        </div>
+        <div id="dh-proj-help-wrap" style="display:none;">
+          <label class="field-label">What kind of help?</label>
+          <input id="dh-proj-helpdesc" class="field-input" placeholder="e.g. Need help with CSS grid layout">
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeModal('modal-dh-project')">Cancel</button>
+        <button class="btn btn-primary" onclick="dhSaveProject()">Save Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEV HUB: Template Modal -->
+  <div class="overlay" id="modal-dh-template" style="display:none" onclick="overlayClose(event,'modal-dh-template')">
+    <div class="modal" style="width:650px;max-height:85vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title" id="dh-tpl-modal-title">New Template</div>
+        <span class="modal-x" onclick="closeModal('modal-dh-template')">&times;</span>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;">
+        <input type="hidden" id="dh-tpl-id">
+        <div>
+          <label class="field-label">Template Title</label>
+          <input id="dh-tpl-title" class="field-input" placeholder="e.g. Standard Modal Pattern">
+        </div>
+        <div>
+          <label class="field-label">Description</label>
+          <textarea id="dh-tpl-desc" class="field-input" rows="2" placeholder="What does this template do?"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="field-label">Language</label>
+            <select id="dh-tpl-lang" class="field-input" style="height:36px;">
+              <option value="javascript">JavaScript</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="node">Node.js</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Tags <span style="font-weight:400;color:var(--text-d);">(comma-separated)</span></label>
+            <input id="dh-tpl-tags" class="field-input" placeholder="e.g. modal, UI, pattern">
+          </div>
+        </div>
+        <div>
+          <label class="field-label">Code</label>
+          <textarea id="dh-tpl-code" class="field-input" rows="10" placeholder="Paste code here..." style="font-family:monospace;font-size:12px;white-space:pre;tab-size:2;"></textarea>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeModal('modal-dh-template')">Cancel</button>
+        <button class="btn btn-primary" onclick="dhSaveTemplate()">Save Template</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEV HUB: Project Detail Modal -->
+  <div class="overlay" id="modal-dh-detail" style="display:none" onclick="overlayClose(event,'modal-dh-detail')">
+    <div class="modal" style="width:680px;max-height:85vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title" id="dh-detail-title">Project</div>
+        <span class="modal-x" onclick="closeModal('modal-dh-detail')">&times;</span>
+      </div>
+      <div class="modal-body" id="dh-detail-body" style="overflow-y:auto;flex:1;"></div>
+    </div>
+  </div>
+
   <!-- /main -->
 
 <!-- USER EDIT MODAL moved to end of body -->
@@ -6840,6 +7040,8 @@ function _buildDBPayload() {
     notebookEntries:DB.notebookEntries||[],
     projectGroups:  DB.projectGroups||[],
     ideas:          DB.ideas||[],
+    devProjects:    DB.devProjects||[],
+    devTemplates:   DB.devTemplates||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -6876,6 +7078,8 @@ function _applyDBPayload(saved) {
     notebookEntries:saved.notebookEntries|| [],
     projectGroups:  saved.projectGroups  || [],
     ideas:          saved.ideas          || [],
+    devProjects:    saved.devProjects    || [],
+    devTemplates:   saved.devTemplates   || [],
   });
 }
 
@@ -8354,7 +8558,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'dev hub'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -8367,7 +8571,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Dev Hub'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -8433,6 +8637,7 @@ function nav(page){
     renderUsers();
   }
   if(page==='integrations'){ integrationsInit(); }
+  if(page==='devhub'){ dhInit(); }
 }
 
 // ══════════════════════════════════════════════
@@ -37532,6 +37737,469 @@ const INTEGRATIONS = [
 ];
 
 let _intStatuses = {};
+
+// ══════════════════════════════════════════════════════════════════
+//  DEV HUB — Project Board + Template Library
+// ══════════════════════════════════════════════════════════════════
+const DH_STATUSES = ['planning','in-progress','review','completed','on-hold'];
+const DH_STATUS_LABELS = {planning:'Planning','in-progress':'In Progress',review:'Review',completed:'Completed','on-hold':'On Hold'};
+const DH_STATUS_COLORS = {planning:'var(--amber)','in-progress':'var(--blue)',review:'#6b3fa0',completed:'var(--green)','on-hold':'var(--text-d)'};
+
+function dhInit(){
+  if(!DB.devProjects) DB.devProjects = [];
+  if(!DB.devTemplates) DB.devTemplates = [];
+  dhSwitchTab('board');
+}
+
+function dhSwitchTab(tab){
+  ['board','help','templates','mine'].forEach(t=>{
+    const panel = document.getElementById('dh-panel-'+t);
+    const btn = document.getElementById('dh-tab-'+t);
+    if(panel) panel.style.display = t===tab?'':'none';
+    if(btn) btn.classList.toggle('active', t===tab);
+  });
+  if(tab==='board') dhRenderBoard();
+  if(tab==='help') dhRenderHelp();
+  if(tab==='templates') dhRenderTemplates();
+  if(tab==='mine') dhRenderMine();
+}
+
+function _dhGetUser(id){
+  return (_cachedServerUsers||[]).find(u=>u.id===id)||(DB.users||[]).find(u=>u.id===id);
+}
+function _dhUserName(id){
+  const u=_dhGetUser(id);
+  return u?`${u.fname} ${u.lname||''}`.trim():(id||'Unknown');
+}
+function _dhWho(){ return currentUser?`${currentUser.fname} ${currentUser.lname||''}`.trim():'Unknown'; }
+
+// ── Render Board (kanban) ──
+function dhRenderBoard(){
+  const board = document.getElementById('dh-board');
+  if(!board) return;
+  const q = (document.getElementById('dh-search')?.value||'').toLowerCase();
+  const tagFilter = document.getElementById('dh-filter-tag')?.value||'';
+  // Populate tag filter
+  const allTags = new Set();
+  (DB.devProjects||[]).forEach(p=>(p.tags||[]).forEach(t=>allTags.add(t)));
+  const tagSel = document.getElementById('dh-filter-tag');
+  if(tagSel){
+    const cur = tagSel.value;
+    tagSel.innerHTML = '<option value="">All Tags</option>'+[...allTags].sort().map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+  }
+  const projects = (DB.devProjects||[]).filter(p=>{
+    if(q && !p.title.toLowerCase().includes(q) && !(p.description||'').toLowerCase().includes(q)) return false;
+    if(tagFilter && !(p.tags||[]).includes(tagFilter)) return false;
+    return true;
+  });
+  const cols = ['planning','in-progress','review','completed'];
+  board.innerHTML = cols.map(status=>{
+    const items = projects.filter(p=>p.status===status);
+    return `<div class="dh-col">
+      <div class="dh-col-title"><span style="color:${DH_STATUS_COLORS[status]};">${DH_STATUS_LABELS[status]}</span><span class="dh-col-count">${items.length}</span></div>
+      ${items.map(p=>dhRenderCard(p)).join('')}
+      ${!items.length?'<div style="font-size:11px;color:var(--text-d);font-style:italic;text-align:center;padding:20px 0;">No projects</div>':''}
+    </div>`;
+  }).join('');
+  // On-hold at bottom if any
+  const onHold = projects.filter(p=>p.status==='on-hold');
+  if(onHold.length){
+    board.innerHTML += `<div style="grid-column:1/-1;margin-top:8px;"><div class="dh-col" style="background:var(--surface2);opacity:.7;">
+      <div class="dh-col-title"><span style="color:var(--text-d);">On Hold</span><span class="dh-col-count">${onHold.length}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${onHold.map(p=>dhRenderCard(p)).join('')}</div>
+    </div></div>`;
+  }
+}
+
+function dhRenderCard(p){
+  const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+  const helpBadge = p.needsHelp?`<span class="dh-badge-help">🆘 Needs Help</span>`:'';
+  const priBadge = `<span class="dh-badge-pri dh-badge-${p.priority||'medium'}">${(p.priority||'medium').charAt(0).toUpperCase()+(p.priority||'medium').slice(1)}</span>`;
+  const assignees = (p.assignees||[]).slice(0,4).map(id=>{
+    const u=_dhGetUser(id);
+    const ini=u?((u.fname||'?')[0]+(u.lname||'?')[0]).toUpperCase():'?';
+    const bg=u?.color||'#1a2440';
+    return `<div class="dh-avatar" style="background:${bg};" title="${_dhUserName(id)}">${ini}</div>`;
+  }).join('');
+  const commentCount = (p.comments||[]).length;
+  return `<div class="dh-card" onclick="dhOpenDetail('${p.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px;">${priBadge}${helpBadge}</div>
+    <div class="dh-card-title">${p.title}</div>
+    <div class="dh-card-desc">${p.description||''}</div>
+    <div>${tags}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+      <div class="dh-assignees">${assignees||'<span style="font-size:10px;color:var(--text-d);">Unassigned</span>'}</div>
+      ${commentCount?`<span style="font-size:10px;color:var(--text-d);">💬 ${commentCount}</span>`:''}
+    </div>
+  </div>`;
+}
+
+// ── Help Board ──
+function dhRenderHelp(){
+  const list = document.getElementById('dh-help-list');
+  if(!list) return;
+  const helpProjects = (DB.devProjects||[]).filter(p=>p.needsHelp && p.status!=='completed');
+  if(!helpProjects.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No projects need help right now.</div>';
+    return;
+  }
+  list.innerHTML = helpProjects.map(p=>{
+    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+    const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;" onclick="dhOpenDetail('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}</div>
+        <span class="dh-badge-help">🆘 Needs Help</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;">${p.helpDescription||p.description||''}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${tags}
+        <span style="font-size:10px;color:var(--text-d);">Status: ${DH_STATUS_LABELS[p.status]||p.status}</span>
+        ${assignees?`<span style="font-size:10px;color:var(--text-d);">Assigned: ${assignees}</span>`:''}
+      </div>
+      <button onclick="event.stopPropagation();dhJoinProject('${p.id}')" class="btn btn-primary btn-sm" style="margin-top:8px;">Join This Project</button>
+    </div>`;
+  }).join('');
+}
+
+// ── My Work ──
+function dhRenderMine(){
+  const list = document.getElementById('dh-mine-list');
+  if(!list||!currentUser) return;
+  const myProjects = (DB.devProjects||[]).filter(p=>(p.assignees||[]).includes(currentUser.id) || p.createdBy===currentUser.id);
+  if(!myProjects.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">You haven\'t joined or created any projects yet.</div>';
+    return;
+  }
+  list.innerHTML = myProjects.map(p=>{
+    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+    const statusColor = DH_STATUS_COLORS[p.status]||'var(--text-d)';
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid ${statusColor};" onclick="dhOpenDetail('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:14px;font-weight:700;color:var(--navy);">${p.title}</div>
+        <span style="font-size:10px;font-weight:600;color:${statusColor};">${DH_STATUS_LABELS[p.status]||p.status}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-m);margin:4px 0 6px;">${p.description||''}</div>
+      ${tags}
+    </div>`;
+  }).join('');
+}
+
+// ── Project Detail Modal ──
+function dhOpenDetail(id){
+  const p = (DB.devProjects||[]).find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('dh-detail-title').textContent = p.title;
+  const body = document.getElementById('dh-detail-body');
+  const isAdmin = currentUser?.role==='admin';
+  const isAssigned = (p.assignees||[]).includes(currentUser?.id);
+  const assigneeNames = (p.assignees||[]).map(id=>_dhUserName(id));
+  const statusColor = DH_STATUS_COLORS[p.status]||'var(--text-d)';
+  const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+  const comments = (p.comments||[]).map(c=>`<div class="dh-comment">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-weight:600;font-size:12px;">${c.authorName||'Unknown'}</span>
+      <span style="font-size:10px;color:var(--text-d);">${new Date(c.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${new Date(c.createdAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
+    </div>
+    <div style="font-size:12px;color:var(--text);line-height:1.5;">${c.text.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+  </div>`).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+      <span style="font-size:11px;font-weight:700;color:${statusColor};background:${statusColor}15;padding:3px 10px;border-radius:12px;">${DH_STATUS_LABELS[p.status]||p.status}</span>
+      <span class="dh-badge-pri dh-badge-${p.priority||'medium'}">${(p.priority||'medium')}</span>
+      ${p.needsHelp?'<span class="dh-badge-help">🆘 Needs Help</span>':''}
+      ${p.submittedForReview?'<span style="font-size:10px;background:#e8f0fb;color:var(--blue);padding:2px 8px;border-radius:10px;font-weight:600;">Submitted for Review</span>':''}
+    </div>
+    <div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:14px;">${(p.description||'No description.').replace(/\n/g,'<br>')}</div>
+    ${p.helpDescription?`<div style="background:var(--red-bg);border:1px solid rgba(176,58,58,.15);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--red);"><strong>Help needed:</strong> ${p.helpDescription}</div>`:''}
+    <div style="margin-bottom:14px;">${tags}</div>
+    <div style="font-size:11px;color:var(--text-d);margin-bottom:6px;">Created by <strong>${_dhUserName(p.createdBy)}</strong> · ${new Date(p.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+    <div style="font-size:11px;color:var(--text-d);margin-bottom:14px;">Assigned: ${assigneeNames.length?assigneeNames.join(', '):'<em>No one yet</em>'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+      ${!isAssigned?`<button class="btn btn-primary btn-sm" onclick="dhJoinProject('${p.id}')">Join Project</button>`
+        :`<button class="btn btn-ghost btn-sm" onclick="dhLeaveProject('${p.id}')">Leave Project</button>`}
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-dh-detail');dhOpenProjectModal('${p.id}')">Edit</button>
+      ${!p.submittedForReview&&!isAdmin?`<button class="btn btn-gold btn-sm" onclick="dhSubmitForReview('${p.id}')">Submit for Admin Review</button>`:''}
+      ${isAdmin&&p.submittedForReview?`<button class="btn btn-primary btn-sm" onclick="dhAdminApprove('${p.id}')">Approve</button><button class="btn btn-danger btn-sm" onclick="dhAdminReject('${p.id}')">Reject</button>`:''}
+      ${isAdmin||p.createdBy===currentUser?.id?`<button class="btn btn-danger btn-sm" onclick="dhDeleteProject('${p.id}')">Delete</button>`:''}
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;">Comments (${(p.comments||[]).length})</div>
+      ${comments||'<div style="font-size:12px;color:var(--text-d);font-style:italic;">No comments yet.</div>'}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input id="dh-comment-input" class="field-input" placeholder="Add a comment..." style="flex:1;font-size:12px;"
+          onkeydown="if(event.key==='Enter')dhAddComment('${p.id}')">
+        <button class="btn btn-primary btn-sm" onclick="dhAddComment('${p.id}')">Post</button>
+      </div>
+    </div>`;
+  openModal('modal-dh-detail');
+}
+
+// ── Project CRUD ──
+function dhOpenProjectModal(editId){
+  const p = editId?(DB.devProjects||[]).find(x=>x.id===editId):null;
+  document.getElementById('dh-proj-modal-title').textContent = p?'Edit Project':'New Project';
+  document.getElementById('dh-proj-id').value = p?.id||'';
+  document.getElementById('dh-proj-title').value = p?.title||'';
+  document.getElementById('dh-proj-desc').value = p?.description||'';
+  document.getElementById('dh-proj-status').value = p?.status||'planning';
+  document.getElementById('dh-proj-priority').value = p?.priority||'medium';
+  document.getElementById('dh-proj-tags').value = (p?.tags||[]).join(', ');
+  document.getElementById('dh-proj-needshelp').checked = p?.needsHelp||false;
+  document.getElementById('dh-proj-helpdesc').value = p?.helpDescription||'';
+  document.getElementById('dh-proj-help-wrap').style.display = p?.needsHelp?'':'none';
+  document.getElementById('dh-proj-needshelp').onchange = function(){ document.getElementById('dh-proj-help-wrap').style.display=this.checked?'':'none'; };
+  openModal('modal-dh-project');
+}
+
+function dhSaveProject(){
+  const id = document.getElementById('dh-proj-id').value;
+  const title = document.getElementById('dh-proj-title').value.trim();
+  if(!title){alert('Project title is required.');return;}
+  const obj = {
+    id: id||uid(),
+    title,
+    description: document.getElementById('dh-proj-desc').value.trim(),
+    status: document.getElementById('dh-proj-status').value,
+    priority: document.getElementById('dh-proj-priority').value,
+    tags: document.getElementById('dh-proj-tags').value.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean),
+    needsHelp: document.getElementById('dh-proj-needshelp').checked,
+    helpDescription: document.getElementById('dh-proj-helpdesc').value.trim(),
+    _updatedAt: new Date().toISOString(),
+  };
+  if(id){
+    const idx=(DB.devProjects||[]).findIndex(x=>x.id===id);
+    if(idx>=0){
+      obj.createdBy = DB.devProjects[idx].createdBy;
+      obj.createdAt = DB.devProjects[idx].createdAt;
+      obj.assignees = DB.devProjects[idx].assignees||[];
+      obj.comments = DB.devProjects[idx].comments||[];
+      obj.submittedForReview = DB.devProjects[idx].submittedForReview||false;
+      obj.reviewStatus = DB.devProjects[idx].reviewStatus||null;
+      DB.devProjects[idx]=obj;
+    }
+  } else {
+    obj.createdBy = currentUser?.id;
+    obj.createdAt = new Date().toISOString();
+    obj.assignees = [currentUser?.id].filter(Boolean);
+    obj.comments = [];
+    obj.submittedForReview = false;
+    obj.reviewStatus = null;
+    if(!DB.devProjects) DB.devProjects=[];
+    DB.devProjects.push(obj);
+  }
+  saveDB();
+  closeModal('modal-dh-project');
+  dhRenderBoard();
+  showToast(id?'Project updated':'Project created');
+}
+
+function dhDeleteProject(id){
+  if(!confirm('Delete this project? This cannot be undone.')) return;
+  DB.devProjects = (DB.devProjects||[]).filter(x=>x.id!==id);
+  saveDB();
+  closeModal('modal-dh-detail');
+  dhRenderBoard();
+  showToast('Project deleted');
+}
+
+function dhJoinProject(id){
+  const p=(DB.devProjects||[]).find(x=>x.id===id);
+  if(!p||!currentUser) return;
+  if(!p.assignees) p.assignees=[];
+  if(!p.assignees.includes(currentUser.id)){
+    p.assignees.push(currentUser.id);
+    p._updatedAt = new Date().toISOString();
+    saveDB();
+    showToast('You joined "'+p.title+'"');
+    dhOpenDetail(id); // refresh detail
+  }
+}
+
+function dhLeaveProject(id){
+  const p=(DB.devProjects||[]).find(x=>x.id===id);
+  if(!p||!currentUser) return;
+  p.assignees = (p.assignees||[]).filter(a=>a!==currentUser.id);
+  p._updatedAt = new Date().toISOString();
+  saveDB();
+  showToast('You left "'+p.title+'"');
+  dhOpenDetail(id);
+}
+
+function dhAddComment(projId){
+  const input = document.getElementById('dh-comment-input');
+  const text = input?.value.trim();
+  if(!text) return;
+  const p=(DB.devProjects||[]).find(x=>x.id===projId);
+  if(!p) return;
+  if(!p.comments) p.comments=[];
+  p.comments.push({
+    id: uid(),
+    authorId: currentUser?.id,
+    authorName: _dhWho(),
+    text,
+    createdAt: new Date().toISOString(),
+  });
+  p._updatedAt = new Date().toISOString();
+  saveDB();
+  dhOpenDetail(projId); // refresh
+}
+
+function dhSubmitForReview(id){
+  const p=(DB.devProjects||[]).find(x=>x.id===id);
+  if(!p) return;
+  p.submittedForReview = true;
+  p.reviewStatus = 'pending';
+  p._updatedAt = new Date().toISOString();
+  saveDB();
+  showToast('Submitted for admin review');
+  dhOpenDetail(id);
+}
+
+function dhAdminApprove(id){
+  const p=(DB.devProjects||[]).find(x=>x.id===id);
+  if(!p) return;
+  p.reviewStatus = 'approved';
+  p.submittedForReview = false;
+  p._updatedAt = new Date().toISOString();
+  if(!p.comments) p.comments=[];
+  p.comments.push({id:uid(),authorId:currentUser?.id,authorName:_dhWho(),text:'✅ Approved for CRM integration',createdAt:new Date().toISOString()});
+  saveDB();
+  showToast('Project approved');
+  dhOpenDetail(id);
+}
+
+function dhAdminReject(id){
+  const reason = prompt('Reason for rejection (optional):');
+  const p=(DB.devProjects||[]).find(x=>x.id===id);
+  if(!p) return;
+  p.reviewStatus = 'rejected';
+  p.submittedForReview = false;
+  p._updatedAt = new Date().toISOString();
+  if(!p.comments) p.comments=[];
+  p.comments.push({id:uid(),authorId:currentUser?.id,authorName:_dhWho(),text:`❌ Rejected${reason?' — '+reason:''}`,createdAt:new Date().toISOString()});
+  saveDB();
+  showToast('Project rejected');
+  dhOpenDetail(id);
+}
+
+// ── Template Library ──
+function dhRenderTemplates(){
+  const list = document.getElementById('dh-tpl-list');
+  if(!list) return;
+  const q = (document.getElementById('dh-tpl-search')?.value||'').toLowerCase();
+  const tagFilter = document.getElementById('dh-tpl-filter-tag')?.value||'';
+  // Populate tag filter
+  const allTags = new Set();
+  (DB.devTemplates||[]).forEach(t=>(t.tags||[]).forEach(tag=>allTags.add(tag)));
+  const tagSel = document.getElementById('dh-tpl-filter-tag');
+  if(tagSel){
+    const cur = tagSel.value;
+    tagSel.innerHTML = '<option value="">All Tags</option>'+[...allTags].sort().map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+  }
+  const templates = (DB.devTemplates||[]).filter(t=>{
+    if(q && !t.title.toLowerCase().includes(q) && !(t.description||'').toLowerCase().includes(q) && !(t.code||'').toLowerCase().includes(q)) return false;
+    if(tagFilter && !(t.tags||[]).includes(tagFilter)) return false;
+    return true;
+  });
+  if(!templates.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No templates yet. Click "+ New Template" to add one.</div>';
+    return;
+  }
+  list.innerHTML = templates.map(t=>{
+    const tags = (t.tags||[]).map(tag=>`<span class="dh-tag">${tag}</span>`).join('');
+    const langBadge = `<span style="font-size:9px;background:var(--navy);color:#fff;padding:2px 7px;border-radius:10px;font-weight:600;">${t.language||'code'}</span>`;
+    return `<div class="dh-tpl-card">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px;">${t.title} ${langBadge}</div>
+          <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;">${t.description||''}</div>
+          ${tags}
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="dhEditTemplate('${t.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="dhDeleteTemplate('${t.id}')">Delete</button>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <div class="dh-tpl-code">${(t.code||'').replace(/</g,'&lt;')}</div>
+        <button class="dh-tpl-copy" onclick="event.stopPropagation();dhCopyTemplate('${t.id}')">Copy</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-d);margin-top:6px;">Added by ${_dhUserName(t.createdBy)} · ${t.usageCount||0} copies</div>
+    </div>`;
+  }).join('');
+}
+
+function dhOpenTemplateModal(editId){
+  const t = editId?(DB.devTemplates||[]).find(x=>x.id===editId):null;
+  document.getElementById('dh-tpl-modal-title').textContent = t?'Edit Template':'New Template';
+  document.getElementById('dh-tpl-id').value = t?.id||'';
+  document.getElementById('dh-tpl-title').value = t?.title||'';
+  document.getElementById('dh-tpl-desc').value = t?.description||'';
+  document.getElementById('dh-tpl-lang').value = t?.language||'javascript';
+  document.getElementById('dh-tpl-tags').value = (t?.tags||[]).join(', ');
+  document.getElementById('dh-tpl-code').value = t?.code||'';
+  openModal('modal-dh-template');
+}
+
+function dhEditTemplate(id){ dhOpenTemplateModal(id); }
+
+function dhSaveTemplate(){
+  const id = document.getElementById('dh-tpl-id').value;
+  const title = document.getElementById('dh-tpl-title').value.trim();
+  if(!title){alert('Template title is required.');return;}
+  const code = document.getElementById('dh-tpl-code').value;
+  if(!code.trim()){alert('Template code is required.');return;}
+  const obj = {
+    id: id||uid(),
+    title,
+    description: document.getElementById('dh-tpl-desc').value.trim(),
+    language: document.getElementById('dh-tpl-lang').value,
+    tags: document.getElementById('dh-tpl-tags').value.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean),
+    code,
+    _updatedAt: new Date().toISOString(),
+  };
+  if(id){
+    const idx=(DB.devTemplates||[]).findIndex(x=>x.id===id);
+    if(idx>=0){
+      obj.createdBy = DB.devTemplates[idx].createdBy;
+      obj.createdAt = DB.devTemplates[idx].createdAt;
+      obj.usageCount = DB.devTemplates[idx].usageCount||0;
+      DB.devTemplates[idx]=obj;
+    }
+  } else {
+    obj.createdBy = currentUser?.id;
+    obj.createdAt = new Date().toISOString();
+    obj.usageCount = 0;
+    if(!DB.devTemplates) DB.devTemplates=[];
+    DB.devTemplates.push(obj);
+  }
+  saveDB();
+  closeModal('modal-dh-template');
+  dhRenderTemplates();
+  showToast(id?'Template updated':'Template added');
+}
+
+function dhDeleteTemplate(id){
+  if(!confirm('Delete this template?')) return;
+  DB.devTemplates = (DB.devTemplates||[]).filter(x=>x.id!==id);
+  saveDB();
+  dhRenderTemplates();
+  showToast('Template deleted');
+}
+
+function dhCopyTemplate(id){
+  const t = (DB.devTemplates||[]).find(x=>x.id===id);
+  if(!t) return;
+  navigator.clipboard.writeText(t.code||'').then(()=>{
+    t.usageCount = (t.usageCount||0)+1;
+    t._updatedAt = new Date().toISOString();
+    saveDB();
+    showToast('Copied to clipboard');
+    dhRenderTemplates();
+  }).catch(()=>showToast('Copy failed — try selecting manually'));
+}
 
 async function integrationsInit() {
   const root = document.getElementById('integrations-root');
