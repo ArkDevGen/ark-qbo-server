@@ -5276,9 +5276,13 @@ app.get('/db/load', requireAuth, (req, res) => {
 // This prevents data loss when two users save concurrently with partially
 // overlapping edits.
 const _MERGE_ARRAYS_BY_ID = [
+  // Core records
   'clients', 'employees', 'vendors', 'form1099s', 'w2s', 'w2cs',
   'tasks', 'meetings', 'proposals', 'leads', 'notebooks', 'notebookEntries',
   'projectGroups', 'postage', 'ideas', 'accountManagers', 'users',
+  // Logs & messages (also need per-record merge to prevent overwrites)
+  'activity', 'notifications', 'efw2Log', 'nachaLog',
+  'faxOutbox', 'faxInbox', 'smsLog', 'smsMessages',
 ];
 
 function _mergeArrayById(existing, incoming) {
@@ -5346,6 +5350,15 @@ app.post('/db/save', requireAuth, (req, res) => {
       for (const key of _MERGE_ARRAYS_BY_ID) {
         if (Array.isArray(existing[key]) || Array.isArray(payload[key])) {
           merged[key] = _mergeArrayById(existing[key], payload[key]);
+        }
+      }
+      // Merge object-keyed data (notes, calls, commConfig, nachaCfg) by
+      // combining keys from both sides — incoming overwrites per-key but
+      // keys only in existing are preserved (not lost by stale client)
+      const _MERGE_OBJECTS = ['notes', 'calls', 'commConfig', 'nachaCfg'];
+      for (const key of _MERGE_OBJECTS) {
+        if (existing[key] && typeof existing[key] === 'object' && !Array.isArray(existing[key])) {
+          merged[key] = { ...existing[key], ...(payload[key] || {}) };
         }
       }
       // Log merge activity so we can spot concurrent edits in the console

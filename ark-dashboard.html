@@ -6818,6 +6818,7 @@ function _buildDBPayload() {
     notebooks:      DB.notebooks||[],
     notebookEntries:DB.notebookEntries||[],
     projectGroups:  DB.projectGroups||[],
+    ideas:          DB.ideas||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -6853,6 +6854,7 @@ function _applyDBPayload(saved) {
     notebooks:      saved.notebooks      || [],
     notebookEntries:saved.notebookEntries|| [],
     projectGroups:  saved.projectGroups  || [],
+    ideas:          saved.ideas          || [],
   });
 }
 
@@ -7184,6 +7186,7 @@ function submitIdea(){
     submittedAt: new Date().toISOString(),
     adminNote:  '',
     updatedAt:  new Date().toISOString(),
+    _updatedAt: new Date().toISOString(),
   };
   DB.ideas.unshift(idea);
   saveDB();
@@ -12824,6 +12827,7 @@ function saveAM(){
   });
   selected.forEach(cid=>{ const c=DB.clients.find(x=>x.id===cid);if(c)c.am=obj.id; });
 
+  obj._updatedAt = new Date().toISOString();
   if(DB._editAM){
     const i=DB.accountManagers.findIndex(x=>x.id===DB._editAM);
     DB.accountManagers[i]=obj;
@@ -13010,6 +13014,7 @@ function saveEmp(){
     locationId,
     workState,
   };
+  obj._updatedAt = new Date().toISOString();
   if(DB._editEmp){
     const i=DB.employees.findIndex(x=>x.id===DB._editEmp);DB.employees[i]=obj;
     logAct(`New hire updated: ${fname} ${lname}`);
@@ -14654,12 +14659,14 @@ function save1099(){
       if(!confirm(`An entry already exists for this payer/vendor/type/${year}. Current amount: ${fmtMoney(existing.amount)}. Replace with ${fmtMoney(amount)}?`)) return;
       existing.amount = amount;
       existing.loggedBy = logName;
+      existing._updatedAt = new Date().toISOString();
       logAct(`1099-${type} updated: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
     } else {
       DB.form1099s.push({
         id: uid(), payerId, vendorId, type, amount, miscBox: miscBox||null, year: parseInt(year),
         loggedBy: logName,
-        addedDate: new Date().toISOString()
+        addedDate: new Date().toISOString(),
+        _updatedAt: new Date().toISOString(),
       });
       logAct(`1099-${type} added: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
     }
@@ -15061,9 +15068,10 @@ function saveVendor(){
 
   if(editId){
     const idx = DB.vendors.findIndex(v=>v.id===editId);
-    if(idx>=0){ DB.vendors[idx] = buildVendor(DB.vendors[idx]); logAct(`Vendor updated: ${name}`); }
+    if(idx>=0){ DB.vendors[idx] = buildVendor(DB.vendors[idx]); DB.vendors[idx]._updatedAt = new Date().toISOString(); logAct(`Vendor updated: ${name}`); }
   } else {
-    DB.vendors.push(buildVendor(null));
+    const v = buildVendor(null); v._updatedAt = new Date().toISOString();
+    DB.vendors.push(v);
     logAct(`Vendor added: ${name}`);
   }
 
@@ -15370,6 +15378,7 @@ function saveW2(){
   };
   if(!DB.w2s) DB.w2s=[];
   const idx=DB.w2s.findIndex(x=>x.id===obj.id);
+  obj._updatedAt = new Date().toISOString();
   if(idx>=0) DB.w2s[idx]=obj; else DB.w2s.push(obj);
   logAct(`W-2 ${idx>=0?'updated':'added'}: ${first} ${last} (${year})`);
   closeModal('modal-w2');
@@ -15511,6 +15520,7 @@ function saveW2c(){
   };
   if(!DB.w2cs) DB.w2cs=[];
   const idx=DB.w2cs.findIndex(x=>x.id===obj.id);
+  obj._updatedAt = new Date().toISOString();
   if(idx>=0) DB.w2cs[idx]=obj; else DB.w2cs.push(obj);
   logAct(`W-2c ${idx>=0?'updated':'added'}: ${first} ${last} (${year})`);
   closeModal('modal-w2c');
@@ -19559,6 +19569,7 @@ function propSave(data){
     // Draft → no side effect
   }
 
+  p._updatedAt = new Date().toISOString();
   if(idx>=0) DB.proposals[idx]=p; else DB.proposals.push(p);
   saveDB();
   logAct(`Proposal ${idx>=0?'updated':'created'} for ${p.clientName} (${p.status})`);
@@ -25461,6 +25472,7 @@ function lcSaveLead(){
 
   if(!DB.leads) DB.leads=[];
   const idx = DB.leads.findIndex(x=>x.id===lead.id);
+  lead._updatedAt = new Date().toISOString();
   if(idx>=0) DB.leads[idx]=lead; else DB.leads.push(lead);
   saveDB();
   logAct(`Lead "${biz}" ${idx>=0?'updated':'created'} (${lead.stage})`);
@@ -33515,6 +33527,7 @@ async function mtgSchedule() {
     completedAt: null,
     completedBy: null,
     createdAt: new Date().toISOString(),
+    _updatedAt: new Date().toISOString(),
   };
 
   DB.meetings.push(meeting);
