@@ -1226,15 +1226,19 @@ input[type="checkbox"]{accent-color:var(--navy);}
           onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'"
           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">
           🔔
-          <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;font-family:'DM Sans',sans-serif;"></span>
+          <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;font-family:'DM Sans',sans-serif;"></span>
         </button>
         <!-- Dropdown -->
-        <div id="notif-dropdown" style="display:none;position:absolute;top:40px;right:0;width:340px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,.25);z-index:500;overflow:hidden;">
-          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:13px;font-weight:700;color:var(--text);">Notifications</span>
+        <div id="notif-dropdown" style="display:none;position:absolute;top:40px;right:0;width:360px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,.25);z-index:500;overflow:hidden;">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;gap:0;">
+              <button id="notif-tab-inbox" onclick="notifSwitchTab('inbox')" style="font-size:12px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:2px solid var(--gold);cursor:pointer;padding:4px 12px;font-family:'DM Sans',sans-serif;">Inbox</button>
+              <button id="notif-tab-sent" onclick="notifSwitchTab('sent')" style="font-size:12px;font-weight:500;color:var(--text-d);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;padding:4px 12px;font-family:'DM Sans',sans-serif;">Sent</button>
+            </div>
             <button onclick="notifMarkAllRead()" style="font-size:11px;color:var(--text-d);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;">Mark all read</button>
           </div>
           <div id="notif-list" style="max-height:360px;overflow-y:auto;"></div>
+          <div id="notif-sent-list" style="max-height:360px;overflow-y:auto;display:none;"></div>
           <div id="notif-enable-row" style="display:none;padding:10px 16px;border-top:1px solid var(--border);background:rgba(59,130,246,0.06);">
             <button onclick="notifRequestPermission()" style="width:100%;padding:7px;background:var(--navy);border:none;border-radius:var(--radius-sm);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
               🔔 Enable Desktop Notifications
@@ -27248,8 +27252,31 @@ async function versionInit() {
 setTimeout(versionInit, 3000);
 
 // Register service worker for deploy resilience (caches page for 502 fallback)
+// Also auto-restore push subscription if browser permission is already granted
+// (hardReload unregisters the SW which can invalidate the push subscription)
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register(ARK_SERVER + '/sw-push.js', { scope: '/' }).catch(()=>{});
+  navigator.serviceWorker.register(ARK_SERVER + '/sw-push.js', { scope: '/' }).then(async reg => {
+    if(!('PushManager' in window) || Notification.permission !== 'granted') return;
+    try {
+      // Check if we already have an active subscription
+      let sub = await reg.pushManager.getSubscription();
+      if(!sub){
+        // Subscription lost (SW was unregistered + re-registered) — re-subscribe
+        const vapidResp = await fetch(ARK_SERVER + '/push/vapid-key');
+        if(!vapidResp.ok) return;
+        const { publicKey } = await vapidResp.json();
+        const key = Uint8Array.from(atob(publicKey.replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0));
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      }
+      // Send subscription to server (idempotent — server deduplicates by endpoint)
+      if(currentUser){
+        await authFetch(ARK_SERVER + '/push/subscribe', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      }
+    } catch(_){}
+  }).catch(()=>{});
 }
 
 function versionStartPoll() {
@@ -27382,6 +27409,7 @@ function notifCreate(opts){
     body:      opts.body    || '',
     taskId:    opts.taskId  || null,
     from:      opts.from    || '',
+    sentBy:    currentUser?.id || null,
     read:      false,
     createdAt: new Date().toISOString(),
   };
@@ -27550,6 +27578,71 @@ async function notifClickItem(id){
   }
 }
 
+let _notifTab = 'inbox';
+function notifSwitchTab(tab){
+  _notifTab = tab;
+  const inbox = document.getElementById('notif-list');
+  const sent  = document.getElementById('notif-sent-list');
+  const tabInbox = document.getElementById('notif-tab-inbox');
+  const tabSent  = document.getElementById('notif-tab-sent');
+  if(tab === 'inbox'){
+    if(inbox) inbox.style.display = '';
+    if(sent)  sent.style.display  = 'none';
+    if(tabInbox){ tabInbox.style.fontWeight='700'; tabInbox.style.color='var(--navy)'; tabInbox.style.borderBottomColor='var(--gold)'; }
+    if(tabSent){ tabSent.style.fontWeight='500'; tabSent.style.color='var(--text-d)'; tabSent.style.borderBottomColor='transparent'; }
+    notifRenderList();
+  } else {
+    if(inbox) inbox.style.display = 'none';
+    if(sent)  sent.style.display  = '';
+    if(tabSent){ tabSent.style.fontWeight='700'; tabSent.style.color='var(--navy)'; tabSent.style.borderBottomColor='var(--gold)'; }
+    if(tabInbox){ tabInbox.style.fontWeight='500'; tabInbox.style.color='var(--text-d)'; tabInbox.style.borderBottomColor='transparent'; }
+    notifRenderSentList();
+  }
+}
+
+function notifRenderSentList(){
+  const list = document.getElementById('notif-sent-list');
+  if(!list) return;
+  const uid = currentUser?.id;
+  // Sent = notifications created by current user (targetAm is someone else)
+  const items = notifGetAll().filter(n => n.sentBy === uid && n.targetAm && n.targetAm !== uid);
+
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️' };
+  const fmtDate = iso => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffM = Math.round((now - d) / 60000);
+    if(diffM < 1) return 'just now';
+    if(diffM < 60) return `${diffM}m ago`;
+    const diffH = Math.floor(diffM / 60);
+    if(diffH < 24) return `${diffH}h ago`;
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  };
+  const getTargetName = id => {
+    const u = (_cachedServerUsers||[]).find(x=>x.id===id) || (DB.accountManagers||[]).find(x=>x.id===id);
+    return u ? `${u.fname} ${u.lname||''}`.trim() : id;
+  };
+
+  if(!items.length){
+    list.innerHTML = `<div style="padding:28px 16px;text-align:center;color:var(--text-d);font-size:13px;font-style:italic;">No sent notifications</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(n => `
+    <div onclick="${n.taskId?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${n.taskId?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'📤'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;">${n.title}</div>
+        <div style="font-size:11px;color:var(--text-d);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.body}</div>
+        <div style="font-size:10px;color:var(--text-d);margin-top:3px;display:flex;align-items:center;gap:8px;">
+          <span>${fmtDate(n.createdAt)}</span>
+          <span style="color:var(--blue);">→ ${getTargetName(n.targetAm)}</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
 function notifMarkAllRead(){
   const uid = currentUser?.id;
   notifGetAll().forEach(n => {
@@ -27565,19 +27658,22 @@ function notifFireDesktop(notif){
   if(!('Notification' in window)) return;
   if(Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(notif.title, {
-      body: notif.body,
-      icon: '',
-      tag:  notif.id,
+    const n = new Notification(notif.title || 'ARK Financial', {
+      body: notif.body || '',
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      tag:  notif.id || 'ark-' + Date.now(),
+      requireInteraction: true, // keep on screen until user dismisses
     });
     // Click on desktop notification jumps to task
     n.onclick = () => {
       window.focus();
+      n.close();
       if(notif.taskId){ nav('tasks'); setTimeout(()=>twfOpen(notif.taskId),200); }
     };
-    // Auto-close after 6 seconds
-    setTimeout(() => n.close(), 6000);
-  } catch(e) { /* silent fail */ }
+    // Auto-close after 15 seconds
+    setTimeout(() => n.close(), 15000);
+  } catch(e) { console.warn('Desktop notification failed:', e); }
 }
 
 async function notifRequestPermission(){
