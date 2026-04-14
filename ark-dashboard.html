@@ -20597,30 +20597,12 @@ function tcToggleComplete(id){
     t.noteLog.unshift({ id:uid(), text:'✅ Completed', author:who, at:when, type:'completion' });
     logAct(`Task "${t.name}" completed by ${who} (${t.clientName})`);
 
-    // Spawn a notify task on the reviewer's board (read-only, dismissible)
-    const reviewer = (DB.accountManagers||[]).find(a=>a.id===t.reviewerId);
-    const notifyTask = {
-      id: uid(),
-      name: `📣 Done: ${t.name}`,
-      clientId: t.clientId, clientName: t.clientName,
-      amId: t.reviewerId,
-      category: t.category, dueDate: when.slice(0,10),
-      recurring: false, recurFreq: null, recurCustomN: null,
-      recurBmDay1: null, recurBmDay2: null,
-      showDaysAdvance: 30, priority: 'low',
-      notes: `Completed by ${who} on ${new Date(when).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`,
-      bankUrl: '', status: 'open',
-      noteLog: [],
-      createdAt: when, updatedAt: when, createdBy: 'System',
-      completedAt: null, completedBy: null,
-      reviewType: null, reviewerId: null, reviewStatus: null,
-      reviewTaskId: null, parentTaskId: t.id,
-      isNotifyTask: true,   // flag so UI renders a Dismiss button
-    };
-    DB.tasks.push(notifyTask);
+    // Notify-only: just send a bell notification to the reviewer — no task
+    // on their board (they don't need to take action, just be informed)
+    const reviewer = (DB.accountManagers||[]).find(a=>a.id===t.reviewerId) ||
+                     (_cachedServerUsers||[]).find(u=>u.id===t.reviewerId);
     logAct(`Notification sent to ${reviewer?.fname||'reviewer'} — "${t.name}" completed (${t.clientName})`);
-    // Notify the reviewer that a task was completed
-    notifCreate({ type:'task-completed', targetAm: t.reviewerId, title:'Task completed', body:`"${t.name}" (${t.clientName||''}) completed by ${who}`, taskId: notifyTask.id, from: who });
+    notifCreate({ type:'task-completed', targetAm: t.reviewerId, title:'Task completed', body:`"${t.name}" (${t.clientName||''}) completed by ${who}`, taskId: t.id, from: who });
 
   // ── No review — normal complete ───────────────────────────────────
   } else {
@@ -27429,12 +27411,19 @@ function notifCreate(opts){
     notifFireDesktop(notif);
   }
 
-  // Broadcast to other clients via SSE (only for notifications targeting someone else)
+  // Broadcast to other clients via SSE + Web Push (for notifications targeting someone else)
   if(notif.targetAm && notif.targetAm !== currentUser?.id){
+    // Save DB first so the notification is persisted before we push —
+    // even if the SSE push fails, the target user will see it on next load
+    saveDB();
     authFetch(ARK_SERVER + '/notifications/push', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ notification: notif })
-    }).catch(()=>{});
+    }).then(resp => {
+      if(!resp.ok) console.warn('Notification push failed:', resp.status);
+    }).catch(e => {
+      console.warn('Notification push error:', e.message);
+    });
   }
 }
 
