@@ -3450,7 +3450,7 @@ RULES:
 - If fleet data is provided, flag accounts that differ from 75%+ of other stores
 
 Known Scooters COA structure:
-- Revenue: Store Sales, Catering Income, Tip Income
+- Revenue: Sales (may also appear as "Store Sales"), Catering Income, Tip Income
 - COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
 - Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
 - Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses

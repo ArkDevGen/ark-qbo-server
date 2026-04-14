@@ -31212,7 +31212,7 @@ let plFleetSalesTrends = null; // { momPct, yoyPct, currentMonth, ... }
 
 // ── Scooters COA Rule Engine ─────────────────────────────────────
 const PL_ALWAYS_FLAG = ['Uncategorized Expense','Uncategorized Income','Uncategorized Asset','Ask My Accountant','Reconciliation Discrepancies'];
-const PL_EXPECTED_MONTHLY = ['Store Sales','Royalty Fees','Ad Fund National','Technology Fee','Payroll:Wages','Payroll:Payroll Taxes','Rent','Cost of Goods Sold'];
+const PL_EXPECTED_MONTHLY = ['Sales','Royalty Fees','Ad Fund National','Technology Fee','Payroll:Wages','Payroll:Payroll Taxes','Rent','Cost of Goods Sold'];
 const PL_BENCHMARKS = {
   'Royalty Fees':   { pctOfSales: [5, 7],   label: '~6% of sales' },
   'Ad Fund National':{ pctOfSales: [1.5, 3], label: '~2% of sales' },
@@ -31802,7 +31802,7 @@ function plBuildSummary(accounts) {
     const acct = accounts.find(a => a.name.toLowerCase().includes(pattern.toLowerCase()));
     return acct ? acct.amount : 0;
   };
-  const sales = find('Store Sales') || find('Total Income') || find('Income');
+  const sales = find('Store Sales') || find('Sales') || find('Total Income') || find('Income');
   const cogs = find('Cost of Goods Sold') || find('COGS');
   const payroll = accounts.filter(a => a.name.toLowerCase().includes('payroll')).reduce((s,a) => s + Math.abs(a.amount), 0);
   const royalty = find('Royalty Fees') || find('Royalty');
