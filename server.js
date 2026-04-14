@@ -1727,6 +1727,7 @@ app.post('/sms/send', async (req, res) => {
 let _smsInbox = [];
 
 // Sinch inbound webhook — receives MO (mobile-originated) messages
+// Also saves as a chat message in the sms~ channel so it appears in Team Chat
 app.post('/sms/inbound', (req, res) => {
   const msg = req.body;
   console.log('SMS inbound:', JSON.stringify(msg));
@@ -1735,6 +1736,7 @@ app.post('/sms/inbound', (req, res) => {
   const fromRaw = (msg.from || '').replace(/\D/g, '');
   const from = fromRaw.startsWith('1') ? '+' + fromRaw : '+1' + fromRaw;
 
+  // Keep legacy inbox for Comm Center backward compat
   _smsInbox.push({
     id: crypto.randomUUID(),
     direction: 'inbound',
@@ -1744,9 +1746,51 @@ app.post('/sms/inbound', (req, res) => {
     sinchId: msg.id || '',
   });
 
+  // Also save as a chat message so it appears in Team Chat
+  const channelId = 'sms~' + from;
+  const chatMsg = {
+    id: crypto.randomUUID(),
+    channelId,
+    senderId: from,
+    senderName: _smsResolveContactName(from),
+    text: msg.body || '',
+    createdAt: msg.received_at || new Date().toISOString(),
+    smsType: 'inbound',
+  };
+  const messages = _loadChatMessages();
+  messages.push(chatMsg);
+  if (messages.length > 10000) messages.splice(0, messages.length - 10000);
+  _saveChatMessages(messages);
+
+  // Broadcast to all team members via SSE
+  _sseBroadcastChat(chatMsg);
+
   console.log(`SMS received from ${from}: ${(msg.body || '').slice(0, 50)}`);
   res.status(200).json({ ok: true });
 });
+
+// Resolve phone number to a client owner name (best-effort)
+function _smsResolveContactName(phone) {
+  const digits = phone.replace(/\D/g, '');
+  try {
+    if (!fs.existsSync(ARK_DB_FILE)) return phone;
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    for (const client of (db.clients || [])) {
+      for (const owner of (client.owners || [])) {
+        const ownerDigits = (owner.mobile || owner.phone || '').replace(/\D/g, '');
+        if (ownerDigits && ownerDigits.length >= 10 && digits.endsWith(ownerDigits.slice(-10))) {
+          return `${owner.name || ''} (${client.biz || ''})`.trim();
+        }
+      }
+      // Also check client-level phone
+      const clientDigits = (client.phone || '').replace(/\D/g, '');
+      if (clientDigits && clientDigits.length >= 10 && digits.endsWith(clientDigits.slice(-10))) {
+        return client.biz || phone;
+      }
+    }
+  } catch (_) {}
+  return phone;
+}
 
 // Dashboard polls this to get new inbound messages, then clears buffer
 app.get('/sms/inbox', (req, res) => {
@@ -6012,15 +6056,15 @@ function _saveChatReadStatus(status) {
 // Helper: broadcast a chat message to relevant SSE connections
 function _sseBroadcastChat(msg) {
   const payload = `data: ${JSON.stringify({ type: 'chat', message: msg })}\n\n`;
-  if (msg.channelId === 'general') {
-    // Broadcast to ALL connected users
+  if (msg.channelId === 'general' || msg.channelId.startsWith('sms~')) {
+    // Broadcast to ALL connected users (general chat + SMS are shared)
     for (const [userId, clients] of _sseClients) {
       for (const client of clients) {
         try { client.write(payload); } catch (_) { clients.delete(client); }
       }
     }
   } else if (msg.channelId.startsWith('dm_') || msg.channelId.startsWith('dm~')) {
-    // DM — broadcast to both participants
+    // DM — broadcast to both participants only
     const parts = msg.channelId.includes('~')
       ? msg.channelId.replace(/^dm~/, '').split('~')
       : (msg.channelId.match(/usr_[a-f0-9]+/g) || msg.channelId.replace('dm_', '').split('_'));
@@ -6059,8 +6103,8 @@ app.get('/chat/channels', requireAuth, (req, res) => {
     for (const msg of messages) {
       const ch = msg.channelId;
       if (hidden.channels.includes(ch)) continue;
-      // Only include general or DMs involving this user
-      if (ch === 'general' || ((ch.startsWith('dm_') || ch.startsWith('dm~')) && ch.includes(userId))) {
+      // Include: general, DMs involving this user, and ALL SMS channels (shared)
+      if (ch === 'general' || ch.startsWith('sms~') || ((ch.startsWith('dm_') || ch.startsWith('dm~')) && ch.includes(userId))) {
         if (!channelMap[ch]) channelMap[ch] = { channelId: ch, messages: 0, lastMessage: null };
         channelMap[ch].messages++;
         if (!channelMap[ch].lastMessage || msg.createdAt > channelMap[ch].lastMessage.createdAt) {
@@ -6076,6 +6120,12 @@ app.get('/chat/channels', requireAuth, (req, res) => {
     const channels = Object.values(channelMap).map(ch => {
       const lastRead = userRead[ch.channelId] || '1970-01-01T00:00:00Z';
       const unread = messages.filter(m => m.channelId === ch.channelId && m.createdAt > lastRead && m.senderId !== userId).length;
+      // For SMS channels, resolve phone to contact name
+      let smsContactName = null;
+      if (ch.channelId.startsWith('sms~')) {
+        const phone = ch.channelId.replace('sms~', '');
+        smsContactName = _smsResolveContactName(phone);
+      }
       // For DM channels, resolve participant names
       let participants = null;
       if (ch.channelId !== 'general' && (ch.channelId.startsWith('dm_') || ch.channelId.startsWith('dm~'))) {
@@ -6088,7 +6138,7 @@ app.get('/chat/channels', requireAuth, (req, res) => {
           participants[pid] = u ? `${u.fname || ''} ${u.lname || ''}`.trim() || u.username : pid;
         }
       }
-      return { ...ch, unread, participants };
+      return { ...ch, unread, participants, smsContactName };
     });
 
     // Sort: general first, then by last message time
@@ -6113,8 +6163,8 @@ app.get('/chat/messages', requireAuth, (req, res) => {
     if (!channelId) return res.status(400).json({ error: 'channelId required' });
 
     const userId = req.arkUser.userId;
-    // Security: only allow general or DMs involving this user
-    if (channelId !== 'general' && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
+    // Security: allow general, DMs involving this user, and SMS channels (shared)
+    if (channelId !== 'general' && !channelId.startsWith('sms~') && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -6138,40 +6188,84 @@ app.get('/chat/messages', requireAuth, (req, res) => {
   }
 });
 
-// Send a message
-app.post('/chat/messages', requireAuth, (req, res) => {
+// Send a message (internal chat OR SMS — routed by channel type)
+app.post('/chat/messages', requireAuth, async (req, res) => {
   try {
     const { channelId, text } = req.body;
     if (!channelId || !text?.trim()) return res.status(400).json({ error: 'channelId and text required' });
 
     const userId = req.arkUser.userId;
-    // Security check
-    if (channelId !== 'general' && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
+    const senderName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
+
+    // Security check — allow general, SMS, and DMs involving this user
+    if (channelId !== 'general' && !channelId.startsWith('sms~') && !((channelId.startsWith('dm_') || channelId.startsWith('dm~')) && channelId.includes(userId))) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // ── SMS channel: send via Sinch, then save as chat message ──
+    if (channelId.startsWith('sms~')) {
+      const toPhone = channelId.replace('sms~', '');
+      const digits = toPhone.replace(/\D/g, '');
+      const toE164 = digits.startsWith('1') ? '+' + digits : '+1' + digits;
+
+      if (!SINCH.sms.planId || !SINCH.sms.apiToken) {
+        return res.status(500).json({ error: 'SMS not configured on server' });
+      }
+
+      // Send via Sinch
+      const smsUrl = `https://us.sms.api.sinch.com/xms/v1/${SINCH.sms.planId}/batches`;
+      const smsResp = await fetch(smsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SINCH.sms.apiToken}` },
+        body: JSON.stringify({ from: SINCH.sms.number, to: [toE164], body: text.trim() }),
+      });
+
+      if (!smsResp.ok) {
+        const errBody = await smsResp.text();
+        console.error(`SMS send failed: ${smsResp.status} ${errBody}`);
+        return res.status(502).json({ error: 'SMS delivery failed', status: smsResp.status, detail: errBody.slice(0, 200) });
+      }
+
+      const smsData = await smsResp.json();
+      console.log(`SMS sent to ${toE164} via chat: batch ${smsData.id}`);
+
+      // Save as chat message
+      const msg = {
+        id: crypto.randomUUID(), channelId, senderId: userId, senderName,
+        text: text.trim(), createdAt: new Date().toISOString(),
+        smsType: 'outbound', smsBatchId: smsData.id,
+      };
+
+      const messages = _loadChatMessages();
+      messages.push(msg);
+      if (messages.length > 10000) messages.splice(0, messages.length - 10000);
+      _saveChatMessages(messages);
+
+      const readStatus = _loadChatReadStatus();
+      if (!readStatus[userId]) readStatus[userId] = {};
+      readStatus[userId][channelId] = msg.createdAt;
+      _saveChatReadStatus(readStatus);
+
+      _sseBroadcastChat(msg);
+      return res.json(msg);
+    }
+
+    // ── Regular internal chat message ──
     const msg = {
-      id: crypto.randomUUID(),
-      channelId,
-      senderId: userId,
-      senderName: req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown'),
-      text: text.trim(),
-      createdAt: new Date().toISOString(),
+      id: crypto.randomUUID(), channelId, senderId: userId, senderName,
+      text: text.trim(), createdAt: new Date().toISOString(),
     };
 
     const messages = _loadChatMessages();
     messages.push(msg);
-    // Keep max 10000 messages (trim oldest)
     if (messages.length > 10000) messages.splice(0, messages.length - 10000);
     _saveChatMessages(messages);
 
-    // Mark as read for sender
     const readStatus = _loadChatReadStatus();
     if (!readStatus[userId]) readStatus[userId] = {};
     readStatus[userId][channelId] = msg.createdAt;
     _saveChatReadStatus(readStatus);
 
-    // Broadcast via SSE
     _sseBroadcastChat(msg);
 
     console.log(`Chat: ${req.arkUser.userName} → ${channelId}: "${text.trim().slice(0, 50)}"`);
