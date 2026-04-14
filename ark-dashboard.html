@@ -16225,6 +16225,14 @@ async function tcLoadEmployee(){
     if (punchResp.ok) {
       const punches = await punchResp.json();
       DB.timePunches[empId] = punches;
+      // Backup to localStorage so punches survive session issues
+      try { localStorage.setItem('ark_tp_'+empId, JSON.stringify(punches)); } catch(_){}
+    } else {
+      // Server failed — try localStorage backup
+      try {
+        const backup = localStorage.getItem('ark_tp_'+empId);
+        if(backup) DB.timePunches[empId] = JSON.parse(backup);
+      } catch(_){}
     }
     if (ptoResp.ok) {
       if(!DB.timePTO) DB.timePTO = {};
@@ -16247,13 +16255,29 @@ async function _tcPunchCore(type, afterMeta){
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ empId, type, date, time, enteredBy: tcEnteredBy(), override: false, afterMeta: afterMeta || undefined }),
     });
-    if (!resp.ok) { const err = await resp.json(); tcMsg(err.error || 'Failed to save punch', '#c0392b'); return; }
+    if (!resp.ok) {
+      let errMsg = 'Failed to save punch';
+      try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(_){}
+      alert(`Punch NOT saved (${resp.status}): ${errMsg}\n\nPlease try again.`);
+      tcMsg(errMsg, '#c0392b');
+      return;
+    }
     const entry = await resp.json();
-    // Update local cache
-    if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
-    DB.timePunches[empId].push(entry);
-    DB.timePunches[empId].sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
-  } catch(e) { tcMsg('Network error saving punch','#c0392b'); return; }
+    // Reload from server to verify the save persisted (not just a 200 with no data)
+    try {
+      const verifyResp = await authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(empId));
+      if (verifyResp.ok) DB.timePunches[empId] = await verifyResp.json();
+    } catch(_){
+      // Verification failed — use optimistic local update
+      if(!DB.timePunches[empId]) DB.timePunches[empId]=[];
+      DB.timePunches[empId].push(entry);
+    }
+    if (DB.timePunches[empId]) DB.timePunches[empId].sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time));
+  } catch(e) {
+    alert('Network error — your punch was NOT saved. Please try again.\n\n' + (e.message||''));
+    tcMsg('Network error saving punch','#c0392b');
+    return;
+  }
 
   const label = type==='in' ? 'Clocked in' : 'Clocked out';
   const emp = (_cachedServerUsers||[]).find(u=>u.id===empId) || (DB.users||[]).find(u=>u.id===empId);
