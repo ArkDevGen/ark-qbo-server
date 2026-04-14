@@ -5577,6 +5577,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">Help Wanted</button>
       <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">Templates</button>
       <button class="dh-tab" id="dh-tab-mine" onclick="dhSwitchTab('mine')">My Work</button>
+      <button class="dh-tab" id="dh-tab-completed" onclick="dhSwitchTab('completed')">Completed</button>
     </div>
 
     <!-- Project Board -->
@@ -5615,6 +5616,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- My Work -->
     <div id="dh-panel-mine" style="display:none;">
       <div id="dh-mine-list"></div>
+    </div>
+
+    <!-- Completed Archive -->
+    <div id="dh-panel-completed" style="display:none;">
+      <div id="dh-completed-list"></div>
     </div>
   </div>
 
@@ -37752,7 +37758,7 @@ function dhInit(){
 }
 
 function dhSwitchTab(tab){
-  ['board','help','templates','mine'].forEach(t=>{
+  ['board','help','templates','mine','completed'].forEach(t=>{
     const panel = document.getElementById('dh-panel-'+t);
     const btn = document.getElementById('dh-tab-'+t);
     if(panel) panel.style.display = t===tab?'':'none';
@@ -37762,6 +37768,7 @@ function dhSwitchTab(tab){
   if(tab==='help') dhRenderHelp();
   if(tab==='templates') dhRenderTemplates();
   if(tab==='mine') dhRenderMine();
+  if(tab==='completed') dhRenderCompleted();
 }
 
 function _dhGetUser(id){
@@ -37817,20 +37824,12 @@ function dhRenderBoard(){
       ${!items.length?'<div style="font-size:11px;color:var(--text-d);font-style:italic;text-align:center;padding:20px 0;">No projects</div>':''}
     </div>`;
   }).join('');
-  // Completed row below (full width)
-  const completedItems = projects.filter(p=>p.status==='completed');
-  if(completedItems.length){
-    board.innerHTML += `<div style="grid-column:1/-1;margin-top:4px;"><div class="dh-col" style="opacity:.8;">
-      <div class="dh-col-title"><span style="color:var(--green);">Completed</span><span class="dh-col-count">${completedItems.length}</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">${completedItems.map(p=>dhRenderCard(p)).join('')}</div>
-    </div></div>`;
-  }
-  // On-hold at bottom if any
-  const onHold = projects.filter(p=>p.status==='on-hold');
-  if(onHold.length){
-    board.innerHTML += `<div style="grid-column:1/-1;margin-top:8px;"><div class="dh-col" style="background:var(--surface2);opacity:.7;">
-      <div class="dh-col-title"><span style="color:var(--text-d);">On Hold</span><span class="dh-col-count">${onHold.length}</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">${onHold.map(p=>dhRenderCard(p)).join('')}</div>
+  // On-hold row below (full width) if any
+  const onHoldItems = projects.filter(p=>p.status==='on-hold');
+  if(onHoldItems.length){
+    board.innerHTML += `<div style="grid-column:1/-1;margin-top:4px;"><div class="dh-col" style="opacity:.7;">
+      <div class="dh-col-title"><span style="color:var(--text-d);">On Hold</span><span class="dh-col-count">${onHoldItems.length}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${onHoldItems.map(p=>dhRenderCard(p)).join('')}</div>
     </div></div>`;
   }
 }
@@ -37905,6 +37904,35 @@ function dhRenderMine(){
       </div>
       <div style="font-size:12px;color:var(--text-m);margin:4px 0 6px;">${p.description||''}</div>
       ${tags}
+    </div>`;
+  }).join('');
+}
+
+// ── Completed Archive ──
+function dhRenderCompleted(){
+  const list = document.getElementById('dh-completed-list');
+  if(!list) return;
+  const completed = (DB.devProjects||[]).filter(p=>p.status==='completed').sort((a,b)=>(b._updatedAt||b.createdAt||'').localeCompare(a._updatedAt||a.createdAt||''));
+  if(!completed.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No completed projects yet.</div>';
+    return;
+  }
+  list.innerHTML = completed.map(p=>{
+    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+    const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
+    const commentCount = (p.comments||[]).length;
+    const approved = p.reviewStatus==='approved' ? '<span style="font-size:9px;background:#eaf4ef;color:#2e7d5e;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">✅ Approved</span>' : '';
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--green);" onclick="dhOpenDetail('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}${approved}</div>
+        <span style="font-size:10px;color:var(--text-d);">${p._updatedAt?new Date(p._updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;">${p.description||''}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${tags}
+        ${assignees?`<span style="font-size:10px;color:var(--text-d);">Team: ${assignees}</span>`:''}
+        ${commentCount?`<span style="font-size:10px;color:var(--text-d);">💬 ${commentCount} comments</span>`:''}
+      </div>
     </div>`;
   }).join('');
 }
