@@ -34198,9 +34198,20 @@ function sjeMode(mode) {
   const fleetPanel = document.getElementById('sje-fleet-panel');
   if (fleetPanel) fleetPanel.style.display = mode === 'fleet' ? '' : 'none';
 
-  // Show/hide the P&L Review workspace (lives in general tools area but displayed here)
+  // Move the P&L Review workspace into the Scooter's tab when in review mode,
+  // otherwise move it back to the general tab so qboOpenTool('pldigest') still works
   const plWs = document.getElementById('qbo-pl-workspace');
-  if (plWs) plWs.style.display = mode === 'review' ? '' : 'none';
+  if (plWs) {
+    if (mode === 'review') {
+      const scootersTab = document.getElementById('qbo-tab-scooters');
+      if (scootersTab && plWs.parentElement !== scootersTab) scootersTab.appendChild(plWs);
+      plWs.style.display = '';
+    } else {
+      const generalTab = document.getElementById('qbo-tab-general');
+      if (generalTab && plWs.parentElement !== generalTab) generalTab.appendChild(plWs);
+      plWs.style.display = 'none';
+    }
+  }
 
   const salesBtn = document.getElementById('sje-mode-sales');
   const cogsBtn = document.getElementById('sje-mode-cogs');
