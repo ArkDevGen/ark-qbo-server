@@ -22625,6 +22625,7 @@ function tdParseMultiFiles() {
     const idx = h => headers.indexOf(h);
     const iType = idx('TYPE'), iName = idx('CONTENT'), iDesc = idx('DESCRIPTION');
     const iPri = idx('PRIORITY'), iDate = idx('DATE'), iDeadline = idx('DEADLINE');
+    const iIndent = idx('INDENT');
     if (iName < 0) continue;
 
     function mapPri(p) { const n=parseInt(p); return n===4?'high':n===3?'medium':n===2?'low':'medium'; }
@@ -22845,15 +22846,17 @@ function tdParseMultiFiles() {
     }
 
     let sectionName = '';
+    let lastIndent1Id = null; // tracks the most recent indent=1 task for subtask linking
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i]; // already parsed
       const type = iType >= 0 ? (cols[iType] || '').toLowerCase().trim() : 'task';
-      if (type === 'section') { sectionName = iName >= 0 ? cols[iName] : ''; continue; }
+      if (type === 'section') { sectionName = iName >= 0 ? cols[iName] : ''; lastIndent1Id = null; continue; }
       if (type === 'meta' || (type !== 'task' && type !== '')) continue;
 
       const name = iName >= 0 ? cols[iName] : '';
       if (!name.trim()) continue;
 
+      const indent = iIndent >= 0 ? parseInt(cols[iIndent]) || 1 : 1;
       const desc = iDesc >= 0 ? cols[iDesc] : '';
       const priority = iPri >= 0 ? mapPri(cols[iPri]) : 'medium';
       const dateRaw = iDate >= 0 ? (cols[iDate] || '').trim() : '';
@@ -22864,9 +22867,14 @@ function tdParseMultiFiles() {
       const isRecurring = dateInfo.recurring || deadInfo.recurring || false;
       const recurFreq = dateInfo.recurFreq || deadInfo.recurFreq || null;
 
+      const taskId = uid();
+      // Indent 1 = direct task under section, 2+ = subtask of the nearest indent=1 above
+      const parentId = (indent >= 2 && lastIndent1Id) ? lastIndent1Id : null;
+      if (indent === 1) lastIndent1Id = taskId;
+
       allTasks.push({
         _import: true, _checked: true, _row: i, _project: file.name,
-        id: uid(), name: name.trim(),
+        id: taskId, name: name.trim(),
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
         priority, dueDate: dueDate || '', _noDate: !dueDate,
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
@@ -22874,6 +22882,8 @@ function tdParseMultiFiles() {
         recurBmDay1: dateInfo.recurBmDay1 || deadInfo.recurBmDay1 || '',
         recurBmDay2: dateInfo.recurBmDay2 || deadInfo.recurBmDay2 || '',
         showDaysAdvance: 3, status: 'open',
+        parentId: parentId, parentTaskId: null,
+        _sectionName: sectionName || null, _indent: indent,
         noteLog: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         createdBy: currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'Import',
       });
@@ -22955,7 +22965,8 @@ function tdParseCSV(){
   const iPri   = idx('PRIORITY');
   const iDate  = idx('DATE');
   const iDeadline = idx('DEADLINE');
-  const iSection  = idx('SECTION') >= 0 ? idx('SECTION') : idx('INDENT');
+  const iIndent2 = idx('INDENT');
+  const iSection  = idx('SECTION') >= 0 ? idx('SECTION') : -1;
   const iDuration = idx('DURATION');
 
   if(iName < 0){ alert('Could not find CONTENT column. Make sure you\'re pasting a Todoist CSV export.'); return; }
@@ -22987,6 +22998,7 @@ function tdParseCSV(){
   const tasks = [];
   const warnings = [];
   let sectionName = '';
+  let lastIndent1Id2 = null; // tracks most recent indent=1 task for subtask linking
 
   for(let i=1; i<lines.length; i++){
     const cols = parseCSVRow(lines[i]);
@@ -22994,13 +23006,15 @@ function tdParseCSV(){
 
     if(type === 'section'){
       sectionName = iName>=0 ? cols[iName] : '';
+      lastIndent1Id2 = null;
       continue;
     }
-    if(type !== 'task' && type !== '') continue;
+    if(type === 'meta' || (type !== 'task' && type !== '')) continue;
 
     const name = iName>=0 ? cols[iName] : '';
     if(!name.trim()) continue;
 
+    const indent = iIndent2>=0 ? parseInt(cols[iIndent2]) || 1 : 1;
     const desc     = iDesc>=0 ? cols[iDesc] : '';
     const priority = iPri>=0  ? mapPriority(cols[iPri]) : 'medium';
     const dateRaw  = iDate>=0 ? cols[iDate] : '';
@@ -23011,12 +23025,16 @@ function tdParseCSV(){
 
     const project = iProject >= 0 ? (cols[iProject] || '').trim() : '';
 
+    const taskId = uid();
+    const parentId = (indent >= 2 && lastIndent1Id2) ? lastIndent1Id2 : null;
+    if (indent === 1) lastIndent1Id2 = taskId;
+
     tasks.push({
       _import: true,
       _checked: true,
       _row: i,
       _project: project,
-      id:        uid(),
+      id:        taskId,
       name:      name.trim(),
       notes:     [desc, sectionName ? `[Section: ${sectionName}]` : ''].filter(Boolean).join(' · '),
       priority,
@@ -23029,6 +23047,10 @@ function tdParseCSV(){
       recurFreq:  null,
       showDaysAdvance: 3,
       status:    'open',
+      parentId:  parentId,
+      parentTaskId: null,
+      _sectionName: sectionName || null,
+      _indent:   indent,
       noteLog:   [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
