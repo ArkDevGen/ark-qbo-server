@@ -2930,11 +2930,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </select>
           <div class="search-wrap"><input id="f1099-search" placeholder="Search…" oninput="render1099s()"></div>
           <button class="btn btn-primary btn-sm" onclick="open1099Modal()">+ Add 1099</button>
+          <button class="btn btn-sm" id="f1099-export-sel-btn" onclick="exportSelected1099s()" style="background:var(--green);color:#fff;border:none;font-weight:600;display:none;">⬇ Export Selected</button>
         </div>
       </div>
       <div class="tbl-wrap">
         <table>
           <thead><tr>
+            <th style="width:36px;text-align:center;"><input type="checkbox" id="f1099-select-all" onchange="toggle1099SelectAll(this.checked)" title="Select all"></th>
             <th>Payer (Client)</th>
             <th>Vendor / Payee</th>
             <th style="text-align:center;">Type</th>
@@ -2947,6 +2949,43 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </table>
       </div>
     </div>
+    <!-- Submitted 1099s card -->
+    <div class="card" style="margin-bottom:22px;border-left:4px solid var(--green);">
+      <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+        <div>
+          <div class="card-title">✅ Submitted 1099s</div>
+          <div class="card-subtitle" id="f1099-submitted-count-label"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="f1099-sub-year-filter" onchange="renderSubmitted1099s()"
+            style="height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);cursor:pointer;">
+          </select>
+          <select id="f1099-sub-type-filter" onchange="renderSubmitted1099s()"
+            style="height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);cursor:pointer;">
+            <option value="">All Types</option>
+            <option>NEC</option><option>INT</option><option>MISC</option><option>W-2G</option>
+          </select>
+          <div class="search-wrap"><input id="f1099-sub-search" placeholder="Search submitted…" oninput="renderSubmitted1099s()"></div>
+          <button class="btn btn-sm" id="f1099-reexport-btn" onclick="reExportSelected1099s()" style="background:var(--navy);color:#fff;border:none;font-weight:600;display:none;">↻ Re-export Selected</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:36px;text-align:center;"><input type="checkbox" id="f1099-sub-select-all" onchange="toggle1099SubSelectAll(this.checked)" title="Select all"></th>
+            <th>Payer (Client)</th>
+            <th>Vendor / Payee</th>
+            <th style="text-align:center;">Type</th>
+            <th style="text-align:right;">Amount</th>
+            <th style="text-align:center;">Tax Year</th>
+            <th>Exported</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="f1099-submitted-body"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Vendor Library card -->
     <div class="card" style="margin-bottom:22px;">
       <div class="card-header">
@@ -6427,7 +6466,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
 <div class="overlay" id="modal-1099" style="display:none" onclick="overlayClose(event,'modal-1099')">
   <div class="modal modal-lg">
     <div class="modal-head">
-      <div class="modal-title">📋 Add 1099 Entry</div>
+      <div class="modal-title" id="f1099-modal-title">📋 Add 1099 Entry</div>
+      <input type="hidden" id="f1099-edit-id" value="">
       <button class="modal-close" onclick="closeModal('modal-1099')">×</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:20px;">
@@ -6535,7 +6575,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="font-size:12px;color:var(--text-d);font-style:italic;" id="f1099-validation-msg"></div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost" onclick="closeModal('modal-1099')">Cancel</button>
-        <button class="btn btn-primary" onclick="save1099()">Save 1099 Entry</button>
+        <button class="btn btn-primary" id="f1099-save-btn" onclick="save1099()">Save 1099 Entry</button>
       </div>
     </div>
   </div>
@@ -14206,7 +14246,57 @@ function renderVendors(q=''){
   }).join('');
 }
 
-// ── 1099 rendering ──
+// ── 1099 checkbox state ──
+const _1099Selected = new Set();
+const _1099ReexportSelected = new Set();
+
+function toggle1099Check(id, checked){
+  if(checked) _1099Selected.add(id); else _1099Selected.delete(id);
+  update1099ExportBtn();
+  const all = document.getElementById('f1099-select-all');
+  if(all){
+    const boxes = document.querySelectorAll('#f1099-body input[type="checkbox"]');
+    all.checked = boxes.length && Array.from(boxes).every(b=>b.checked);
+  }
+}
+function toggle1099SelectAll(checked){
+  document.querySelectorAll('#f1099-body input[type="checkbox"]').forEach(cb=>{
+    cb.checked = checked;
+    const id = cb.dataset.id;
+    if(checked) _1099Selected.add(id); else _1099Selected.delete(id);
+  });
+  update1099ExportBtn();
+}
+function update1099ExportBtn(){
+  const btn = document.getElementById('f1099-export-sel-btn');
+  if(btn) btn.style.display = _1099Selected.size ? '' : 'none';
+  if(btn && _1099Selected.size) btn.textContent = `⬇ Export Selected (${_1099Selected.size})`;
+}
+
+function toggle1099SubCheck(id, checked){
+  if(checked) _1099ReexportSelected.add(id); else _1099ReexportSelected.delete(id);
+  update1099ReexportBtn();
+  const all = document.getElementById('f1099-sub-select-all');
+  if(all){
+    const boxes = document.querySelectorAll('#f1099-submitted-body input[type="checkbox"]');
+    all.checked = boxes.length && Array.from(boxes).every(b=>b.checked);
+  }
+}
+function toggle1099SubSelectAll(checked){
+  document.querySelectorAll('#f1099-submitted-body input[type="checkbox"]').forEach(cb=>{
+    cb.checked = checked;
+    const id = cb.dataset.id;
+    if(checked) _1099ReexportSelected.add(id); else _1099ReexportSelected.delete(id);
+  });
+  update1099ReexportBtn();
+}
+function update1099ReexportBtn(){
+  const btn = document.getElementById('f1099-reexport-btn');
+  if(btn) btn.style.display = _1099ReexportSelected.size ? '' : 'none';
+  if(btn && _1099ReexportSelected.size) btn.textContent = `↻ Re-export Selected (${_1099ReexportSelected.size})`;
+}
+
+// ── 1099 rendering (unexported only) ──
 function render1099s(){
   const tbody = document.getElementById('f1099-body');
   if(!tbody) return;
@@ -14217,6 +14307,7 @@ function render1099s(){
   const typeBg    = { NEC:'#eef2fb', INT:'#eaf4ef', MISC:'#fdf6e8', 'W-2G':'#fdecea' };
 
   let list = DB.form1099s.filter(f => {
+    if(f.exported) return false;
     if(year && String(f.year) !== String(year)) return false;
     if(type && f.type !== type) return false;
     if(q){
@@ -14228,12 +14319,18 @@ function render1099s(){
     return true;
   }).sort((a,b)=> b.year-a.year || (a.payerId>b.payerId?1:-1));
 
+  // Auto-select all visible entries
+  _1099Selected.clear();
+  list.forEach(f => _1099Selected.add(f.id));
+
   const total = list.reduce((s,f)=>s+(f.amount||0),0);
   document.getElementById('f1099-count-label').textContent =
     `${list.length} entr${list.length!==1?'ies':'y'} · total ${fmtMoney(total)}`;
 
   if(!list.length){
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--text-d);font-style:italic;">No 1099 entries found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--text-d);font-style:italic;">No 1099 entries found</td></tr>`;
+    const allCb = document.getElementById('f1099-select-all'); if(allCb) allCb.checked = false;
+    update1099ExportBtn();
     return;
   }
   tbody.innerHTML = list.map(f => {
@@ -14243,6 +14340,7 @@ function render1099s(){
     const tb = typeBg[f.type]||'var(--surface2)';
     const over600 = (f.amount||0) >= 600;
     return `<tr>
+      <td style="text-align:center;"><input type="checkbox" data-id="${f.id}" checked onchange="toggle1099Check('${f.id}',this.checked)"></td>
       <td><span style="font-weight:600;">${client?client.biz:'Unknown'}</span></td>
       <td>
         <div style="font-weight:600;">${vendor?vendor.name:'Unknown'}</div>
@@ -14253,9 +14351,15 @@ function render1099s(){
       <td style="text-align:right;font-weight:700;color:${over600?'#2e7d5e':'var(--text)'};">${fmtMoney(f.amount)}${over600?'':'<span style="font-size:10px;color:var(--text-d);font-weight:400;margin-left:4px;">under $600</span>'}</td>
       <td style="text-align:center;font-weight:600;">${f.year}</td>
       <td style="font-size:12px;color:var(--text-d);">${f.loggedBy||'—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="delete1099('${f.id}')">Delete</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" onclick="edit1099('${f.id}')">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="delete1099('${f.id}')" style="color:#c0392b;">Delete</button>
+      </td>
     </tr>`;
   }).join('');
+  const allCb = document.getElementById('f1099-select-all'); if(allCb) allCb.checked = true;
+  update1099ExportBtn();
+  renderSubmitted1099s();
 }
 
 // ── 1099 Modal open/close ──
@@ -14264,6 +14368,12 @@ let _1099ReturnTo1099 = false; // flag: vendor was opened from 1099 modal
 function open1099Modal(){
   // Open modal first so all elements are accessible
   openModal('modal-1099');
+
+  // Reset edit mode
+  document.getElementById('f1099-edit-id').value = '';
+  document.getElementById('f1099-modal-title').textContent = '📋 Add 1099 Entry';
+  document.getElementById('f1099-save-btn').textContent = 'Save 1099 Entry';
+  document.getElementById('f1099-payer-status').style.display = 'none';
 
   // Reset form fields
   document.getElementById('f1099-payer-search').value = '';
@@ -14517,22 +14627,41 @@ function save1099(){
 
   msg.textContent = '';
 
-  // Check for existing entry (same payer + vendor + type + year) → update amount
-  const existing = DB.form1099s.find(f=>f.payerId===payerId&&f.vendorId===vendorId&&f.type===type&&String(f.year)===String(year));
-  if(existing){
-    if(!confirm(`An entry already exists for this payer/vendor/type/${year}. Current amount: ${fmtMoney(existing.amount)}. Replace with ${fmtMoney(amount)}?`)) return;
-    existing.amount = amount;
-    existing.loggedBy = currentUser?(currentUser.lname?`${currentUser.fname} ${currentUser.lname}`:currentUser.fname):'Unknown';
-    logAct(`1099-${type} updated: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
+  const editId = document.getElementById('f1099-edit-id').value;
+  const logName = currentUser?(currentUser.lname?`${currentUser.fname} ${currentUser.lname}`:currentUser.fname):'Unknown';
+
+  if(editId){
+    // Edit mode — update existing entry
+    const entry = DB.form1099s.find(f=>f.id===editId);
+    if(entry){
+      entry.payerId = payerId;
+      entry.vendorId = vendorId;
+      entry.type = type;
+      entry.amount = amount;
+      entry.miscBox = miscBox||null;
+      entry.year = parseInt(year);
+      entry.loggedBy = logName;
+      logAct(`1099-${type} updated: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
+    }
   } else {
-    DB.form1099s.push({
-      id: uid(), payerId, vendorId, type, amount, miscBox: miscBox||null, year: parseInt(year),
-      loggedBy: currentUser?(currentUser.lname?`${currentUser.fname} ${currentUser.lname}`:currentUser.fname):'Unknown',
-      addedDate: new Date().toISOString()
-    });
-    logAct(`1099-${type} added: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
+    // Check for existing entry (same payer + vendor + type + year) → update amount
+    const existing = DB.form1099s.find(f=>f.payerId===payerId&&f.vendorId===vendorId&&f.type===type&&String(f.year)===String(year));
+    if(existing){
+      if(!confirm(`An entry already exists for this payer/vendor/type/${year}. Current amount: ${fmtMoney(existing.amount)}. Replace with ${fmtMoney(amount)}?`)) return;
+      existing.amount = amount;
+      existing.loggedBy = logName;
+      logAct(`1099-${type} updated: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
+    } else {
+      DB.form1099s.push({
+        id: uid(), payerId, vendorId, type, amount, miscBox: miscBox||null, year: parseInt(year),
+        loggedBy: logName,
+        addedDate: new Date().toISOString()
+      });
+      logAct(`1099-${type} added: ${DB.clients.find(c=>c.id===payerId)?.biz} → ${DB.vendors.find(v=>v.id===vendorId)?.name} · ${fmtMoney(amount)} (${year})`);
+    }
   }
 
+  saveDB();
   closeModal('modal-1099');
   render1099s();
 }
@@ -14540,9 +14669,314 @@ function save1099(){
 function delete1099(id){
   if(!confirm('Delete this 1099 entry?')) return;
   DB.form1099s = DB.form1099s.filter(f=>f.id!==id);
+  _1099Selected.delete(id);
   saveDB();
   logAct('1099 entry deleted');
   render1099s();
+}
+
+// ── Submitted 1099s rendering ──
+function populateSubmitted1099YearFilter(){
+  const sel = document.getElementById('f1099-sub-year-filter');
+  if(!sel) return;
+  const cur = new Date().getFullYear();
+  sel.innerHTML = '<option value="">All Years</option>';
+  for(let y=cur; y>=cur-5; y--){
+    const o = document.createElement('option'); o.value=y; o.textContent=y; sel.appendChild(o);
+  }
+}
+
+function renderSubmitted1099s(){
+  const tbody = document.getElementById('f1099-submitted-body');
+  if(!tbody) return;
+  const year = (document.getElementById('f1099-sub-year-filter')||{}).value||'';
+  const type = (document.getElementById('f1099-sub-type-filter')||{}).value||'';
+  const q    = (document.getElementById('f1099-sub-search')||{value:''}).value.toLowerCase();
+  const typeColors = { NEC:'#2c5fa1', INT:'#2e7d5e', MISC:'#b8922a', 'W-2G':'#c0392b' };
+  const typeBg    = { NEC:'#eef2fb', INT:'#eaf4ef', MISC:'#fdf6e8', 'W-2G':'#fdecea' };
+
+  let list = DB.form1099s.filter(f => {
+    if(!f.exported) return false;
+    if(year && String(f.year) !== String(year)) return false;
+    if(type && f.type !== type) return false;
+    if(q){
+      const client = DB.clients.find(c=>c.id===f.payerId);
+      const vendor = DB.vendors.find(v=>v.id===f.vendorId);
+      const hay = [(client?client.biz:''),(vendor?vendor.name:''),(vendor?vendor.dba:''),f.type].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b)=> b.year-a.year || (a.payerId>b.payerId?1:-1));
+
+  _1099ReexportSelected.clear();
+
+  const label = document.getElementById('f1099-submitted-count-label');
+  if(label) label.textContent = `${list.length} submitted entr${list.length!==1?'ies':'y'}`;
+
+  if(!list.length){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--text-d);font-style:italic;">No submitted 1099s yet</td></tr>`;
+    const allCb = document.getElementById('f1099-sub-select-all'); if(allCb) allCb.checked = false;
+    update1099ReexportBtn();
+    return;
+  }
+  tbody.innerHTML = list.map(f => {
+    const client = DB.clients.find(c=>c.id===f.payerId);
+    const vendor = DB.vendors.find(v=>v.id===f.vendorId);
+    const tc = typeColors[f.type]||'var(--navy)';
+    const tb = typeBg[f.type]||'var(--surface2)';
+    const expDate = f.exportedDate ? new Date(f.exportedDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    return `<tr>
+      <td style="text-align:center;"><input type="checkbox" data-id="${f.id}" onchange="toggle1099SubCheck('${f.id}',this.checked)"></td>
+      <td><span style="font-weight:600;">${client?client.biz:'Unknown'}</span></td>
+      <td>
+        <div style="font-weight:600;">${vendor?vendor.name:'Unknown'}</div>
+        ${vendor&&vendor.dba?`<div style="font-size:11px;color:var(--text-d);">DBA: ${vendor.dba}</div>`:''}
+        ${vendor&&vendor.tin?`<div style="font-size:11px;color:var(--text-d);font-family:monospace;">${vendor.tin}</div>`:''}
+      </td>
+      <td style="text-align:center;"><span style="background:${tb};color:${tc};border:1px solid ${tc}33;border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;">${f.type}${f.type==='MISC'&&f.miscBox?` <span style="opacity:.7">Bx${f.miscBox}</span>`:''}</span></td>
+      <td style="text-align:right;font-weight:700;">${fmtMoney(f.amount)}</td>
+      <td style="text-align:center;font-weight:600;">${f.year}</td>
+      <td style="font-size:12px;color:var(--green);font-weight:600;">${expDate}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="edit1099('${f.id}')">Edit</button></td>
+    </tr>`;
+  }).join('');
+  const allCb = document.getElementById('f1099-sub-select-all'); if(allCb) allCb.checked = false;
+  update1099ReexportBtn();
+}
+
+// ── Edit 1099 ──
+function edit1099(id){
+  const entry = DB.form1099s.find(f=>f.id===id);
+  if(!entry) return;
+
+  // Open modal
+  openModal('modal-1099');
+
+  // Set edit mode
+  document.getElementById('f1099-edit-id').value = id;
+  document.getElementById('f1099-modal-title').textContent = '📋 Edit 1099 Entry';
+  document.getElementById('f1099-save-btn').textContent = 'Update 1099 Entry';
+
+  // Populate payer
+  const client = DB.clients.find(c=>c.id===entry.payerId);
+  document.getElementById('f1099-payer-id').value = entry.payerId;
+  document.getElementById('f1099-payer-search').value = client ? client.biz : '';
+  check1099PayerReadiness(entry.payerId);
+
+  // Populate vendor
+  const vendor = DB.vendors.find(v=>v.id===entry.vendorId);
+  document.getElementById('f1099-vendor-id').value = entry.vendorId;
+  document.getElementById('f1099-vendor-search').value = vendor ? vendor.name : '';
+  document.getElementById('f1099-vendor-tin').textContent = vendor&&vendor.tin ? `TIN: ${vendor.tin}` : '';
+  if(vendor) select1099Vendor(vendor.id);
+
+  // Populate year
+  populate1099Years();
+  document.getElementById('f1099-year').value = entry.year;
+
+  // Populate type
+  document.querySelectorAll('input[name="f1099type"]').forEach(r => {
+    r.checked = r.value === entry.type;
+  });
+  highlight1099Type();
+
+  // MISC box
+  if(entry.type === 'MISC' && entry.miscBox){
+    document.getElementById('f1099-misc-box').value = entry.miscBox;
+  }
+
+  // Amount
+  document.getElementById('f1099-amount').value = entry.amount;
+
+  // Clear validation
+  document.getElementById('f1099-validation-msg').textContent = '';
+
+  // Hide dropdowns
+  const cdd = document.getElementById('f1099-client-dd');
+  const vdd = document.getElementById('f1099-vendor-dd');
+  if(cdd) cdd.style.display = 'none';
+  if(vdd) vdd.style.display = 'none';
+}
+
+// ── Export Selected (from entries table) ──
+function exportSelected1099s(){
+  if(!_1099Selected.size){ showToast('No entries selected'); return; }
+
+  const entries = DB.form1099s.filter(f => _1099Selected.has(f.id) && !f.exported);
+  if(!entries.length){ showToast('No unexported entries selected'); return; }
+
+  // Validation — check payers and vendors
+  const warnings = [];
+  const checkedClients = new Set();
+  const checkedVendors = new Set();
+  for(const f of entries){
+    if(!checkedClients.has(f.payerId)){
+      checkedClients.add(f.payerId);
+      const c = (DB.clients||[]).find(x=>x.id===f.payerId);
+      if(c){
+        const cm = [];
+        if(!c.ein) cm.push('EIN');
+        if(!(c.addrStreet||c.street)) cm.push('Address');
+        if(!(c.addrCity||c.city)) cm.push('City');
+        if(!(c.addrState||c.state)) cm.push('State');
+        if(!(c.addrZip||c.zip)) cm.push('ZIP');
+        if(cm.length) warnings.push(`Payer "${c.biz}" missing: ${cm.join(', ')}`);
+      }
+    }
+    if(!checkedVendors.has(f.vendorId)){
+      checkedVendors.add(f.vendorId);
+      const v = (DB.vendors||[]).find(x=>x.id===f.vendorId);
+      if(v){
+        const vm = [];
+        if(!v.tin) vm.push('TIN');
+        if(!v.addr) vm.push('Address');
+        if(!v.city) vm.push('City');
+        if(!v.state) vm.push('State');
+        if(!v.zip) vm.push('ZIP');
+        if(vm.length) warnings.push(`Vendor "${v.name}" missing: ${vm.join(', ')}`);
+      }
+    }
+  }
+  if(warnings.length){
+    alert('Export blocked — incomplete records:\n\n' + warnings.join('\n'));
+    return;
+  }
+
+  // Group by type then by client
+  const byType = {};
+  entries.forEach(f => {
+    if(!byType[f.type]) byType[f.type] = {};
+    if(!byType[f.type][f.payerId]) byType[f.type][f.payerId] = [];
+    byType[f.type][f.payerId].push(f);
+  });
+
+  const files = [];
+  let totalRows = 0;
+  Object.entries(byType).forEach(([type, byClient]) => {
+    Object.entries(byClient).forEach(([payerId, forms]) => {
+      const client = DB.clients.find(c=>c.id===payerId);
+      const rows = buildEfileRows(type, forms, client);
+      if(!rows) return;
+      const year = forms[0].year;
+      const safeName = (client?.biz||'Unknown').replace(/[^a-zA-Z0-9]/g,'_');
+      files.push({ name: `1099-${type}_${year}_${safeName}.csv`, content: rows.csv });
+      totalRows += rows.count;
+    });
+  });
+
+  if(!files.length){
+    showToast('Could not generate export files — check records');
+    return;
+  }
+
+  // Download files
+  files.forEach(f => {
+    const blob = new Blob([f.content], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=f.name; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Mark entries as exported
+  const now = new Date().toISOString();
+  entries.forEach(f => {
+    f.exported = true;
+    f.exportedDate = now;
+  });
+  saveDB();
+  _1099Selected.clear();
+  showToast(`Exported ${totalRows} row${totalRows!==1?'s':''} in ${files.length} file${files.length!==1?'s':''}`);
+  logAct(`1099 export: ${totalRows} rows in ${files.length} files`);
+  render1099s();
+}
+
+// ── Re-export Selected (from submitted table) ──
+function reExportSelected1099s(){
+  if(!_1099ReexportSelected.size){ showToast('No entries selected for re-export'); return; }
+
+  const entries = DB.form1099s.filter(f => _1099ReexportSelected.has(f.id));
+  if(!entries.length){ showToast('No entries found'); return; }
+
+  // Validation
+  const warnings = [];
+  const checkedClients = new Set();
+  const checkedVendors = new Set();
+  for(const f of entries){
+    if(!checkedClients.has(f.payerId)){
+      checkedClients.add(f.payerId);
+      const c = (DB.clients||[]).find(x=>x.id===f.payerId);
+      if(c){
+        const cm = [];
+        if(!c.ein) cm.push('EIN');
+        if(!(c.addrStreet||c.street)) cm.push('Address');
+        if(!(c.addrCity||c.city)) cm.push('City');
+        if(!(c.addrState||c.state)) cm.push('State');
+        if(!(c.addrZip||c.zip)) cm.push('ZIP');
+        if(cm.length) warnings.push(`Payer "${c.biz}" missing: ${cm.join(', ')}`);
+      }
+    }
+    if(!checkedVendors.has(f.vendorId)){
+      checkedVendors.add(f.vendorId);
+      const v = (DB.vendors||[]).find(x=>x.id===f.vendorId);
+      if(v){
+        const vm = [];
+        if(!v.tin) vm.push('TIN');
+        if(!v.addr) vm.push('Address');
+        if(!v.city) vm.push('City');
+        if(!v.state) vm.push('State');
+        if(!v.zip) vm.push('ZIP');
+        if(vm.length) warnings.push(`Vendor "${v.name}" missing: ${vm.join(', ')}`);
+      }
+    }
+  }
+  if(warnings.length){
+    alert('Re-export blocked — incomplete records:\n\n' + warnings.join('\n'));
+    return;
+  }
+
+  // Group and build CSV
+  const byType = {};
+  entries.forEach(f => {
+    if(!byType[f.type]) byType[f.type] = {};
+    if(!byType[f.type][f.payerId]) byType[f.type][f.payerId] = [];
+    byType[f.type][f.payerId].push(f);
+  });
+
+  const files = [];
+  let totalRows = 0;
+  Object.entries(byType).forEach(([type, byClient]) => {
+    Object.entries(byClient).forEach(([payerId, forms]) => {
+      const client = DB.clients.find(c=>c.id===payerId);
+      const rows = buildEfileRows(type, forms, client);
+      if(!rows) return;
+      const year = forms[0].year;
+      const safeName = (client?.biz||'Unknown').replace(/[^a-zA-Z0-9]/g,'_');
+      files.push({ name: `1099-${type}_${year}_${safeName}_REEXPORT.csv`, content: rows.csv });
+      totalRows += rows.count;
+    });
+  });
+
+  if(!files.length){
+    showToast('Could not generate re-export files');
+    return;
+  }
+
+  files.forEach(f => {
+    const blob = new Blob([f.content], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=f.name; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Update exported date on re-export
+  const now = new Date().toISOString();
+  entries.forEach(f => { f.exportedDate = now; });
+  saveDB();
+
+  _1099ReexportSelected.clear();
+  showToast(`Re-exported ${totalRows} row${totalRows!==1?'s':''} in ${files.length} file${files.length!==1?'s':''}`);
+  logAct(`1099 re-export: ${totalRows} rows in ${files.length} files`);
+  renderSubmitted1099s();
 }
 
 // ── Vendor Modal ──
@@ -18322,9 +18756,11 @@ try{
       orig(page);
       if(page === 'form1099s'){
         populate1099YearFilter();
+        populateSubmitted1099YearFilter();
         populateEfileSelects();
         renderVendors();
         render1099s();
+        renderSubmitted1099s();
       }
     };
   } catch(e){ console.warn('nav patch failed:', e); }
