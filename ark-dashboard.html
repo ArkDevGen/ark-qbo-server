@@ -8083,10 +8083,15 @@ async function renderUsers(q){
         va = roleOrder[a.role] ?? 99;
         vb = roleOrder[b.role] ?? 99;
       } else if (_userSortField === 'clients') {
-        const aidA = a._id || a.id;
-        const aidB = b._id || b.id;
-        va = crmClients.filter(c => c.am === aidA || c.am === a.username).length || (a.assignedClients||[]).length;
-        vb = crmClients.filter(c => c.am === aidB || c.am === b.username).length || (b.assignedClients||[]).length;
+        // Match all possible ID formats (same logic as display count)
+        const idsA = new Set([a._id||a.id, a.username].filter(Boolean));
+        const amA = (DB.accountManagers||[]).find(x=>x.fname&&a.fname&&x.fname.toLowerCase()===a.fname.toLowerCase()&&(x.lname||'').toLowerCase()===(a.lname||'').toLowerCase());
+        if(amA) idsA.add(amA.id);
+        const idsB = new Set([b._id||b.id, b.username].filter(Boolean));
+        const amB = (DB.accountManagers||[]).find(x=>x.fname&&b.fname&&x.fname.toLowerCase()===b.fname.toLowerCase()&&(x.lname||'').toLowerCase()===(b.lname||'').toLowerCase());
+        if(amB) idsB.add(amB.id);
+        va = crmClients.filter(c => c.am && idsA.has(c.am)).length;
+        vb = crmClients.filter(c => c.am && idsB.has(c.am)).length;
       }
       if (va < vb) return _userSortDir === 'asc' ? -1 : 1;
       if (va > vb) return _userSortDir === 'asc' ? 1 : -1;
@@ -8101,11 +8106,16 @@ async function renderUsers(q){
       const statusDot = (u.status||'active') === 'active'
         ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;"><span style="width:7px;height:7px;border-radius:50%;background:#27ae60;display:inline-block;"></span> Active</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-d);"><span style="width:7px;height:7px;border-radius:50%;background:#ccc;display:inline-block;"></span> Inactive</span>';
-      // Count clients assigned to this user (match by user ID or username)
+      // Count clients assigned to this user — match by ALL possible ID formats
+      // (server user ID, username, old AM ID from legacy accountManagers)
       const uid = u._id || u.id;
-      const clientCount = crmClients.filter(c => c.am === uid || c.am === u.username).length;
-      const assignedCount = (u.assignedClients||[]).length;
-      const displayClients = clientCount || assignedCount;
+      const matchIds = new Set([uid, u.username].filter(Boolean));
+      // Also match against legacy accountManagers by name
+      const amMatch = (DB.accountManagers||[]).find(a =>
+        a.fname && u.fname && a.fname.toLowerCase() === u.fname.toLowerCase() &&
+        (a.lname||'').toLowerCase() === (u.lname||'').toLowerCase());
+      if(amMatch) matchIds.add(amMatch.id);
+      const displayClients = crmClients.filter(c => c.am && matchIds.has(c.am)).length;
       // Count open tasks for this user
       const openTasks = (DB?.tasks || []).filter(t => t.assignee === uid && t.status !== 'done' && t.status !== 'completed').length;
       const lastLogin = u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—';
