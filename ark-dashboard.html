@@ -7289,11 +7289,9 @@ function rptNavBlocked(reportName){
 }
 
 function defaultUsers(){
+  // Only Jacob as admin — real team members are created via Team & Users
   return [
     {id:'admin-jacob', fname:'Jacob', lname:'Malousek', role:'admin', color:'#b8922a', perms:{}},
-    {id:'am-rachel', fname:'Rachel', lname:'Donovan', role:'am',    color:'#1a2440', perms:{}},
-    {id:'am-marcus', fname:'Marcus', lname:'Holt',    role:'am',    color:'#2c5fa1', perms:{}},
-    {id:'am-tina',   fname:'Tina',   lname:'Sorensen',role:'am',    color:'#2e7d5e', perms:{}},
   ];
 }
 
@@ -7602,9 +7600,6 @@ async function loginAs(userId){
     if(!DB.accountManagers.length){
       const ams = [
         {id:'am-jacob',  fname:'Jacob', lname:'Malousek',title:'Owner / Admin',           email:'jacob@arkfinancial.com', phone:'(402) 555-1100',status:'Active',notes:'Owner and administrator.'},
-        {id:'am-rachel', fname:'Rachel',lname:'Donovan', title:'Senior Account Manager',  email:'rdonovan@arkfinancial.com',phone:'(402) 555-1101',status:'Active',notes:'Specializes in small business advisory.'},
-        {id:'am-marcus', fname:'Marcus',lname:'Holt',    title:'Account Manager',         email:'mholt@arkfinancial.com',   phone:'(402) 555-1102',status:'Active',notes:'Payroll and bookkeeping focus.'},
-        {id:'am-tina',   fname:'Tina',  lname:'Sorensen',title:'Junior Account Manager',  email:'tsorensen@arkfinancial.com',phone:'(402) 555-1103',status:'Active',notes:''},
       ];
       ams.forEach(a=>DB.accountManagers.push(a));
       saveDB();
@@ -7661,9 +7656,6 @@ async function loginWithCredentials(){
         if(!DB.accountManagers.length){
           const ams = [
             {id:'am-jacob',  fname:'Jacob', lname:'Malousek',title:'Owner / Admin',           email:'jacob@arkfinancial.com', phone:'(402) 555-1100',status:'Active',notes:'Owner and administrator.'},
-            {id:'am-rachel', fname:'Rachel',lname:'Donovan', title:'Senior Account Manager',  email:'rdonovan@arkfinancial.com',phone:'(402) 555-1101',status:'Active',notes:''},
-            {id:'am-marcus', fname:'Marcus',lname:'Holt',    title:'Account Manager',         email:'mholt@arkfinancial.com',   phone:'(402) 555-1102',status:'Active',notes:''},
-            {id:'am-tina',   fname:'Tina',  lname:'Sorensen',title:'Junior Account Manager',  email:'tsorensen@arkfinancial.com',phone:'(402) 555-1103',status:'Active',notes:''},
           ];
           ams.forEach(a=>DB.accountManagers.push(a));
           saveDB();
@@ -14184,15 +14176,7 @@ function plAutoGenerateMonthlyReviewTasks(){
 if(!DB.vendors)  DB.vendors  = [];
 if(!DB.form1099s) DB.form1099s = [];
 
-// ── Seed vendors ──
-(function seedVendors(){
-  if(DB.vendors.length) return;
-  DB.vendors = [
-    { id:'v-001', name:'Acme Supplies Inc.', dba:'', taxClass:'C Corporation', tin:'45-1234567', addr:'100 Commerce Dr', city:'Omaha', state:'NE', zip:'68101', email:'ar@acmesupplies.com', phone:'402-555-0100', w9File:null, w9FileName:'', addedBy:'Jacob Malousek', addedDate:new Date().toISOString() },
-    { id:'v-002', name:'John T. Walker',     dba:'JTW Consulting', taxClass:'Individual / Sole Proprietor', tin:'523-45-6789', addr:'222 Maple Ave', city:'Lincoln', state:'NE', zip:'68502', email:'jtwalker@email.com', phone:'402-555-0177', w9File:null, w9FileName:'', addedBy:'Jacob Malousek', addedDate:new Date().toISOString() },
-    { id:'v-003', name:'Heartland Repair LLC', dba:'', taxClass:'LLC – Single Member', tin:'81-9876543', addr:'55 Industrial Blvd', city:'Fremont', state:'NE', zip:'68025', email:'', phone:'', w9File:null, w9FileName:'', addedBy:'Jacob Malousek', addedDate:new Date().toISOString() },
-  ];
-})();
+// ── Seed vendors removed — real vendors are in the server DB ──
 
 // ── Helpers ──
 function fmtMoney(n){ return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
