@@ -1755,6 +1755,35 @@ app.get('/sms/inbox', (req, res) => {
   res.json({ messages });
 });
 
+// SMS delivery reports — Sinch POSTs status updates here
+// Set as Default URL in Sinch dashboard → REST API → Callback URLs
+app.post('/sms/delivery', (req, res) => {
+  const report = req.body;
+  console.log('SMS delivery report:', JSON.stringify(report));
+
+  // Sinch delivery report types:
+  // - recipient_delivery_report_sms: per-recipient status
+  // - delivery_report_sms: batch-level summary
+  const type = report.type || '';
+  const statuses = report.statuses || [];
+  const batchId = report.batch_id || '';
+
+  if (type.includes('recipient')) {
+    // Per-recipient status update
+    const status = report.status || 'unknown';
+    const code = report.code || 0;
+    const recipient = report.at || report.recipient || '';
+    console.log(`SMS delivery: ${recipient} → ${status} (code: ${code}, batch: ${batchId})`);
+  } else if (statuses.length) {
+    // Batch summary
+    for (const s of statuses) {
+      console.log(`SMS batch ${batchId}: ${s.count} ${s.status}`);
+    }
+  }
+
+  res.status(200).json({ ok: true });
+});
+
 // ─────────────────────────────────────────────────────────────────
 // SHAREFILE — File Storage via ShareFile REST API
 // Uses password-based token auth (no OAuth redirect needed)
