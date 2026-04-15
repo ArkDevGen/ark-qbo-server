@@ -6627,16 +6627,17 @@ app.get('/help/posts', requireAuth, (req, res) => {
 // Create or update a help post
 app.post('/help/posts', requireAuth, (req, res) => {
   try {
-    const { id, title, body, category, mentionIds, attachments, status } = req.body;
+    const { id, title, body, category, priority, mentionIds, attachments, status } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
     const userId = req.arkUser.userId;
     const userName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
+    const validPri = ['urgent','high','low'].includes(priority) ? priority : 'low';
     const posts = _loadHelpPosts();
     let post;
     if (id) {
       post = posts.find(p => p.id === id);
       if (!post) return res.status(404).json({ error: 'Post not found' });
-      // Only author or admin can edit
+      // Only author or admin can edit basic fields
       if (post.authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Cannot edit others\' posts' });
       Object.assign(post, {
         title: title.trim(),
@@ -6648,12 +6649,15 @@ app.post('/help/posts', requireAuth, (req, res) => {
         _updatedAt: new Date().toISOString(),
         _updatedBy: userName,
       });
+      // Priority changes go through dedicated endpoint with required note
     } else {
       post = {
         id: crypto.randomUUID(),
         title: title.trim(),
         body: (body || '').trim(),
         category: category || 'general',
+        priority: validPri,
+        priorityHistory: [],
         authorId: userId,
         authorName: userName,
         mentionIds: mentionIds || [],
@@ -6716,6 +6720,35 @@ app.post('/help/posts/:id/accept', requireAuth, (req, res) => {
     if (post.authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Only the author or admin can accept an answer' });
     post.acceptedReplyId = replyId || null;
     post.status = replyId ? 'answered' : 'open';
+    post._updatedAt = new Date().toISOString();
+    _saveHelpPosts(posts);
+    res.json(post);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Change post priority — anyone can do this but must provide a reason note
+app.post('/help/posts/:id/priority', requireAuth, (req, res) => {
+  try {
+    const { priority, note } = req.body;
+    if (!['urgent', 'high', 'low'].includes(priority)) return res.status(400).json({ error: 'Invalid priority (must be urgent/high/low)' });
+    if (!note?.trim()) return res.status(400).json({ error: 'A reason note is required when changing priority' });
+    const userId = req.arkUser.userId;
+    const userName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
+    const posts = _loadHelpPosts();
+    const post = posts.find(p => p.id === req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const oldPriority = post.priority || 'low';
+    if (oldPriority === priority) return res.status(400).json({ error: 'Priority is already ' + priority });
+    if (!post.priorityHistory) post.priorityHistory = [];
+    post.priorityHistory.push({
+      from: oldPriority,
+      to: priority,
+      changedBy: userName,
+      changedById: userId,
+      note: note.trim(),
+      at: new Date().toISOString(),
+    });
+    post.priority = priority;
     post._updatedAt = new Date().toISOString();
     _saveHelpPosts(posts);
     res.json(post);
