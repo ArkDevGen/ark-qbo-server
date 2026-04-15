@@ -5364,6 +5364,7 @@ const _MERGE_ARRAYS_BY_ID = [
   'salesTaxRates',       // jurisdiction rate database (state/city/county)
   'salesTaxFilings',     // filing history per client per period
   'salesTaxClientSetup', // per-client sales tax config (jurisdictions, import profile, portal URL)
+  'salesTaxDrafts',      // in-progress filings saved for later resume
 ];
 
 function _mergeArrayById(existing, incoming) {

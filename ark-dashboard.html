@@ -7386,7 +7386,7 @@ function logAct(desc, clientId=null, amId=null){
 const ARK_DB_KEY = 'ark_db_v1';
 const ARK_SERVER = 'https://ark-qbo-server.onrender.com';
 
-const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], salesTaxRates:[], salesTaxFilings:[], salesTaxClientSetup:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
+const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], salesTaxRates:[], salesTaxFilings:[], salesTaxClientSetup:[], salesTaxDrafts:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
 
 // ── Server-synced DB persistence ───────────────────────────────────
 // saveDB() writes to localStorage (instant) then debounces a server sync.
@@ -7441,6 +7441,7 @@ function _buildDBPayload() {
     salesTaxRates:       DB.salesTaxRates||[],
     salesTaxFilings:     DB.salesTaxFilings||[],
     salesTaxClientSetup: DB.salesTaxClientSetup||[],
+    salesTaxDrafts:      DB.salesTaxDrafts||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -7484,6 +7485,7 @@ function _applyDBPayload(saved) {
     salesTaxRates:       saved.salesTaxRates       || [],
     salesTaxFilings:     saved.salesTaxFilings     || [],
     salesTaxClientSetup: saved.salesTaxClientSetup || [],
+    salesTaxDrafts:      saved.salesTaxDrafts      || [],
   });
 }
 
@@ -20312,8 +20314,12 @@ function stfRenderList(){
       : '<span style="color:var(--text-d);">No due date</span>';
     const jurCount = (c.stJurisdictionIds||[]).length;
     const active = _stfActiveClient?.id === c.id;
+    const draft = stfGetDraft(c.id);
+    const draftBadge = draft
+      ? `<span style="background:var(--navy);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:6px;" title="Draft saved ${new Date(draft.savedAt).toLocaleString()}">💾 DRAFT</span>`
+      : '';
     return `<div onclick="stfOpenClient('${c.id}')" style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;${active?'background:var(--surface2);border-left:3px solid var(--navy);':''}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${active?'var(--surface2)':''}'">
-      <div style="font-weight:600;font-size:13px;color:var(--text);">${c.biz||'—'}</div>
+      <div style="font-weight:600;font-size:13px;color:var(--text);">${c.biz||'—'}${draftBadge}</div>
       <div style="font-size:11px;color:var(--text-d);margin-top:3px;display:flex;justify-content:space-between;gap:8px;">
         <span>${c.stFreq||'—'} · ${jurCount} jurisdiction${jurCount===1?'':'s'} · ${(c.stImportProfile||'manual').replace(/-/g,' ')}</span>
         <span>${dueLbl}</span>
@@ -20335,6 +20341,10 @@ function stfOpenClient(clientId){
   active.style.display = '';
   stfRenderPanel();
   stfRenderList(); // refresh selection highlight
+
+  // Auto-apply any existing draft so user picks up where they left off
+  const draft = stfGetDraft(clientId);
+  if (draft) stfApplyDraft(draft);
 }
 
 function _stfJurs(){
@@ -20394,6 +20404,17 @@ function stfRenderPanel(){
     </div>
 
     <div style="padding:22px 26px;">
+
+      ${(() => {
+        const d = stfGetDraft(c.id);
+        if (!d) return '';
+        return `<div style="background:#eef3fb;border:1px solid var(--navy);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div style="font-size:12px;color:var(--navy);">
+            💾 <strong>Draft resumed</strong> from ${new Date(d.savedAt).toLocaleString()} ${d.savedBy?`by ${d.savedBy}`:''}
+          </div>
+          <button onclick="stfDiscardDraft('${c.id}')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 10px;color:var(--red);border-color:var(--red);">Discard draft</button>
+        </div>`;
+      })()}
 
       <!-- Period -->
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px;">
@@ -20967,6 +20988,72 @@ function stfClose(){
   stfRenderList();
 }
 
+// ── Drafts ───────────────────────────────────────────────────────
+function stfGetDraft(clientId){
+  return (DB.salesTaxDrafts||[]).find(d => d.clientId === clientId) || null;
+}
+
+function stfSaveDraft(){
+  if (!_stfActiveClient) return;
+  const c = _stfActiveClient;
+  const period = document.getElementById('stf-period')?.value || '';
+  const confirmNum = document.getElementById('stf-confirm')?.value || '';
+  const notes = document.getElementById('stf-notes')?.value || '';
+  const draft = {
+    id: 'draft-' + c.id,
+    clientId: c.id,
+    clientName: c.biz,
+    period,
+    perJurTax: { ..._stfPerJurTax },
+    grossInput: _stfGrossInput,
+    adHocJurIds: [..._stfAdHocJurIds],
+    importedTaxable: { ..._stfImportedTaxable },
+    confirmationNumber: confirmNum,
+    notes,
+    savedAt: new Date().toISOString(),
+    savedBy: currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Unknown',
+    _updatedAt: new Date().toISOString(),
+  };
+  DB.salesTaxDrafts = DB.salesTaxDrafts || [];
+  const idx = DB.salesTaxDrafts.findIndex(d => d.clientId === c.id);
+  if (idx >= 0) DB.salesTaxDrafts[idx] = draft;
+  else DB.salesTaxDrafts.push(draft);
+  saveDB();
+  showToast(`Draft saved for ${c.biz}`);
+  stfRenderList(); // refresh list to show draft badge
+  // Re-render panel so the "last saved" indicator appears
+  stfRenderPanel();
+}
+
+function stfDiscardDraft(clientId){
+  const id = clientId || _stfActiveClient?.id;
+  if (!id) return;
+  if (!confirm('Discard the saved draft? Any unsaved numbers will be lost.')) return;
+  DB.salesTaxDrafts = (DB.salesTaxDrafts||[]).filter(d => d.clientId !== id);
+  saveDB();
+  _stfPerJurTax = {};
+  _stfGrossInput = null;
+  _stfAdHocJurIds = [];
+  _stfImportedTaxable = {};
+  if (_stfActiveClient?.id === id) stfRenderPanel();
+  stfRenderList();
+  showToast('Draft discarded');
+}
+
+function stfApplyDraft(draft){
+  _stfPerJurTax = { ...(draft.perJurTax||{}) };
+  _stfGrossInput = draft.grossInput ?? null;
+  _stfAdHocJurIds = [...(draft.adHocJurIds||[])];
+  _stfImportedTaxable = { ...(draft.importedTaxable||{}) };
+  stfRenderPanel();
+  // Period + confirm + notes restored after render (inputs exist by then)
+  setTimeout(() => {
+    const p = document.getElementById('stf-period');   if (p && draft.period) p.value = draft.period;
+    const cf = document.getElementById('stf-confirm'); if (cf) cf.value = draft.confirmationNumber || '';
+    const nt = document.getElementById('stf-notes');   if (nt) nt.value = draft.notes || '';
+  }, 0);
+}
+
 // ── Core calc ────────────────────────────────────────────────────
 // For NE specifically (and structurally applicable elsewhere):
 //   Line 1 = Gross sales
@@ -21150,8 +21237,9 @@ function stfRecalc(){
         <div class="fg" style="margin:0;"><label style="font-size:11px;">Filing notes (optional)</label><input id="stf-notes" placeholder="Anything worth remembering" style="font-size:12px;padding:7px 9px;"></div>
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
         <button class="btn btn-ghost" onclick="stfClose()">Cancel</button>
+        <button class="btn btn-ghost" onclick="stfSaveDraft()" style="color:var(--navy);border-color:var(--navy);" title="Save your progress and come back later. Draft is shared across devices.">💾 Save Draft</button>
         <button class="btn btn-primary" onclick="stfSubmit()" ${hasData?'':'disabled'}>✓ Mark Filed &amp; Save</button>
       </div>
     </div>
@@ -21235,6 +21323,9 @@ function stfSubmit(){
     c.stNextdue = d.toISOString().slice(0,10);
     c._updatedAt = new Date().toISOString();
   }
+
+  // Submitting a filing invalidates any saved draft for this client
+  DB.salesTaxDrafts = (DB.salesTaxDrafts||[]).filter(d => d.clientId !== c.id);
 
   saveDB();
   logAct(`Sales tax filed: ${c.biz} ${period} ($${r.totalTaxDue.toFixed(2)})`);
