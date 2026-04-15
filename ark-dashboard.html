@@ -4383,7 +4383,27 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Report</button>
           <button class="btn btn-sm" id="sje-mode-review" onclick="sjeMode('review')" style="font-size:12px;border-color:#2ca01c;color:#2ca01c;">☑ P&L Review</button>
           <button class="btn btn-sm" id="sje-mode-fleet" onclick="sjeMode('fleet')" style="font-size:12px;border-color:#f0b429;color:#f0b429;">🏆 Fleet Scoreboard</button>
+          <button class="btn btn-sm" id="sje-mode-history" onclick="sjeMode('history')" style="font-size:12px;border-color:#6b3fa0;color:#6b3fa0;">📋 Push History</button>
         </div>
+      </div>
+
+      <!-- ═══ PUSH HISTORY PANEL ═══ -->
+      <div id="sje-history-panel" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">Push History</div>
+            <div style="font-size:11px;color:var(--text-d);">Review past Sales & COGS journal entry pushes — click to expand</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <select id="sje-hist-filter-type" class="field-input" style="height:32px;font-size:12px;width:140px;" onchange="sjeRenderHistory()">
+              <option value="">All Types</option>
+              <option value="sales">Sales JE</option>
+              <option value="cogs">COGS JE</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="sjeRenderHistory()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div id="sje-history-list"></div>
       </div>
 
       <!-- ═══ SALES JE PANEL ═══ -->
@@ -7048,6 +7068,7 @@ function _buildDBPayload() {
     ideas:          DB.ideas||[],
     devProjects:    DB.devProjects||[],
     devTemplates:   DB.devTemplates||[],
+    sjePushLog:     DB.sjePushLog||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -7086,6 +7107,7 @@ function _applyDBPayload(saved) {
     ideas:          saved.ideas          || [],
     devProjects:    saved.devProjects    || [],
     devTemplates:   saved.devTemplates   || [],
+    sjePushLog:     saved.sjePushLog     || [],
   });
 }
 
@@ -34388,6 +34410,9 @@ async function sjePushAll() {
     }
   }
 
+  // Save batch to push history log
+  if(_sjePushResults.length) sjeSaveBatch('sales', _sjePushResults);
+
   // Show confirmation
   sjeShowConfirm();
 }
@@ -34641,6 +34666,8 @@ function sjeMode(mode) {
   document.getElementById('scoots-pl-panel').style.display = mode === 'pl' ? '' : 'none';
   const fleetPanel = document.getElementById('sje-fleet-panel');
   if (fleetPanel) fleetPanel.style.display = mode === 'fleet' ? '' : 'none';
+  const histPanel = document.getElementById('sje-history-panel');
+  if (histPanel) histPanel.style.display = mode === 'history' ? '' : 'none';
 
   // Move the P&L Review workspace into the Scooter's tab when in review mode,
   // otherwise move it back to the general tab so qboOpenTool('pldigest') still works
@@ -34662,8 +34689,9 @@ function sjeMode(mode) {
   const plBtn = document.getElementById('sje-mode-pl');
   const reviewBtn = document.getElementById('sje-mode-review');
   const fleetBtn = document.getElementById('sje-mode-fleet');
+  const histBtn = document.getElementById('sje-mode-history');
   // Reset all buttons
-  [salesBtn, cogsBtn, plBtn, reviewBtn, fleetBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
+  [salesBtn, cogsBtn, plBtn, reviewBtn, fleetBtn, histBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
   if (mode === 'sales') {
     salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
   } else if (mode === 'cogs') {
@@ -34684,7 +34712,147 @@ function sjeMode(mode) {
       pi.value = `${lm.getFullYear()}-${String(lm.getMonth()+1).padStart(2,'0')}`;
     }
     fleetScoreboardLoad();
+  } else if (mode === 'history') {
+    histBtn.style.background = '#6b3fa0'; histBtn.style.color = '#fff'; histBtn.style.borderColor = '#6b3fa0'; histBtn.style.fontWeight = '600';
+    sjeRenderHistory();
   }
+}
+
+// ── Push History Logging ─────────────────────────────────────────
+// Logs every push batch (Sales or COGS) so we can review them later
+function sjeSaveBatch(type, results){
+  if(!DB.sjePushLog) DB.sjePushLog = [];
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
+  const successCount = results.filter(r=>r.status==='success').length;
+  const failedCount = results.filter(r=>r.status==='failed').length;
+  const skippedCount = results.filter(r=>r.status==='skipped').length;
+  const batch = {
+    id: uid(),
+    type, // 'sales' or 'cogs'
+    pushedAt: new Date().toISOString(),
+    pushedBy: who,
+    pushedById: currentUser?.id||null,
+    successCount, failedCount, skippedCount,
+    totalCount: results.length,
+    entries: results, // full detail preserved
+    _updatedAt: new Date().toISOString(),
+  };
+  DB.sjePushLog.unshift(batch);
+  // Keep last 200 batches
+  if(DB.sjePushLog.length > 200) DB.sjePushLog = DB.sjePushLog.slice(0, 200);
+  saveDB();
+  return batch;
+}
+
+function sjeRenderHistory(){
+  const list = document.getElementById('sje-history-list');
+  if(!list) return;
+  const filter = document.getElementById('sje-hist-filter-type')?.value || '';
+  let batches = (DB.sjePushLog||[]).slice();
+  if(filter) batches = batches.filter(b=>b.type===filter);
+  if(!batches.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No push history yet. Push some journal entries to see them here.</div>';
+    return;
+  }
+  list.innerHTML = batches.map(b=>{
+    const typeColor = b.type==='sales' ? 'var(--blue)' : '#b06a1a';
+    const typeBg = b.type==='sales' ? 'var(--blue-bg)' : 'var(--amber-bg)';
+    const typeLabel = b.type==='sales' ? 'Sales JE' : 'COGS JE';
+    const d = new Date(b.pushedAt);
+    const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const timeStr = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const hasError = b.failedCount > 0;
+    return `<div class="card" style="margin-bottom:10px;padding:0;overflow:hidden;">
+      <div onclick="sjeToggleBatch('${b.id}')" style="padding:14px 18px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-left:4px solid ${hasError?'var(--red)':'var(--green)'};">
+        <div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;font-weight:700;background:${typeBg};color:${typeColor};padding:3px 10px;border-radius:12px;">${typeLabel}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--navy);">${dateStr} · ${timeStr}</span>
+            <span style="font-size:11px;color:var(--text-d);">by ${b.pushedBy}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-m);">
+            <strong style="color:var(--green);">${b.successCount} pushed</strong>
+            ${b.skippedCount?` · <span style="color:var(--text-d);">${b.skippedCount} skipped</span>`:''}
+            ${b.failedCount?` · <strong style="color:var(--red);">${b.failedCount} failed</strong>`:''}
+            · ${b.totalCount} total
+          </div>
+        </div>
+        <div style="font-size:16px;color:var(--text-d);" id="sje-batch-arrow-${b.id}">▶</div>
+      </div>
+      <div id="sje-batch-detail-${b.id}" style="display:none;padding:0 18px 14px;background:var(--surface2);">
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:10px;">
+          <thead>
+            <tr style="background:var(--surface);">
+              <th style="text-align:left;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">${b.type==='sales'?'Franchise':'Store'}</th>
+              <th style="text-align:left;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Date</th>
+              <th style="text-align:left;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Journal #</th>
+              ${b.type==='sales'?'<th style="text-align:right;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Debits</th><th style="text-align:right;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Credits</th>':''}
+              <th style="text-align:center;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Status</th>
+              <th style="text-align:left;padding:8px 10px;font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${b.entries.map(e=>{
+              const statusColor = e.status==='success'?'var(--green)':e.status==='skipped'?'var(--text-d)':'var(--red)';
+              const statusIcon = e.status==='success'?'✓':e.status==='skipped'?'⊘':'✗';
+              const nameField = b.type==='sales' ? (e.franchise||'—') : (e.store||'—');
+              const detail = e.qboId ? `QBO ID: ${e.qboId}` : (e.error ? `Error: ${e.error}` : (e.status==='skipped'?'Already exists in QBO':''));
+              return `<tr style="border-top:1px solid var(--border);">
+                <td style="padding:8px 10px;color:var(--text);">${nameField}</td>
+                <td style="padding:8px 10px;color:var(--text-m);">${e.date||''}</td>
+                <td style="padding:8px 10px;font-family:monospace;color:var(--text-m);">${e.journalNo||''}</td>
+                ${b.type==='sales'?`<td style="padding:8px 10px;text-align:right;font-family:monospace;color:var(--text-m);">$${(e.debits||0).toFixed(2)}</td><td style="padding:8px 10px;text-align:right;font-family:monospace;color:var(--text-m);">$${(e.credits||0).toFixed(2)}</td>`:''}
+                <td style="padding:8px 10px;text-align:center;"><span style="color:${statusColor};font-weight:700;">${statusIcon} ${e.status}</span></td>
+                <td style="padding:8px 10px;font-size:10px;color:var(--text-d);">${detail}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="sjeExportBatch('${b.id}')" style="font-size:11px;">📥 Export CSV</button>
+          <button class="btn btn-danger btn-sm" onclick="sjeDeleteBatch('${b.id}')" style="font-size:11px;">🗑 Delete Log</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function sjeToggleBatch(id){
+  const detail = document.getElementById('sje-batch-detail-'+id);
+  const arrow = document.getElementById('sje-batch-arrow-'+id);
+  if(!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : '';
+  if(arrow) arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+function sjeExportBatch(id){
+  const batch = (DB.sjePushLog||[]).find(b=>b.id===id);
+  if(!batch) return;
+  const isSales = batch.type==='sales';
+  const headers = isSales
+    ? ['Franchise','Store ID','QBO Company','Class','Date','Journal #','Debits','Credits','Status','QBO ID','Error']
+    : ['Store','Date','Journal #','Status','Error'];
+  const rows = batch.entries.map(e=>isSales
+    ? [e.franchise||'',e.storeId||'',e.qboCompany||'',e.className||'',e.date||'',e.journalNo||'',(e.debits||0).toFixed(2),(e.credits||0).toFixed(2),e.status||'',e.qboId||'',e.error||'']
+    : [e.store||'',e.date||'',e.journalNo||'',e.status||'',e.error||'']);
+  const csv = [headers.join(','),...rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','))].join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date(batch.pushedAt).toISOString().slice(0,10);
+  a.download = `Scooters-${batch.type}-push-${d}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function sjeDeleteBatch(id){
+  if(!confirm('Delete this push log entry? This does not affect the journal entries in QBO.')) return;
+  DB.sjePushLog = (DB.sjePushLog||[]).filter(b=>b.id!==id);
+  saveDB();
+  sjeRenderHistory();
 }
 
 // ── Fleet Scoreboard ─────────────────────────────────────────────
@@ -35140,6 +35308,9 @@ async function cogsPushAll() {
       }
     }
   }
+
+  // Save batch to push history log
+  if(_cogsPushResults.length) sjeSaveBatch('cogs', _cogsPushResults);
 
   // Show confirmation
   const success = _cogsPushResults.filter(r => r.status === 'success').length;

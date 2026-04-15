@@ -5358,6 +5358,8 @@ const _MERGE_ARRAYS_BY_ID = [
   'faxOutbox', 'faxInbox', 'smsLog', 'smsMessages',
   // Dev Hub
   'devProjects', 'devTemplates',
+  // Scooters JE push history
+  'sjePushLog',
 ];
 
 function _mergeArrayById(existing, incoming) {
