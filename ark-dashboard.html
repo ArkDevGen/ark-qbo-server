@@ -20252,6 +20252,8 @@ function strDelete(id){
 let _stfActiveClient = null;     // {id, biz, ...}
 let _stfPerJurTax = {};          // {jurisdictionId: taxAmount} — per-local tax entry mode
 let _stfGrossInput = null;       // optional override for Line 1
+let _stfAdHocJurIds = [];        // jurisdiction IDs added just for this filing (not saved to client)
+let _stfImportedTaxable = {};    // {jurisdictionId: taxableAmount} from parsed report, for display
 
 function stfGetSetupClients(){
   // Clients with at least 1 configured jurisdiction
@@ -20311,6 +20313,8 @@ function stfOpenClient(clientId){
   _stfActiveClient = c;
   _stfPerJurTax = {};
   _stfGrossInput = null;
+  _stfAdHocJurIds = [];
+  _stfImportedTaxable = {};
   document.getElementById('stf-empty-state').style.display = 'none';
   const active = document.getElementById('stf-active');
   active.style.display = '';
@@ -20319,9 +20323,16 @@ function stfOpenClient(clientId){
 }
 
 function _stfJurs(){
-  return (_stfActiveClient?.stJurisdictionIds || [])
+  const configuredIds = _stfActiveClient?.stJurisdictionIds || [];
+  const all = [...configuredIds, ..._stfAdHocJurIds.filter(id => !configuredIds.includes(id))];
+  return all
     .map(id => (DB.salesTaxRates||[]).find(r=>r.id===id))
     .filter(Boolean);
+}
+
+function _stfIsAdHoc(jurId){
+  const configured = _stfActiveClient?.stJurisdictionIds || [];
+  return !configured.includes(jurId) && _stfAdHocJurIds.includes(jurId);
 }
 
 function _stfStateJur(){ return _stfJurs().find(j => j.type === 'state'); }
@@ -20376,10 +20387,31 @@ function stfRenderPanel(){
         <span style="font-size:11px;color:var(--text-d);">Combined rate: <strong>${(combinedRate*100).toFixed(4)}%</strong></span>
       </div>
 
+      <!-- Import drop zone -->
+      <div id="stf-import-zone" ondragover="stfDragOver(event)" ondragleave="stfDragLeave(event)" ondrop="stfDrop(event)"
+        style="background:linear-gradient(to bottom, #f9f7f1, #f4f2eb);border:1.5px dashed var(--gold);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;cursor:pointer;transition:all .15s;"
+        onclick="document.getElementById('stf-file-input').click();"
+        onmouseover="this.style.background='#f4f2eb';this.style.borderColor='var(--navy)';"
+        onmouseout="this.style.background='';this.style.borderColor='var(--gold)';">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-size:24px;">📄</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);">Drop source report here</div>
+            <div style="font-size:11px;color:var(--text-d);margin-top:2px;">QBO Sales Tax Liability Report (PDF/XLSX), Lightspeed CSV, Toast PDF — auto-populates numbers below. File is parsed in-browser; nothing uploads to the server.</div>
+          </div>
+          <input type="file" id="stf-file-input" accept=".pdf,.xlsx,.xls,.csv" onchange="stfFileChosen(event)" style="display:none;">
+        </div>
+        <div id="stf-import-status" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:11px;"></div>
+      </div>
+      <div id="stf-import-preview" style="display:none;margin-bottom:14px;"></div>
+
       <!-- Input section -->
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px;">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);margin-bottom:10px;">
-          Source Data — ${calcMode==='from_tax' ? 'Enter tax collected' : 'Enter gross sales'}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);">
+            Source Data — ${calcMode==='from_tax' ? 'Enter tax collected' : 'Enter gross sales'}
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="stfAdHocPickerOpen()" style="font-size:10px;padding:3px 8px;" title="Add a jurisdiction just for this filing (e.g., one-off job in a new city)">⚡ + Add Jurisdiction</button>
         </div>
 
         ${calcMode === 'from_tax' ? `
@@ -20393,10 +20425,20 @@ function stfRenderPanel(){
             <div style="display:grid;grid-template-columns:1fr 150px;gap:8px 16px;align-items:center;">
               <div style="font-size:11px;color:var(--text-d);font-weight:600;">Jurisdiction (rate)</div>
               <div style="font-size:11px;color:var(--text-d);font-weight:600;text-align:right;">Tax collected</div>
-              ${locals.map(j => `
-                <div style="font-size:12px;"><strong>${j.name}</strong> <span style="color:var(--text-d);">${j.state} · ${(j.rate*100).toFixed(3)}%</span></div>
+              ${locals.map(j => {
+                const adHoc = _stfIsAdHoc(j.id);
+                const importedTax = _stfImportedTaxable[j.id];
+                return `
+                <div style="font-size:12px;">
+                  <strong>${j.name}</strong>
+                  <span style="color:var(--text-d);">${j.state} · ${(j.rate*100).toFixed(3)}%</span>
+                  ${adHoc ? `<span style="background:var(--gold);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;">⚡ AD-HOC</span>
+                    <button onclick="stfAdHocRemove('${j.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;margin-left:2px;" title="Remove from this filing">✕</button>
+                    <button onclick="stfAdHocMakePermanent('${j.id}')" style="background:none;border:1px solid var(--gold);color:var(--gold);font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;cursor:pointer;" title="Add permanently to client's setup">Save to client</button>` : ''}
+                  ${importedTax != null ? `<div style="font-size:10px;color:var(--text-d);margin-top:2px;">📄 From report: taxable $${Number(importedTax).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
+                </div>
                 <input type="number" step="0.01" oninput="stfPerJurSet('${j.id}', this.value)" value="${_stfPerJurTax[j.id]||''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:13px;padding:6px 9px;text-align:right;">
-              `).join('')}
+              `;}).join('')}
             </div>
           `}
           <div class="fg" style="margin:14px 0 0;">
@@ -20434,10 +20476,477 @@ function stfGrossSet(val){
   stfRecalc();
 }
 
+// ── Ad-hoc jurisdiction management ──────────────────────────────
+function stfAdHocRemove(jurId){
+  // Remove from ad-hoc list and clear any entered tax
+  _stfAdHocJurIds = _stfAdHocJurIds.filter(x => x !== jurId);
+  delete _stfPerJurTax[jurId];
+  delete _stfImportedTaxable[jurId];
+  stfRenderPanel();
+}
+
+function stfAdHocMakePermanent(jurId){
+  if (!_stfActiveClient) return;
+  const c = _stfActiveClient;
+  c.stJurisdictionIds = c.stJurisdictionIds || [];
+  if (!c.stJurisdictionIds.includes(jurId)) c.stJurisdictionIds.push(jurId);
+  _stfAdHocJurIds = _stfAdHocJurIds.filter(x => x !== jurId);
+  c._updatedAt = new Date().toISOString();
+  saveDB();
+  const r = (DB.salesTaxRates||[]).find(x=>x.id===jurId);
+  showToast(`Added ${r?.name||'jurisdiction'} to ${c.biz} permanently`);
+  logAct(`Added ${r?.name||'jurisdiction'} to ${c.biz} sales tax setup`);
+  stfRenderPanel();
+}
+
+function stfAdHocPickerOpen(){
+  if (!_stfActiveClient) return;
+  const state = _stfStateJur()?.state || '';
+  const overlay = document.createElement('div');
+  overlay.id = 'stf-adhoc-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10002;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius);width:540px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);">Add Ad-hoc Jurisdiction</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:3px;">For a one-off filing only. The client's default setup is unchanged.</div>
+      </div>
+      <div style="padding:14px 20px;display:flex;gap:8px;">
+        <input id="stf-adhoc-search" placeholder="Search city / code…" oninput="stfAdHocDD()" autofocus
+          style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;">
+        <select id="stf-adhoc-state" onchange="stfAdHocDD()" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;">
+          <option value="${state}">${state||'All'}</option>
+        </select>
+      </div>
+      <div id="stf-adhoc-dd" style="flex:1;overflow-y:auto;padding:0 6px 12px;"></div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;">
+        <button class="btn btn-ghost" onclick="document.getElementById('stf-adhoc-overlay').remove()">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  // Populate state dropdown
+  const rates = DB.salesTaxRates || [];
+  const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
+  const stateSel = document.getElementById('stf-adhoc-state');
+  stateSel.innerHTML = '<option value="">All States</option>' +
+    states.map(s=>`<option ${s===state?'selected':''}>${s}</option>`).join('');
+  stfAdHocDD();
+}
+
+function stfAdHocDD(){
+  const q = (document.getElementById('stf-adhoc-search')?.value||'').toLowerCase().trim();
+  const fs = document.getElementById('stf-adhoc-state')?.value || '';
+  const rates = DB.salesTaxRates || [];
+  const alreadyIn = new Set([...(_stfActiveClient?.stJurisdictionIds||[]), ..._stfAdHocJurIds]);
+  const pool = rates.filter(r => {
+    if (fs && r.state !== fs) return false;
+    if (alreadyIn.has(r.id)) return false;
+    if (!q) return true;
+    return (r.name||'').toLowerCase().includes(q)
+        || (r.code||'').toLowerCase().includes(q)
+        || (r.state||'').toLowerCase().includes(q);
+  }).sort((a,b) => (a.state||'').localeCompare(b.state||'') || (a.name||'').localeCompare(b.name||''));
+  const dd = document.getElementById('stf-adhoc-dd');
+  if (!dd) return;
+  if (!pool.length){
+    dd.innerHTML = '<div style="padding:24px;color:var(--text-d);text-align:center;font-size:12px;">No match.</div>';
+    return;
+  }
+  dd.innerHTML = pool.slice(0, 100).map(r => {
+    const pct = (r.rate*100).toFixed(r.rate>=0.01?2:4);
+    return `<div onclick="stfAdHocAdd('${r.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;display:flex;justify-content:space-between;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span><strong>${r.name}</strong> <span style="color:var(--text-d);font-size:11px;">${r.state} · code ${r.code||'—'} · ${r.type||'city'}</span></span>
+      <span style="font-family:'DM Mono',monospace;color:var(--text-d);">${pct}%</span>
+    </div>`;
+  }).join('') + (pool.length > 100 ? `<div style="padding:8px;font-size:10px;color:var(--text-d);text-align:center;">${pool.length-100} more — narrow your search</div>` : '');
+}
+
+function stfAdHocAdd(jurId){
+  if (!_stfAdHocJurIds.includes(jurId)) _stfAdHocJurIds.push(jurId);
+  document.getElementById('stf-adhoc-overlay')?.remove();
+  stfRenderPanel();
+}
+
+
+// ── File import: drag/drop + file picker ───────────────────────
+function stfDragOver(e){ e.preventDefault(); e.currentTarget.style.background = '#eee'; e.currentTarget.style.borderColor = 'var(--navy)'; }
+function stfDragLeave(e){ e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = 'var(--gold)'; }
+function stfDrop(e){
+  e.preventDefault();
+  e.currentTarget.style.background = '';
+  e.currentTarget.style.borderColor = 'var(--gold)';
+  const file = e.dataTransfer?.files?.[0];
+  if (file) stfHandleFile(file);
+}
+function stfFileChosen(e){
+  const file = e.target?.files?.[0];
+  if (file) stfHandleFile(file);
+  e.target.value = ''; // allow re-selecting the same file later
+}
+
+function _stfSetStatus(msg, tone){
+  const el = document.getElementById('stf-import-status');
+  if (!el) return;
+  const colors = {
+    info: { bg:'#eef3fb', fg:'var(--navy)', border:'var(--navy)' },
+    ok:   { bg:'#effaf0', fg:'var(--green)', border:'var(--green)' },
+    warn: { bg:'#fff8e6', fg:'#8a6d00', border:'var(--gold)' },
+    err:  { bg:'#fff1f1', fg:'var(--red)', border:'var(--red)' },
+  }[tone || 'info'];
+  el.style.display = 'block';
+  el.style.background = colors.bg;
+  el.style.color = colors.fg;
+  el.style.border = `1px solid ${colors.border}`;
+  el.innerHTML = msg;
+}
+
+async function stfHandleFile(file){
+  if (!_stfActiveClient) return;
+  const name = (file.name||'').toLowerCase();
+  const ext = name.split('.').pop();
+  _stfSetStatus(`⏳ Reading <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} KB)…`, 'info');
+
+  try {
+    let parsed;
+    if (ext === 'pdf')                    parsed = await stfParsePdf(file);
+    else if (ext === 'xlsx' || ext === 'xls') parsed = stfParseXlsx(file);
+    else if (ext === 'csv')               parsed = await stfParseCsv(file);
+    else {
+      _stfSetStatus(`❌ Unsupported file type: .${ext}`, 'err');
+      return;
+    }
+    parsed = await parsed;
+    if (!parsed || !parsed.lines?.length){
+      _stfSetStatus(`⚠ No jurisdiction lines found in <strong>${file.name}</strong>. You can still enter numbers manually.`, 'warn');
+      return;
+    }
+    stfRenderImportPreview(parsed, file.name);
+  } catch (err){
+    console.error('[stf import] parse error:', err);
+    _stfSetStatus(`❌ Failed to parse <strong>${file.name}</strong>: ${err.message||err}`, 'err');
+  }
+}
+
+// Lazy-load PDF.js from CDN on first use
+let _pdfjsReady = null;
+function stfLoadPdfJs(){
+  if (_pdfjsReady) return _pdfjsReady;
+  _pdfjsReady = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => {
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } catch(e){ reject(e); }
+    };
+    script.onerror = () => reject(new Error('Failed to load PDF.js'));
+    document.head.appendChild(script);
+  });
+  return _pdfjsReady;
+}
+
+async function stfParsePdf(file){
+  const pdfjs = await stfLoadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buf }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Group text items by approximate Y position to reconstruct lines
+    const items = content.items;
+    const lines = {};
+    items.forEach(it => {
+      const y = Math.round(it.transform[5]);
+      (lines[y] = lines[y] || []).push({ x: it.transform[4], s: it.str });
+    });
+    Object.keys(lines)
+      .sort((a,b) => Number(b) - Number(a)) // top-down
+      .forEach(y => {
+        const row = lines[y].sort((a,b) => a.x - b.x).map(it => it.s).join(' ').trim();
+        if (row) fullText += row + '\n';
+      });
+  }
+  return stfExtractQboLines(fullText);
+}
+
+async function stfParseCsv(file){
+  const text = await file.text();
+  return stfExtractQboLines(text);
+}
+
+async function stfParseXlsx(file){
+  if (!window.XLSX) throw new Error('XLSX library not loaded — refresh the page');
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: 'array', cellDates: true });
+  // Concatenate all sheets as newline-separated rows for pattern extraction
+  let text = '';
+  wb.SheetNames.forEach(sn => {
+    const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+    rows.forEach(r => {
+      text += r.filter(x => x !== '' && x != null).join(' | ') + '\n';
+    });
+  });
+  return stfExtractQboLines(text);
+}
+
+// Extracts jurisdiction lines from QBO-style sales tax liability report text.
+// Patterns handled:
+//   "EKHORN CITY SALES TAX (1.5%)        950.00    14.25"
+//   "Nebraska State Sales Tax (5.5%)  42,160.00  2,318.80"
+//   "Nebraska, Lincoln City (1.75%)   49,794.26    871.41"
+// Single-number lines (like Cheri's email = "16517.41") → returns tax-only
+function stfExtractQboLines(text){
+  const lines = [];
+  const warnings = [];
+  // Pattern: anything, then (rate%), then taxable, then tax amount
+  // Tolerant of commas, leading/trailing whitespace, optional "$" signs
+  const re = /^(.+?)\s*\((\d+(?:\.\d+)?)\s*%\)\s*\$?([\d,]+(?:\.\d{2})?)\s+\$?([\d,]+(?:\.\d{2})?)\s*$/;
+  // Alternate: name with rate then single amount (rare — treat as tax only)
+  const text2 = text.replace(/\r/g, '');
+  const rawLines = text2.split('\n');
+  for (const raw of rawLines){
+    const ln = raw.trim();
+    if (!ln) continue;
+    const m = ln.match(re);
+    if (m){
+      const [, name, ratePct, taxableStr, taxStr] = m;
+      const rate = parseFloat(ratePct) / 100;
+      const taxable = parseFloat(taxableStr.replace(/,/g,''));
+      const tax = parseFloat(taxStr.replace(/,/g,''));
+      if (isNaN(rate) || isNaN(taxable) || isNaN(tax)) continue;
+      if (tax < 0.01 && taxable < 0.01) continue;
+      lines.push({ name: name.trim(), rate, taxable, tax });
+    }
+  }
+  // Also detect total
+  let total = 0;
+  const totalMatch = text.match(/Total[^\n]*?\$?([\d,]+\.\d{2})\s*$/im);
+  if (totalMatch) total = parseFloat(totalMatch[1].replace(/,/g,''));
+  return { lines, total, rawText: text };
+}
+
+// ── Match extracted lines to client's configured jurisdictions ──
+function stfMatchJurisdictions(parsed){
+  const c = _stfActiveClient;
+  if (!c) return { matched: [], unmatched: [], warnings: [] };
+  const configured = (c.stJurisdictionIds||[]).map(id => (DB.salesTaxRates||[]).find(r=>r.id===id)).filter(Boolean);
+  const stateCode = configured.find(j=>j.type==='state')?.state || '';
+  const allInState = (DB.salesTaxRates||[]).filter(r => r.state === stateCode);
+
+  // Group extracted lines by (fuzzy-matched jurisdiction, rate)
+  // Same jurisdiction + same rate → sum amounts. Different rate → separate entry with warning.
+  const matchBuckets = {};  // key: jurId or 'unmatched:name'
+  const warnings = [];
+
+  const normalizeName = s => (s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const stripQboChrome = s => (s||'')
+    .replace(/\b(CITY\s+SALES\s+TAX|SALES\s+TAX|STATE\s+SALES\s+TAX|CITY\s+TAX\s+RATE|COUNTY\s+SALES\s+TAX|TAX\s+RATE|TAX)\b/gi, ' ')
+    .replace(/^\s*\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\s+/, '')  // strip leading dates like "10-1-2019"
+    .replace(/^\s*[A-Z]{2,}\s*,\s*/i, '')                   // strip leading "Nebraska, "
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  for (const line of parsed.lines){
+    const cleaned = stripQboChrome(line.name);
+    const normCleaned = normalizeName(cleaned);
+
+    // Try configured first (fuzzy)
+    let match = configured.find(j => normalizeName(j.name) === normCleaned)
+             || configured.find(j => normalizeName(j.name).includes(normCleaned) || normCleaned.includes(normalizeName(j.name)));
+
+    // If not in configured, check DB.salesTaxRates in same state
+    if (!match){
+      match = allInState.find(j => normalizeName(j.name) === normCleaned)
+           || allInState.find(j => normalizeName(j.name).includes(normCleaned) || normCleaned.includes(normalizeName(j.name)));
+    }
+
+    // Levenshtein-style fallback: up to 2 character edits (catches QBO typos
+    // like "EKHORN" → "Elkhorn"). Limited to same rate to avoid bad matches.
+    if (!match){
+      const sameRate = [...configured, ...allInState].filter(j => Math.abs(j.rate - line.rate) < 0.0001);
+      const levenshtein = (a, b) => {
+        if (a === b) return 0;
+        const m = a.length, n = b.length;
+        if (Math.abs(m - n) > 3) return Infinity;
+        const dp = Array(n+1).fill(0).map((_,i)=>i);
+        for (let i = 1; i <= m; i++){
+          let prev = dp[0]; dp[0] = i;
+          for (let j = 1; j <= n; j++){
+            const tmp = dp[j];
+            dp[j] = Math.min(dp[j]+1, dp[j-1]+1, prev + (a[i-1]===b[j-1]?0:1));
+            prev = tmp;
+          }
+        }
+        return dp[n];
+      };
+      let best = null, bestDist = 3;
+      for (const j of sameRate){
+        const d = levenshtein(normCleaned, normalizeName(j.name));
+        if (d < bestDist){ bestDist = d; best = j; }
+      }
+      if (best){ match = best; }
+    }
+
+    if (match){
+      // Rate sanity check
+      const configRate = match.rate;
+      if (Math.abs(configRate - line.rate) > 0.0001){
+        warnings.push({
+          type: 'rate-mismatch',
+          jurisdiction: match.name,
+          jurisdictionId: match.id,
+          configuredRate: configRate,
+          reportedRate: line.rate,
+          message: `${match.name}: report shows ${(line.rate*100).toFixed(4)}%, Rate Database has ${(configRate*100).toFixed(4)}%`,
+        });
+      }
+      const key = match.id;
+      if (!matchBuckets[key]){
+        matchBuckets[key] = {
+          jurisdiction: match,
+          isAdHoc: !configured.includes(match),
+          taxable: 0, tax: 0,
+          lines: [],
+          rateUsed: line.rate,
+        };
+      }
+      matchBuckets[key].taxable += line.taxable;
+      matchBuckets[key].tax += line.tax;
+      matchBuckets[key].lines.push(line);
+    } else {
+      // No match at all — flag as unmatched
+      const key = 'unmatched:' + normCleaned;
+      if (!matchBuckets[key]){
+        matchBuckets[key] = {
+          jurisdiction: null,
+          name: cleaned,
+          rateReported: line.rate,
+          taxable: 0, tax: 0, lines: [],
+          isUnmatched: true,
+        };
+      }
+      matchBuckets[key].taxable += line.taxable;
+      matchBuckets[key].tax += line.tax;
+      matchBuckets[key].lines.push(line);
+    }
+  }
+
+  const matched = Object.values(matchBuckets).filter(b => !b.isUnmatched);
+  const unmatched = Object.values(matchBuckets).filter(b => b.isUnmatched);
+  return { matched, unmatched, warnings };
+}
+
+// Render extraction preview with per-row accept/skip controls
+function stfRenderImportPreview(parsed, fileName){
+  const preview = document.getElementById('stf-import-preview');
+  if (!preview) return;
+  const result = stfMatchJurisdictions(parsed);
+  const fmt = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const warnHtml = result.warnings.length ? `<div style="background:#fff8e6;border:1px solid var(--gold);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;">
+    <div style="font-size:11px;font-weight:700;color:#8a6d00;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">⚠ ${result.warnings.length} Rate Discrepanc${result.warnings.length===1?'y':'ies'} — Verify</div>
+    ${result.warnings.map(w => `<div style="font-size:11px;color:#8a6d00;">${w.message}</div>`).join('')}
+    <div style="font-size:10px;color:var(--text-d);margin-top:6px;font-style:italic;">Report rate will be used for this filing's calculations. Update the Rate Database if the report is correct.</div>
+  </div>` : '';
+
+  const matchedRows = result.matched.map(b => {
+    const j = b.jurisdiction;
+    const adHocBadge = b.isAdHoc ? '<span style="background:var(--gold);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;">NEW — not configured</span>' : '';
+    return `<tr>
+      <td><input type="checkbox" class="stf-imp-chk" data-jurid="${j.id}" data-taxable="${b.taxable}" data-tax="${b.tax}" data-adhoc="${b.isAdHoc?1:0}" checked style="transform:scale(1.1);"></td>
+      <td style="font-size:12px;"><strong>${j.name}</strong> <span style="color:var(--text-d);">${j.state} · ${j.code||''}</span>${adHocBadge}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;">${(b.rateUsed*100).toFixed(4)}%</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;">${fmt(b.taxable)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;font-weight:600;">${fmt(b.tax)}</td>
+      <td style="font-size:11px;color:var(--text-d);">${b.lines.length>1?`Summed ${b.lines.length} rows`:''}</td>
+    </tr>`;
+  }).join('');
+
+  const unmatchedRows = result.unmatched.map(b => `<tr style="background:#fff1f1;">
+    <td style="color:var(--red);font-size:14px;">⚠</td>
+    <td style="font-size:12px;"><strong>${b.name}</strong> <span style="color:var(--text-d);">not in Rate Database</span></td>
+    <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;">${(b.rateReported*100).toFixed(4)}%</td>
+    <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;">${fmt(b.taxable)}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:12px;text-align:right;">${fmt(b.tax)}</td>
+    <td style="font-size:11px;color:var(--red);">Tax excluded — add to Rate Database first</td>
+  </tr>`).join('');
+
+  preview.style.display = 'block';
+  preview.innerHTML = `
+    <div style="background:var(--surface);border:2px solid var(--navy);border-radius:var(--radius);overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);">📄 Report Parsed — review before applying</div>
+          <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${fileName} · ${result.matched.length} jurisdiction(s) matched${result.unmatched.length?' · '+result.unmatched.length+' not matched':''}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="stfDismissImport()" style="font-size:10px;padding:4px 10px;">Dismiss</button>
+      </div>
+      ${warnHtml ? `<div style="padding:12px 16px 0;">${warnHtml}</div>` : ''}
+      <div style="padding:8px 16px;">
+        <table style="font-size:12px;width:100%;">
+          <thead>
+            <tr>
+              <th style="width:24px;">Use</th>
+              <th>Jurisdiction</th>
+              <th style="text-align:right;">Rate</th>
+              <th style="text-align:right;">Taxable</th>
+              <th style="text-align:right;">Tax</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${matchedRows || '<tr><td colspan="6" style="color:var(--text-d);padding:14px;text-align:center;font-style:italic;">No matches found.</td></tr>'}
+            ${unmatchedRows}
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="stfDismissImport()">Cancel</button>
+        <button class="btn btn-primary" onclick="stfApplyImport()" ${result.matched.length?'':'disabled'}>✓ Apply Selected</button>
+      </div>
+    </div>
+  `;
+  _stfSetStatus(`✓ Parsed <strong>${fileName}</strong> — ${result.matched.length} jurisdiction(s) matched`, 'ok');
+}
+
+function stfDismissImport(){
+  const el = document.getElementById('stf-import-preview');
+  if (el){ el.style.display = 'none'; el.innerHTML = ''; }
+  const st = document.getElementById('stf-import-status');
+  if (st){ st.style.display = 'none'; st.innerHTML = ''; }
+}
+
+function stfApplyImport(){
+  const checks = document.querySelectorAll('#stf-import-preview .stf-imp-chk:checked');
+  let addedAdHoc = 0, applied = 0;
+  checks.forEach(cb => {
+    const jurId = cb.dataset.jurid;
+    const taxable = parseFloat(cb.dataset.taxable) || 0;
+    const tax = parseFloat(cb.dataset.tax) || 0;
+    const isAdHoc = cb.dataset.adhoc === '1';
+    if (isAdHoc && !_stfAdHocJurIds.includes(jurId)){
+      _stfAdHocJurIds.push(jurId);
+      addedAdHoc++;
+    }
+    _stfPerJurTax[jurId] = (_stfPerJurTax[jurId]||0) + tax;
+    _stfImportedTaxable[jurId] = (_stfImportedTaxable[jurId]||0) + taxable;
+    applied++;
+  });
+  stfDismissImport();
+  stfRenderPanel();
+  showToast(`Applied ${applied} jurisdiction${applied===1?'':'s'}${addedAdHoc?` (${addedAdHoc} ad-hoc)`:''}`);
+}
+
 function stfClose(){
   _stfActiveClient = null;
   _stfPerJurTax = {};
   _stfGrossInput = null;
+  _stfAdHocJurIds = [];
+  _stfImportedTaxable = {};
   document.getElementById('stf-empty-state').style.display = '';
   document.getElementById('stf-active').style.display = 'none';
   stfRenderList();
