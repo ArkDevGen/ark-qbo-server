@@ -20271,6 +20271,8 @@ let _stfPerJurTax = {};          // {jurisdictionId: taxAmount} — per-local ta
 let _stfGrossInput = null;       // optional override for Line 1
 let _stfAdHocJurIds = [];        // jurisdiction IDs added just for this filing (not saved to client)
 let _stfImportedTaxable = {};    // {jurisdictionId: taxableAmount} from parsed report, for display
+let _stfSourceTotal = null;      // Total tax from the parsed source report (reconciliation check)
+let _stfSourceFile = null;       // Filename of last parsed source — for audit/debugging
 
 function stfGetSetupClients(){
   // Clients with at least 1 configured jurisdiction
@@ -20336,6 +20338,8 @@ function stfOpenClient(clientId){
   _stfGrossInput = null;
   _stfAdHocJurIds = [];
   _stfImportedTaxable = {};
+  _stfSourceTotal = null;
+  _stfSourceFile = null;
   document.getElementById('stf-empty-state').style.display = 'none';
   const active = document.getElementById('stf-active');
   active.style.display = '';
@@ -20461,6 +20465,17 @@ function stfRenderPanel(){
             <div style="display:grid;grid-template-columns:1fr 150px;gap:8px 16px;align-items:center;">
               <div style="font-size:11px;color:var(--text-d);font-weight:600;">Jurisdiction (rate)</div>
               <div style="font-size:11px;color:var(--text-d);font-weight:600;text-align:right;">Tax collected</div>
+              ${state ? (() => {
+                const importedTax = _stfImportedTaxable[state.id];
+                return `
+                <div style="font-size:12px;padding:6px 8px;background:#eef3fb;border-left:3px solid var(--navy);border-radius:4px;">
+                  <strong>${state.name}</strong>
+                  <span style="color:var(--text-d);">${state.state} · ${(state.rate*100).toFixed(3)}%</span>
+                  <span style="background:var(--navy);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;" title="This tax / state rate = Line 2 (Net Taxable)">LINE 2 SOURCE</span>
+                  ${importedTax != null ? `<div style="font-size:10px;color:var(--text-d);margin-top:2px;">📄 From report: taxable $${Number(importedTax).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
+                </div>
+                <input type="number" step="0.01" oninput="stfPerJurSet('${state.id}', this.value)" value="${_stfPerJurTax[state.id]||''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:13px;padding:6px 9px;text-align:right;background:#eef3fb;border-color:var(--navy);">
+              `;})() : ''}
               ${locals.map(j => {
                 const adHoc = _stfIsAdHoc(j.id);
                 const importedTax = _stfImportedTaxable[j.id];
@@ -20876,8 +20891,12 @@ function stfMatchJurisdictions(parsed){
   return { matched, unmatched, warnings };
 }
 
+// Cached parse result so stfApplyImport can access it after preview
+let _stfParsedCache = null;
+
 // Render extraction preview with per-row accept/skip controls
 function stfRenderImportPreview(parsed, fileName){
+  _stfParsedCache = { parsed, fileName };
   const preview = document.getElementById('stf-import-preview');
   if (!preview) return;
   const result = stfMatchJurisdictions(parsed);
@@ -20972,6 +20991,18 @@ function stfApplyImport(){
     _stfImportedTaxable[jurId] = (_stfImportedTaxable[jurId]||0) + taxable;
     applied++;
   });
+  // Capture source total for reconciliation check. Prefer the PDF's "Total"
+  // line if present; otherwise fall back to the sum of what we just applied.
+  if (_stfParsedCache){
+    const pc = _stfParsedCache;
+    _stfSourceFile = pc.fileName;
+    if (pc.parsed?.total && pc.parsed.total > 0){
+      _stfSourceTotal = pc.parsed.total;
+    } else {
+      // Sum of all extracted tax (selected OR not — what the report actually totaled)
+      _stfSourceTotal = (pc.parsed?.lines || []).reduce((s, ln) => s + (ln.tax || 0), 0);
+    }
+  }
   stfDismissImport();
   stfRenderPanel();
   showToast(`Applied ${applied} jurisdiction${applied===1?'':'s'}${addedAdHoc?` (${addedAdHoc} ad-hoc)`:''}`);
@@ -20983,6 +21014,8 @@ function stfClose(){
   _stfGrossInput = null;
   _stfAdHocJurIds = [];
   _stfImportedTaxable = {};
+  _stfSourceTotal = null;
+  _stfSourceFile = null;
   document.getElementById('stf-empty-state').style.display = '';
   document.getElementById('stf-active').style.display = 'none';
   stfRenderList();
@@ -21008,6 +21041,8 @@ function stfSaveDraft(){
     grossInput: _stfGrossInput,
     adHocJurIds: [..._stfAdHocJurIds],
     importedTaxable: { ..._stfImportedTaxable },
+    sourceTotal: _stfSourceTotal,
+    sourceFile: _stfSourceFile,
     confirmationNumber: confirmNum,
     notes,
     savedAt: new Date().toISOString(),
@@ -21035,6 +21070,8 @@ function stfDiscardDraft(clientId){
   _stfGrossInput = null;
   _stfAdHocJurIds = [];
   _stfImportedTaxable = {};
+  _stfSourceTotal = null;
+  _stfSourceFile = null;
   if (_stfActiveClient?.id === id) stfRenderPanel();
   stfRenderList();
   showToast('Draft discarded');
@@ -21045,6 +21082,8 @@ function stfApplyDraft(draft){
   _stfGrossInput = draft.grossInput ?? null;
   _stfAdHocJurIds = [...(draft.adHocJurIds||[])];
   _stfImportedTaxable = { ...(draft.importedTaxable||{}) };
+  _stfSourceTotal = draft.sourceTotal ?? null;
+  _stfSourceFile = draft.sourceFile ?? null;
   stfRenderPanel();
   // Period + confirm + notes restored after render (inputs exist by then)
   setTimeout(() => {
@@ -21072,62 +21111,80 @@ function stfCompute(){
   const combinedRate = _stfCombinedRate();
   if (combinedRate <= 0) return { error: 'No jurisdictions configured — add at least one state rate.' };
 
-  let netTaxable = 0;
-  let totalTaxInput = 0;
-  const perJurTax = {};
+  let netTaxable = 0;       // Line 2 value
+  let stateTax = 0;
+  let localTaxTotal = 0;
+  const perJurTax = {};     // {jurId: {net, tax}}
+
+  // Does the user have a separate state-tax entry? (populated by parser or manual state row)
+  const hasStateEntry = !!(state && (_stfPerJurTax[state.id] || 0) > 0);
 
   if (calcMode === 'from_tax'){
-    if (locals.length === 1){
-      // Total tax entered against the one local jurisdiction, which
-      // represents the *total* collected (local + state). Back-calc.
-      totalTaxInput = _stfPerJurTax[locals[0].id] || 0;
-      netTaxable = totalTaxInput / combinedRate;
+    // Combined mode (single local + no separate state input):
+    // One number = state + local total. Back-calc net from the combined rate.
+    if (locals.length === 1 && !hasStateEntry){
+      const totalEntered = _stfPerJurTax[locals[0].id] || 0;
+      netTaxable = totalEntered / combinedRate;
+      perJurTax[locals[0].id] = { net: netTaxable, tax: netTaxable * (locals[0].rate||0) };
+      stateTax     = state ? netTaxable * (state.rate||0) : 0;
+      localTaxTotal = perJurTax[locals[0].id].tax;
     } else {
-      // Multiple locals → each input is the tax for that jurisdiction only.
-      // Derive net per-jurisdiction, then sum. We assume the reported
-      // per-jurisdiction tax already reflects that jurisdiction's rate.
+      // Per-jurisdiction mode: each back-calculates independently. Used
+      // when the source report broke out tax per jurisdiction (typical
+      // for multi-city clients), or when the user has entered state tax
+      // separately. This prevents the old bug where sum(local nets) was
+      // used as state net — which understates state tax for any sales
+      // that hit state tax but no city tax (rural, multi-city clients).
       for (const j of locals){
         const t = _stfPerJurTax[j.id] || 0;
         if (t === 0) continue;
-        const netJ = t / (j.rate || 0.0001);
-        netTaxable += netJ;
-        totalTaxInput += t;
-        perJurTax[j.id] = { net: netJ, tax: t };
+        perJurTax[j.id] = { net: t / (j.rate || 0.0001), tax: t };
+        localTaxTotal += t;
       }
-      // Account for state tax: if state rate exists, state tax was ALSO
-      // collected on the same net. We approximate state_tax = sum(net_j) * state_rate
       if (state){
-        const stTax = netTaxable * (state.rate || 0);
-        totalTaxInput += stTax;
+        const stIn = _stfPerJurTax[state.id] || 0;
+        if (stIn > 0){
+          stateTax = stIn;
+          netTaxable = stIn / (state.rate || 0.0001);
+        } else {
+          // Fallback: no state input. Approximate net as sum of local nets.
+          netTaxable = locals.reduce((s,j) => s + (perJurTax[j.id]?.net || 0), 0);
+          stateTax = netTaxable * (state.rate||0);
+        }
+      } else {
+        netTaxable = locals.reduce((s,j) => s + (perJurTax[j.id]?.net || 0), 0);
       }
     }
   } else {
-    // from_sales: user enters gross, treat net == gross
+    // from_sales mode: user enters gross, net == gross, tax = net × rate
     netTaxable = _stfGrossInput || 0;
+    stateTax = state ? netTaxable * (state.rate||0) : 0;
     for (const j of locals){
-      perJurTax[j.id] = { net: netTaxable, tax: netTaxable * (j.rate || 0) };
-    }
-    if (state){
-      totalTaxInput = netTaxable * combinedRate;
-    } else {
-      totalTaxInput = locals.reduce((s,j) => s + netTaxable * (j.rate||0), 0);
+      perJurTax[j.id] = { net: netTaxable, tax: netTaxable * (j.rate||0) };
+      localTaxTotal += perJurTax[j.id].tax;
     }
   }
 
   if (roundWhole) netTaxable = Math.round(netTaxable);
 
-  // Fill in per-jur tax for the single-local case
-  if (calcMode === 'from_tax' && locals.length === 1){
-    perJurTax[locals[0].id] = { net: netTaxable, tax: netTaxable * (locals[0].rate||0) };
-  }
-  // Fill forward mode per-jur net (was set above)
-
-  const stateTax = state ? (netTaxable * (state.rate||0)) : 0;
-  const localTaxTotal = locals.reduce((s,j) => s + (perJurTax[j.id]?.tax || netTaxable * (j.rate||0)), 0);
   const totalTaxDue = stateTax + localTaxTotal;
+  const totalTaxInput = (_stfPerJurTax[state?.id] || 0)
+                      + locals.reduce((s,j) => s + (_stfPerJurTax[j.id] || 0), 0);
 
   const line1 = (_stfGrossInput != null) ? _stfGrossInput : (roundWhole ? Math.round(netTaxable) : +netTaxable.toFixed(2));
   const line2 = roundWhole ? Math.round(netTaxable) : +netTaxable.toFixed(2);
+
+  // Reconciliation — compare CRM total to source report total (if we have one)
+  let reconciliation = null;
+  if (_stfSourceTotal != null){
+    const diff = +(totalTaxDue - _stfSourceTotal).toFixed(2);
+    reconciliation = {
+      sourceTotal: +_stfSourceTotal.toFixed(2),
+      crmTotal: +totalTaxDue.toFixed(2),
+      diff,
+      ok: Math.abs(diff) <= 0.01,
+    };
+  }
 
   return {
     line1, line2,
@@ -21139,6 +21196,7 @@ function stfCompute(){
     combinedRate,
     perJurTax,
     state, locals,
+    reconciliation,
   };
 }
 
@@ -21226,6 +21284,20 @@ function stfRecalc(){
 
     <!-- Summary + Submit -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;">
+      ${r.reconciliation ? (() => {
+        const rc = r.reconciliation;
+        const color = rc.ok ? 'var(--green)' : 'var(--red)';
+        const bg    = rc.ok ? '#effaf0'    : '#fff1f1';
+        const icon  = rc.ok ? '✓' : '⚠';
+        const label = rc.ok ? 'Total matches source report within pennies' : 'Total does NOT match source report';
+        const diffStr = rc.diff > 0 ? `+${fmt(rc.diff)} over` : `${fmt(rc.diff)} under`;
+        return `<div style="background:${bg};border:1px solid ${color};border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <div style="font-size:12px;color:${color};">
+            <strong>${icon} ${label}</strong>
+            <div style="font-size:11px;margin-top:2px;color:var(--text-d);">CRM total: ${fmt(rc.crmTotal)} · Source total: ${fmt(rc.sourceTotal)} · ${rc.ok ? 'Δ within tolerance' : `Δ ${diffStr}`}${_stfSourceFile?` · from ${_stfSourceFile}`:''}</div>
+          </div>
+        </div>`;
+      })() : ''}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px;margin-bottom:12px;">
         <div><div style="color:var(--text-d);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">State Tax (Line 3)</div><div style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;">${hasData?fmt(r.stateTax):'—'}</div></div>
         <div><div style="color:var(--text-d);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Local Tax (Line 6)</div><div style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;">${hasData?fmt(r.localTaxTotal):'—'}</div></div>
