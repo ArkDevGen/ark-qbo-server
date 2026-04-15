@@ -8892,15 +8892,33 @@ async function saveUser(){
     const data = await resp.json();
     if(resp.ok){
       // Sync: update c.am on clients to match assigned list
-      const userId = id || data.user?.id;
+      // Accept either shape the server might return (id vs _id)
+      const userId = id || data.user?.id || data.user?._id;
       if (userId) {
+        const nowIso = new Date().toISOString();
+        let changedCount = 0;
         DB.clients.forEach(c => {
           const isAssigned = assignedClients.includes(c.id);
-          if (isAssigned && c.am !== userId) c.am = userId;
-          else if (!isAssigned && c.am === userId) c.am = '';
+          if (isAssigned && c.am !== userId){
+            c.am = userId;
+            // CRITICAL: bump _updatedAt so the server's per-record merge
+            // accepts this change instead of keeping an older c.am value.
+            // Without this, /db/save sees c._updatedAt older than server's
+            // copy and discards the assignment.
+            c._updatedAt = nowIso;
+            changedCount++;
+          } else if (!isAssigned && c.am === userId){
+            c.am = '';
+            c._updatedAt = nowIso;
+            changedCount++;
+          }
         });
         saveDB();
         renderClients(document.getElementById('client-search')?.value || '');
+        // Refresh any other views that depend on c.am
+        if (typeof renderSalesTax === 'function') { try { renderSalesTax(); } catch(_){} }
+        if (typeof stfRenderList   === 'function') { try { stfRenderList();   } catch(_){} }
+        if (changedCount > 0) logAct(`Assigned ${changedCount} client${changedCount===1?'':'s'} to ${fname} ${lname||''}`.trim());
       }
       closeModal('modal-user-edit');
       renderUsers();
