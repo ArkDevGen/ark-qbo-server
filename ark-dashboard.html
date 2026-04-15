@@ -20780,6 +20780,12 @@ async function stfParsePdf(file){
         if (row) fullText += row + '\n';
       });
   }
+  // Auto-detect format. Davisware's "Cash Basis Sales Tax Summary" has
+  // a distinctive header + "Totals for X" rows; QBO Sales Tax Liability
+  // Report uses "(rate%)" in the jurisdiction name. Default to QBO.
+  if (/Cash Basis Sales Tax/i.test(fullText) && /Totals for/i.test(fullText)){
+    return stfExtractDavisware(fullText);
+  }
   return stfExtractQboLines(fullText);
 }
 
@@ -20837,6 +20843,57 @@ function stfExtractQboLines(text){
   const totalMatch = text.match(/Total[^\n]*?\$?([\d,]+\.\d{2})\s*$/im);
   if (totalMatch) total = parseFloat(totalMatch[1].replace(/,/g,''));
   return { lines, total, rawText: text };
+}
+
+// Davisware "Cash Basis Sales Tax Summary" parser — one row per jurisdiction
+// with 9 dollar columns: Receipt / Discount / Total Applied / Amount Applied /
+// Invoice Total / Taxable Sales / Non-Taxable / Exempt / Tax Collected.
+// No rate printed; we compute implied rate from tax / taxable.
+// Handles multi-state reports (Haines filings have NE + IA rows combined);
+// each line is tagged with its state so the matcher can route appropriately.
+function stfExtractDavisware(text){
+  const lines = [];
+  // Capture name + exactly 9 dollar amounts. Tolerant of whitespace variation.
+  const re = /^Totals for (.+?)\s+(\$[\d,]+\.\d{2}(?:\s+\$[\d,]+\.\d{2}){8})\s*$/;
+  const rawLines = text.replace(/\r/g,'').split('\n');
+  for (const raw of rawLines){
+    const ln = raw.trim();
+    const m = ln.match(re);
+    if (!m) continue;
+    let rawName = m[1].trim();
+    const amounts = m[2].split(/\s+/).map(a => parseFloat(a.replace(/[$,]/g,'')));
+    if (amounts.length !== 9 || amounts.some(isNaN)) continue;
+    const taxable = amounts[5];  // Taxable Sales column
+    const tax     = amounts[8];  // Tax Collected column
+    if (tax < 0.01 && taxable < 0.01) continue;
+    // Skip the exempt / no-state bucket ("0NONE" or similar)
+    if (/^0?NONE$/i.test(rawName)) continue;
+
+    // Derive state + normalize name
+    let state = '', type = 'city', name = rawName;
+    if (/Nebraska\s+(?:State\s+)?Sales\s+Tax/i.test(rawName)){
+      name = 'Nebraska State'; state = 'NE'; type = 'state';
+    } else if (/Iowa\s+(?:State\s+)?Sales\s+Tax/i.test(rawName)){
+      name = 'Iowa State'; state = 'IA'; type = 'state';
+    } else {
+      const stMatch = rawName.match(/,\s*([A-Z]{2})\s*$/);
+      if (stMatch){
+        state = stMatch[1];
+        name = rawName.replace(/,\s*[A-Z]{2}\s*$/,'').trim();
+      }
+      // Strip parenthetical clarifiers like "Fremont (city)"
+      name = name.replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s+/g,' ').trim();
+      if (/\bCounty\b/i.test(name)) type = 'county';
+    }
+
+    const rate = taxable > 0 ? tax / taxable : 0;
+    lines.push({ name, rate, taxable, tax, state, type, _davisware: true });
+  }
+  // Report total — Davisware prints it on page 2 as "Report Totals: $X"
+  let total = 0;
+  const totalMatch = text.match(/Report Totals?:?\s*\$?([\d,]+\.\d{2})/i);
+  if (totalMatch) total = parseFloat(totalMatch[1].replace(/,/g,''));
+  return { lines, total, rawText: text, format: 'davisware' };
 }
 
 // ── Match extracted lines to client's configured jurisdictions ──
