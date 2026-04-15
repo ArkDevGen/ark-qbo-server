@@ -34357,10 +34357,15 @@ async function sjePushAll() {
       progressLabel.textContent = `Pushing ${franchise.label} — ${entry.date}`;
 
       try {
+        // Build all lines including zero-amount entries.
+        // The line's "side" is determined by whether `debit` is set (vs credit),
+        // NOT by whether the amount is > 0 — so $0 debit lines stay as debits.
         const lines = entry.lines.map(l => {
           const acctId = sjeResolveAcctId(l.account, acctMap);
+          const isDebitSide = l.debit !== null && l.debit !== undefined;
+          const amount = isDebitSide ? (l.debit || 0) : (l.credit || 0);
           const lineDetail = {
-            PostingType: l.debit ? 'Debit' : 'Credit',
+            PostingType: isDebitSide ? 'Debit' : 'Credit',
             AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
           };
           if (l.class) {
@@ -34369,11 +34374,11 @@ async function sjePushAll() {
           }
           return {
             DetailType: 'JournalEntryLineDetail',
-            Amount: l.debit || l.credit || 0,
+            Amount: amount,
             Description: l.description || '',
             JournalEntryLineDetail: lineDetail,
           };
-        }).filter(l => l.Amount > 0);
+        }); // no longer filtered — zero-amount lines preserved
 
         const payload = {
           TxnDate: entry.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2'),
@@ -34487,10 +34492,15 @@ async function sjePushOne(idx) {
 
   for (const entry of toPush) {
     try {
+      // Build all lines including zero-amount entries so the JE in QBO
+      // matches the source data exactly (line side determined by which
+      // of debit/credit is set, not by amount being non-zero)
       const lines = entry.lines.map(l => {
         const acctId = sjeResolveAcctId(l.account, acctMap);
+        const isDebitSide = l.debit !== null && l.debit !== undefined;
+        const amount = Math.abs(isDebitSide ? (l.debit || 0) : (l.credit || 0));
         const lineDetail = {
-          PostingType: l.debit ? 'Debit' : 'Credit',
+          PostingType: isDebitSide ? 'Debit' : 'Credit',
           AccountRef: acctId ? { value: acctId, name: l.account } : { name: l.account },
         };
         if (l.class) {
@@ -34499,11 +34509,11 @@ async function sjePushOne(idx) {
         }
         return {
           DetailType: 'JournalEntryLineDetail',
-          Amount: Math.abs(l.debit || l.credit || 0),
+          Amount: amount,
           Description: l.description || '',
           JournalEntryLineDetail: lineDetail,
         };
-      }).filter(l => l.Amount > 0);
+      }); // no longer filtered — zero-amount lines preserved
 
       const payload = {
         TxnDate: entry.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2'),
