@@ -1828,8 +1828,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- Sub-tab bar -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);background:var(--surface);padding:0 28px;">
-      <div id="st-tab-crm" onclick="stTab('crm')"
+      <div id="st-tab-filer" onclick="stTab('filer')"
         style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--navy);border-bottom:3px solid var(--navy);margin-bottom:-2px;transition:all .15s;">
+        📝 File Returns
+      </div>
+      <div id="st-tab-history" onclick="stTab('history')"
+        style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;">
+        📚 Filing History
+      </div>
+      <div id="st-tab-crm" onclick="stTab('crm')"
+        style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;">
         📋 Client Filing Info
       </div>
       <div id="st-tab-rates" onclick="stTab('rates')"
@@ -1842,8 +1850,84 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
+    <!-- FILE RETURNS PANEL -->
+    <div id="st-panel-filer" style="padding:28px;">
+      <div style="display:grid;grid-template-columns:360px 1fr;gap:18px;">
+
+        <!-- Left: Upcoming filings list -->
+        <div class="card" style="height:fit-content;max-height:calc(100vh - 180px);overflow:hidden;display:flex;flex-direction:column;">
+          <div class="card-header" style="padding-bottom:10px;">
+            <div>
+              <div class="card-title">Upcoming Filings</div>
+              <div class="card-subtitle" id="stf-upcoming-subtitle">Clients with filing automation configured</div>
+            </div>
+          </div>
+          <div style="padding:0 14px 10px;display:flex;gap:6px;">
+            <input id="stf-search" placeholder="Search client…" oninput="stfRenderList()" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">
+            <select id="stf-filter" onchange="stfRenderList()" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">
+              <option value="">All</option>
+              <option value="overdue">Overdue</option>
+              <option value="due-week">Due this week</option>
+              <option value="due-month">Due this month</option>
+            </select>
+          </div>
+          <div id="stf-list" style="overflow-y:auto;flex:1;min-height:200px;"></div>
+          <div id="stf-list-empty" style="display:none;padding:20px;text-align:center;font-size:12px;color:var(--text-d);font-style:italic;">No clients with filing automation setup yet. Configure via Client Modal → Sales Tax tab.</div>
+        </div>
+
+        <!-- Right: Filing panel (empty state) -->
+        <div id="stf-panel" class="card" style="min-height:500px;">
+          <div id="stf-empty-state" style="padding:60px 40px;text-align:center;color:var(--text-d);">
+            <div style="font-size:48px;margin-bottom:12px;">📝</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;">Select a client to file a return</div>
+            <div style="font-size:12px;">Pick from the list on the left to start a new filing.</div>
+          </div>
+          <div id="stf-active" style="display:none;"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FILING HISTORY PANEL -->
+    <div id="st-panel-history" style="display:none;padding:28px;">
+      <div class="card" style="margin-bottom:18px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Filing History</div>
+            <div class="card-subtitle">All sales tax returns filed through the CRM</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input id="sth-search" placeholder="Search client, period, confirmation #…" oninput="sthRender()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;width:280px;">
+            <select id="sth-filter-state" onchange="sthRender()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:13px;">
+              <option value="">All States</option>
+            </select>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Filed Date</th>
+                <th>Client</th>
+                <th>State</th>
+                <th>Period</th>
+                <th style="text-align:right;">Gross Sales</th>
+                <th style="text-align:right;">Net Taxable</th>
+                <th style="text-align:right;">Total Tax</th>
+                <th>Confirmation #</th>
+                <th>Filed By</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sth-tbody"></tbody>
+          </table>
+        </div>
+        <div id="sth-empty" style="display:none;padding:32px;text-align:center;color:var(--text-d);font-size:13px;font-style:italic;">No filings recorded yet.</div>
+      </div>
+    </div>
+
     <!-- CRM Panel -->
-    <div id="st-panel-crm" style="padding:28px;">
+    <div id="st-panel-crm" style="display:none;padding:28px;">
       <div class="card" style="margin-bottom:18px;">
         <div class="card-header">
           <div>
@@ -8913,7 +8997,12 @@ function nav(page){
   if(page==='qbo'){ qboInit(); }
   if(page==='w9gen'){ w9genInit(); }
   if(page==='import'){ importInit(); }
-  if(page==='salestax'){ stTab('crm'); renderSalesTax(); }
+  if(page==='salestax'){
+    // Default to File Returns for filers/admins; non-filers land on Client Filing Info
+    const canFile = canDo('canFileSalesTax') || canDo('_isAdmin');
+    stTab(canFile ? 'filer' : 'crm');
+    renderSalesTax();
+  }
   if(page==='taxcenter'){ renderTaxHub(); }
   if(page==='commcenter'){ ccInit(); ccLoadChatPreview(); }
   if(page==='meetings'){ mtgInit(); }
@@ -19744,24 +19833,30 @@ function buildEfileRows(type, forms, client){
 // Scooters calc now native — b64 removed
 
 function stTab(tab){
-  const crm   = document.getElementById('st-panel-crm');
-  const calc  = document.getElementById('st-panel-calc');
-  const rates = document.getElementById('st-panel-rates');
-  const tCrm   = document.getElementById('st-tab-crm');
-  const tCalc  = document.getElementById('st-tab-calc');
-  const tRates = document.getElementById('st-tab-rates');
-  const reset = (el, selected) => {
+  const panels = {
+    filer:   document.getElementById('st-panel-filer'),
+    history: document.getElementById('st-panel-history'),
+    crm:     document.getElementById('st-panel-crm'),
+    rates:   document.getElementById('st-panel-rates'),
+    calc:    document.getElementById('st-panel-calc'),
+  };
+  const tabs = {
+    filer:   document.getElementById('st-tab-filer'),
+    history: document.getElementById('st-tab-history'),
+    crm:     document.getElementById('st-tab-crm'),
+    rates:   document.getElementById('st-tab-rates'),
+    calc:    document.getElementById('st-tab-calc'),
+  };
+  Object.entries(panels).forEach(([k,el]) => { if (el) el.style.display = (k===tab) ? '' : 'none'; });
+  Object.entries(tabs).forEach(([k,el]) => {
     if (!el) return;
+    const selected = (k===tab);
     el.style.color = selected ? 'var(--navy)' : 'var(--text-d)';
     el.style.borderBottomColor = selected ? 'var(--navy)' : 'transparent';
-  };
-  crm.style.display   = (tab==='crm')   ? '' : 'none';
-  rates.style.display = (tab==='rates') ? '' : 'none';
-  calc.style.display  = (tab==='calc')  ? '' : 'none';
-  reset(tCrm,   tab==='crm');
-  reset(tRates, tab==='rates');
-  reset(tCalc,  tab==='calc');
-  if (tab==='rates') strRender();
+  });
+  if (tab==='filer')   stfRenderList();
+  if (tab==='history') sthRender();
+  if (tab==='rates')   strRender();
   if (tab==='calc' && !document.querySelector('#stc-store-list .stc-store-row')) stcBuildStoreList();
 }
 
@@ -20051,6 +20146,560 @@ function strDelete(id){
   saveDB();
   strRender();
   logAct(`Sales tax rate deleted: ${r.name} ${r.state}`);
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SALES TAX FILING CENTER — stfXxx
+//  The operator workflow: pick client → drop report or enter tax →
+//  compute Form 10 lines + Schedule I CSV → submit to history.
+// ══════════════════════════════════════════════════════════════════
+let _stfActiveClient = null;     // {id, biz, ...}
+let _stfPerJurTax = {};          // {jurisdictionId: taxAmount} — per-local tax entry mode
+let _stfGrossInput = null;       // optional override for Line 1
+
+function stfGetSetupClients(){
+  // Clients with at least 1 configured jurisdiction
+  return (DB.clients||[]).filter(c => {
+    const jur = c.stJurisdictionIds || [];
+    return jur.length > 0 && c.status !== 'Inactive';
+  });
+}
+
+function stfRenderList(){
+  const list = document.getElementById('stf-list');
+  const empty = document.getElementById('stf-list-empty');
+  if (!list) return;
+  const q = (document.getElementById('stf-search')?.value||'').toLowerCase().trim();
+  const filter = document.getElementById('stf-filter')?.value || '';
+  const now = Date.now();
+  const weekAhead = now + 7*24*60*60*1000;
+  const monthAhead = now + 30*24*60*60*1000;
+
+  let rows = stfGetSetupClients();
+  if (q) rows = rows.filter(c => (c.biz||'').toLowerCase().includes(q));
+  rows = rows.map(c => {
+    const dueTs = c.stNextdue ? new Date(c.stNextdue).getTime() : Infinity;
+    return { c, dueTs };
+  });
+  if (filter === 'overdue')    rows = rows.filter(r => r.dueTs < now);
+  if (filter === 'due-week')   rows = rows.filter(r => r.dueTs >= now && r.dueTs <= weekAhead);
+  if (filter === 'due-month')  rows = rows.filter(r => r.dueTs >= now && r.dueTs <= monthAhead);
+  rows.sort((a,b) => a.dueTs - b.dueTs);
+
+  document.getElementById('stf-upcoming-subtitle').textContent =
+    `${rows.length} client(s) ready to file`;
+
+  if (!rows.length){ list.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  list.innerHTML = rows.map(({c, dueTs}) => {
+    const dueLbl = c.stNextdue
+      ? (dueTs < now ? `<span style="color:var(--red);font-weight:600;">Overdue · ${new Date(c.stNextdue).toLocaleDateString()}</span>`
+          : `Due ${new Date(c.stNextdue).toLocaleDateString()}`)
+      : '<span style="color:var(--text-d);">No due date</span>';
+    const jurCount = (c.stJurisdictionIds||[]).length;
+    const active = _stfActiveClient?.id === c.id;
+    return `<div onclick="stfOpenClient('${c.id}')" style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;${active?'background:var(--surface2);border-left:3px solid var(--navy);':''}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${active?'var(--surface2)':''}'">
+      <div style="font-weight:600;font-size:13px;color:var(--text);">${c.biz||'—'}</div>
+      <div style="font-size:11px;color:var(--text-d);margin-top:3px;display:flex;justify-content:space-between;gap:8px;">
+        <span>${c.stFreq||'—'} · ${jurCount} jurisdiction${jurCount===1?'':'s'} · ${(c.stImportProfile||'manual').replace(/-/g,' ')}</span>
+        <span>${dueLbl}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function stfOpenClient(clientId){
+  const c = (DB.clients||[]).find(x=>x.id===clientId);
+  if (!c) return;
+  _stfActiveClient = c;
+  _stfPerJurTax = {};
+  _stfGrossInput = null;
+  document.getElementById('stf-empty-state').style.display = 'none';
+  const active = document.getElementById('stf-active');
+  active.style.display = '';
+  stfRenderPanel();
+  stfRenderList(); // refresh selection highlight
+}
+
+function _stfJurs(){
+  return (_stfActiveClient?.stJurisdictionIds || [])
+    .map(id => (DB.salesTaxRates||[]).find(r=>r.id===id))
+    .filter(Boolean);
+}
+
+function _stfStateJur(){ return _stfJurs().find(j => j.type === 'state'); }
+function _stfLocalJurs(){ return _stfJurs().filter(j => j.type !== 'state'); }
+
+function _stfCombinedRate(){
+  return _stfJurs().reduce((sum, j) => sum + (j.rate || 0), 0);
+}
+
+function stfRenderPanel(){
+  const c = _stfActiveClient;
+  if (!c) return;
+  const calcMode = c.stCalcMode || 'from_tax';
+  const roundWhole = !!c.stRoundWhole;
+  const jurs = _stfJurs();
+  const state = _stfStateJur();
+  const locals = _stfLocalJurs();
+  const combinedRate = _stfCombinedRate();
+
+  // Determine period from stNextdue (previous filing period, typically)
+  const defaultPeriod = c.stNextdue ? (() => {
+    const d = new Date(c.stNextdue);
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0,7);  // YYYY-MM
+  })() : new Date().toISOString().slice(0,7);
+
+  const portalBtn = c.stUrl
+    ? `<a href="${c.stUrl}" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px;padding:6px 12px;">🔗 Open Portal ↗</a>`
+    : '';
+
+  const active = document.getElementById('stf-active');
+  active.innerHTML = `
+    <div style="padding:22px 26px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+      <div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);line-height:1.15;">${c.biz}</div>
+        <div style="font-size:12px;color:var(--text-d);margin-top:4px;">
+          ${c.stFreq || '—'} · ${jurs.length} jurisdiction${jurs.length===1?'':'s'} · ${(c.stImportProfile||'manual').replace(/-/g,' ')} · calc: ${calcMode==='from_tax'?'back-calc from tax':'forward from sales'}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${portalBtn}
+        <button class="btn btn-ghost btn-sm" onclick="stfClose()" style="font-size:11px;padding:6px 12px;">✕ Close</button>
+      </div>
+    </div>
+
+    <div style="padding:22px 26px;">
+
+      <!-- Period -->
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-m);">Filing Period:</label>
+        <input type="month" id="stf-period" value="${defaultPeriod}" onchange="stfRenderPanel_keepInputs()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:'DM Mono',monospace;">
+        <span style="font-size:11px;color:var(--text-d);">Combined rate: <strong>${(combinedRate*100).toFixed(4)}%</strong></span>
+      </div>
+
+      <!-- Input section -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-d);margin-bottom:10px;">
+          Source Data — ${calcMode==='from_tax' ? 'Enter tax collected' : 'Enter gross sales'}
+        </div>
+
+        ${calcMode === 'from_tax' ? `
+          <!-- Tax collected mode — one input per local jurisdiction if multi; one total if single -->
+          ${locals.length === 1 ? `
+            <div class="fg" style="margin:0;">
+              <label style="font-size:11px;">Total tax collected (will be back-calculated into Line 2)</label>
+              <input type="number" step="0.01" id="stf-tax-single" oninput="stfPerJurSet('${locals[0].id}', this.value)" value="${_stfPerJurTax[locals[0].id]||''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:16px;padding:10px;width:220px;">
+            </div>
+          ` : `
+            <div style="display:grid;grid-template-columns:1fr 150px;gap:8px 16px;align-items:center;">
+              <div style="font-size:11px;color:var(--text-d);font-weight:600;">Jurisdiction (rate)</div>
+              <div style="font-size:11px;color:var(--text-d);font-weight:600;text-align:right;">Tax collected</div>
+              ${locals.map(j => `
+                <div style="font-size:12px;"><strong>${j.name}</strong> <span style="color:var(--text-d);">${j.state} · ${(j.rate*100).toFixed(3)}%</span></div>
+                <input type="number" step="0.01" oninput="stfPerJurSet('${j.id}', this.value)" value="${_stfPerJurTax[j.id]||''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:13px;padding:6px 9px;text-align:right;">
+              `).join('')}
+            </div>
+          `}
+          <div class="fg" style="margin:14px 0 0;">
+            <label style="font-size:11px;">Gross sales (Line 1) <span style="color:var(--text-d);font-weight:400;">— optional; if blank, Line 1 uses calculated Net</span></label>
+            <input type="number" step="0.01" id="stf-gross" oninput="stfGrossSet(this.value)" value="${_stfGrossInput??''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:13px;padding:8px;width:220px;">
+          </div>
+        ` : `
+          <!-- Forward mode — enter gross sales only, compute tax -->
+          <div class="fg" style="margin:0;">
+            <label style="font-size:11px;">Gross sales (from client report) — tax will be computed</label>
+            <input type="number" step="0.01" id="stf-gross" oninput="stfGrossSet(this.value)" value="${_stfGrossInput??''}" placeholder="0.00" style="font-family:'DM Mono',monospace;font-size:16px;padding:10px;width:220px;">
+          </div>
+        `}
+      </div>
+
+      <!-- Results section -->
+      <div id="stf-results"></div>
+    </div>
+  `;
+  stfRecalc();
+}
+
+// Called on period change — keeps the partial inputs, just re-renders
+function stfRenderPanel_keepInputs(){ stfRecalc(); }
+
+function stfPerJurSet(jurId, val){
+  const n = parseFloat(val);
+  if (!isNaN(n) && n !== 0) _stfPerJurTax[jurId] = n;
+  else delete _stfPerJurTax[jurId];
+  stfRecalc();
+}
+function stfGrossSet(val){
+  const n = parseFloat(val);
+  _stfGrossInput = (isNaN(n) || val === '') ? null : n;
+  stfRecalc();
+}
+
+function stfClose(){
+  _stfActiveClient = null;
+  _stfPerJurTax = {};
+  _stfGrossInput = null;
+  document.getElementById('stf-empty-state').style.display = '';
+  document.getElementById('stf-active').style.display = 'none';
+  stfRenderList();
+}
+
+// ── Core calc ────────────────────────────────────────────────────
+// For NE specifically (and structurally applicable elsewhere):
+//   Line 1 = Gross sales
+//   Line 2 = Net taxable sales
+//   Line 3 = Line 2 * state_rate (portal calcs)
+//   Line 4 = NE use tax subject (we default 0)
+//   Schedule I: per local jurisdiction, tax = net * local_rate
+// For 'from_tax' mode: net = tax_total / combined_rate
+// For 'from_sales' mode: net = gross, tax = net * rate_per_jur
+function stfCompute(){
+  const c = _stfActiveClient; if (!c) return null;
+  const calcMode = c.stCalcMode || 'from_tax';
+  const roundWhole = !!c.stRoundWhole;
+  const state = _stfStateJur();
+  const locals = _stfLocalJurs();
+  const combinedRate = _stfCombinedRate();
+  if (combinedRate <= 0) return { error: 'No jurisdictions configured — add at least one state rate.' };
+
+  let netTaxable = 0;
+  let totalTaxInput = 0;
+  const perJurTax = {};
+
+  if (calcMode === 'from_tax'){
+    if (locals.length === 1){
+      // Total tax entered against the one local jurisdiction, which
+      // represents the *total* collected (local + state). Back-calc.
+      totalTaxInput = _stfPerJurTax[locals[0].id] || 0;
+      netTaxable = totalTaxInput / combinedRate;
+    } else {
+      // Multiple locals → each input is the tax for that jurisdiction only.
+      // Derive net per-jurisdiction, then sum. We assume the reported
+      // per-jurisdiction tax already reflects that jurisdiction's rate.
+      for (const j of locals){
+        const t = _stfPerJurTax[j.id] || 0;
+        if (t === 0) continue;
+        const netJ = t / (j.rate || 0.0001);
+        netTaxable += netJ;
+        totalTaxInput += t;
+        perJurTax[j.id] = { net: netJ, tax: t };
+      }
+      // Account for state tax: if state rate exists, state tax was ALSO
+      // collected on the same net. We approximate state_tax = sum(net_j) * state_rate
+      if (state){
+        const stTax = netTaxable * (state.rate || 0);
+        totalTaxInput += stTax;
+      }
+    }
+  } else {
+    // from_sales: user enters gross, treat net == gross
+    netTaxable = _stfGrossInput || 0;
+    for (const j of locals){
+      perJurTax[j.id] = { net: netTaxable, tax: netTaxable * (j.rate || 0) };
+    }
+    if (state){
+      totalTaxInput = netTaxable * combinedRate;
+    } else {
+      totalTaxInput = locals.reduce((s,j) => s + netTaxable * (j.rate||0), 0);
+    }
+  }
+
+  if (roundWhole) netTaxable = Math.round(netTaxable);
+
+  // Fill in per-jur tax for the single-local case
+  if (calcMode === 'from_tax' && locals.length === 1){
+    perJurTax[locals[0].id] = { net: netTaxable, tax: netTaxable * (locals[0].rate||0) };
+  }
+  // Fill forward mode per-jur net (was set above)
+
+  const stateTax = state ? (netTaxable * (state.rate||0)) : 0;
+  const localTaxTotal = locals.reduce((s,j) => s + (perJurTax[j.id]?.tax || netTaxable * (j.rate||0)), 0);
+  const totalTaxDue = stateTax + localTaxTotal;
+
+  const line1 = (_stfGrossInput != null) ? _stfGrossInput : (roundWhole ? Math.round(netTaxable) : +netTaxable.toFixed(2));
+  const line2 = roundWhole ? Math.round(netTaxable) : +netTaxable.toFixed(2);
+
+  return {
+    line1, line2,
+    line4: 0,
+    stateTax: +stateTax.toFixed(2),
+    localTaxTotal: +localTaxTotal.toFixed(2),
+    totalTaxDue: +totalTaxDue.toFixed(2),
+    totalTaxInput: +totalTaxInput.toFixed(2),
+    combinedRate,
+    perJurTax,
+    state, locals,
+  };
+}
+
+function stfRecalc(){
+  const out = document.getElementById('stf-results');
+  if (!out) return;
+  const r = stfCompute();
+  if (!r) return;
+  if (r.error){ out.innerHTML = `<div style="padding:14px;background:#fff8f8;border:1px solid var(--red);border-radius:var(--radius);color:var(--red);font-size:12px;">${r.error}</div>`; return; }
+  const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtInt = n => '$' + Number(Math.round(n)).toLocaleString('en-US');
+  const c = _stfActiveClient;
+  const stateCode = (r.state?.state || '').toUpperCase();
+
+  const schedRows = r.locals.map(j => {
+    const row = r.perJurTax[j.id] || { net: 0, tax: 0 };
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${j.code||'—'}</td>
+      <td>${j.name}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${(j.rate*100).toFixed(4)}%</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(row.net||0)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;">${fmt(row.tax||0)}</td>
+    </tr>`;
+  }).join('');
+
+  const hasData = r.totalTaxInput > 0 || r.line1 > 0;
+
+  out.innerHTML = `
+    <!-- Form 10 Output -->
+    <div style="background:var(--surface);border:2px solid var(--navy);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;font-size:18px;">
+          ${stateCode === 'NE' ? 'Nebraska Form 10' : 'State Return'} — Enter these on the portal
+        </div>
+        <div style="font-size:11px;color:var(--text-d);">Portal auto-calcs all other lines</div>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:8px 14px;align-items:center;font-family:'DM Mono',monospace;font-size:14px;">
+        <div style="font-weight:700;color:var(--text-d);">1</div>
+        <div>Gross sales and services in Nebraska</div>
+        <div style="font-weight:700;color:var(--text);">${hasData?fmt(r.line1):'—'}</div>
+        <button class="btn btn-ghost btn-sm" onclick="stfCopy(${r.line1})" style="font-size:10px;padding:3px 8px;" ${hasData?'':'disabled'}>Copy</button>
+
+        <div style="font-weight:700;color:var(--text-d);">2</div>
+        <div>Net Nebraska taxable sales</div>
+        <div style="font-weight:700;color:var(--text);">${hasData?fmt(r.line2):'—'}</div>
+        <button class="btn btn-ghost btn-sm" onclick="stfCopy(${r.line2})" style="font-size:10px;padding:3px 8px;" ${hasData?'':'disabled'}>Copy</button>
+
+        <div style="font-weight:700;color:var(--text-d);">4</div>
+        <div>Nebraska use tax subject <span style="color:var(--text-d);font-size:11px;">(usually 0)</span></div>
+        <div style="font-weight:700;color:var(--text);">${fmt(r.line4)}</div>
+        <button class="btn btn-ghost btn-sm" onclick="stfCopy(${r.line4})" style="font-size:10px;padding:3px 8px;">Copy</button>
+      </div>
+    </div>
+
+    <!-- Schedule I CSV -->
+    <div style="background:var(--surface);border:2px solid var(--green);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green);font-family:'Cormorant Garamond',serif;font-size:18px;">
+            Schedule I — Local Sales &amp; Use Tax
+          </div>
+          <div style="font-size:11px;color:var(--text-d);margin-top:2px;">Upload this CSV on the Schedule I page; Lines 5 &amp; 6 auto-populate on Form 10</div>
+        </div>
+        <button class="btn btn-primary" onclick="stfDownloadScheduleI()" style="background:var(--green);border-color:var(--green);" ${hasData?'':'disabled'}>⬇ Download Schedule I CSV</button>
+      </div>
+      <div class="tbl-wrap" style="max-height:240px;overflow-y:auto;">
+        <table style="font-size:12px;">
+          <thead style="position:sticky;top:0;background:var(--surface2);">
+            <tr>
+              <th>Code</th>
+              <th>Jurisdiction</th>
+              <th style="text-align:right;">Rate</th>
+              <th style="text-align:right;">Taxable</th>
+              <th style="text-align:right;">Tax</th>
+            </tr>
+          </thead>
+          <tbody>${schedRows || '<tr><td colspan="5" style="color:var(--text-d);font-style:italic;padding:18px;text-align:center;">No local jurisdictions configured</td></tr>'}</tbody>
+          ${schedRows ? `<tfoot><tr style="font-weight:700;background:var(--surface2);">
+            <td colspan="4" style="text-align:right;">Total local tax:</td>
+            <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(r.localTaxTotal)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+
+    <!-- Summary + Submit -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px;margin-bottom:12px;">
+        <div><div style="color:var(--text-d);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">State Tax (Line 3)</div><div style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;">${hasData?fmt(r.stateTax):'—'}</div></div>
+        <div><div style="color:var(--text-d);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Local Tax (Line 6)</div><div style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;">${hasData?fmt(r.localTaxTotal):'—'}</div></div>
+        <div><div style="color:var(--text-d);font-weight:600;text-transform:uppercase;letter-spacing:.06em;">Total Tax Due</div><div style="font-size:16px;font-family:'DM Mono',monospace;font-weight:700;color:var(--navy);">${hasData?fmt(r.totalTaxDue):'—'}</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="fg" style="margin:0;"><label style="font-size:11px;">Confirmation # (after submitting on portal)</label><input id="stf-confirm" placeholder="Enter after filing" style="font-family:'DM Mono',monospace;font-size:12px;padding:7px 9px;"></div>
+        <div class="fg" style="margin:0;"><label style="font-size:11px;">Filing notes (optional)</label><input id="stf-notes" placeholder="Anything worth remembering" style="font-size:12px;padding:7px 9px;"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="stfClose()">Cancel</button>
+        <button class="btn btn-primary" onclick="stfSubmit()" ${hasData?'':'disabled'}>✓ Mark Filed &amp; Save</button>
+      </div>
+    </div>
+  `;
+}
+
+function stfCopy(val){
+  const s = (typeof val === 'number') ? val.toFixed(2) : String(val);
+  navigator.clipboard?.writeText(s).then(
+    ()=>showToast(`Copied: $${s}`),
+    ()=>showToast('Copy failed — select text manually')
+  );
+}
+
+function stfDownloadScheduleI(){
+  const r = stfCompute();
+  if (!r || r.error) { showToast('Cannot generate CSV — fix inputs first'); return; }
+  const lines = ['# Nebraska Schedule I — jurisdiction_code, local_use_tax, local_sales_tax'];
+  // Nebraska portal accepts 3 columns; we omit the comment line in the actual file.
+  const dataLines = r.locals
+    .map(j => {
+      const row = r.perJurTax[j.id] || { tax: 0 };
+      return `${j.code},0,${row.tax.toFixed(2)}`;
+    });
+  const csv = dataLines.join('\n') + '\n';
+  const c = _stfActiveClient;
+  const period = document.getElementById('stf-period')?.value || new Date().toISOString().slice(0,7);
+  const fname = `${(c.biz||'client').replace(/[^\w-]/g,'_')}_ScheduleI_${period}.csv`;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`Downloaded ${fname}`);
+}
+
+function stfSubmit(){
+  const r = stfCompute();
+  if (!r || r.error){ alert(r?.error || 'Cannot submit — no data entered'); return; }
+  const c = _stfActiveClient;
+  const period = document.getElementById('stf-period')?.value || '';
+  const confirmNum = document.getElementById('stf-confirm')?.value.trim() || '';
+  const notes = document.getElementById('stf-notes')?.value.trim() || '';
+  if (!confirm(`File ${c.biz} — ${period}?\n\nGross: $${r.line1.toFixed(2)}\nNet taxable: $${r.line2.toFixed(2)}\nTotal tax: $${r.totalTaxDue.toFixed(2)}\n\nThis records the filing to history.`)) return;
+
+  const rec = {
+    id: uid(),
+    clientId: c.id,
+    clientName: c.biz,
+    state: (r.state?.state || '').toUpperCase(),
+    period,
+    filedDate: new Date().toISOString(),
+    filedBy: currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Unknown',
+    filedById: currentUser?.id || null,
+    grossSales: r.line1,
+    netTaxable: r.line2,
+    stateTax: r.stateTax,
+    localTax: r.localTaxTotal,
+    totalTax: r.totalTaxDue,
+    useTax: r.line4,
+    confirmationNumber: confirmNum,
+    notes,
+    calcMode: c.stCalcMode || 'from_tax',
+    importProfile: c.stImportProfile || 'manual',
+    scheduleI: r.locals.map(j => ({
+      code: j.code, name: j.name, rate: j.rate,
+      taxable: r.perJurTax[j.id]?.net || 0,
+      tax: r.perJurTax[j.id]?.tax || 0,
+    })),
+    _updatedAt: new Date().toISOString(),
+  };
+  DB.salesTaxFilings = DB.salesTaxFilings || [];
+  DB.salesTaxFilings.unshift(rec);
+
+  // Advance Next Due Date based on frequency
+  if (c.stNextdue && c.stFreq){
+    const d = new Date(c.stNextdue);
+    if (c.stFreq === 'Monthly')       d.setMonth(d.getMonth() + 1);
+    else if (c.stFreq === 'Quarterly') d.setMonth(d.getMonth() + 3);
+    else if (c.stFreq === 'Annually')  d.setFullYear(d.getFullYear() + 1);
+    c.stNextdue = d.toISOString().slice(0,10);
+    c._updatedAt = new Date().toISOString();
+  }
+
+  saveDB();
+  logAct(`Sales tax filed: ${c.biz} ${period} ($${r.totalTaxDue.toFixed(2)})`);
+  showToast(`Filed ${c.biz} · ${period}`);
+  stfClose();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  FILING HISTORY — sthXxx
+// ══════════════════════════════════════════════════════════════════
+function sthRender(){
+  const tbody = document.getElementById('sth-tbody');
+  const empty = document.getElementById('sth-empty');
+  const stateSel = document.getElementById('sth-filter-state');
+  if (!tbody) return;
+  const filings = DB.salesTaxFilings || [];
+  const states = [...new Set(filings.map(f=>f.state).filter(Boolean))].sort();
+  const curState = stateSel.value;
+  stateSel.innerHTML = '<option value="">All States</option>' +
+    states.map(s=>`<option ${s===curState?'selected':''}>${s}</option>`).join('');
+  const q = (document.getElementById('sth-search')?.value||'').toLowerCase().trim();
+  const fs = stateSel.value;
+  const rows = filings.filter(f => {
+    if (fs && f.state !== fs) return false;
+    if (!q) return true;
+    return (f.clientName||'').toLowerCase().includes(q)
+        || (f.period||'').toLowerCase().includes(q)
+        || (f.confirmationNumber||'').toLowerCase().includes(q);
+  });
+  if (!rows.length){ tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  const fmt = n => '$' + Number(n||0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  tbody.innerHTML = rows.map(f => `
+    <tr>
+      <td style="font-size:12px;">${f.filedDate ? new Date(f.filedDate).toLocaleDateString() : '—'}</td>
+      <td style="font-weight:600;">${f.clientName||'—'}</td>
+      <td>${f.state||''}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${f.period||'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(f.grossSales)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(f.netTaxable)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;">${fmt(f.totalTax)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${f.confirmationNumber||'<span style="color:var(--text-d);">—</span>'}</td>
+      <td style="font-size:11px;color:var(--text-d);">${f.filedBy||''}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="sthView('${f.id}')" style="font-size:10px;padding:3px 7px;">View</button></td>
+    </tr>
+  `).join('');
+}
+
+function sthView(id){
+  const f = (DB.salesTaxFilings||[]).find(x=>x.id===id); if (!f) return;
+  const fmt = n => '$' + Number(n||0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const schedRows = (f.scheduleI||[]).map(r => `
+    <tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${r.code}</td>
+      <td>${r.name}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${(r.rate*100).toFixed(4)}%</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(r.taxable)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(r.tax)}</td>
+    </tr>
+  `).join('');
+  const html = `<div style="padding:16px 20px;max-width:700px;">
+    <h3 style="font-family:'Cormorant Garamond',serif;color:var(--navy);margin:0 0 4px;">${f.clientName}</h3>
+    <div style="font-size:12px;color:var(--text-d);margin-bottom:14px;">${f.state} · ${f.period} · filed ${new Date(f.filedDate).toLocaleString()} by ${f.filedBy}</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 14px;font-size:13px;margin-bottom:14px;">
+      <div><strong>Gross:</strong> <span style="font-family:'DM Mono',monospace;">${fmt(f.grossSales)}</span></div>
+      <div><strong>Net taxable:</strong> <span style="font-family:'DM Mono',monospace;">${fmt(f.netTaxable)}</span></div>
+      <div><strong>State tax:</strong> <span style="font-family:'DM Mono',monospace;">${fmt(f.stateTax)}</span></div>
+      <div><strong>Local tax:</strong> <span style="font-family:'DM Mono',monospace;">${fmt(f.localTax)}</span></div>
+      <div><strong>Use tax:</strong> <span style="font-family:'DM Mono',monospace;">${fmt(f.useTax||0)}</span></div>
+      <div><strong>Total:</strong> <span style="font-family:'DM Mono',monospace;font-weight:700;">${fmt(f.totalTax)}</span></div>
+      <div><strong>Confirmation #:</strong> <span style="font-family:'DM Mono',monospace;">${f.confirmationNumber||'—'}</span></div>
+      <div><strong>Mode:</strong> ${f.calcMode==='from_tax'?'Back-calc from tax':'Forward from sales'}</div>
+    </div>
+    ${f.notes ? `<div style="background:var(--surface2);padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;"><strong>Notes:</strong> ${f.notes}</div>` : ''}
+    ${schedRows ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-d);margin-bottom:6px;">Schedule I Detail</div>
+    <table style="font-size:12px;width:100%;margin-bottom:14px;"><thead><tr><th>Code</th><th>Jurisdiction</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">Tax</th></tr></thead><tbody>${schedRows}</tbody></table>` : ''}
+    <div style="text-align:right;"><button class="btn btn-ghost" onclick="document.getElementById('sth-view-overlay').remove()">Close</button></div>
+  </div>`;
+  const overlay = document.createElement('div');
+  overlay.id = 'sth-view-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius);max-width:760px;width:92%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">${html}</div>`;
+  document.body.appendChild(overlay);
 }
 
 
