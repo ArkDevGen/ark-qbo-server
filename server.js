@@ -6557,6 +6557,251 @@ setInterval(() => { _checkClockReminders().catch(e => console.warn('Clock remind
 console.log('Clock reminders scheduled: 8:30am/4:30pm America/Chicago (weekdays)');
 
 // ─────────────────────────────────────────────────────────────────
+// HELP BOARD — Q&A posts with attachments (Reddit-style threads)
+// Posts stored in DB (chat-messages style). Files on persistent disk.
+// ─────────────────────────────────────────────────────────────────
+const HELP_ATTACH_DIR = path.join(DATA_DIR, 'help-attachments');
+fs.mkdirSync(HELP_ATTACH_DIR, { recursive: true });
+const HELP_POSTS_FILE = path.join(DATA_DIR, 'help-posts.json');
+
+function _loadHelpPosts() {
+  try { if (fs.existsSync(HELP_POSTS_FILE)) return JSON.parse(fs.readFileSync(HELP_POSTS_FILE, 'utf8')); } catch (_) {}
+  return [];
+}
+function _saveHelpPosts(posts) { fs.writeFileSync(HELP_POSTS_FILE, JSON.stringify(posts)); }
+
+// Upload attachment(s) for a help post. Returns the saved file metadata.
+const helpUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 10 }, // 15MB per file, 10 files max
+});
+
+app.post('/help/upload', requireAuth, helpUpload.array('files', 10), (req, res) => {
+  try {
+    const postId = req.body.postId || crypto.randomUUID();
+    const dir = path.join(HELP_ATTACH_DIR, postId);
+    fs.mkdirSync(dir, { recursive: true });
+    const saved = [];
+    for (const f of (req.files || [])) {
+      const safeName = Date.now() + '-' + f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+      fs.writeFileSync(path.join(dir, safeName), f.buffer);
+      saved.push({
+        name: f.originalname,
+        savedAs: safeName,
+        size: f.size,
+        type: f.mimetype,
+        url: `/help/attachment/${postId}/${safeName}`,
+      });
+    }
+    res.json({ ok: true, postId, attachments: saved });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Serve attachment files (auth required so files aren't public)
+app.get('/help/attachment/:postId/:filename', requireAuth, (req, res) => {
+  try {
+    const safePostId = req.params.postId.replace(/[^a-zA-Z0-9-]/g, '');
+    const safeName = req.params.filename.replace(/[^a-zA-Z0-9._-]/g, '');
+    const filePath = path.join(HELP_ATTACH_DIR, safePostId, safeName);
+    if (!filePath.startsWith(HELP_ATTACH_DIR)) return res.status(403).end(); // path traversal guard
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+    res.sendFile(filePath);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// List all help posts (everyone can see all)
+app.get('/help/posts', requireAuth, (req, res) => {
+  try {
+    const posts = _loadHelpPosts();
+    // Sort newest first, with open posts before answered/closed
+    posts.sort((a, b) => {
+      const aOpen = a.status === 'open' ? 0 : 1;
+      const bOpen = b.status === 'open' ? 0 : 1;
+      if (aOpen !== bOpen) return aOpen - bOpen;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    res.json(posts);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create or update a help post
+app.post('/help/posts', requireAuth, (req, res) => {
+  try {
+    const { id, title, body, category, mentionIds, attachments, status } = req.body;
+    if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
+    const userId = req.arkUser.userId;
+    const userName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
+    const posts = _loadHelpPosts();
+    let post;
+    if (id) {
+      post = posts.find(p => p.id === id);
+      if (!post) return res.status(404).json({ error: 'Post not found' });
+      // Only author or admin can edit
+      if (post.authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Cannot edit others\' posts' });
+      Object.assign(post, {
+        title: title.trim(),
+        body: (body || '').trim(),
+        category: category || post.category,
+        mentionIds: mentionIds || post.mentionIds || [],
+        attachments: attachments || post.attachments || [],
+        status: status || post.status,
+        _updatedAt: new Date().toISOString(),
+        _updatedBy: userName,
+      });
+    } else {
+      post = {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        body: (body || '').trim(),
+        category: category || 'general',
+        authorId: userId,
+        authorName: userName,
+        mentionIds: mentionIds || [],
+        attachments: attachments || [],
+        status: 'open',
+        acceptedReplyId: null,
+        replies: [],
+        createdAt: new Date().toISOString(),
+        _updatedAt: new Date().toISOString(),
+        _updatedBy: userName,
+      };
+      posts.push(post);
+    }
+    _saveHelpPosts(posts);
+    // Broadcast: bell notif to mentions
+    _helpNotifyMentions(post, post.mentionIds || [], userId, userName, 'new-post');
+    res.json(post);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Add a reply to a post
+app.post('/help/posts/:id/replies', requireAuth, (req, res) => {
+  try {
+    const { body, mentionIds, attachments } = req.body;
+    if (!body?.trim()) return res.status(400).json({ error: 'Reply body required' });
+    const userId = req.arkUser.userId;
+    const userName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
+    const posts = _loadHelpPosts();
+    const post = posts.find(p => p.id === req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const reply = {
+      id: crypto.randomUUID(),
+      authorId: userId,
+      authorName: userName,
+      body: body.trim(),
+      mentionIds: mentionIds || [],
+      attachments: attachments || [],
+      createdAt: new Date().toISOString(),
+    };
+    if (!post.replies) post.replies = [];
+    post.replies.push(reply);
+    post._updatedAt = new Date().toISOString();
+    _saveHelpPosts(posts);
+    // Notify post author + any @mentions in the reply
+    const notifyIds = new Set(reply.mentionIds || []);
+    if (post.authorId && post.authorId !== userId) notifyIds.add(post.authorId);
+    _helpNotifyMentions(post, [...notifyIds], userId, userName, 'reply');
+    res.json({ post, reply });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Mark a reply as the accepted answer (closes the question)
+app.post('/help/posts/:id/accept', requireAuth, (req, res) => {
+  try {
+    const { replyId } = req.body;
+    const userId = req.arkUser.userId;
+    const posts = _loadHelpPosts();
+    const post = posts.find(p => p.id === req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Only the author or admin can accept an answer' });
+    post.acceptedReplyId = replyId || null;
+    post.status = replyId ? 'answered' : 'open';
+    post._updatedAt = new Date().toISOString();
+    _saveHelpPosts(posts);
+    res.json(post);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Change post status (open / answered / closed)
+app.post('/help/posts/:id/status', requireAuth, (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['open', 'answered', 'closed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const userId = req.arkUser.userId;
+    const posts = _loadHelpPosts();
+    const post = posts.find(p => p.id === req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Cannot change others\' post status' });
+    post.status = status;
+    post._updatedAt = new Date().toISOString();
+    _saveHelpPosts(posts);
+    res.json(post);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete a post (author or admin)
+app.delete('/help/posts/:id', requireAuth, (req, res) => {
+  try {
+    const userId = req.arkUser.userId;
+    const posts = _loadHelpPosts();
+    const idx = posts.findIndex(p => p.id === req.params.id);
+    if (idx < 0) return res.status(404).json({ error: 'Post not found' });
+    if (posts[idx].authorId !== userId && req.arkUser.role !== 'admin') return res.status(403).json({ error: 'Cannot delete others\' posts' });
+    // Clean up attachment dir
+    try {
+      const dir = path.join(HELP_ATTACH_DIR, req.params.id);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    } catch (_) {}
+    posts.splice(idx, 1);
+    _saveHelpPosts(posts);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Send bell + push notifications to mentioned users
+function _helpNotifyMentions(post, userIds, fromUserId, fromUserName, type) {
+  if (!userIds || !userIds.length) return;
+  const isReply = type === 'reply';
+  const title = isReply ? `New reply to "${post.title}"` : `${fromUserName} posted on Help Board`;
+  const body = isReply ? `${fromUserName} replied to your post` : post.title;
+  for (const uid of userIds) {
+    if (uid === fromUserId) continue; // don't notify yourself
+    const notif = {
+      id: crypto.randomUUID(),
+      type: 'help-' + type,
+      targetAm: uid,
+      title,
+      body,
+      taskId: null,
+      helpPostId: post.id,
+      from: fromUserName,
+      sentBy: fromUserId,
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    // Broadcast via SSE
+    const clients = _sseClients.get(uid);
+    if (clients) {
+      const data = `data: ${JSON.stringify(notif)}\n\n`;
+      for (const client of clients) {
+        try { client.write(data); } catch (_) { clients.delete(client); }
+      }
+    }
+    // Web push
+    if (webpush) {
+      const subs = _loadPushSubscriptions(uid);
+      for (const sub of subs) {
+        webpush.sendNotification(sub.subscription, JSON.stringify({
+          id: notif.id, title, body, helpPostId: post.id,
+        })).catch(e => {
+          if (e.statusCode === 410 || e.statusCode === 404) _removePushSubscription(uid, sub.subscription.endpoint);
+        });
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // HEALTH CHECK — Render uses this for zero-downtime deploys
 // ─────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {

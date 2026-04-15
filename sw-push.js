@@ -91,7 +91,7 @@ self.addEventListener('push', (event) => {
       icon: '/favicon.ico',
       badge: '/favicon.ico',
       tag: payload.id || 'ark-notif',
-      data: { taskId: payload.taskId, url: '/' },
+      data: { taskId: payload.taskId, helpPostId: payload.helpPostId, url: '/' },
       requireInteraction: false,
       silent: false,
     };
@@ -108,6 +108,7 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const taskId = event.notification.data?.taskId;
+  const helpPostId = event.notification.data?.helpPostId;
   const url = event.notification.data?.url || '/';
 
   event.waitUntil(
@@ -116,7 +117,9 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin)) {
           client.focus();
-          if (taskId) {
+          if (helpPostId) {
+            client.postMessage({ type: 'notif-click', helpPostId });
+          } else if (taskId) {
             client.postMessage({ type: 'notif-click', taskId });
           }
           return;

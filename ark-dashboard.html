@@ -895,6 +895,33 @@ input[type="checkbox"]{accent-color:var(--navy);}
 @media(max-width:900px){.dh-kanban{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:600px){.dh-kanban{grid-template-columns:1fr;}}
 
+/* Help Board */
+.hb-post{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:10px;cursor:pointer;transition:var(--transition);display:flex;gap:14px;align-items:start;}
+.hb-post:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+.hb-post-vote{flex-shrink:0;text-align:center;min-width:60px;}
+.hb-post-vote .count{font-size:18px;font-weight:700;color:var(--navy);}
+.hb-post-vote .label{font-size:9px;color:var(--text-d);text-transform:uppercase;letter-spacing:1px;}
+.hb-post-content{flex:1;min-width:0;}
+.hb-post-title{font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+.hb-post-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text-d);}
+.hb-cat{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:1px;}
+.hb-cat-tax{background:#e8f0fb;color:var(--blue);}
+.hb-cat-payroll{background:#f5ecd4;color:var(--gold);}
+.hb-cat-client{background:#eaf4ef;color:var(--green);}
+.hb-cat-bookkeeping{background:#fdf3e3;color:var(--amber);}
+.hb-cat-general{background:var(--surface2);color:var(--text-m);}
+.hb-cat-urgent{background:#fde8e8;color:var(--red);animation:pulseRed 2s ease-in-out infinite;}
+@keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(176,58,58,0);}50%{box-shadow:0 0 0 4px rgba(176,58,58,.15);}}
+.hb-status-open{background:#eaf4ef;color:var(--green);}
+.hb-status-answered{background:#e8f0fb;color:var(--blue);}
+.hb-status-closed{background:var(--surface2);color:var(--text-d);}
+.hb-status{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:1px;}
+.hb-attach-thumb{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;color:var(--text-m);text-decoration:none;}
+.hb-attach-thumb:hover{background:var(--surface3);color:var(--navy);}
+.hb-reply{padding:14px 0;border-top:1px solid var(--border);}
+.hb-reply.accepted{background:var(--green-bg);border-radius:var(--radius);padding:14px;margin:8px 0;border:1px solid #c8e6d7;}
+.hb-mention{color:var(--blue);font-weight:600;}
+
 </style>
 </head>
 <body>
@@ -1196,9 +1223,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
     </div>
 
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Development <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Team Hub <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
-      <div class="nav-item" id="nav-devhub" onclick="nav('devhub')"><span class="ni">🛠</span>Dev Hub</div>
+      <div class="nav-item" id="nav-devhub" onclick="nav('devhub')"><span class="ni">🤝</span>Team Hub</div>
     </div>
   </nav>
   <!-- Sidebar utility buttons -->
@@ -5592,12 +5619,39 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ══ DEV HUB ══ -->
   <div class="view content" id="view-devhub">
     <!-- Tab bar -->
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
-      <button class="dh-tab active" id="dh-tab-board" onclick="dhSwitchTab('board')">Project Board</button>
-      <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">Help Wanted</button>
-      <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">Templates</button>
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
+      <button class="dh-tab active" id="dh-tab-helpboard" onclick="dhSwitchTab('helpboard')">🆘 Help Board</button>
+      <button class="dh-tab" id="dh-tab-board" onclick="dhSwitchTab('board')">🛠 Project Board</button>
+      <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">🙋 Help Wanted</button>
+      <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">📋 Templates</button>
       <button class="dh-tab" id="dh-tab-mine" onclick="dhSwitchTab('mine')">My Work</button>
       <button class="dh-tab" id="dh-tab-completed" onclick="dhSwitchTab('completed')">Completed</button>
+    </div>
+
+    <!-- Help Board (Q&A) -->
+    <div id="dh-panel-helpboard">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input id="hb-search" class="field-input" placeholder="Search posts..." style="width:220px;height:34px;font-size:12px;" oninput="hbRenderList()">
+          <select id="hb-filter-cat" class="field-input" style="height:34px;font-size:12px;width:140px;" onchange="hbRenderList()">
+            <option value="">All Categories</option>
+            <option value="tax">Tax</option>
+            <option value="payroll">Payroll</option>
+            <option value="client">Client</option>
+            <option value="bookkeeping">Bookkeeping</option>
+            <option value="general">General</option>
+            <option value="urgent">Urgent</option>
+          </select>
+          <select id="hb-filter-status" class="field-input" style="height:34px;font-size:12px;width:140px;" onchange="hbRenderList()">
+            <option value="">All Status</option>
+            <option value="open" selected>Open</option>
+            <option value="answered">Answered</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="hbOpenComposeModal()">+ New Post</button>
+      </div>
+      <div id="hb-list"></div>
     </div>
 
     <!-- Project Board -->
@@ -5743,6 +5797,68 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="btn btn-ghost" onclick="closeModal('modal-dh-template')">Cancel</button>
         <button class="btn btn-primary" onclick="dhSaveTemplate()">Save Template</button>
       </div>
+    </div>
+  </div>
+
+  <!-- HELP BOARD: Compose Post Modal -->
+  <div class="overlay" id="modal-hb-compose" style="display:none" onclick="overlayClose(event,'modal-hb-compose')">
+    <div class="modal" style="width:640px;max-height:88vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title" id="hb-compose-title">New Help Post</div>
+        <span class="modal-x" onclick="closeModal('modal-hb-compose')">&times;</span>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;">
+        <input type="hidden" id="hb-post-id">
+        <input type="hidden" id="hb-attachments-json" value="[]">
+        <div>
+          <label class="field-label">Title</label>
+          <input id="hb-title" class="field-input" placeholder="What do you need help with?">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="field-label">Category</label>
+            <select id="hb-category" class="field-input" style="height:36px;">
+              <option value="general">General</option>
+              <option value="tax">Tax</option>
+              <option value="payroll">Payroll</option>
+              <option value="client">Client</option>
+              <option value="bookkeeping">Bookkeeping</option>
+              <option value="urgent">🔴 Urgent</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">@Mention <span style="font-weight:400;color:var(--text-d);">(optional)</span></label>
+            <select id="hb-mention" class="field-input" style="height:36px;">
+              <option value="">No one specific (open to all)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">Details</label>
+          <textarea id="hb-body" class="field-input" rows="6" placeholder="Describe the issue or question. Include relevant client/account details..." style="resize:vertical;font-family:inherit;"></textarea>
+        </div>
+        <div>
+          <label class="field-label">Attachments <span style="font-weight:400;color:var(--text-d);">(PDFs, screenshots, forms — up to 15MB each, 10 files)</span></label>
+          <input type="file" id="hb-files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+            style="font-size:12px;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);width:100%;background:var(--surface);box-sizing:border-box;">
+          <div id="hb-files-preview" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeModal('modal-hb-compose')">Cancel</button>
+        <button class="btn btn-primary" id="hb-submit-btn" onclick="hbSubmitPost()">Post</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HELP BOARD: Post Detail Modal -->
+  <div class="overlay" id="modal-hb-detail" style="display:none" onclick="overlayClose(event,'modal-hb-detail')">
+    <div class="modal" style="width:720px;max-height:90vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title" id="hb-detail-title">Help Post</div>
+        <span class="modal-x" onclick="closeModal('modal-hb-detail')">&times;</span>
+      </div>
+      <div class="modal-body" id="hb-detail-body" style="overflow-y:auto;flex:1;"></div>
     </div>
   </div>
 
@@ -8586,7 +8702,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'dev hub'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -8599,7 +8715,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Dev Hub'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -27856,7 +27972,7 @@ function notifRenderList(){
     return;
   }
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -27894,6 +28010,15 @@ async function notifClickItem(id){
   saveDB();
   notifUpdateBadge();
   notifRenderList();
+  // Navigate to help post if applicable
+  if(notif.helpPostId){
+    const dd = document.getElementById('notif-dropdown');
+    if(dd) dd.style.display = 'none';
+    _notifOpen = false;
+    nav('devhub');
+    setTimeout(() => { dhSwitchTab('helpboard'); setTimeout(() => hbOpenDetail(notif.helpPostId), 300); }, 200);
+    return;
+  }
   // Navigate to task if applicable
   if(notif.taskId){
     // Close dropdown
@@ -27954,7 +28079,7 @@ function notifRenderSentList(){
   // Sent = notifications created by current user (targetAm is someone else)
   const items = notifGetAll().filter(n => n.sentBy === uid && n.targetAm && n.targetAm !== uid);
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -27976,7 +28101,7 @@ function notifRenderSentList(){
   }
 
   list.innerHTML = items.map(n => `
-    <div onclick="${n.taskId?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${n.taskId?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
+    <div onclick="${(n.taskId||n.helpPostId)?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${(n.taskId||n.helpPostId)?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'📤'}</div>
       <div style="flex:1;min-width:0;">
@@ -28321,9 +28446,14 @@ function notifInit(){
   // Listen for service worker messages (push notification clicks)
   if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('message', (e) => {
-      if(e.data?.type === 'notif-click' && e.data.taskId){
-        nav('tasks');
-        setTimeout(() => twfOpen(e.data.taskId), 200);
+      if(e.data?.type === 'notif-click'){
+        if(e.data.helpPostId){
+          nav('devhub');
+          setTimeout(() => { dhSwitchTab('helpboard'); setTimeout(() => hbOpenDetail(e.data.helpPostId), 300); }, 200);
+        } else if(e.data.taskId){
+          nav('tasks');
+          setTimeout(() => twfOpen(e.data.taskId), 200);
+        }
       }
     });
   }
@@ -37894,21 +38024,340 @@ const DH_STATUS_COLORS = {planning:'var(--amber)','in-progress':'var(--blue)',re
 function dhInit(){
   if(!DB.devProjects) DB.devProjects = [];
   if(!DB.devTemplates) DB.devTemplates = [];
-  dhSwitchTab('board');
+  dhSwitchTab('helpboard');
 }
 
 function dhSwitchTab(tab){
-  ['board','help','templates','mine','completed'].forEach(t=>{
+  ['helpboard','board','help','templates','mine','completed'].forEach(t=>{
     const panel = document.getElementById('dh-panel-'+t);
     const btn = document.getElementById('dh-tab-'+t);
     if(panel) panel.style.display = t===tab?'':'none';
     if(btn) btn.classList.toggle('active', t===tab);
   });
+  if(tab==='helpboard') hbLoadAndRender();
   if(tab==='board') dhRenderBoard();
   if(tab==='help') dhRenderHelp();
   if(tab==='templates') dhRenderTemplates();
   if(tab==='mine') dhRenderMine();
   if(tab==='completed') dhRenderCompleted();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HELP BOARD
+// ══════════════════════════════════════════════════════════════════
+let _hbPosts = [];
+let _hbStagedAttachments = []; // attachments pending upload for new post
+
+async function hbLoadAndRender(){
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts');
+    if(resp.ok) _hbPosts = await resp.json();
+  } catch(_) {}
+  hbRenderList();
+}
+
+function hbRenderList(){
+  const list = document.getElementById('hb-list');
+  if(!list) return;
+  const q = (document.getElementById('hb-search')?.value||'').toLowerCase();
+  const cat = document.getElementById('hb-filter-cat')?.value || '';
+  const status = document.getElementById('hb-filter-status')?.value || '';
+
+  let posts = _hbPosts.filter(p => {
+    if(q && !p.title.toLowerCase().includes(q) && !(p.body||'').toLowerCase().includes(q)) return false;
+    if(cat && p.category !== cat) return false;
+    if(status && p.status !== status) return false;
+    return true;
+  });
+
+  if(!posts.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No posts match your filter. Click "+ New Post" to ask a question or share something for the team.</div>';
+    return;
+  }
+
+  list.innerHTML = posts.map(p => {
+    const replyCount = (p.replies||[]).length;
+    const attachCount = (p.attachments||[]).length;
+    const fmtDate = (iso) => {
+      const d = new Date(iso), now = new Date();
+      const diffM = Math.round((now - d) / 60000);
+      if(diffM < 1) return 'just now';
+      if(diffM < 60) return diffM + 'm ago';
+      const diffH = Math.floor(diffM/60);
+      if(diffH < 24) return diffH + 'h ago';
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    };
+    const mentionNames = (p.mentionIds||[]).map(id => _hbUserName(id)).filter(Boolean).join(', ');
+    const statusIcon = p.status === 'answered' ? '✓' : p.status === 'closed' ? '🔒' : '●';
+    return `<div class="hb-post" onclick="hbOpenDetail('${p.id}')">
+      <div class="hb-post-vote">
+        <div class="count">${replyCount}</div>
+        <div class="label">${replyCount === 1 ? 'reply' : 'replies'}</div>
+      </div>
+      <div class="hb-post-content">
+        <div class="hb-post-title">${_hbEscape(p.title)}</div>
+        <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${_hbEscape((p.body||'').slice(0,180))}</div>
+        <div class="hb-post-meta">
+          <span class="hb-cat hb-cat-${p.category}">${p.category}</span>
+          <span class="hb-status hb-status-${p.status}">${statusIcon} ${p.status}</span>
+          <span>by <strong>${_hbEscape(p.authorName || 'Unknown')}</strong> · ${fmtDate(p.createdAt)}</span>
+          ${attachCount ? `<span>📎 ${attachCount}</span>` : ''}
+          ${mentionNames ? `<span class="hb-mention">@${_hbEscape(mentionNames)}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _hbUserName(id){
+  const u = (_cachedServerUsers||[]).find(x=>x.id===id) || (DB.users||[]).find(x=>x.id===id);
+  return u ? `${u.fname} ${u.lname||''}`.trim() : '';
+}
+
+function _hbEscape(s){
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function hbOpenComposeModal(editPostId){
+  const editingPost = editPostId ? _hbPosts.find(p=>p.id===editPostId) : null;
+  document.getElementById('hb-compose-title').textContent = editingPost ? 'Edit Post' : 'New Help Post';
+  document.getElementById('hb-post-id').value = editingPost?.id || '';
+  document.getElementById('hb-title').value = editingPost?.title || '';
+  document.getElementById('hb-body').value = editingPost?.body || '';
+  document.getElementById('hb-category').value = editingPost?.category || 'general';
+  document.getElementById('hb-attachments-json').value = JSON.stringify(editingPost?.attachments || []);
+  document.getElementById('hb-files').value = '';
+  _hbStagedAttachments = editingPost?.attachments?.slice() || [];
+
+  // Populate mention dropdown
+  const sel = document.getElementById('hb-mention');
+  const users = (_cachedServerUsers||[]).filter(u => u.id !== currentUser?.id && (!u.status || u.status.toLowerCase()==='active'));
+  sel.innerHTML = '<option value="">No one specific (open to all)</option>' +
+    users.map(u => `<option value="${u.id}">${u.fname} ${u.lname||''}</option>`).join('');
+  sel.value = editingPost?.mentionIds?.[0] || '';
+
+  // Render existing attachments
+  hbRenderFilesPreview();
+
+  // File input change → preview
+  document.getElementById('hb-files').onchange = function(){
+    hbRenderFilesPreview(this.files);
+  };
+
+  openModal('modal-hb-compose');
+}
+
+function hbRenderFilesPreview(newFiles){
+  const wrap = document.getElementById('hb-files-preview');
+  if(!wrap) return;
+  let html = '';
+  for(const a of _hbStagedAttachments){
+    html += `<span class="hb-attach-thumb">📎 ${_hbEscape(a.name)}</span>`;
+  }
+  if(newFiles && newFiles.length){
+    for(const f of newFiles){
+      const sizeKb = (f.size/1024).toFixed(0);
+      html += `<span class="hb-attach-thumb" style="background:var(--gold-pale);color:var(--gold);">⬆ ${_hbEscape(f.name)} (${sizeKb} KB)</span>`;
+    }
+  }
+  wrap.innerHTML = html || '<span style="font-size:11px;color:var(--text-d);">No files attached</span>';
+}
+
+async function hbSubmitPost(){
+  const btn = document.getElementById('hb-submit-btn');
+  const id = document.getElementById('hb-post-id').value || '';
+  const title = document.getElementById('hb-title').value.trim();
+  const body = document.getElementById('hb-body').value.trim();
+  const category = document.getElementById('hb-category').value || 'general';
+  const mentionId = document.getElementById('hb-mention').value || '';
+  const mentionIds = mentionId ? [mentionId] : [];
+
+  if(!title){ alert('Please enter a title.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  // Upload any new files first
+  const fileInput = document.getElementById('hb-files');
+  let attachments = _hbStagedAttachments.slice();
+  if(fileInput.files && fileInput.files.length){
+    const form = new FormData();
+    const tempPostId = id || crypto.randomUUID();
+    form.append('postId', tempPostId);
+    for(const f of fileInput.files) form.append('files', f);
+    try {
+      const upResp = await authFetch(ARK_SERVER + '/help/upload', { method:'POST', body: form });
+      if(upResp.ok){
+        const upData = await upResp.json();
+        attachments = attachments.concat(upData.attachments || []);
+      } else {
+        alert('Failed to upload attachments. Post saved without them.');
+      }
+    } catch(e) { alert('Upload error: ' + e.message); }
+  }
+
+  // Save post
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id: id||undefined, title, body, category, mentionIds, attachments }),
+    });
+    if(!resp.ok){ const err=await resp.json(); throw new Error(err.error||'Failed'); }
+    closeModal('modal-hb-compose');
+    showToast(id ? '✓ Post updated' : '✓ Posted to Help Board');
+    await hbLoadAndRender();
+  } catch(e) {
+    alert('Failed to save post: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Post';
+  }
+}
+
+async function hbOpenDetail(postId){
+  // Refresh from server to get latest replies
+  await hbLoadAndRender();
+  const p = _hbPosts.find(x => x.id === postId);
+  if(!p) return;
+  document.getElementById('hb-detail-title').textContent = p.title;
+  hbRenderDetail(p);
+  openModal('modal-hb-detail');
+}
+
+function hbRenderDetail(p){
+  const body = document.getElementById('hb-detail-body');
+  if(!body) return;
+  const isAuthor = p.authorId === currentUser?.id;
+  const isAdmin = currentUser?.role === 'admin';
+  const fmtDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  };
+  const renderAttachments = (attachments) => {
+    if(!attachments || !attachments.length) return '';
+    return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' +
+      attachments.map(a => {
+        const isImg = (a.type||'').startsWith('image/');
+        const url = ARK_SERVER + a.url;
+        if(isImg){
+          return `<a href="${url}" target="_blank" style="display:inline-block;"><img src="${url}" alt="${_hbEscape(a.name)}" style="max-width:200px;max-height:160px;border-radius:var(--radius-sm);border:1px solid var(--border);"></a>`;
+        }
+        return `<a href="${url}" target="_blank" class="hb-attach-thumb" style="text-decoration:none;">📎 ${_hbEscape(a.name)} <span style="color:var(--text-d);font-size:10px;">(${(a.size/1024).toFixed(0)}KB)</span></a>`;
+      }).join('') + '</div>';
+  };
+
+  const repliesHtml = (p.replies||[]).map(r => {
+    const isAccepted = r.id === p.acceptedReplyId;
+    const canAccept = isAuthor && p.status !== 'closed';
+    return `<div class="hb-reply ${isAccepted?'accepted':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <strong style="color:var(--navy);font-size:13px;">${_hbEscape(r.authorName)}</strong>
+          ${isAccepted ? '<span style="font-size:9px;background:var(--green);color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;">✓ ACCEPTED ANSWER</span>' : ''}
+          <span style="font-size:11px;color:var(--text-d);">${fmtDate(r.createdAt)}</span>
+        </div>
+        ${canAccept ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="hbAcceptReply('${p.id}','${r.id}')">${isAccepted?'Unmark':'Mark as Answer'}</button>` : ''}
+      </div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${_hbEscape(r.body)}</div>
+      ${renderAttachments(r.attachments)}
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <span class="hb-cat hb-cat-${p.category}">${p.category}</span>
+      <span class="hb-status hb-status-${p.status}">${p.status === 'answered' ? '✓' : p.status === 'closed' ? '🔒' : '●'} ${p.status}</span>
+      <span style="font-size:11px;color:var(--text-d);">posted by <strong>${_hbEscape(p.authorName)}</strong> on ${fmtDate(p.createdAt)}</span>
+      ${(p.mentionIds||[]).length ? `<span class="hb-mention">@${(p.mentionIds||[]).map(id=>_hbUserName(id)||'').filter(Boolean).join(', ')}</span>` : ''}
+    </div>
+    <div style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;margin-bottom:12px;">${_hbEscape(p.body || '(no details)')}</div>
+    ${renderAttachments(p.attachments)}
+
+    <div style="display:flex;gap:6px;margin:14px 0;flex-wrap:wrap;">
+      ${(isAuthor||isAdmin) ? `<button class="btn btn-ghost btn-sm" onclick="closeModal('modal-hb-detail');hbOpenComposeModal('${p.id}')">Edit</button>` : ''}
+      ${(isAuthor||isAdmin) && p.status !== 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="hbChangeStatus('${p.id}','closed')">Close Post</button>` : ''}
+      ${(isAuthor||isAdmin) && p.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="hbChangeStatus('${p.id}','open')">Reopen</button>` : ''}
+      ${(isAuthor||isAdmin) ? `<button class="btn btn-danger btn-sm" onclick="hbDeletePost('${p.id}')">Delete</button>` : ''}
+    </div>
+
+    <div style="border-top:2px solid var(--border);padding-top:14px;margin-top:14px;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;">${(p.replies||[]).length} ${(p.replies||[]).length === 1 ? 'Reply' : 'Replies'}</div>
+      ${repliesHtml || '<div style="font-size:12px;color:var(--text-d);font-style:italic;">No replies yet. Be the first to help!</div>'}
+
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <textarea id="hb-reply-input" class="field-input" rows="3" placeholder="Add a reply..." style="resize:vertical;font-family:inherit;font-size:13px;"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;flex-wrap:wrap;gap:6px;">
+          <input type="file" id="hb-reply-files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" style="font-size:11px;">
+          <button class="btn btn-primary btn-sm" onclick="hbSubmitReply('${p.id}')">Post Reply</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function hbSubmitReply(postId){
+  const input = document.getElementById('hb-reply-input');
+  const text = input?.value.trim();
+  if(!text) return;
+  const fileInput = document.getElementById('hb-reply-files');
+  let attachments = [];
+
+  if(fileInput?.files?.length){
+    const form = new FormData();
+    form.append('postId', postId);
+    for(const f of fileInput.files) form.append('files', f);
+    try {
+      const upResp = await authFetch(ARK_SERVER + '/help/upload', { method:'POST', body: form });
+      if(upResp.ok){
+        const upData = await upResp.json();
+        attachments = upData.attachments || [];
+      }
+    } catch(_){}
+  }
+
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts/' + postId + '/replies', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ body: text, mentionIds: [], attachments }),
+    });
+    if(!resp.ok) throw new Error('Failed to reply');
+    showToast('✓ Reply posted');
+    await hbOpenDetail(postId);
+  } catch(e) { alert('Reply failed: ' + e.message); }
+}
+
+async function hbAcceptReply(postId, replyId){
+  const post = _hbPosts.find(p => p.id === postId);
+  const isUnmark = post && post.acceptedReplyId === replyId;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts/' + postId + '/accept', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ replyId: isUnmark ? null : replyId }),
+    });
+    if(!resp.ok) throw new Error('Failed');
+    showToast(isUnmark ? 'Answer unmarked' : '✓ Answer accepted');
+    await hbOpenDetail(postId);
+  } catch(e) { alert('Failed: ' + e.message); }
+}
+
+async function hbChangeStatus(postId, newStatus){
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts/' + postId + '/status', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if(!resp.ok) throw new Error('Failed');
+    showToast('Status: ' + newStatus);
+    await hbOpenDetail(postId);
+  } catch(e) { alert('Failed: ' + e.message); }
+}
+
+async function hbDeletePost(postId){
+  if(!confirm('Delete this post and all replies? This cannot be undone.')) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/help/posts/' + postId, { method: 'DELETE' });
+    if(!resp.ok) throw new Error('Failed');
+    closeModal('modal-hb-detail');
+    showToast('Post deleted');
+    await hbLoadAndRender();
+  } catch(e) { alert('Failed: ' + e.message); }
 }
 
 function _dhGetUser(id){
