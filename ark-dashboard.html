@@ -9829,7 +9829,7 @@ function wgEditWidget(id){
   const curKey = `${w.grid.colSpan||3}x${w.grid.rowSpan||1}`;
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.onclick = e => { if(_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:380px;padding:0;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:15px;font-weight:700;color:var(--navy);">Resize Widget</div>
@@ -12133,7 +12133,7 @@ async function qboLinkClient() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => { if(_bkdrop(e,overlay)) overlay.remove(); });
 }
 
 async function qboLinkClientToRealm(realmId) {
@@ -12208,7 +12208,7 @@ function qboOpenFromClient(clientId, realmIdOverride) {
       <div style="padding:12px 20px;">${listHtml}</div>
     </div>`;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('click', e => { if (_bkdrop(e,overlay)) overlay.remove(); });
     return;
   }
 
@@ -12487,7 +12487,7 @@ async function linkFranchiseToQBO(idx) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => { if (_bkdrop(e,overlay)) overlay.remove(); });
 }
 
 function linkFranchiseToRealm(idx, realmId, companyName) {
@@ -14201,7 +14201,33 @@ function openAMDetail(id){
 // ══════════════════════════════════════════════
 function openModal(id){ document.getElementById(id).style.display='flex'; }
 function closeModal(id){ document.getElementById(id).style.display='none'; }
-function overlayClose(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
+
+// Track where each mousedown started, globally. We use this so overlayClose
+// can distinguish "user clicked on the dark backdrop" (should close) from
+// "user started a text selection inside the modal and dragged the mouse
+// out onto the backdrop before releasing" (should NOT close).
+//
+// The raw click event's target is the topmost common ancestor of mousedown
+// and mouseup, which means a fast drag from an <input> across the backdrop
+// reports e.target === overlay and closes the modal unexpectedly. Checking
+// mousedown origin prevents that.
+let _lastMouseDownTarget = null;
+document.addEventListener('mousedown', (e) => { _lastMouseDownTarget = e.target; }, true);
+
+function overlayClose(e, id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Require BOTH: click registered on the overlay itself AND mousedown also
+  // started there. If mousedown was anywhere inside the modal content, bail.
+  if (e.target === el && _lastMouseDownTarget === el) closeModal(id);
+}
+
+// Shared predicate used by dynamically-built overlay dialogs. True only when
+// the user actually clicked on the backdrop — not when they started a text
+// selection inside the dialog and dragged out.
+function _bkdrop(e, overlay){
+  return e.target === overlay && _lastMouseDownTarget === overlay;
+}
 
 // ══════════════════════════════════════════════
 //  STATE FAX REFERENCE DATA (Source: HHS OCSE 2025)
@@ -17921,7 +17947,7 @@ function tcEditShift(empId, inId, outId, date) {
 
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:360px;padding:0;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:15px;font-weight:700;color:var(--navy);">Edit Shift</div>
@@ -20588,7 +20614,7 @@ function stfAdHocPickerOpen(){
   const overlay = document.createElement('div');
   overlay.id = 'stf-adhoc-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10002;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = (e) => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `
     <div style="background:var(--surface);border-radius:var(--radius);width:540px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);">
       <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
@@ -21692,7 +21718,7 @@ function sthView(id){
   const overlay = document.createElement('div');
   overlay.id = 'sth-view-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = (e) => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius);max-width:760px;width:92%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">${html}</div>`;
   document.body.appendChild(overlay);
 }
@@ -24336,7 +24362,7 @@ function nbDeleteEntry(id) {
 function nbOpenCreateModal() {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:400px;padding:0;overflow:visible;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:15px;font-weight:700;color:var(--navy);">New Notebook</div>
@@ -24524,7 +24550,7 @@ function tcManageGroups() {
   const groups = (DB.projectGroups || []).filter(g => g.userId === (currentUser?.id || ''));
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
 
   const allClients = (DB.clients || []).sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
   const groupedIds = new Set();
@@ -24696,7 +24722,7 @@ function tcNewProjectNote() {
   // No client selected — show a modal to pick client + optionally link to a task
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:440px;padding:0;overflow:visible;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
       <div style="font-size:15px;font-weight:700;color:var(--navy);">New Note</div>
@@ -25052,7 +25078,7 @@ function tcCalShowDay(dateStr) {
 
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:400px;max-height:70vh;overflow-y:auto;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <div style="font-weight:700;font-size:14px;">${label}</div>
@@ -31946,7 +31972,7 @@ async function qboInvView(id) {
     // Use a simple overlay
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
     overlay.innerHTML = `<div class="card" style="width:600px;max-height:80vh;overflow-y:auto;">${html}<div style="padding:0 20px 16px;text-align:right;"><button class="btn btn-sm" onclick="this.closest('[style*=fixed]').remove()">Close</button></div></div>`;
     document.body.appendChild(overlay);
   } catch(e) { alert('Failed to load invoice: ' + e.message); }
@@ -32917,7 +32943,7 @@ async function qboBillView(id) {
     </div>`;
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
     overlay.innerHTML = `<div class="card" style="width:600px;max-height:80vh;overflow-y:auto;">${html}<div style="padding:0 20px 16px;text-align:right;"><button class="btn btn-sm" onclick="this.closest('[style*=fixed]').remove()">Close</button></div></div>`;
     document.body.appendChild(overlay);
   } catch(e) { alert('Failed to load bill: ' + e.message); }
@@ -33990,7 +34016,7 @@ function batchBulkLinkModal() {
       <div style="padding:16px 24px;">${listHtml}</div>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => { if (_bkdrop(e,overlay)) overlay.remove(); });
 }
 
 async function batchBulkLink(realmId) {
@@ -39915,7 +39941,7 @@ async function engLettersOpen() {
     </div>
   </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+  overlay.addEventListener('click', e => { if (_bkdrop(e,overlay)) overlay.style.display = 'none'; });
 
   // Set default valid-until to 30 days from now
   const d = new Date(); d.setDate(d.getDate() + 30);
@@ -40652,7 +40678,7 @@ function hbOpenPriorityModal(postId){
   // Build a small inline modal — no need for a separate HTML overlay
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10000;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.onclick = e => { if(_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:420px;padding:0;">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
       <div style="font-size:14px;font-weight:700;color:var(--navy);">Change Priority</div>
@@ -41211,7 +41237,7 @@ function dhOpenPriorityModal(projectId){
   const current = (proj.priority === 'medium' ? 'high' : (proj.priority || 'low'));
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10000;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.onclick = e => { if(_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `<div class="card" style="width:420px;padding:0;">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
       <div style="font-size:14px;font-weight:700;color:var(--navy);">Change Priority</div>
