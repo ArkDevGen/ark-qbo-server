@@ -4849,9 +4849,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
                   <input type="checkbox" id="scoots-pl-pct" style="accent-color:#C8102E;"> % of Income
                 </label>
-                <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
+                <label id="scoots-pl-class-lbl" style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
                   <input type="checkbox" id="scoots-pl-class" style="accent-color:#C8102E;"> By Class
                 </label>
+                <div style="position:relative;">
+                  <button type="button" id="scoots-pl-compare-btn" onclick="scootsPLToggleCompare()" style="font-size:11px;color:#888;background:#f5f5f5;border:1px solid #ddd;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;">🏢 Compare Stores <span id="scoots-pl-compare-count" style="color:#C8102E;"></span></button>
+                  <div id="scoots-pl-compare-popover" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:100;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px;min-width:280px;max-width:360px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #eee;">
+                      <div style="font-size:12px;font-weight:700;color:#1a1a1a;">Pick up to 5 stores</div>
+                      <button type="button" onclick="scootsPLClearCompare()" style="font-size:10px;color:#C8102E;background:transparent;border:none;cursor:pointer;font-weight:600;padding:0;">Clear</button>
+                    </div>
+                    <div id="scoots-pl-compare-list" style="max-height:300px;overflow-y:auto;"></div>
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;font-size:10px;color:#999;font-style:italic;">Select 2+ stores, then click Run Report. Accounts are matched by exact name.</div>
+                  </div>
+                </div>
               </div>
               <button onclick="scootsPLRun()" style="font-size:12px;font-weight:600;padding:8px 24px;background:#C8102E;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;margin-left:auto;" onmouseenter="this.style.background='#a00d24'" onmouseleave="this.style.background='#C8102E'">Run Report</button>
               <button onclick="scootsPLPrint()" id="scoots-pl-print-btn" style="display:none;font-size:12px;font-weight:600;padding:8px 20px;background:#fff;color:#333;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'">Print / PDF</button>
@@ -16085,6 +16096,12 @@ function populateW2Selects(){
     (DB.clients||[]).filter(c=>c.status==='Active').sort((a,b)=>a.biz.localeCompare(b.biz)).forEach(c=>{
       const o=document.createElement('option'); o.value=c.id; o.textContent=c.biz; el.appendChild(o);
     });
+    // Add "Other Employer" option (not for the filter)
+    if(!id.includes('filter')){
+      const otherOpt=document.createElement('option');
+      otherOpt.value='__other__'; otherOpt.textContent='— Other Employer (enter manually) —';
+      el.appendChild(otherOpt);
+    }
     if(prev) el.value=prev;
   });
   ['a','b','c','d'].forEach(l=>{
@@ -16108,6 +16125,11 @@ function populateW2cSelects(){
     (DB.clients||[]).filter(c=>c.status==='Active').sort((a,b)=>a.biz.localeCompare(b.biz)).forEach(c=>{
       const o=document.createElement('option'); o.value=c.id; o.textContent=c.biz; el.appendChild(o);
     });
+    if(!id.includes('filter')){
+      const otherOpt=document.createElement('option');
+      otherOpt.value='__other__'; otherOpt.textContent='— Other Employer (enter manually) —';
+      el.appendChild(otherOpt);
+    }
   });
   // Populate all 8 Box 12 code selects (4 prev + 4 corr)
   ['prev-b12a','prev-b12b','prev-b12c','prev-b12d','corr-b12a','corr-b12b','corr-b12c','corr-b12d'].forEach(k=>{
@@ -16153,7 +16175,7 @@ function renderW2s(){
   const list=(DB.w2s||[]).filter(w=>{
     if(year && w.year!==year) return false;
     if(cFilter && w.employerId!==cFilter) return false;
-    if(q){ const h=[w.empFirst,w.empLast,w.empSsn,(DB.clients.find(c=>c.id===w.employerId)?.biz||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
+    if(q){ const h=[w.empFirst,w.empLast,w.empSsn,(DB.clients.find(c=>c.id===w.employerId)?.biz||''),(w.employerOverride?.name||''),(w.employerOverride?.ein||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
     return true;
   });
   if(lbl) lbl.textContent=`${list.length} result${list.length!==1?'s':''}`;
@@ -16162,10 +16184,13 @@ function renderW2s(){
   if(!tbody) return;
   tbody.innerHTML=list.length?list.map(w=>{
     const cl=(DB.clients||[]).find(c=>c.id===w.employerId);
+    const employerDisplay = w.employerOverride
+      ? `${w.employerOverride.name||'—'} <span style="color:#b8922a;font-size:10px;font-weight:700;">OTHER</span>`
+      : (cl?.biz || '—');
     return`<tr>
       <td><strong>${w.empFirst||''} ${w.empLast||''}</strong></td>
       <td style="font-family:monospace;font-size:12px;">${w.empSsn||'—'}</td>
-      <td style="color:var(--text-m);font-size:12px;">${cl?.biz||'—'}</td>
+      <td style="color:var(--text-m);font-size:12px;">${employerDisplay}</td>
       <td style="text-align:right;font-family:monospace;">${f(w.b1)}</td>
       <td style="text-align:right;font-family:monospace;">${f(w.b2)}</td>
       <td style="text-align:right;font-family:monospace;">${f(w.b3)}</td>
@@ -16198,7 +16223,7 @@ function renderW2cs(){
   const list=(DB.w2cs||[]).filter(w=>{
     if(year && w.year!==year) return false;
     if(cFilter && w.employerId!==cFilter) return false;
-    if(q){ const h=[w.empFirst,w.empLast,w.empSsn,w.corrFirst||'',w.corrLast||'',(DB.clients.find(c=>c.id===w.employerId)?.biz||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
+    if(q){ const h=[w.empFirst,w.empLast,w.empSsn,w.corrFirst||'',w.corrLast||'',(DB.clients.find(c=>c.id===w.employerId)?.biz||''),(w.employerOverride?.name||''),(w.employerOverride?.ein||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
     return true;
   });
   if(lbl) lbl.textContent=`${list.length} result${list.length!==1?'s':''}`;
@@ -16209,10 +16234,13 @@ function renderW2cs(){
     const cl=(DB.clients||[]).find(c=>c.id===w.employerId);
     const nameCorr=w.corrFirst||w.corrLast?` <span style="color:var(--green);font-size:11px;">→ ${w.corrFirst||''} ${w.corrLast||''}</span>`:'';
     const ssnCorr=w.corrSsn?` <span style="color:var(--green);font-size:11px;">→ ${w.corrSsn}</span>`:'';
+    const employerDisplay = w.employerOverride
+      ? `${w.employerOverride.name||'—'} <span style="color:#b8922a;font-size:10px;font-weight:700;">OTHER</span>`
+      : (cl?.biz || '—');
     return`<tr>
       <td><strong>${w.empFirst||''} ${w.empLast||''}</strong>${nameCorr}</td>
       <td style="font-family:monospace;font-size:12px;">${w.empSsn||'—'}${ssnCorr}</td>
-      <td style="color:var(--text-m);font-size:12px;">${cl?.biz||'—'}</td>
+      <td style="color:var(--text-m);font-size:12px;">${employerDisplay}</td>
       <td style="text-align:right;font-family:monospace;">${f(w.corrB1)}</td>
       <td style="text-align:right;font-family:monospace;">${f(w.corrB2)}</td>
       <td style="text-align:center;">${w.year||''}</td>
@@ -16225,24 +16253,49 @@ function renderW2cs(){
   }).join(''):'<tr><td colspan="8" class="empty">No records match your search.</td></tr>';
 }
 
+// ── Show/hide the Other Employer override box for W-2 modal ──
+function w2OnEmployerChange(){
+  const box=document.getElementById('w2-other-employer-box');
+  const isOther=document.getElementById('w2-employer-id').value==='__other__';
+  if(box) box.style.display=isOther?'':'none';
+}
+function w2cOnEmployerChange(){
+  const box=document.getElementById('w2c-other-employer-box');
+  const isOther=document.getElementById('w2c-employer-id').value==='__other__';
+  if(box) box.style.display=isOther?'':'none';
+}
+
 // ── Open W-2 Modal ──
 function openW2Modal(id){
   populateW2Selects();
   const fields=['w2-emp-first','w2-emp-last','w2-emp-ssn','w2-emp-addr','w2-emp-city','w2-emp-state','w2-emp-zip',
     'w2-b1','w2-b2','w2-b3','w2-b4','w2-b5','w2-b6','w2-b7','w2-b8','w2-b10','w2-b11',
     'w2-b12a-amt','w2-b12b-amt','w2-b12c-amt','w2-b12d-amt','w2-b14',
-    'w2-b15-state','w2-b15-ein','w2-b16','w2-b17','w2-b18','w2-b19','w2-b20'];
+    'w2-b15-state','w2-b15-ein','w2-b16','w2-b17','w2-b18','w2-b19','w2-b20',
+    'w2-other-name','w2-other-ein','w2-other-addr','w2-other-city','w2-other-state','w2-other-zip'];
   fields.forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
   ['w2-b13-stat','w2-b13-ret','w2-b13-sick'].forEach(f=>{ const el=document.getElementById(f); if(el) el.checked=false; });
   ['w2-b12a-code','w2-b12b-code','w2-b12c-code','w2-b12d-code'].forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
   document.getElementById('w2-edit-id').value='';
   document.getElementById('w2-validation-msg').textContent='';
+  document.getElementById('w2-other-employer-box').style.display='none';
   if(id){
     const w=(DB.w2s||[]).find(x=>x.id===id); if(!w) return;
     document.getElementById('w2-modal-title').textContent='✏️ Edit W-2';
     document.getElementById('w2-edit-id').value=id;
     document.getElementById('w2-employer-id').value=w.employerId||'';
     document.getElementById('w2-year').value=w.year||'';
+    // Populate override fields if present
+    if(w.employerOverride){
+      const ov=w.employerOverride;
+      document.getElementById('w2-other-name').value=ov.name||'';
+      document.getElementById('w2-other-ein').value=ov.ein||'';
+      document.getElementById('w2-other-addr').value=ov.addr||'';
+      document.getElementById('w2-other-city').value=ov.city||'';
+      document.getElementById('w2-other-state').value=ov.state||'';
+      document.getElementById('w2-other-zip').value=ov.zip||'';
+    }
+    w2OnEmployerChange();
     const map={
       'emp-first':'empFirst','emp-last':'empLast','emp-ssn':'empSsn',
       'emp-addr':'empAddr','emp-city':'empCity','emp-state':'empState','emp-zip':'empZip',
@@ -16271,6 +16324,22 @@ function saveW2(){
   const ssn=document.getElementById('w2-emp-ssn').value.trim();
   const msg=document.getElementById('w2-validation-msg');
   if(!employerId){msg.textContent='⚠ Please select an employer.';return;}
+  // Validate override fields when "Other Employer" is selected
+  let employerOverride=null;
+  if(employerId==='__other__'){
+    const otherName=document.getElementById('w2-other-name').value.trim();
+    const otherEin=document.getElementById('w2-other-ein').value.trim();
+    if(!otherName){msg.textContent='⚠ Other Employer: Business Name is required.';return;}
+    if(!otherEin){msg.textContent='⚠ Other Employer: EIN is required.';return;}
+    employerOverride={
+      name:otherName,
+      ein:otherEin,
+      addr:document.getElementById('w2-other-addr').value.trim(),
+      city:document.getElementById('w2-other-city').value.trim(),
+      state:document.getElementById('w2-other-state').value.trim(),
+      zip:document.getElementById('w2-other-zip').value.trim(),
+    };
+  }
   if(!first||!last){msg.textContent='⚠ Employee first and last name required.';return;}
   if(!ssn){msg.textContent='⚠ SSN is required.';return;}
   msg.textContent='';
@@ -16278,7 +16347,7 @@ function saveW2(){
   const s=f=>document.getElementById(f)?.value?.trim()||'';
   const obj={
     id:document.getElementById('w2-edit-id').value||uid(),
-    employerId,year,empFirst:first,empLast:last,empSsn:ssn,
+    employerId,employerOverride,year,empFirst:first,empLast:last,empSsn:ssn,
     empAddr:s('w2-emp-addr'),empCity:s('w2-emp-city'),empState:s('w2-emp-state'),empZip:s('w2-emp-zip'),
     b1:n('w2-b1'),b2:n('w2-b2'),b3:n('w2-b3'),b4:n('w2-b4'),
     b5:n('w2-b5'),b6:n('w2-b6'),b7:n('w2-b7'),b8:n('w2-b8'),
@@ -16319,6 +16388,7 @@ function openW2cModal(id){
   // Clear all fields
   const allFields=[
     'w2c-emp-first','w2c-emp-last','w2c-emp-ssn','w2c-emp-suffix','w2c-wfid',
+    'w2c-emp-addr','w2c-emp-city','w2c-emp-state','w2c-emp-zip',
     'w2c-corr-first','w2c-corr-last','w2c-corr-ssn','w2c-corr-suffix',
     'w2c-prev-b1','w2c-prev-b2','w2c-prev-b3','w2c-prev-b4','w2c-prev-b5','w2c-prev-b6',
     'w2c-prev-b7','w2c-prev-b8','w2c-prev-b10','w2c-prev-b11',
@@ -16331,6 +16401,10 @@ function openW2cModal(id){
     'w2c-corr-b16','w2c-corr-b17','w2c-corr-b18','w2c-corr-b19','w2c-b20'
   ];
   allFields.forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
+  // Clear override fields
+  ['w2c-other-name','w2c-other-ein','w2c-other-addr','w2c-other-city','w2c-other-state','w2c-other-zip']
+    .forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
+  document.getElementById('w2c-other-employer-box').style.display='none';
   ['w2c-b13-stat','w2c-b13-ret','w2c-b13-sick'].forEach(f=>{ const el=document.getElementById(f); if(el) el.checked=false; });
   ['w2c-prev-b12a-code','w2c-prev-b12b-code','w2c-prev-b12c-code','w2c-prev-b12d-code',
    'w2c-corr-b12a-code','w2c-corr-b12b-code','w2c-corr-b12c-code','w2c-corr-b12d-code']
@@ -16344,10 +16418,22 @@ function openW2cModal(id){
     document.getElementById('w2c-edit-id').value=id;
     document.getElementById('w2c-employer-id').value=w.employerId||'';
     document.getElementById('w2c-year').value=w.year||'';
+    // Populate override fields if present
+    if(w.employerOverride){
+      const ov=w.employerOverride;
+      document.getElementById('w2c-other-name').value=ov.name||'';
+      document.getElementById('w2c-other-ein').value=ov.ein||'';
+      document.getElementById('w2c-other-addr').value=ov.addr||'';
+      document.getElementById('w2c-other-city').value=ov.city||'';
+      document.getElementById('w2c-other-state').value=ov.state||'';
+      document.getElementById('w2c-other-zip').value=ov.zip||'';
+    }
+    w2cOnEmployerChange();
     // Simple string fields
     const strMap={
       'w2c-wfid':'wfid','w2c-emp-first':'empFirst','w2c-emp-last':'empLast',
       'w2c-emp-ssn':'empSsn','w2c-emp-suffix':'empSuffix',
+      'w2c-emp-addr':'empAddr','w2c-emp-city':'empCity','w2c-emp-state':'empState','w2c-emp-zip':'empZip',
       'w2c-corr-first':'corrFirst','w2c-corr-last':'corrLast',
       'w2c-corr-ssn':'corrSsn','w2c-corr-suffix':'corrSuffix',
       'w2c-b14':'b14','w2c-b15-state':'b15State','w2c-b15-ein':'b15Ein','w2c-b20':'b20',
@@ -16392,6 +16478,22 @@ function saveW2c(){
   const ssn=document.getElementById('w2c-emp-ssn').value.trim();
   const msg=document.getElementById('w2c-validation-msg');
   if(!employerId){msg.textContent='⚠ Please select an employer.';return;}
+  // Validate override fields when "Other Employer" is selected
+  let employerOverride=null;
+  if(employerId==='__other__'){
+    const otherName=document.getElementById('w2c-other-name').value.trim();
+    const otherEin=document.getElementById('w2c-other-ein').value.trim();
+    if(!otherName){msg.textContent='⚠ Other Employer: Business Name is required.';return;}
+    if(!otherEin){msg.textContent='⚠ Other Employer: EIN is required.';return;}
+    employerOverride={
+      name:otherName,
+      ein:otherEin,
+      addr:document.getElementById('w2c-other-addr').value.trim(),
+      city:document.getElementById('w2c-other-city').value.trim(),
+      state:document.getElementById('w2c-other-state').value.trim(),
+      zip:document.getElementById('w2c-other-zip').value.trim(),
+    };
+  }
   if(!wfid){msg.textContent='⚠ WFID is required for W-2c filing.';return;}
   if(!first||!last){msg.textContent='⚠ Employee name required.';return;}
   if(!ssn){msg.textContent='⚠ SSN required.';return;}
@@ -16400,8 +16502,9 @@ function saveW2c(){
   const s=f=>document.getElementById(f)?.value?.trim()||'';
   const obj={
     id:document.getElementById('w2c-edit-id').value||uid(),
-    employerId,year,wfid,
+    employerId,employerOverride,year,wfid,
     empFirst:first,empLast:last,empSsn:ssn,empSuffix:s('w2c-emp-suffix'),
+    empAddr:s('w2c-emp-addr'),empCity:s('w2c-emp-city'),empState:s('w2c-emp-state'),empZip:s('w2c-emp-zip'),
     corrFirst:s('w2c-corr-first'),corrLast:s('w2c-corr-last'),
     corrSsn:s('w2c-corr-ssn'),corrSuffix:s('w2c-corr-suffix'),
     // Wage boxes prev
@@ -16490,9 +16593,11 @@ function buildEFW2(year, records, client){
   const empCity = client.addrCity||client.city||'';
   const empState = client.addrState||client.state||'';
   const empZip = client.addrZip||client.zip||'';
+  // Use legal business name for SSA filings (fall back to biz/DBA)
+  const empName = client.nameLegal || client.biz || '';
   lines.push(('RE'+
     String(year).slice(-2)+' '+ein+' '.repeat(9)+' '+' '.repeat(6)+' '+' '.repeat(4)+
-    _e2Str(client.biz||'',57)+
+    _e2Str(empName,57)+
     _e2Str(empAddr,22)+_e2Str('',22)+
     _e2Str(empCity,22)+_stAbbr(empState)+
     _zip5(empZip)+'    '+_e2Str('US',2)+'E'+' '+' '+' '.repeat(6)+' '.repeat(332)).slice(0,512));
@@ -16596,6 +16701,158 @@ function clearExportLog(){
   renderExportLog();
 }
 
+// ── W-2 Export Readiness Check ─────────────────────────────────────
+// Gathers the distinct set of employers (clients) involved in an export,
+// identifies missing SSA-required fields, and shows an inline-fix modal.
+// If all employers are ready, invokes `proceedCallback()` directly.
+
+// Required fields for SSA EFW2/EFW2C employer record
+const W2_REQUIRED_CLIENT_FIELDS = [
+  { key:'ein',        label:'EIN / Tax ID',  placeholder:'XX-XXXXXXX', addrKey:false },
+  { key:'nameLegal',  label:'Legal Name',    placeholder:'Legal entity name', addrKey:false },
+  { key:'addrStreet', label:'Street Address',placeholder:'123 Main St', addrKey:true },
+  { key:'addrCity',   label:'City',          placeholder:'City', addrKey:true },
+  { key:'addrState',  label:'State',         placeholder:'NE', addrKey:true },
+  { key:'addrZip',    label:'ZIP Code',      placeholder:'68xxx', addrKey:true },
+];
+
+// Return list of { key, label, placeholder } for missing fields on a client
+function _w2MissingClientFields(client){
+  if(!client) return [];
+  const missing=[];
+  for(const f of W2_REQUIRED_CLIENT_FIELDS){
+    let val;
+    if(f.key==='addrStreet') val = client.addrStreet || client.street;
+    else if(f.key==='addrCity') val = client.addrCity || client.city;
+    else if(f.key==='addrState') val = client.addrState || client.state;
+    else if(f.key==='addrZip') val = client.addrZip || client.zip;
+    else val = client[f.key];
+    if(!val || !String(val).trim()) missing.push(f);
+  }
+  return missing;
+}
+
+let _w2ReadinessProceedCb = null;
+let _w2ReadinessClientIds = [];
+
+// Main entry point: call with a list of employers involved in the export + a callback.
+// If everything is ready, calls the callback immediately. Otherwise opens the modal.
+function checkW2ExportReadiness(entries, proceedCb){
+  // Only consider client-backed entries; override entries supply their own fields
+  const clientIds=[...new Set(entries.filter(e=>e.employerId!=='__other__').map(e=>e.employerId))];
+  const problems=[];
+  for(const cid of clientIds){
+    const c=(DB.clients||[]).find(x=>x.id===cid);
+    if(!c){ problems.push({clientId:cid,client:null,missing:[{key:'__not_found__',label:'Client record',placeholder:''}]}); continue; }
+    const missing=_w2MissingClientFields(c);
+    if(missing.length) problems.push({clientId:cid,client:c,missing});
+  }
+  if(!problems.length){ proceedCb(); return; }
+  _w2ReadinessProceedCb = proceedCb;
+  _w2ReadinessClientIds = clientIds;
+  renderW2Readiness(problems);
+  openModal('modal-w2-readiness');
+}
+
+function renderW2Readiness(problems){
+  const body=document.getElementById('w2-readiness-body');
+  const cont=document.getElementById('w2-readiness-continue-btn');
+  if(!problems.length){
+    body.innerHTML=`<div style="padding:20px;text-align:center;color:var(--green);"><strong>✓ All employers ready.</strong> You can continue the export.</div>`;
+    cont.disabled=false;
+    return;
+  }
+  cont.disabled=true;
+  body.innerHTML=`
+    <div style="padding:8px 14px 14px;font-size:13px;color:var(--text-m);">
+      The following employers are missing fields required by SSA's EFW2/EFW2C filing format.
+      Fix these before exporting — SSA will reject a file with missing data.
+    </div>
+    ${problems.map(p=>{
+      if(!p.client){
+        return `<div style="margin:12px 14px;padding:12px;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius);">
+          <div style="font-weight:700;color:#c0392b;font-size:13px;">⚠ Client record not found (${p.clientId})</div>
+          <div style="font-size:11px;color:var(--text-m);margin-top:4px;">The entry references a client that no longer exists. Edit the W-2 entry to pick a valid employer.</div>
+        </div>`;
+      }
+      return `<div style="margin:12px 14px;padding:12px;background:rgba(192,57,43,.06);border:1px solid rgba(192,57,43,.2);border-radius:var(--radius);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="color:#c0392b;font-size:14px;">⚠</span>
+          <span style="font-weight:700;font-size:13px;color:var(--navy);">${p.client.biz||p.client.id}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${p.missing.map(m=>`<div id="w2fix-row-${p.clientId}-${m.key}" style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;color:var(--text-d);width:120px;text-align:right;flex-shrink:0;">${m.label}</span>
+            <input id="w2fix-${p.clientId}-${m.key}" type="text" placeholder="${m.placeholder}" class="field-input" style="font-size:12px;padding:5px 10px;flex:1;">
+            <button onclick="w2FixClientField('${p.clientId}','${m.key}')" class="btn btn-sm" style="font-size:10px;white-space:nowrap;background:var(--navy);color:#fff;border-color:var(--navy);">Save</button>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function w2FixClientField(clientId, field){
+  const inp=document.getElementById(`w2fix-${clientId}-${field}`);
+  const value=inp?.value?.trim();
+  if(!value){ showToast('Please enter a value'); return; }
+  const client=(DB.clients||[]).find(c=>c.id===clientId);
+  if(!client) return;
+  client[field]=value;
+  saveDB();
+  // Mark row as saved
+  const row=document.getElementById(`w2fix-row-${clientId}-${field}`);
+  if(row){
+    const label=W2_REQUIRED_CLIENT_FIELDS.find(f=>f.key===field)?.label || field;
+    row.innerHTML=`<span style="font-size:11px;color:var(--text-d);width:120px;text-align:right;flex-shrink:0;">${label}</span>
+      <span style="font-size:12px;color:var(--green);font-weight:600;flex:1;">✓ ${value}</span>`;
+  }
+  logAct(`Client updated: ${field} set to "${value}" for ${client.biz} (from W-2 Export readiness)`);
+  // Re-evaluate
+  setTimeout(()=>{
+    const problems=[];
+    for(const cid of _w2ReadinessClientIds){
+      const c=(DB.clients||[]).find(x=>x.id===cid);
+      if(!c){ problems.push({clientId:cid,client:null,missing:[]}); continue; }
+      const missing=_w2MissingClientFields(c);
+      if(missing.length) problems.push({clientId:cid,client:c,missing});
+    }
+    if(!problems.length){
+      document.getElementById('w2-readiness-continue-btn').disabled=false;
+      document.getElementById('w2-readiness-body').innerHTML+=
+        `<div style="margin:16px 14px 8px;padding:12px;background:rgba(46,125,94,.08);border:1px solid rgba(46,125,94,.25);border-radius:var(--radius);font-size:13px;font-weight:600;color:var(--green);text-align:center;">✓ All employers ready — click Continue Export.</div>`;
+    }
+  }, 300);
+}
+
+function w2ReadinessContinue(){
+  closeModal('modal-w2-readiness');
+  const cb=_w2ReadinessProceedCb;
+  _w2ReadinessProceedCb=null;
+  _w2ReadinessClientIds=[];
+  if(cb) cb();
+}
+
+// Build a client-shaped object from an entry's override fields, so buildEFW2/buildEFW2C can consume it
+function _w2BuildOverrideClient(ov){
+  return {
+    id:'__other_'+(ov.ein||'').replace(/\D/g,''),
+    biz:ov.name||'',
+    ein:ov.ein||'',
+    addrStreet:ov.addr||'', street:ov.addr||'',
+    addrCity:ov.city||'', city:ov.city||'',
+    addrState:ov.state||'', state:ov.state||'',
+    addrZip:ov.zip||'', zip:ov.zip||'',
+  };
+}
+// Group key for an entry: uses EIN when override present, else client id
+function _w2GroupKey(w){
+  if(w.employerId==='__other__' && w.employerOverride){
+    return 'other::'+(w.employerOverride.ein||'').replace(/\D/g,'');
+  }
+  return 'client::'+w.employerId;
+}
+
 function runEFW2Export(){
   const year=parseInt(document.getElementById('efw2-year').value);
   const cFilter=document.getElementById('efw2-client').value;
@@ -16603,11 +16860,28 @@ function runEFW2Export(){
   let records=(DB.w2s||[]).filter(w=>w.year===year);
   if(cFilter) records=records.filter(w=>w.employerId===cFilter);
   if(!records.length){ preview.innerHTML='<span style="color:var(--red)">⚠ No W-2 entries found for the selected filters.</span>'; return; }
-  const byClient={};
-  records.forEach(w=>{ if(!byClient[w.employerId]) byClient[w.employerId]=[]; byClient[w.employerId].push(w); });
+  // Pre-export readiness: verify each employer client has required SSA fields.
+  // Override-employer entries supply their own fields and are skipped here.
+  checkW2ExportReadiness(records, ()=>_runEFW2ExportActual(year, records, preview));
+}
+
+function _runEFW2ExportActual(year, records, preview){
+  const byEmployer={};
+  records.forEach(w=>{
+    const k=_w2GroupKey(w);
+    if(!byEmployer[k]) byEmployer[k]={recs:[],entry:w};
+    byEmployer[k].recs.push(w);
+  });
   let n=0;
-  Object.entries(byClient).forEach(([cid,recs])=>{
-    const cl=(DB.clients||[]).find(c=>c.id===cid); if(!cl) return;
+  Object.entries(byEmployer).forEach(([key,{recs,entry}])=>{
+    let cl;
+    if(key.startsWith('other::')){
+      if(!entry.employerOverride) return;
+      cl=_w2BuildOverrideClient(entry.employerOverride);
+    } else {
+      cl=(DB.clients||[]).find(c=>c.id===entry.employerId);
+      if(!cl) return;
+    }
     const txt=buildEFW2(year,recs,cl);
     const safe=(cl.biz||'Unknown').replace(/[^a-zA-Z0-9]/g,'_');
     const fname=`EFW2_${year}_${safe}.txt`;
@@ -16836,7 +17110,7 @@ function buildRCE(year, client) {
   rec += ' '.repeat(9);                                    // 27-35 Agent EIN
   rec += _efw2cStr(c.origEstabNum || '', 4);              // 36-39
   rec += _efw2cStr(c.corrEstabNum || '', 4);              // 40-43
-  rec += _efw2cStr(c.biz || c.name || '', 57);           // 44-100 Employer Name
+  rec += _efw2cStr(c.nameLegal || c.biz || c.name || '', 57);  // 44-100 Employer Name (legal name preferred)
   rec += _efw2cStr(addr, 22);                             // 101-122 Location Address
   rec += _efw2cStr(addr, 22);                             // 123-144 Delivery Address
   rec += _efw2cStr(city, 22);                             // 145-166
@@ -16970,27 +17244,36 @@ function buildRCW(w) {
   let rec = '';
   rec += 'RCW';                                              // 1-3
 
-  // SSN — if correcting SSN, put orig in 4-12, correct in 13-21
-  // If NOT correcting SSN, leave 4-12 blank, put SSN in 13-21
-  if (w.origSsn && w.origSsn.replace(/\D/g,'') !== (w.empSsn || '').replace(/\D/g,'')) {
-    rec += _efw2cSSN(w.origSsn);                            // 4-12  Orig SSN
+  // SSN correction: data model stores w.empSsn = previously reported (as filed),
+  // w.corrSsn = corrected. Per SSA Pub 42-014, positions 4-12 hold the Originally
+  // Reported SSN and 13-21 hold the Correct SSN. Blank 4-12 if SSN isn't changing.
+  const empSsnClean  = (w.empSsn  || '').replace(/\D/g, '');
+  const corrSsnClean = (w.corrSsn || '').replace(/\D/g, '');
+  const ssnIsCorrecting = corrSsnClean && corrSsnClean !== empSsnClean;
+  if (ssnIsCorrecting) {
+    rec += _efw2cSSN(w.empSsn);                               // 4-12  Originally Reported SSN
+    rec += _efw2cSSN(w.corrSsn);                              // 13-21 Correct SSN
   } else {
-    rec += ' '.repeat(9);                                     // 4-12  Blank (not correcting SSN)
+    rec += ' '.repeat(9);                                      // 4-12  Blank (not correcting SSN)
+    rec += _efw2cSSN(w.empSsn);                                // 13-21 Current SSN (unchanged)
   }
-  rec += _efw2cSSN(w.empSsn || w.corrSsn);                  // 13-21 Correct SSN
 
-  // Names — orig name fields (blank if not correcting name)
-  if (w.origFirst || w.origMiddle || w.origLast) {
-    rec += _efw2cStr(w.origFirst || '', 15);                 // 22-36
-    rec += _efw2cStr(w.origMiddle || '', 15);                // 37-51
-    rec += _efw2cStr(w.origLast || '', 20);                  // 52-71
+  // Name correction: w.empFirst/empLast = as filed, w.corrFirst/corrLast = corrected
+  const nameIsCorrecting = (w.corrFirst && w.corrFirst !== w.empFirst) ||
+                           (w.corrLast  && w.corrLast  !== w.empLast);
+  if (nameIsCorrecting) {
+    rec += _efw2cStr(w.empFirst || '', 15);                   // 22-36 Originally Reported First
+    rec += _efw2cStr('', 15);                                  // 37-51 Originally Reported Middle (not captured)
+    rec += _efw2cStr(w.empLast || '', 20);                    // 52-71 Originally Reported Last
+    rec += _efw2cStr(w.corrFirst || w.empFirst || '', 15);    // 72-86 Correct First
+    rec += _efw2cStr('', 15);                                  // 87-101 Correct Middle
+    rec += _efw2cStr(w.corrLast || w.empLast || '', 20);      // 102-121 Correct Last
   } else {
-    rec += ' '.repeat(50);                                    // 22-71 Blank
+    rec += ' '.repeat(50);                                     // 22-71 Blank (not correcting name)
+    rec += _efw2cStr(w.empFirst || '', 15);                   // 72-86 Current First
+    rec += _efw2cStr('', 15);                                  // 87-101 Current Middle
+    rec += _efw2cStr(w.empLast || '', 20);                    // 102-121 Current Last
   }
-  // Correct name — REQUIRED if correcting anything
-  rec += _efw2cStr(w.empFirst || w.corrFirst || '', 15);     // 72-86
-  rec += _efw2cStr(w.empMiddle || w.corrMiddle || '', 15);   // 87-101
-  rec += _efw2cStr(w.empLast || w.corrLast || '', 20);       // 102-121
 
   // Address (optional for corrections, but fill if we have it)
   rec += _efw2cStr(w.locationAddr || '', 22);                // 122-143
@@ -17199,22 +17482,33 @@ function runEFW2CExport() {
     preview.innerHTML = '<span style="color:var(--red)">⚠ No W-2c entries found for the selected filters.</span>';
     return;
   }
+  // Pre-export readiness: verify each employer client has required SSA fields
+  checkW2ExportReadiness(records, () => _runEFW2CExportActual(year, records, preview));
+}
 
-  // Group by client + wfid (each WFID = separate submission file)
+function _runEFW2CExportActual(year, records, preview){
+  // Group by employer (client OR other-EIN) + wfid (each WFID = separate submission file)
   // WFID is optional — only required when resubmitting a previously rejected file.
-  // Records without a WFID are grouped together per client as an initial correction filing.
-  const byClientWfid = {};
+  // Records without a WFID are grouped together per employer as an initial correction filing.
+  const byEmployerWfid = {};
   records.forEach(w => {
     const wfidKey = (w.wfid || '').trim() || '__initial__';
-    const key = `${w.employerId}::${wfidKey}`;
-    if (!byClientWfid[key]) byClientWfid[key] = { employerId: w.employerId, wfid: (w.wfid || '').trim(), recs: [] };
-    byClientWfid[key].recs.push(w);
+    const groupKey = _w2GroupKey(w);
+    const key = `${groupKey}::${wfidKey}`;
+    if (!byEmployerWfid[key]) byEmployerWfid[key] = { groupKey, entry: w, wfid: (w.wfid || '').trim(), recs: [] };
+    byEmployerWfid[key].recs.push(w);
   });
 
   let filesGenerated = 0;
-  Object.values(byClientWfid).forEach(({ employerId, wfid, recs }) => {
-    const client = DB.clients.find(c => c.id === employerId);
-    if (!client) return;
+  Object.values(byEmployerWfid).forEach(({ groupKey, entry, wfid, recs }) => {
+    let client;
+    if (groupKey.startsWith('other::')) {
+      if (!entry.employerOverride) return;
+      client = _w2BuildOverrideClient(entry.employerOverride);
+    } else {
+      client = DB.clients.find(c => c.id === entry.employerId);
+      if (!client) return;
+    }
 
     const content = buildEFW2C(year, recs, client, wfid);
 
@@ -32471,28 +32765,23 @@ function qboPLRptRender(report, container, showPct, byClass) {
     html += '</div>';
   }
 
-  // Determine income total for % calculation
-  let incomeTotal = 0;
+  // Determine income totals per column for % calculation (By Class: per-class income)
+  let incomeTotals = [];
   if (showPct) {
+    const extractTotals = (sumData) => sumData.map((c, idx) => idx === 0 ? 0 : (parseFloat(c.value) || 0));
     for (const section of rows) {
       const headerLabel = section.Header?.ColData?.[0]?.value || '';
       if (headerLabel.toLowerCase().includes('income') && !headerLabel.toLowerCase().includes('other') && !headerLabel.toLowerCase().includes('net')) {
         const sumVals = section.Summary?.ColData || [];
-        // Use the total column (last numeric column, or column index 1 for single-column)
-        const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
-        if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
-        break;
+        if (sumVals.length) { incomeTotals = extractTotals(sumVals); break; }
       }
     }
-    // Fallback: look for "Total Income" in summary rows
-    if (!incomeTotal) {
+    if (!incomeTotals.length) {
       for (const section of rows) {
         const sumLabel = section.Summary?.ColData?.[0]?.value || '';
         if (sumLabel.toLowerCase().includes('total income') || sumLabel.toLowerCase() === 'gross profit') {
           const sumVals = section.Summary?.ColData || [];
-          const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
-          if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
-          break;
+          if (sumVals.length) { incomeTotals = extractTotals(sumVals); break; }
         }
       }
     }
@@ -32504,21 +32793,21 @@ function qboPLRptRender(report, container, showPct, byClass) {
       html += `<div style="font-size:13px;font-weight:700;color:var(--text);padding:10px 0 4px;border-bottom:2px solid var(--border);margin-top:12px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
         ${headerVal[0] || 'Section'} <span style="float:right;font-size:11px;opacity:.5;">click to toggle</span></div>`;
       html += '<div>';
-      html += qboPLRptRenderRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass);
+      html += qboPLRptRenderRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotals, byClass);
       if (section.Summary) {
-        html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, true);
+        html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, true);
       }
       html += '</div>';
     } else if (section.Summary) {
       // Grand total row (e.g., Net Income)
-      html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, false, true);
+      html += qboPLRptSummaryRow(section.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, false, true);
     }
   }
   html += '</div>';
   container.innerHTML = html;
 }
 
-function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotal, byClass) {
+function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotals, byClass) {
   let html = '';
   const indent = depth * 16;
   for (const row of rows) {
@@ -32529,8 +32818,9 @@ function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotal, byClass
       for (let i = 1; i < vals.length; i++) {
         const money = qboFmtMoney(vals[i]);
         html += `<span style="width:${byClass ? 110 : 120}px;text-align:right;font-family:'DM Mono',monospace;color:var(--text-d);font-size:11px;">${money}`;
-        if (showPct && incomeTotal) {
-          const pct = (parseFloat(vals[i]) || 0) / incomeTotal * 100;
+        const colIncome = (incomeTotals && incomeTotals[i]) ? incomeTotals[i] : 0;
+        if (showPct && colIncome) {
+          const pct = (parseFloat(vals[i]) || 0) / colIncome * 100;
           html += `<span style="font-size:9px;color:var(--text-d);opacity:.6;margin-left:4px;">${pct.toFixed(1)}%</span>`;
         }
         html += '</span>';
@@ -32540,9 +32830,9 @@ function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotal, byClass
       const headerVals = row.Header.ColData?.map(c => c.value) || [];
       html += `<div style="font-size:12px;font-weight:600;padding:6px 8px 2px ${8 + indent}px;color:var(--text);cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
       html += '<div>';
-      html += qboPLRptRenderRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass);
+      html += qboPLRptRenderRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotals, byClass);
       if (row.Summary) {
-        html += qboPLRptSummaryRow(row.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, true);
+        html += qboPLRptSummaryRow(row.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, true);
       }
       html += '</div>';
     }
@@ -32550,7 +32840,7 @@ function qboPLRptRenderRows(rows, depth, colCount, showPct, incomeTotal, byClass
   return html;
 }
 
-function qboPLRptSummaryRow(colData, colCount, showPct, incomeTotal, byClass, isSection, isGrand) {
+function qboPLRptSummaryRow(colData, colCount, showPct, incomeTotals, byClass, isSection, isGrand) {
   const vals = colData.map(c => c.value);
   const border = isGrand ? '3px double var(--border)' : '2px solid var(--border)';
   const fontSize = isGrand ? '13px' : '12px';
@@ -32561,8 +32851,9 @@ function qboPLRptSummaryRow(colData, colCount, showPct, incomeTotal, byClass, is
   for (let i = 1; i < vals.length; i++) {
     const money = qboFmtMoney(vals[i]);
     html += `<span style="width:${byClass ? 110 : 120}px;text-align:right;font-family:'DM Mono',monospace;">${money}`;
-    if (showPct && incomeTotal) {
-      const pct = (parseFloat(vals[i]) || 0) / incomeTotal * 100;
+    const colIncome = (incomeTotals && incomeTotals[i]) ? incomeTotals[i] : 0;
+    if (showPct && colIncome) {
+      const pct = (parseFloat(vals[i]) || 0) / colIncome * 100;
       html += `<span style="font-size:9px;opacity:.6;margin-left:4px;">${pct.toFixed(1)}%</span>`;
     }
     html += '</span>';
@@ -32653,18 +32944,247 @@ function scootsPLDeepSearch(rows, ...keywords) {
   return 0;
 }
 
-async function scootsPLFetch(startDate, endDate, byClass) {
+async function scootsPLFetchRealm(realmId, startDate, endDate, byClass) {
   const payload = { startDate, endDate, reportType: 'summary' };
   if (byClass) payload.summarize_column_by = 'Classes';
   const resp = await authFetch(ARK_SERVER + '/qbo/api', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId: qboActiveRealmId }),
+    body: JSON.stringify({ action: 'getProfitAndLoss', payload, realmId }),
   });
   const text = await resp.text();
   let data;
   try { data = JSON.parse(text); } catch(e) { throw new Error('Server returned invalid response — it may still be deploying. Try again in a moment.'); }
   if (!data.success) throw new Error(data.error || 'Failed to fetch P&L');
   return data.report;
+}
+
+async function scootsPLFetch(startDate, endDate, byClass) {
+  return scootsPLFetchRealm(qboActiveRealmId, startDate, endDate, byClass);
+}
+
+// ── Compare Stores (multi-realm side-by-side) ──────────────────────
+let scootsPLCompareRealms = []; // array of realmIds currently selected for compare
+const SCOOTS_PL_COMPARE_MAX = 5;
+
+function scootsPLToggleCompare() {
+  const pop = document.getElementById('scoots-pl-compare-popover');
+  if (!pop) return;
+  const open = pop.style.display === 'none' || !pop.style.display;
+  if (open) {
+    scootsPLRenderCompanyPicker();
+    pop.style.display = 'block';
+    // Close on outside click
+    setTimeout(() => {
+      const handler = (e) => {
+        if (!pop.contains(e.target) && e.target.id !== 'scoots-pl-compare-btn' && !document.getElementById('scoots-pl-compare-btn').contains(e.target)) {
+          pop.style.display = 'none';
+          document.removeEventListener('click', handler);
+        }
+      };
+      document.addEventListener('click', handler);
+    }, 0);
+  } else {
+    pop.style.display = 'none';
+  }
+}
+
+function scootsPLRenderCompanyPicker() {
+  const list = document.getElementById('scoots-pl-compare-list');
+  if (!list) return;
+  const companies = Object.entries(qboAllCompanies || {})
+    .filter(([_, info]) => info && info.connected)
+    .map(([realmId, info]) => ({ realmId, name: info.companyName || realmId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!companies.length) {
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#999;font-size:11px;">No connected QBO companies. Connect companies first via QBO Center.</div>';
+    return;
+  }
+  const selectedCount = scootsPLCompareRealms.length;
+  const atMax = selectedCount >= SCOOTS_PL_COMPARE_MAX;
+  list.innerHTML = companies.map(c => {
+    const checked = scootsPLCompareRealms.includes(c.realmId);
+    const disabled = !checked && atMax;
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:${disabled?'not-allowed':'pointer'};font-size:12px;color:${disabled?'#bbb':'#333'};border-radius:4px;" onmouseenter="if(!${disabled})this.style.background='#f5f5f5'" onmouseleave="this.style.background='transparent'">
+      <input type="checkbox" ${checked?'checked':''} ${disabled?'disabled':''} onchange="scootsPLSetCompareRealm('${c.realmId}', this.checked)" style="accent-color:#C8102E;">
+      <span style="flex:1;font-weight:${checked?'600':'400'};">${c.name}</span>
+    </label>`;
+  }).join('');
+}
+
+function scootsPLSetCompareRealm(realmId, checked) {
+  if (checked) {
+    if (scootsPLCompareRealms.length >= SCOOTS_PL_COMPARE_MAX) return;
+    if (!scootsPLCompareRealms.includes(realmId)) scootsPLCompareRealms.push(realmId);
+  } else {
+    scootsPLCompareRealms = scootsPLCompareRealms.filter(r => r !== realmId);
+  }
+  scootsPLUpdateCompareUI();
+  scootsPLRenderCompanyPicker(); // re-render to update disabled state
+}
+
+function scootsPLClearCompare() {
+  scootsPLCompareRealms = [];
+  scootsPLUpdateCompareUI();
+  scootsPLRenderCompanyPicker();
+}
+
+function scootsPLUpdateCompareUI() {
+  const countEl = document.getElementById('scoots-pl-compare-count');
+  const btn = document.getElementById('scoots-pl-compare-btn');
+  const classCb = document.getElementById('scoots-pl-class');
+  const classLbl = document.getElementById('scoots-pl-class-lbl');
+  const n = scootsPLCompareRealms.length;
+  if (countEl) countEl.textContent = n ? `(${n})` : '';
+  if (btn) {
+    btn.style.background = n >= 2 ? '#C8102E' : '#f5f5f5';
+    btn.style.color = n >= 2 ? '#fff' : '#888';
+    btn.style.borderColor = n >= 2 ? '#C8102E' : '#ddd';
+  }
+  // Disable "By Class" in compare mode
+  if (classCb && classLbl) {
+    const compareOn = n >= 2;
+    classCb.disabled = compareOn;
+    if (compareOn) classCb.checked = false;
+    classLbl.style.opacity = compareOn ? '0.4' : '1';
+    classLbl.style.cursor = compareOn ? 'not-allowed' : 'pointer';
+    classLbl.title = compareOn ? 'Unavailable in Compare mode' : '';
+  }
+}
+
+// ── Merge multiple realm reports into one side-by-side report ──────
+function scootsPLBuildMergedReport(perRealmReports) {
+  // perRealmReports: [{ realmId, companyName, report }]
+  // Returns a synthetic QBO-shaped report with one column per realm + a TOTAL column.
+  // Matching is by exact account-path (section › subsection › account name).
+
+  // Build a map per realm: { path => amount }
+  const realmMaps = perRealmReports.map(pr => {
+    const map = new Map();
+    const walk = (rows, parentPath) => {
+      if (!rows) return;
+      for (const row of rows) {
+        if (row.type === 'Data' && row.ColData) {
+          const name = row.ColData[0]?.value || '';
+          const amt = parseFloat(row.ColData[1]?.value) || 0;
+          const path = parentPath ? `${parentPath}›${name}` : name;
+          map.set(path, amt);
+        } else if (row.Header) {
+          const sectionName = row.Header.ColData?.[0]?.value || '';
+          const newPath = parentPath ? `${parentPath}›${sectionName}` : sectionName;
+          walk(row.Rows?.Row || [], newPath);
+          if (row.Summary) {
+            const sumLabel = row.Summary.ColData?.[0]?.value || '';
+            const amt = parseFloat(row.Summary.ColData?.[1]?.value) || 0;
+            // Store summary with a marker to distinguish from data rows
+            map.set(`${parentPath ? parentPath + '›' : ''}${sectionName}:::SUMMARY:::${sumLabel}`, amt);
+          }
+        } else if (row.Summary && !row.Header) {
+          // Grand summary (e.g. Net Income)
+          const sumLabel = row.Summary.ColData?.[0]?.value || '';
+          const amt = parseFloat(row.Summary.ColData?.[1]?.value) || 0;
+          map.set(`:::GRAND:::${sumLabel}`, amt);
+        }
+      }
+    };
+    walk(pr.report?.Rows?.Row || [], '');
+    return map;
+  });
+
+  // Collect all unique paths across realms, preserving first-realm order,
+  // then appending any paths from other realms that weren't in the first
+  const seenPaths = new Set();
+  const orderedPaths = [];
+  const addPathsFromRealm = (realmIdx) => {
+    for (const path of realmMaps[realmIdx].keys()) {
+      if (!seenPaths.has(path)) { seenPaths.add(path); orderedPaths.push(path); }
+    }
+  };
+  for (let i = 0; i < realmMaps.length; i++) addPathsFromRealm(i);
+
+  // Build the merged report using the first realm's structure as a skeleton.
+  // For each row in the first report, build a merged row with ColData = [name, r1, r2, ..., total].
+  const buildColData = (path, displayName) => {
+    const cols = [{ value: displayName }];
+    let total = 0;
+    let anyValue = false;
+    for (const m of realmMaps) {
+      if (m.has(path)) {
+        const v = m.get(path);
+        cols.push({ value: String(v) });
+        total += v;
+        anyValue = true;
+      } else {
+        cols.push({ value: '' });
+      }
+    }
+    cols.push({ value: anyValue ? String(total) : '' });
+    return cols;
+  };
+
+  const walkSource = (rows, parentPath) => {
+    const out = [];
+    for (const row of rows) {
+      if (row.type === 'Data' && row.ColData) {
+        const name = row.ColData[0]?.value || '';
+        const path = parentPath ? `${parentPath}›${name}` : name;
+        out.push({ type: 'Data', ColData: buildColData(path, name) });
+      } else if (row.Header) {
+        const sectionName = row.Header.ColData?.[0]?.value || '';
+        const newPath = parentPath ? `${parentPath}›${sectionName}` : sectionName;
+        const childRows = walkSource(row.Rows?.Row || [], newPath);
+        // Append extra leaf accounts present in other realms but missing from first realm
+        // Only for leaf "Data" rows under this section
+        const firstRealmPaths = new Set();
+        const collectFirstRealmLeaves = (rs, p) => {
+          for (const r of rs || []) {
+            if (r.type === 'Data' && r.ColData) {
+              const n = r.ColData[0]?.value || '';
+              firstRealmPaths.add(p ? `${p}›${n}` : n);
+            } else if (r.Header) {
+              const sn = r.Header.ColData?.[0]?.value || '';
+              collectFirstRealmLeaves(r.Rows?.Row || [], p ? `${p}›${sn}` : sn);
+            }
+          }
+        };
+        collectFirstRealmLeaves(row.Rows?.Row || [], newPath);
+        for (let i = 1; i < realmMaps.length; i++) {
+          for (const p of realmMaps[i].keys()) {
+            if (p.includes(':::')) continue; // skip summaries
+            if (p.startsWith(newPath + '›') && !firstRealmPaths.has(p)) {
+              const leafName = p.split('›').pop();
+              childRows.push({ type: 'Data', ColData: buildColData(p, leafName) });
+              firstRealmPaths.add(p);
+            }
+          }
+        }
+        const newRow = { Header: { ColData: [{ value: sectionName }] }, Rows: { Row: childRows } };
+        if (row.Summary) {
+          const sumLabel = row.Summary.ColData?.[0]?.value || '';
+          const sumPath = `${parentPath ? parentPath + '›' : ''}${sectionName}:::SUMMARY:::${sumLabel}`;
+          newRow.Summary = { ColData: buildColData(sumPath, sumLabel) };
+        }
+        out.push(newRow);
+      } else if (row.Summary && !row.Header) {
+        const sumLabel = row.Summary.ColData?.[0]?.value || '';
+        const sumPath = `:::GRAND:::${sumLabel}`;
+        out.push({ Summary: { ColData: buildColData(sumPath, sumLabel) } });
+      }
+    }
+    return out;
+  };
+
+  const firstReport = perRealmReports[0]?.report || {};
+  const mergedRows = walkSource(firstReport.Rows?.Row || [], '');
+
+  const cols = [{ ColTitle: '' }];
+  perRealmReports.forEach(pr => cols.push({ ColTitle: pr.companyName }));
+  cols.push({ ColTitle: 'TOTAL' });
+
+  return {
+    Header: { CompanyName: `${perRealmReports.length} Companies · Side-by-Side` },
+    Columns: { Column: cols },
+    Rows: { Row: mergedRows },
+  };
 }
 
 async function scootsPLRun() {
@@ -32700,14 +33220,45 @@ async function scootsPLRun() {
     const yoyEndClamped = new Date(yoyEnd.getFullYear(), yoyEnd.getMonth() + 1, 0);
     const yoyEndFinal = yoyEnd > yoyEndClamped ? yoyEndClamped : yoyEnd;
 
-    // Fetch all 3 periods in parallel (no class breakout for comparisons — just totals)
-    const [currentReport, prevReport, yoyReport] = await Promise.all([
-      scootsPLFetch(startDate, endDate, byClass),
-      scootsPLFetch(fmt(prevStart), fmt(prevEndFinal), false),
-      scootsPLFetch(fmt(yoyStart), fmt(yoyEndFinal), false),
-    ]);
+    const compareMode = scootsPLCompareRealms.length >= 2;
 
-    // Extract KPI values from current period
+    let currentReport, prevReport, yoyReport;
+    let compareCompanyNames = [];
+
+    if (compareMode) {
+      // Fetch each selected realm × 3 periods in parallel
+      const currentTasks = scootsPLCompareRealms.map(rid => scootsPLFetchRealm(rid, startDate, endDate, false));
+      const prevTasks    = scootsPLCompareRealms.map(rid => scootsPLFetchRealm(rid, fmt(prevStart), fmt(prevEndFinal), false));
+      const yoyTasks     = scootsPLCompareRealms.map(rid => scootsPLFetchRealm(rid, fmt(yoyStart), fmt(yoyEndFinal), false));
+      const [currentReports, prevReports, yoyReports] = await Promise.all([
+        Promise.all(currentTasks), Promise.all(prevTasks), Promise.all(yoyTasks)
+      ]);
+      // Build merged current report
+      const perRealm = scootsPLCompareRealms.map((rid, i) => ({
+        realmId: rid,
+        companyName: (qboAllCompanies[rid]?.companyName) || rid,
+        report: currentReports[i],
+      }));
+      compareCompanyNames = perRealm.map(p => p.companyName);
+      currentReport = scootsPLBuildMergedReport(perRealm);
+      // For KPI aggregation, we still pass through the individual reports — merge also for prev/yoy
+      prevReport = scootsPLBuildMergedReport(scootsPLCompareRealms.map((rid, i) => ({
+        realmId: rid, companyName: qboAllCompanies[rid]?.companyName || rid, report: prevReports[i]
+      })));
+      yoyReport = scootsPLBuildMergedReport(scootsPLCompareRealms.map((rid, i) => ({
+        realmId: rid, companyName: qboAllCompanies[rid]?.companyName || rid, report: yoyReports[i]
+      })));
+    } else {
+      // Fetch all 3 periods in parallel (no class breakout for comparisons — just totals)
+      [currentReport, prevReport, yoyReport] = await Promise.all([
+        scootsPLFetch(startDate, endDate, byClass),
+        scootsPLFetch(fmt(prevStart), fmt(prevEndFinal), false),
+        scootsPLFetch(fmt(yoyStart), fmt(yoyEndFinal), false),
+      ]);
+    }
+
+    // Extract KPI values — scootsPLExtract/DeepSearch already read the LAST numeric column,
+    // which is the total column for a single report AND the TOTAL column for our merged report.
     const allRows = currentReport?.Rows?.Row || [];
     const totalIncome = scootsPLExtract(currentReport, 'income', 'revenue') || scootsPLExtract(currentReport, 'gross profit');
     const cogs = Math.abs(scootsPLExtract(currentReport, 'cost of goods', 'cogs'));
@@ -32715,9 +33266,7 @@ async function scootsPLRun() {
     const discounts = Math.abs(scootsPLDeepSearch(allRows, 'discount'));
     const netIncome = scootsPLExtract(currentReport, 'net income', 'net operating');
 
-    // Previous period income
     const prevIncome = scootsPLExtract(prevReport, 'income', 'revenue') || scootsPLExtract(prevReport, 'gross profit');
-    // YoY income
     const yoyIncome = scootsPLExtract(yoyReport, 'income', 'revenue') || scootsPLExtract(yoyReport, 'gross profit');
 
     // Calculate KPI metrics
@@ -32729,19 +33278,27 @@ async function scootsPLRun() {
     const payrollPct = totalIncome ? (payroll / Math.abs(totalIncome)) * 100 : 0;
     const discountPct = totalIncome ? (discounts / Math.abs(totalIncome)) * 100 : 0;
 
-    // Render company header — try report header options, then QBO company, then fallback
-    let reportName = '';
-    const headerOpts = currentReport?.Header?.Option || [];
-    for (const opt of headerOpts) {
-      if (opt.Name === 'CompanyName' && opt.Value) { reportName = opt.Value; break; }
+    // Render company header
+    let companyName;
+    if (compareMode) {
+      companyName = `${compareCompanyNames.length} Companies · Side-by-Side`;
+    } else {
+      let reportName = '';
+      const headerOpts = currentReport?.Header?.Option || [];
+      for (const opt of headerOpts) {
+        if (opt.Name === 'CompanyName' && opt.Value) { reportName = opt.Value; break; }
+      }
+      if (!reportName) reportName = currentReport?.Header?.CompanyName || '';
+      companyName = reportName || qboCurrentCompany?.name || 'Company';
     }
-    if (!reportName) reportName = currentReport?.Header?.CompanyName || '';
-    const companyName = reportName || qboCurrentCompany?.name || 'Company';
     const headerEl = document.getElementById('scoots-pl-header');
     if (headerEl) {
+      const subtitle = compareMode
+        ? `${compareCompanyNames.join(' · ')} &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}`
+        : `Profit &amp; Loss &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}`;
       headerEl.innerHTML = `<div style="text-align:center;padding:8px 0 20px;">
         <div style="font-family:'DM Sans',sans-serif;font-size:26px;font-weight:700;color:#1a1a1a;letter-spacing:-.02em;">${companyName}</div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#999;margin-top:6px;">Profit &amp; Loss &nbsp;&middot;&nbsp; ${startDate} &ndash; ${endDate}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;color:#999;margin-top:6px;">${subtitle}</div>
       </div>`;
       headerEl.style.display = '';
     }
@@ -32757,11 +33314,12 @@ async function scootsPLRun() {
     });
     kpiBox.style.display = '';
 
-    // Render P&L report
-    scootsPLRenderReport(currentReport, output, showPct, byClass);
+    // Render P&L report — in compare mode, treat as byClass so per-column %-of-income works
+    scootsPLRenderReport(currentReport, output, showPct, byClass || compareMode);
 
-    statusEl.textContent = startDate + ' → ' + endDate;
-    qboLog('info', 'Scooter\'s P&L loaded for ' + startDate + ' → ' + endDate);
+    const storesMsg = compareMode ? `${compareCompanyNames.length} stores · ` : '';
+    statusEl.textContent = storesMsg + startDate + ' → ' + endDate;
+    qboLog('info', 'Scooter\'s P&L loaded for ' + startDate + ' → ' + endDate + (compareMode ? ` (${compareCompanyNames.length} stores)` : ''));
   } catch (e) {
     output.innerHTML = `<div style="padding:40px 20px;text-align:center;"><div style="font-size:13px;color:#cb2431;font-weight:500;">${e.message}</div></div>`;
     statusEl.textContent = 'Error';
@@ -32834,26 +33392,24 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
     html += '</div>';
   }
 
-  // Income total for % of Income
-  let incomeTotal = 0;
+  // Income totals for % of Income — one per column so By Class uses per-class income
+  // incomeTotals[i] corresponds to the i-th ColData entry (i=0 is the label, i>=1 are numeric columns)
+  let incomeTotals = [];
   if (showPct) {
+    const extractTotals = (sumData) => sumData.map((c, idx) => idx === 0 ? 0 : (parseFloat(c.value) || 0));
     for (const section of rows) {
       const headerLabel = section.Header?.ColData?.[0]?.value || '';
       if (headerLabel.toLowerCase().includes('income') && !headerLabel.toLowerCase().includes('other') && !headerLabel.toLowerCase().includes('net')) {
         const sumVals = section.Summary?.ColData || [];
-        const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
-        if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
-        break;
+        if (sumVals.length) { incomeTotals = extractTotals(sumVals); break; }
       }
     }
-    if (!incomeTotal) {
+    if (!incomeTotals.length) {
       for (const section of rows) {
         const sumLabel = section.Summary?.ColData?.[0]?.value || '';
         if (sumLabel.toLowerCase().includes('total income') || sumLabel.toLowerCase() === 'gross profit') {
           const sumVals = section.Summary?.ColData || [];
-          const totalCol = byClass ? sumVals[sumVals.length - 1] : sumVals[1] || sumVals[sumVals.length - 1];
-          if (totalCol) incomeTotal = parseFloat(totalCol.value) || 0;
-          break;
+          if (sumVals.length) { incomeTotals = extractTotals(sumVals); break; }
         }
       }
     }
@@ -32865,13 +33421,13 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
       html += `<div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;color:#1a1a1a;padding:20px 0 10px;border-bottom:1px solid #e8e8e8;margin-top:10px;cursor:pointer;letter-spacing:.01em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
         ${headerVal[0] || 'Section'}</div>`;
       html += '<div>';
-      html += scootsPLRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotal, byClass, colW);
+      html += scootsPLRows(section.Rows?.Row || [], 0, colCount, showPct, incomeTotals, byClass, colW);
       if (section.Summary) {
-        html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, true);
+        html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, colW, true);
       }
       html += '</div>';
     } else if (section.Summary) {
-      html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, false, true);
+      html += scootsPLSumRow(section.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, colW, false, true);
     }
   }
   html += '</div>';
@@ -32910,7 +33466,7 @@ function scootsPLPrint() {
   setTimeout(() => { printWin.print(); }, 600);
 }
 
-function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW) {
+function scootsPLRows(rows, depth, colCount, showPct, incomeTotals, byClass, colW) {
   let html = '';
   const indent = depth * 20;
   for (const row of rows) {
@@ -32924,8 +33480,9 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
         const clr = n < 0 ? '#cb2431' : '#333';
         html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:${clr};font-variant-numeric:tabular-nums;">${money}</span>`;
         if (showPct) {
-          if (incomeTotal) {
-            const pct = (n || 0) / incomeTotal * 100;
+          const colIncome = (incomeTotals && incomeTotals[i]) ? incomeTotals[i] : 0;
+          if (colIncome) {
+            const pct = (n || 0) / colIncome * 100;
             html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:#777;font-weight:500;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
           } else {
             html += `<span style="width:60px;"></span>`;
@@ -32937,9 +33494,9 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
       const headerVals = row.Header.ColData?.map(c => c.value) || [];
       html += `<div style="font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:14px 0 5px ${indent}px;color:#888;cursor:pointer;letter-spacing:.02em;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">${headerVals[0] || ''}</div>`;
       html += '<div>';
-      html += scootsPLRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotal, byClass, colW);
+      html += scootsPLRows(row.Rows?.Row || [], depth + 1, colCount, showPct, incomeTotals, byClass, colW);
       if (row.Summary) {
-        html += scootsPLSumRow(row.Summary.ColData || [], colCount, showPct, incomeTotal, byClass, colW, true);
+        html += scootsPLSumRow(row.Summary.ColData || [], colCount, showPct, incomeTotals, byClass, colW, true);
       }
       html += '</div>';
     }
@@ -32947,7 +33504,7 @@ function scootsPLRows(rows, depth, colCount, showPct, incomeTotal, byClass, colW
   return html;
 }
 
-function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, isSection, isGrand) {
+function scootsPLSumRow(colData, colCount, showPct, incomeTotals, byClass, colW, isSection, isGrand) {
   const vals = colData.map(c => c.value);
   const bTop = isGrand ? '2px solid #1a1a1a' : '1px solid #ddd';
   const bBot = isGrand ? '2px solid #1a1a1a' : 'none';
@@ -32963,8 +33520,9 @@ function scootsPLSumRow(colData, colCount, showPct, incomeTotal, byClass, colW, 
     const clr = n < 0 ? '#cb2431' : '#1a1a1a';
     html += `<span style="width:${colW};text-align:right;font-family:'DM Mono',monospace;color:${clr};font-variant-numeric:tabular-nums;">${money}</span>`;
     if (showPct) {
-      if (incomeTotal) {
-        const pct = (n || 0) / incomeTotal * 100;
+      const colIncome = (incomeTotals && incomeTotals[i]) ? incomeTotals[i] : 0;
+      if (colIncome) {
+        const pct = (n || 0) / colIncome * 100;
         html += `<span style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:#555;font-weight:600;font-variant-numeric:tabular-nums;">${pct.toFixed(1)}%</span>`;
       } else {
         html += `<span style="width:60px;"></span>`;
@@ -42315,6 +42873,21 @@ async function intConnectWithToken() {
 </div>
 
 
+<!-- ════ W-2 EXPORT READINESS MODAL ════ -->
+<div class="overlay" id="modal-w2-readiness" style="display:none" onclick="overlayClose(event,'modal-w2-readiness')">
+  <div class="modal" style="width:680px;max-height:94vh;display:flex;flex-direction:column;">
+    <div class="modal-head">
+      <div class="modal-title">⚠ Employer Info Check — Required for SSA Filing</div>
+      <button class="modal-close" onclick="closeModal('modal-w2-readiness')">×</button>
+    </div>
+    <div class="modal-body" id="w2-readiness-body" style="overflow-y:auto;"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-w2-readiness')">Cancel Export</button>
+      <button class="btn btn-primary" id="w2-readiness-continue-btn" onclick="w2ReadinessContinue()" disabled>Continue Export →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════ W-2 MODAL ════ -->
 <div class="overlay" id="modal-w2" style="display:none" onclick="overlayClose(event,'modal-w2')">
   <div class="modal" style="width:860px;max-height:94vh;display:flex;flex-direction:column;">
@@ -42324,10 +42897,24 @@ async function intConnectWithToken() {
     </div>
     <div class="modal-body" style="overflow-y:auto;display:flex;flex-direction:column;gap:18px;">
       <div style="display:grid;grid-template-columns:1fr 120px;gap:16px;">
-        <div><label class="field-label">Employer (Client) <span style="color:#c0392b;">*</span></label>
-          <select id="w2-employer-id" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
+        <div><label class="field-label">Employer <span style="color:#c0392b;">*</span></label>
+          <select id="w2-employer-id" onchange="w2OnEmployerChange()" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
         <div><label class="field-label">Tax Year <span style="color:#c0392b;">*</span></label>
           <select id="w2-year" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
+      </div>
+      <!-- Override Employer Fields (shown when '— Other Employer —' is picked) -->
+      <div id="w2-other-employer-box" style="display:none;background:#fdf3e3;border:1px solid #e8c97e;border-radius:var(--radius);padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a5a10;margin-bottom:10px;">Other Employer — Manual Entry</div>
+        <div style="display:grid;grid-template-columns:1fr 160px;gap:12px;">
+          <div><label class="field-label">Business Name <span style="color:#c0392b;">*</span></label><input id="w2-other-name" class="field-input" placeholder="Employer legal name"></div>
+          <div><label class="field-label">EIN <span style="color:#c0392b;">*</span></label><input id="w2-other-ein" class="field-input" placeholder="XX-XXXXXXX" maxlength="10"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 80px 80px;gap:12px;margin-top:10px;">
+          <div><label class="field-label">Street</label><input id="w2-other-addr" class="field-input" placeholder="123 Main St"></div>
+          <div><label class="field-label">City</label><input id="w2-other-city" class="field-input"></div>
+          <div><label class="field-label">State</label><input id="w2-other-state" class="field-input" maxlength="2" style="text-transform:uppercase;"></div>
+          <div><label class="field-label">ZIP</label><input id="w2-other-zip" class="field-input" maxlength="10"></div>
+        </div>
       </div>
       <div style="background:var(--surface2);border-radius:var(--radius);padding:14px 16px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);margin-bottom:10px;">Employee Information</div>
@@ -42421,12 +43008,26 @@ async function intConnectWithToken() {
 
       <!-- Employer / Year / WFID -->
       <div style="display:grid;grid-template-columns:1fr 120px 1fr;gap:16px;">
-        <div><label class="field-label">Employer (Client) <span style="color:#c0392b;">*</span></label>
-          <select id="w2c-employer-id" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
+        <div><label class="field-label">Employer <span style="color:#c0392b;">*</span></label>
+          <select id="w2c-employer-id" onchange="w2cOnEmployerChange()" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
         <div><label class="field-label">Tax Year <span style="color:#c0392b;">*</span></label>
           <select id="w2c-year" style="width:100%;height:42px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:#fff;"></select></div>
         <div><label class="field-label">WFID <span style="color:#c0392b;">*</span> <span style="font-weight:400;font-size:11px;color:var(--text-d)">(from Resubmission Notice)</span></label>
           <input id="w2c-wfid" class="field-input" placeholder="17-digit WFID"></div>
+      </div>
+      <!-- Override Employer Fields (shown when '— Other Employer —' is picked) -->
+      <div id="w2c-other-employer-box" style="display:none;background:#fdf3e3;border:1px solid #e8c97e;border-radius:var(--radius);padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7a5a10;margin-bottom:10px;">Other Employer — Manual Entry</div>
+        <div style="display:grid;grid-template-columns:1fr 160px;gap:12px;">
+          <div><label class="field-label">Business Name <span style="color:#c0392b;">*</span></label><input id="w2c-other-name" class="field-input" placeholder="Employer legal name"></div>
+          <div><label class="field-label">EIN <span style="color:#c0392b;">*</span></label><input id="w2c-other-ein" class="field-input" placeholder="XX-XXXXXXX" maxlength="10"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 80px 80px;gap:12px;margin-top:10px;">
+          <div><label class="field-label">Street</label><input id="w2c-other-addr" class="field-input" placeholder="123 Main St"></div>
+          <div><label class="field-label">City</label><input id="w2c-other-city" class="field-input"></div>
+          <div><label class="field-label">State</label><input id="w2c-other-state" class="field-input" maxlength="2" style="text-transform:uppercase;"></div>
+          <div><label class="field-label">ZIP</label><input id="w2c-other-zip" class="field-input" maxlength="10"></div>
+        </div>
       </div>
 
       <!-- Employee name / SSN correction -->
@@ -42447,6 +43048,16 @@ async function intConnectWithToken() {
             <div><label class="field-label">Correct Last Name</label><input id="w2c-corr-last" class="field-input" placeholder="Correct last name"></div>
             <div><label class="field-label">Correct SSN</label><input id="w2c-corr-ssn" class="field-input" placeholder="XXX-XX-XXXX" maxlength="11" oninput="fmtSSN(this)"></div>
             <div><label class="field-label">Correct Suffix</label><input id="w2c-corr-suffix" class="field-input" placeholder="Jr, Sr, II…" maxlength="4"></div>
+          </div>
+        </div>
+        <!-- Employee address (optional — SSA allows blank but recommended) -->
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">
+          <div style="font-size:11px;font-weight:700;color:var(--text-d);margin-bottom:8px;">Employee Address <span style="font-weight:400;">(optional)</span></div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 80px 80px;gap:12px;">
+            <div><label class="field-label">Street</label><input id="w2c-emp-addr" class="field-input" placeholder="123 Main St"></div>
+            <div><label class="field-label">City</label><input id="w2c-emp-city" class="field-input"></div>
+            <div><label class="field-label">State</label><input id="w2c-emp-state" class="field-input" maxlength="2" style="text-transform:uppercase;"></div>
+            <div><label class="field-label">ZIP</label><input id="w2c-emp-zip" class="field-input" maxlength="10"></div>
           </div>
         </div>
       </div>
