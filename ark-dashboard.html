@@ -6084,6 +6084,58 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
 
           <hr class="section-divider">
+          <div class="section-label">Filing Automation <span style="font-size:11px;font-weight:400;color:var(--text-d);">— powers the Sales Tax Filing Center</span></div>
+
+          <div class="fg full">
+            <label>Jurisdictions this client files in <span style="font-size:11px;font-weight:400;color:var(--text-d);">— pick from the Rate Database</span></label>
+            <div id="mc-st-jur-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;min-height:50px;">
+              <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+                <input id="mc-st-jur-search" placeholder="Type city/code to search…" oninput="mcStJurDD()" onfocus="mcStJurDD()"
+                  style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">
+                <select id="mc-st-jur-state" onchange="mcStJurDD()" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;">
+                  <option value="">All States</option>
+                </select>
+              </div>
+              <div id="mc-st-jur-dd" style="display:none;max-height:160px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;"></div>
+              <div id="mc-st-jur-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
+            </div>
+          </div>
+
+          <div class="fg">
+            <label>Source Report Format <span style="font-size:11px;font-weight:400;color:var(--text-d);">— how this client's data arrives</span></label>
+            <select id="mc-st-import-profile">
+              <option value="manual">Manual entry (I type the numbers)</option>
+              <option value="qbo-pdf">QBO Sales Tax Liability Report (PDF)</option>
+              <option value="qbo-xlsx">QBO Sales Tax Liability Report (XLSX)</option>
+              <option value="pbi-excel">Scooters Power BI Excel</option>
+              <option value="lightspeed-csv">Lightspeed CSV</option>
+              <option value="toast-pdf">Toast POS Sales Summary (PDF)</option>
+              <option value="square">Square export</option>
+              <option value="clover">Clover export</option>
+              <option value="shopify">Shopify export</option>
+              <option value="pointofrental">Point of Rental export</option>
+              <option value="servicefusion">Service Fusion export</option>
+              <option value="email-pdf">Email PDF from client</option>
+            </select>
+          </div>
+
+          <div class="fg">
+            <label>Calculation Mode <span style="font-size:11px;font-weight:400;color:var(--text-d);">— which way the math runs</span></label>
+            <select id="mc-st-calc-mode">
+              <option value="from_tax">Back-calc net from tax collected (default)</option>
+              <option value="from_sales">Calculate tax from sales reported (Powers/Cheri/Postscript)</option>
+            </select>
+          </div>
+
+          <div class="fg full">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="mc-st-round-whole">
+              <span style="font-size:13px;">Round calculated net sales to the nearest whole dollar</span>
+              <span style="font-size:11px;color:var(--text-d);">— many states require whole-dollar taxable amounts</span>
+            </label>
+          </div>
+
+          <hr class="section-divider">
           <div class="section-label">ACH / Banking</div>
 
           <div class="fg">
@@ -12802,6 +12854,13 @@ function openAddClient(){
   document.getElementById('mc-st-freq').value='';
   document.getElementById('mc-st-nextdue').value='';
   document.getElementById('mc-st-nexus').value='';
+  // Filing Automation defaults
+  _mcStJurSelected = [];
+  if (document.getElementById('mc-st-import-profile')) document.getElementById('mc-st-import-profile').value = 'manual';
+  if (document.getElementById('mc-st-calc-mode'))       document.getElementById('mc-st-calc-mode').value = 'from_tax';
+  if (document.getElementById('mc-st-round-whole'))     document.getElementById('mc-st-round-whole').checked = false;
+  mcStJurRenderChips();
+  mcStJurRefreshStateDD();
   initStStates(false,[]);
   if(document.getElementById('mc-st-nextdue')) document.getElementById('mc-st-nextdue').value='';
   initStStates(false, []);
@@ -12859,6 +12918,13 @@ function openEditClient(id){
   document.getElementById('mc-st-url').value=c.stUrl||'';
   document.getElementById('mc-st-user').value=c.stUser||'';
   document.getElementById('mc-st-pass').value=c.stPass||'';
+  // Filing Automation
+  _mcStJurSelected = Array.isArray(c.stJurisdictionIds) ? [...c.stJurisdictionIds] : [];
+  if (document.getElementById('mc-st-import-profile')) document.getElementById('mc-st-import-profile').value = c.stImportProfile || 'manual';
+  if (document.getElementById('mc-st-calc-mode'))       document.getElementById('mc-st-calc-mode').value   = c.stCalcMode    || 'from_tax';
+  if (document.getElementById('mc-st-round-whole'))     document.getElementById('mc-st-round-whole').checked = !!c.stRoundWhole;
+  mcStJurRefreshStateDD();
+  mcStJurRenderChips();
   document.getElementById('mc-ach-bank').value=c.achBank||'';
   document.getElementById('mc-ach-accttype').value=c.achAccttype||'';
   document.getElementById('mc-ach-routing').value=c.achRouting||'';
@@ -12984,6 +13050,11 @@ function saveClient(){
     stNexus:  (document.getElementById('mc-st-nexus')?.value||'').trim(),
     stMulti:  document.getElementById('mc-st-multi')?.checked||false,
     stStates: document.getElementById('mc-st-multi')?.checked ? getStStates() : [],
+    // Filing Automation
+    stJurisdictionIds: Array.isArray(_mcStJurSelected) ? [..._mcStJurSelected] : [],
+    stImportProfile:   document.getElementById('mc-st-import-profile')?.value || 'manual',
+    stCalcMode:        document.getElementById('mc-st-calc-mode')?.value || 'from_tax',
+    stRoundWhole:      !!document.getElementById('mc-st-round-whole')?.checked,
     taxMethod:document.getElementById('mc-tax-method').value,
     taxCpa:document.getElementById('mc-tax-cpa').value.trim(),
     taxCpaEmail:document.getElementById('mc-tax-cpa-email').value.trim(),
@@ -19693,6 +19764,86 @@ function stTab(tab){
   if (tab==='rates') strRender();
   if (tab==='calc' && !document.querySelector('#stc-store-list .stc-store-row')) stcBuildStoreList();
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  PER-CLIENT JURISDICTION PICKER (for Sales Tax tab in client modal)
+//  Multi-select chip interface backed by DB.salesTaxRates
+// ══════════════════════════════════════════════════════════════════
+let _mcStJurSelected = [];
+
+function mcStJurRefreshStateDD(){
+  const sel = document.getElementById('mc-st-jur-state');
+  if (!sel) return;
+  const rates = DB.salesTaxRates || [];
+  const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All States</option>' +
+    states.map(s=>`<option ${s===cur?'selected':''}>${s}</option>`).join('');
+}
+
+function mcStJurDD(){
+  const dd = document.getElementById('mc-st-jur-dd');
+  if (!dd) return;
+  const q  = (document.getElementById('mc-st-jur-search')?.value||'').toLowerCase().trim();
+  const fs = document.getElementById('mc-st-jur-state')?.value || '';
+  const rates = DB.salesTaxRates || [];
+  const pool = rates.filter(r => {
+    if (fs && r.state !== fs) return false;
+    if (_mcStJurSelected.includes(r.id)) return false;
+    if (!q) return true;
+    return (r.name||'').toLowerCase().includes(q)
+        || (r.code||'').toLowerCase().includes(q)
+        || (r.state||'').toLowerCase().includes(q);
+  }).sort((a,b)=>(a.state||'').localeCompare(b.state||'')||(a.name||'').localeCompare(b.name||''));
+  if (!q && !fs) { dd.style.display='none'; return; }  // hide until user narrows it
+  if (!pool.length){
+    dd.innerHTML = '<div style="padding:10px;font-size:11px;color:var(--text-d);">No match.</div>';
+    dd.style.display = 'block'; return;
+  }
+  dd.innerHTML = pool.slice(0, 40).map(r => {
+    const pct = (r.rate*100).toFixed(r.rate>=0.01?2:4);
+    return `<div onclick="mcStJurAdd('${r.id}')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span><strong>${r.name}</strong> <span style="color:var(--text-d);font-size:10px;">${r.state} · ${r.code||''}</span></span>
+      <span style="font-family:'DM Mono',monospace;color:var(--text-d);">${pct}%</span>
+    </div>`;
+  }).join('') + (pool.length > 40 ? `<div style="padding:6px;font-size:10px;color:var(--text-d);text-align:center;">${pool.length-40} more — narrow your search</div>` : '');
+  dd.style.display = 'block';
+}
+
+function mcStJurAdd(id){
+  if (!_mcStJurSelected.includes(id)) _mcStJurSelected.push(id);
+  const inp = document.getElementById('mc-st-jur-search'); if (inp) inp.value = '';
+  mcStJurDD();
+  mcStJurRenderChips();
+}
+
+function mcStJurRemove(id){
+  _mcStJurSelected = _mcStJurSelected.filter(x=>x!==id);
+  mcStJurRenderChips();
+  mcStJurDD();
+}
+
+function mcStJurRenderChips(){
+  const wrap = document.getElementById('mc-st-jur-chips');
+  if (!wrap) return;
+  if (!_mcStJurSelected.length){
+    wrap.innerHTML = '<span style="font-size:11px;color:var(--text-d);font-style:italic;">No jurisdictions selected — required for filing automation.</span>';
+    return;
+  }
+  const rates = DB.salesTaxRates || [];
+  wrap.innerHTML = _mcStJurSelected.map(id => {
+    const r = rates.find(x=>x.id===id);
+    if (!r) return `<span style="background:var(--surface);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:12px;font-size:11px;">Unknown (${id.slice(0,6)}…) <button onclick="mcStJurRemove('${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0 0 0 4px;">✕</button></span>`;
+    const pct = (r.rate*100).toFixed(r.rate>=0.01?2:4);
+    const color = r.type==='state' ? 'var(--navy)' : 'var(--accent)';
+    return `<span style="background:var(--surface);border:1px solid ${color};color:${color};padding:3px 10px;border-radius:12px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
+      <strong>${r.name}</strong>
+      <span style="color:var(--text-d);font-family:'DM Mono',monospace;">${r.state} · ${r.code||''} · ${pct}%</span>
+      <button onclick="mcStJurRemove('${r.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;padding:0;font-weight:bold;" title="Remove">✕</button>
+    </span>`;
+  }).join('');
+}
+
 
 // ══════════════════════════════════════════════════════════════════
 //  SALES TAX RATE DATABASE (strXxx)
