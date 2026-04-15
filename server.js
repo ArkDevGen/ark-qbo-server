@@ -5360,6 +5360,10 @@ const _MERGE_ARRAYS_BY_ID = [
   'devProjects', 'devTemplates',
   // Scooters JE push history
   'sjePushLog',
+  // Sales Tax Filing Center
+  'salesTaxRates',       // jurisdiction rate database (state/city/county)
+  'salesTaxFilings',     // filing history per client per period
+  'salesTaxClientSetup', // per-client sales tax config (jurisdictions, import profile, portal URL)
 ];
 
 function _mergeArrayById(existing, incoming) {
@@ -5456,6 +5460,37 @@ app.post('/db/save', requireAuth, (req, res) => {
     res.status(500).json({ error: 'Failed to save database' });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────
+// SALES TAX: Seed data + legacy rate migration
+// Serves static seed files that the dashboard imports on first use
+// ─────────────────────────────────────────────────────────────────
+const SALES_TAX_CONFIG_DIR = path.join(__dirname, 'config');
+
+app.get('/sales-tax/seed/ne-jurisdictions', requireAuth, (req, res) => {
+  try {
+    const p = path.join(SALES_TAX_CONFIG_DIR, 'ne-jurisdictions.json');
+    if (!fs.existsSync(p)) return res.status(404).json({ error: 'Seed file not found' });
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    res.json({ jurisdictions: data, count: data.length });
+  } catch (e) {
+    console.error('NE jurisdictions seed error:', e.message);
+    res.status(500).json({ error: 'Failed to load NE jurisdictions' });
+  }
+});
+
+app.get('/sales-tax/legacy-rates', requireAuth, (req, res) => {
+  try {
+    const p = path.join(SALES_TAX_CONFIG_DIR, 'legacy-store-rates.json');
+    if (!fs.existsSync(p)) return res.status(404).json({ error: 'Legacy rates file not found' });
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    res.json({ rates: data, count: data.length });
+  } catch (e) {
+    console.error('Legacy rates error:', e.message);
+    res.status(500).json({ error: 'Failed to load legacy rates' });
+  }
+});
+
 
 // ─────────────────────────────────────────────────────────────────
 // SCOOTER'S: Sales Journal Entry Parser

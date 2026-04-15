@@ -1832,6 +1832,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
         style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--navy);border-bottom:3px solid var(--navy);margin-bottom:-2px;transition:all .15s;">
         📋 Client Filing Info
       </div>
+      <div id="st-tab-rates" onclick="stTab('rates')"
+        style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;">
+        🗂 Rate Database
+      </div>
       <div id="st-tab-calc" onclick="stTab('calc')"
         style="padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;">
         🧮 Scooters Calculator
@@ -1875,6 +1879,47 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </table>
         </div>
         <div id="st-empty" style="display:none;padding:32px;text-align:center;color:var(--text-d);font-size:13px;font-style:italic;">No clients with sales tax info found.</div>
+      </div>
+    </div>
+
+    <!-- Rate Database Panel -->
+    <div id="st-panel-rates" style="display:none;padding:28px;">
+      <div class="card" style="margin-bottom:18px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Sales Tax Rate Database</div>
+            <div class="card-subtitle">State, city, and county rates with jurisdiction codes. Rates should be re-verified quarterly against state DOR websites.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input id="str-search" placeholder="Search city, code, or state…" oninput="strRender()"
+              style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;width:220px;">
+            <select id="str-filter-state" onchange="strRender()"
+              style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);">
+              <option value="">All States</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="strSeedNebraska()" style="font-size:11px;padding:6px 12px;" title="Load the 280+ Nebraska jurisdiction codes and current rates from the shipped seed file">⬇ Seed Nebraska</button>
+            <button class="btn btn-primary btn-sm" onclick="strOpenAdd()" style="font-size:11px;padding:6px 12px;">+ Add Rate</button>
+          </div>
+        </div>
+        <div id="str-stats" style="padding:10px 18px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;"></div>
+        <div class="tbl-wrap" style="max-height:70vh;overflow-y:auto;">
+          <table>
+            <thead style="position:sticky;top:0;background:var(--surface);z-index:2;">
+              <tr>
+                <th style="width:80px;">Code</th>
+                <th>Jurisdiction</th>
+                <th style="width:70px;">State</th>
+                <th style="width:90px;">Type</th>
+                <th style="width:90px;text-align:right;">Rate</th>
+                <th style="width:130px;">Last Verified</th>
+                <th style="width:130px;">Verified By</th>
+                <th style="width:160px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="str-tbody"></tbody>
+          </table>
+        </div>
+        <div id="str-empty" style="display:none;padding:32px;text-align:center;color:var(--text-d);font-size:13px;font-style:italic;">No jurisdictions yet. Click "Seed Nebraska" to import the 280+ NE codes, or "+ Add Rate" to add one manually.</div>
       </div>
     </div>
 
@@ -6667,6 +6712,41 @@ input[type="checkbox"]{accent-color:var(--navy);}
   </div>
 </div>
 
+<!-- ════ SALES TAX RATE MODAL ════ -->
+<div class="overlay" id="modal-str" style="display:none" onclick="overlayClose(event,'modal-str')">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="str-modal-title">Add Sales Tax Rate</div>
+      <button class="modal-close" onclick="closeModal('modal-str')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="fg"><label>Jurisdiction Code</label><input id="str-code" placeholder="e.g. 506 (NE), or blank for state-level" style="font-family:'DM Mono',monospace;"></div>
+        <div class="fg"><label>State *</label><input id="str-state" maxlength="2" placeholder="NE" style="text-transform:uppercase;"></div>
+        <div class="fg full"><label>Jurisdiction Name *</label><input id="str-name" placeholder="Wahoo, Lancaster County, Nebraska State, etc."></div>
+        <div class="fg"><label>Type</label>
+          <select id="str-type">
+            <option value="state">State</option>
+            <option value="city" selected>City</option>
+            <option value="county">County</option>
+            <option value="transit">Transit / Special District</option>
+            <option value="school">School District</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="fg"><label>Rate (%) *</label><input id="str-rate" type="number" step="0.001" min="0" max="25" placeholder="e.g. 1.75 for 1.75%"></div>
+        <div class="fg"><label>Effective Date</label><input id="str-effective" type="date"></div>
+        <div class="fg full"><label>Source URL</label><input id="str-sourceurl" placeholder="Link to state DOR rate page for verification"></div>
+        <div class="fg full"><label>Notes</label><textarea id="str-notes" rows="2" style="resize:vertical;"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-str')">Cancel</button>
+      <button class="btn btn-primary" onclick="strSave()">Save Rate</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════ CLIENT DETAIL MODAL ════ -->
 <div class="overlay" id="modal-detail" style="display:none" onclick="overlayClose(event,'modal-detail')">
   <div class="modal modal-lg">
@@ -7159,7 +7239,7 @@ function logAct(desc, clientId=null, amId=null){
 const ARK_DB_KEY = 'ark_db_v1';
 const ARK_SERVER = 'https://ark-qbo-server.onrender.com';
 
-const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
+const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], salesTaxRates:[], salesTaxFilings:[], salesTaxClientSetup:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
 
 // ── Server-synced DB persistence ───────────────────────────────────
 // saveDB() writes to localStorage (instant) then debounces a server sync.
@@ -7210,6 +7290,10 @@ function _buildDBPayload() {
     devProjects:    DB.devProjects||[],
     devTemplates:   DB.devTemplates||[],
     sjePushLog:     DB.sjePushLog||[],
+    // Sales Tax Filing Center
+    salesTaxRates:       DB.salesTaxRates||[],
+    salesTaxFilings:     DB.salesTaxFilings||[],
+    salesTaxClientSetup: DB.salesTaxClientSetup||[],
     _savedAt:       new Date().toISOString()
   };
 }
@@ -7249,6 +7333,10 @@ function _applyDBPayload(saved) {
     devProjects:    saved.devProjects    || [],
     devTemplates:   saved.devTemplates   || [],
     sjePushLog:     saved.sjePushLog     || [],
+    // Sales Tax Filing Center
+    salesTaxRates:       saved.salesTaxRates       || [],
+    salesTaxFilings:     saved.salesTaxFilings     || [],
+    salesTaxClientSetup: saved.salesTaxClientSetup || [],
   });
 }
 
@@ -7500,6 +7588,8 @@ const DEFAULT_AM_PERMS = {
   canDownloadFiles:  true,   // Can download files
   canDeleteFiles:    false,  // Can delete files (admin-sensitive, off by default)
   canRenameFiles:    false,  // Can rename/move files (off by default)
+  // ── Sales Tax Filing Center permissions ──
+  canFileSalesTax:   false,  // Off by default — maps to "Ark - Filers" LastPass group
 };
 
 function getPerms(user){
@@ -8188,6 +8278,7 @@ const PERM_LABELS = {
   canViewProposals:  { label:'Lead Center',        desc:'Create, edit, and download client proposals and agreements' },
   canViewTasks:      { label:'Production',         desc:'Manage recurring and one-time tasks across all clients' },
   canViewFiles:      { label:'File Center',        desc:'Access cloud file storage — upload, download, and manage client documents' },
+  canFileSalesTax:   { label:'File Sales Tax',     desc:'Access the Sales Tax Filing Center, upload client reports, and submit returns (maps to "Ark - Filers" LastPass group)' },
 };
 
 // Report sub-permissions — shown as a grouped section in the modal
@@ -19582,21 +19673,233 @@ function buildEfileRows(type, forms, client){
 // Scooters calc now native — b64 removed
 
 function stTab(tab){
-  const crm  = document.getElementById('st-panel-crm');
-  const calc = document.getElementById('st-panel-calc');
-  const tCrm  = document.getElementById('st-tab-crm');
-  const tCalc = document.getElementById('st-tab-calc');
-  if(tab==='crm'){
-    crm.style.display=''; calc.style.display='none';
-    tCrm.style.color='var(--navy)'; tCrm.style.borderBottomColor='var(--navy)';
-    tCalc.style.color='var(--text-d)'; tCalc.style.borderBottomColor='transparent';
-  } else {
-    crm.style.display='none'; calc.style.display='';
-    tCalc.style.color='var(--navy)'; tCalc.style.borderBottomColor='var(--navy)';
-    tCrm.style.color='var(--text-d)'; tCrm.style.borderBottomColor='transparent';
-    // Init store list if not already done
-    if(!document.querySelector('#stc-store-list .stc-store-row')) stcBuildStoreList();
+  const crm   = document.getElementById('st-panel-crm');
+  const calc  = document.getElementById('st-panel-calc');
+  const rates = document.getElementById('st-panel-rates');
+  const tCrm   = document.getElementById('st-tab-crm');
+  const tCalc  = document.getElementById('st-tab-calc');
+  const tRates = document.getElementById('st-tab-rates');
+  const reset = (el, selected) => {
+    if (!el) return;
+    el.style.color = selected ? 'var(--navy)' : 'var(--text-d)';
+    el.style.borderBottomColor = selected ? 'var(--navy)' : 'transparent';
+  };
+  crm.style.display   = (tab==='crm')   ? '' : 'none';
+  rates.style.display = (tab==='rates') ? '' : 'none';
+  calc.style.display  = (tab==='calc')  ? '' : 'none';
+  reset(tCrm,   tab==='crm');
+  reset(tRates, tab==='rates');
+  reset(tCalc,  tab==='calc');
+  if (tab==='rates') strRender();
+  if (tab==='calc' && !document.querySelector('#stc-store-list .stc-store-row')) stcBuildStoreList();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SALES TAX RATE DATABASE (strXxx)
+//  CRUD + rendering for DB.salesTaxRates
+//  Shape per record:
+//    { id, code, name, state, type, rate, effectiveDate, lastVerified,
+//      verifiedBy, sourceUrl, notes, _updatedAt }
+// ══════════════════════════════════════════════════════════════════
+function strRender(){
+  const tbody = document.getElementById('str-tbody');
+  const empty = document.getElementById('str-empty');
+  const stats = document.getElementById('str-stats');
+  const stateSel = document.getElementById('str-filter-state');
+  if (!tbody) return;
+  const rates = DB.salesTaxRates || [];
+
+  // Populate state filter dropdown once per render (cheap)
+  const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
+  const curSelState = stateSel.value;
+  stateSel.innerHTML = '<option value="">All States</option>' +
+    states.map(s=>`<option ${s===curSelState?'selected':''}>${s}</option>`).join('');
+
+  const q = (document.getElementById('str-search')?.value||'').toLowerCase().trim();
+  const fs = stateSel.value;
+  const filtered = rates.filter(r => {
+    if (fs && r.state !== fs) return false;
+    if (!q) return true;
+    return (r.name||'').toLowerCase().includes(q)
+        || (r.code||'').toLowerCase().includes(q)
+        || (r.state||'').toLowerCase().includes(q);
+  }).sort((a,b) => (a.state||'').localeCompare(b.state||'') || (a.name||'').localeCompare(b.name||''));
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    stats.textContent = `${rates.length} total jurisdictions — ${states.length} state(s)`;
+    return;
   }
+  empty.style.display = 'none';
+
+  // Stats: count by state, oldest verification
+  const byState = {};
+  rates.forEach(r=>{ byState[r.state]=(byState[r.state]||0)+1; });
+  const withVerify = rates.filter(r=>r.lastVerified);
+  const stale = rates.filter(r => r.lastVerified && (Date.now() - new Date(r.lastVerified).getTime()) > 90*24*60*60*1000);
+  stats.innerHTML = `${rates.length} total · ${states.length} state(s) · `
+    + Object.entries(byState).map(([s,n])=>`${s}: ${n}`).join(', ')
+    + (stale.length ? ` · <span style="color:var(--red);">⚠ ${stale.length} not verified in 90+ days</span>` : '');
+
+  tbody.innerHTML = filtered.map(r => {
+    const ratePct = (r.rate * 100).toFixed(r.rate >= 0.01 ? 2 : 4);
+    const verifiedStale = r.lastVerified && (Date.now() - new Date(r.lastVerified).getTime()) > 90*24*60*60*1000;
+    const vDateDisp = r.lastVerified ? new Date(r.lastVerified).toLocaleDateString() : '<span style="color:var(--text-d);">—</span>';
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${r.code||'—'}</td>
+      <td style="font-weight:600;">${r.name||'—'}</td>
+      <td>${r.state||''}</td>
+      <td style="font-size:11px;color:var(--text-d);text-transform:capitalize;">${r.type||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;text-align:right;">${ratePct}%</td>
+      <td style="font-size:12px;${verifiedStale?'color:var(--red);':''}">${vDateDisp}</td>
+      <td style="font-size:11px;color:var(--text-d);">${r.verifiedBy||''}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="strMarkVerified('${r.id}')" style="font-size:10px;padding:3px 7px;" title="Mark this rate as verified today">✓ Verify</button>
+        <button class="btn btn-ghost btn-sm" onclick="strOpenEdit('${r.id}')" style="font-size:10px;padding:3px 7px;">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="strDelete('${r.id}')" style="font-size:10px;padding:3px 7px;color:var(--red);">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function strSeedNebraska(){
+  const existing = (DB.salesTaxRates||[]).filter(r=>r.state==='NE');
+  if (existing.length > 0){
+    if (!confirm(`You already have ${existing.length} Nebraska jurisdictions. Seeding will ADD any missing ones but won't overwrite your current rates. Continue?`)) return;
+  }
+  try {
+    const resp = await authFetch(ARK_SERVER + '/sales-tax/seed/ne-jurisdictions');
+    if (!resp.ok) { showToast('Failed to load seed data'); return; }
+    const data = await resp.json();
+    const jurs = data.jurisdictions || [];
+    const existingKeys = new Set((DB.salesTaxRates||[]).map(r => `${r.state}:${r.code}`));
+    let added = 0;
+
+    // State-level NE entry if missing (5.5%)
+    if (!existingKeys.has('NE:STATE')){
+      DB.salesTaxRates = DB.salesTaxRates || [];
+      DB.salesTaxRates.push({
+        id: uid(), code: 'STATE', name: 'Nebraska State', state: 'NE', type: 'state',
+        rate: 0.055, effectiveDate: '', lastVerified: '', verifiedBy: '',
+        sourceUrl: 'https://revenue.nebraska.gov/businesses/sales-and-use-tax/rates',
+        notes: '', _updatedAt: new Date().toISOString()
+      });
+      added++;
+    }
+    for (const j of jurs){
+      if (existingKeys.has(`NE:${j.code}`)) continue;
+      DB.salesTaxRates.push({
+        id: uid(), code: j.code, name: j.name, state: 'NE', type: j.type || 'city',
+        rate: j.rate, effectiveDate: '', lastVerified: '', verifiedBy: '',
+        sourceUrl: 'https://revenue.nebraska.gov/businesses/sales-and-use-tax/rates',
+        notes: '', _updatedAt: new Date().toISOString()
+      });
+      added++;
+    }
+    saveDB();
+    strRender();
+    showToast(`Seeded ${added} Nebraska jurisdictions (${jurs.length} total in seed file)`);
+    logAct(`Seeded ${added} NE sales tax jurisdictions`);
+  } catch(e){
+    console.error('Seed NE failed:', e);
+    showToast('Seed failed — check console');
+  }
+}
+
+function strOpenAdd(){
+  _strEditId = null;
+  document.getElementById('str-modal-title').textContent = 'Add Sales Tax Rate';
+  document.getElementById('str-code').value = '';
+  document.getElementById('str-name').value = '';
+  document.getElementById('str-state').value = 'NE';
+  document.getElementById('str-type').value = 'city';
+  document.getElementById('str-rate').value = '';
+  document.getElementById('str-effective').value = '';
+  document.getElementById('str-sourceurl').value = '';
+  document.getElementById('str-notes').value = '';
+  document.getElementById('modal-str').style.display = 'flex';
+}
+
+function strOpenEdit(id){
+  const r = (DB.salesTaxRates||[]).find(x=>x.id===id); if (!r) return;
+  _strEditId = id;
+  document.getElementById('str-modal-title').textContent = 'Edit Sales Tax Rate';
+  document.getElementById('str-code').value = r.code||'';
+  document.getElementById('str-name').value = r.name||'';
+  document.getElementById('str-state').value = r.state||'';
+  document.getElementById('str-type').value = r.type||'city';
+  document.getElementById('str-rate').value = (r.rate != null) ? (r.rate * 100).toString() : '';
+  document.getElementById('str-effective').value = r.effectiveDate||'';
+  document.getElementById('str-sourceurl').value = r.sourceUrl||'';
+  document.getElementById('str-notes').value = r.notes||'';
+  document.getElementById('modal-str').style.display = 'flex';
+}
+
+let _strEditId = null;
+
+function strSave(){
+  const code = document.getElementById('str-code').value.trim();
+  const name = document.getElementById('str-name').value.trim();
+  const state = document.getElementById('str-state').value.trim().toUpperCase();
+  const type = document.getElementById('str-type').value;
+  const ratePctStr = document.getElementById('str-rate').value.trim();
+  if (!name || !state) { alert('Jurisdiction name and state are required.'); return; }
+  const ratePct = parseFloat(ratePctStr);
+  if (isNaN(ratePct) || ratePct < 0 || ratePct > 25) { alert('Rate must be a number between 0 and 25 (entered as a percentage).'); return; }
+  const rate = +(ratePct / 100).toFixed(6);
+
+  const obj = {
+    id: _strEditId || uid(),
+    code, name, state, type, rate,
+    effectiveDate: document.getElementById('str-effective').value || '',
+    sourceUrl:     document.getElementById('str-sourceurl').value.trim(),
+    notes:         document.getElementById('str-notes').value.trim(),
+    _updatedAt: new Date().toISOString(),
+  };
+  // Preserve verification data on edit
+  if (_strEditId){
+    const existing = (DB.salesTaxRates||[]).find(x=>x.id===_strEditId);
+    if (existing){
+      obj.lastVerified = existing.lastVerified || '';
+      obj.verifiedBy   = existing.verifiedBy || '';
+    }
+  } else {
+    obj.lastVerified = '';
+    obj.verifiedBy = '';
+  }
+
+  if (_strEditId){
+    const i = DB.salesTaxRates.findIndex(x=>x.id===_strEditId);
+    DB.salesTaxRates[i] = obj;
+    logAct(`Sales tax rate updated: ${name} ${state} @ ${ratePct}%`);
+  } else {
+    DB.salesTaxRates = DB.salesTaxRates || [];
+    DB.salesTaxRates.push(obj);
+    logAct(`Sales tax rate added: ${name} ${state} @ ${ratePct}%`);
+  }
+  saveDB();
+  closeModal('modal-str');
+  strRender();
+}
+
+function strMarkVerified(id){
+  const r = (DB.salesTaxRates||[]).find(x=>x.id===id); if (!r) return;
+  r.lastVerified = new Date().toISOString();
+  r.verifiedBy = (currentUser?.fname || '') + (currentUser?.lname ? ' ' + currentUser.lname : '');
+  r._updatedAt = new Date().toISOString();
+  saveDB();
+  strRender();
+  showToast(`${r.name} ${r.state} verified`);
+}
+
+function strDelete(id){
+  const r = (DB.salesTaxRates||[]).find(x=>x.id===id); if (!r) return;
+  if (!confirm(`Delete ${r.name} (${r.state})? This cannot be undone.`)) return;
+  DB.salesTaxRates = DB.salesTaxRates.filter(x=>x.id!==id);
+  saveDB();
+  strRender();
+  logAct(`Sales tax rate deleted: ${r.name} ${r.state}`);
 }
 
 

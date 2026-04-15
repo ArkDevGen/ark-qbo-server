@@ -1,0 +1,920 @@
+[
+  {
+    "key": "10190 Page Ave., St. Louis",
+    "state": "MO",
+    "combined_rate": 0.09118,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.08988
+      },
+      {
+        "name": "Food Tax",
+        "rate": 0.0013
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "104 W. 7th St., Monticello",
+    "state": "MN",
+    "combined_rate": 0.07375,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "104 Wilson Dr., Cozad",
+    "state": "NE",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Quarterly"
+  },
+  {
+    "key": "10515 Taylorsville Rd., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "112 Edwards Avenue, Georgetown",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1136 W 2700 N, Pleasant View",
+    "state": "UT",
+    "combined_rate": 0.08249999999999999,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.0725
+      },
+      {
+        "name": "Weber County Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "11506 Shelbyville Rd., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "11624 Boyette Rd., Riverview",
+    "state": "FL",
+    "combined_rate": 0.09,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.075
+      },
+      {
+        "name": "15(d) - Riverview City Tax",
+        "rate": 0.015
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1187 East 1500 North Rd., Taylorville",
+    "state": "IL",
+    "combined_rate": 0.09,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "120 Hope Ct., Nicholasville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1214 N Main St., Chatham",
+    "state": "IL",
+    "combined_rate": 0.0825,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1242 E. Bristol Rd., Burton",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "12571 State Rt. 143, Highland",
+    "state": "IL",
+    "combined_rate": 0.0885,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "126 Florida Ave., Dayton",
+    "state": "TN",
+    "combined_rate": 0.0975,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1278 Perry Ave., Big Rapids",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1312 Vandalia St, Collinsville",
+    "state": "IL",
+    "combined_rate": 0.1035,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.0935
+      },
+      {
+        "name": "Collinsville City Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1312 Vandalia St., Collinsville",
+    "state": "IL",
+    "combined_rate": 0.1035,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.0935
+      },
+      {
+        "name": "City Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "135 Marketplace Dr., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "13753 Beach Blvd, Jacksonville",
+    "state": "FL",
+    "combined_rate": 0.075,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1502 Harrison Ave., Shawnee",
+    "state": "OK",
+    "combined_rate": 0.09995,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1526 W. Bell Rd., Phoenix",
+    "state": "AZ",
+    "combined_rate": 0.091,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1617  S. 3rd St., Terre Haute",
+    "state": "IN",
+    "combined_rate": 0.08,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "FAB Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1721 N. HWY. 121, Bonham",
+    "state": "TX",
+    "combined_rate": 0.0825,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1721 N. Hwy 121, Bonham",
+    "state": "TX",
+    "combined_rate": 0.0825,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1740 Wabash Ave., Springfield",
+    "state": "IL",
+    "combined_rate": 0.0975,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1815 Dakota Ave. S., Huron",
+    "state": "SD",
+    "combined_rate": 0.072,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1821 5th St., Rapid City",
+    "state": "SD",
+    "combined_rate": 0.072,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1871 West 5300 South, Roy",
+    "state": "UT",
+    "combined_rate": 0.08249999999999999,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.0725
+      },
+      {
+        "name": "Weber County Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1900 Bypass Rd., Winchester",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "1907 Broadway, Yankton",
+    "state": "SD",
+    "combined_rate": 0.077,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "20715 Hwy 365 North, Maumelle",
+    "state": "AR",
+    "combined_rate": 0.095,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "210 Business 30 SW, Mt. Vernon",
+    "state": "IA",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2130 Lone Oak Rd., Paducah",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Quarterly"
+  },
+  {
+    "key": "2131 E. SR 54, Linton",
+    "state": "IN",
+    "combined_rate": 0.08,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "FAB Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2180 105th Ave. NE, Blaine",
+    "state": "MN",
+    "combined_rate": 0.08125,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "220 Hwy 35 S., Carthage",
+    "state": "MS",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2260 Promise Rd., Rapid City",
+    "state": "SD",
+    "combined_rate": 0.072,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2380 44th St. SE, Kentwood",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2404 William St., Cape Girardeau",
+    "state": "MO",
+    "combined_rate": 0.09475,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2503 S Belt Hwy, St. Joseph",
+    "state": "MO",
+    "combined_rate": 0.097,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2700 N. Illinois St., Swansea",
+    "state": "IL",
+    "combined_rate": 0.0885,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2825 Keith St. NW, Cleveland",
+    "state": "TN",
+    "combined_rate": 0.0975,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2832 Damon St., Eau Claire",
+    "state": "WI",
+    "combined_rate": 0.055,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "2935 E. Clear Lake Ave., Springfield",
+    "state": "IL",
+    "combined_rate": 0.0975,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "302 8th St. SE, Orange City",
+    "state": "IA",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "306 N. US Hwy 71, Savannah",
+    "state": "MO",
+    "combined_rate": 0.09425,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "3150 Plainfield Ave. NE, Grand Rapids",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "321 E. Havens Ave., Mitchell",
+    "state": "SD",
+    "combined_rate": 0.072,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "3410 Preston Hwy., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "3645 N Lincoln Blvd, Oklahoma City",
+    "state": "OK",
+    "combined_rate": 0.08625,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "3785 King Rd., Toledo",
+    "state": "OH",
+    "combined_rate": 0.0,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "3850 Eglin St., Rapid City",
+    "state": "SD",
+    "combined_rate": 0.072,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "39890 Van Dyke Ave., Sterling Heights",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "401 E Sioux Ave, Pierre",
+    "state": "SD",
+    "combined_rate": 0.077,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "4023 Talmadge Rd., Toledo",
+    "state": "OH",
+    "combined_rate": 0.0,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "4036 Poplar Level Rd., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "422 N Main St, Sikeston",
+    "state": "MO",
+    "combined_rate": 0.09725,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "430 Main St., Sterling",
+    "state": "CO",
+    "combined_rate": 0.07,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.04
+      },
+      {
+        "name": "Sterling City Tax",
+        "rate": 0.03
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "4401 N. Kickapoo Ave., Shawnee",
+    "state": "OK",
+    "combined_rate": 0.09995,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "4703 Dixie Hwy., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "501 1st St. SW, LeMars",
+    "state": "IA",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "516 Glenn Blvd. S.W., Fort Payne",
+    "state": "AL",
+    "combined_rate": 0.09,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.04
+      },
+      {
+        "name": "Local Tax",
+        "rate": 0.05
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "5180 N Garfield, Loveland",
+    "state": "CO",
+    "combined_rate": 0.067,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.037
+      },
+      {
+        "name": "Loveland City Tax",
+        "rate": 0.03
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "534 N. Chestnut St., Wahoo",
+    "state": "NE",
+    "combined_rate": 0.075,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "5641 N. Rhett Ave., North Charleston",
+    "state": "SC",
+    "combined_rate": 0.11,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.09
+      },
+      {
+        "name": "Hospitality Tax",
+        "rate": 0.02
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "5709 N. Illinois St., Fairview Heights",
+    "state": "IL",
+    "combined_rate": 0.0835,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6074 N. 261st Cir., Valley",
+    "state": "NE",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6102 Irvington Rd., Omaha",
+    "state": "NE",
+    "combined_rate": 0.095,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "Occ Tax",
+        "rate": 0.025
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6102 Irvington Road, Omaha",
+    "state": "NE",
+    "combined_rate": 0.095,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "Occupation Tax",
+        "rate": 0.025
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "612 W. Columbia Ave., Battle Creek",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Quarterly"
+  },
+  {
+    "key": "623 N Franklin St, Cuba",
+    "state": "MO",
+    "combined_rate": 0.09725,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6420 28th St. S.E., Grand Rapids",
+    "state": "MI",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6600 Corporate Dr., North Little Rock",
+    "state": "AR",
+    "combined_rate": 0.125,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.095
+      },
+      {
+        "name": "A&P Tax",
+        "rate": 0.03
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "6801 Matlock Rd., Arlington",
+    "state": "TX",
+    "combined_rate": 0.0825,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "700 East 700 South, Clearfield",
+    "state": "UT",
+    "combined_rate": 0.08249999999999999,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.0725
+      },
+      {
+        "name": "Davis County Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "701 N. Trade Center Blvd, Chesterfield",
+    "state": "MO",
+    "combined_rate": 0.09243,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.09113
+      },
+      {
+        "name": "Food Tax",
+        "rate": 0.0013
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "709 W. Broadway St., Fortville",
+    "state": "IN",
+    "combined_rate": 0.08,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "FAB Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "721 E. Main St., Midlothian",
+    "state": "TX",
+    "combined_rate": 0.0825,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "781 New Highway 68, Sweetwater",
+    "state": "TN",
+    "combined_rate": 0.0975,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "804 E. Platte Ave., Fort Morgan",
+    "state": "CO",
+    "combined_rate": 0.069,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "809 S. Bay St., Eustis",
+    "state": "FL",
+    "combined_rate": 0.08,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "15(d) - Eustis City Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "8763 Navarre Pkwy, Navarre",
+    "state": "FL",
+    "combined_rate": 0.08,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.07
+      },
+      {
+        "name": "15(d) - Navarre City Tax",
+        "rate": 0.01
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "879 E. Jennifer Ln., Sidney",
+    "state": "NE",
+    "combined_rate": 0.075,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "900 Short St., Decorah",
+    "state": "IA",
+    "combined_rate": 0.07,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "902 W Benjamin Ave., Norfolk",
+    "state": "NE",
+    "combined_rate": 0.075,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "9060 Dixie Hwy., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "920 S. 13th St., Norfolk",
+    "state": "NE",
+    "combined_rate": 0.075,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "9248 Westport Rd., Louisville",
+    "state": "KY",
+    "combined_rate": 0.06,
+    "is_combined": true,
+    "taxes": [],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "940 E. Eisenhower Blvd., Loveland",
+    "state": "CO",
+    "combined_rate": 0.067,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.037
+      },
+      {
+        "name": "Loveland City Tax",
+        "rate": 0.03
+      }
+    ],
+    "frequency": "Monthly"
+  },
+  {
+    "key": "9585 Palmetto Commerce Pkwy, Ladson",
+    "state": "SC",
+    "combined_rate": 0.11,
+    "is_combined": false,
+    "taxes": [
+      {
+        "name": "State",
+        "rate": 0.09
+      },
+      {
+        "name": "Hospitality Tax",
+        "rate": 0.02
+      }
+    ],
+    "frequency": "Monthly"
+  }
+]

@@ -1,0 +1,1990 @@
+[
+  {
+    "code": "002",
+    "name": "Adams",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "003",
+    "name": "Ainsworth",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "004",
+    "name": "Albion",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "008",
+    "name": "Alliance",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "009",
+    "name": "Alma",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "015",
+    "name": "Ansley",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "016",
+    "name": "Arapahoe",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "017",
+    "name": "Arcadia",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "018",
+    "name": "Arlington",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "019",
+    "name": "Arnold",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "021",
+    "name": "Ashland",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "023",
+    "name": "Atkinson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "025",
+    "name": "Auburn",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "026",
+    "name": "Aurora",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "030",
+    "name": "Bancroft",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "032",
+    "name": "Barneston",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "035",
+    "name": "Bassett",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "036",
+    "name": "Battle Creek",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "037",
+    "name": "Bayard",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "039",
+    "name": "Beatrice",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "040",
+    "name": "Beaver City",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "041",
+    "name": "Beaver Crossing",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "043",
+    "name": "Beemer",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "046",
+    "name": "Bellevue",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "047",
+    "name": "Bellwood",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "049",
+    "name": "Benedict",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "050",
+    "name": "Benkelman",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "051",
+    "name": "Bennet",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "052",
+    "name": "Bennington",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "053",
+    "name": "Bertrand",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "055",
+    "name": "Big Springs",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "057",
+    "name": "Blair",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "058",
+    "name": "Bloomfield",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "060",
+    "name": "Blue Hill",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "061",
+    "name": "Blue Springs",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "066",
+    "name": "Brainard",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "068",
+    "name": "Bridgeport",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "072",
+    "name": "Broken Bow",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "073",
+    "name": "Brownville",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "075",
+    "name": "Bruning",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "081",
+    "name": "Burwell",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "084",
+    "name": "Byron",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "085",
+    "name": "Cairo",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "086",
+    "name": "Callaway",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "087",
+    "name": "Cambridge",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "092",
+    "name": "Cedar Rapids",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "094",
+    "name": "Central City",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "095",
+    "name": "Ceresco",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "096",
+    "name": "Chadron",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "097",
+    "name": "Chambers",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "099",
+    "name": "Chappell",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "100",
+    "name": "Chester",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "101",
+    "name": "Clarks",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "102",
+    "name": "Clarkson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "103",
+    "name": "Clatonia",
+    "rate": 0.005,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "104",
+    "name": "Clay Center",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "105",
+    "name": "Clearwater",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "108",
+    "name": "Coleridge",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "110",
+    "name": "Columbus",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "114",
+    "name": "Cordova",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "116",
+    "name": "Cortland",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "119",
+    "name": "Cozad",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "122",
+    "name": "Crawford",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "123",
+    "name": "Creighton",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "125",
+    "name": "Crete",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "126",
+    "name": "Crofton",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "129",
+    "name": "Curtis",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "131",
+    "name": "Dakota City",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "134",
+    "name": "Dannebrog",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "137",
+    "name": "Davey",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "138",
+    "name": "David City",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "140",
+    "name": "Daykin",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "141",
+    "name": "Decatur",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "143",
+    "name": "Deshler",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "144",
+    "name": "DeWeese",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "145",
+    "name": "DeWitt",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "147",
+    "name": "Diller",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "150",
+    "name": "Dodge",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "151",
+    "name": "Doniphan",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "152",
+    "name": "Dorchester",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "153",
+    "name": "Douglas, City of",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "156",
+    "name": "Duncan",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "159",
+    "name": "Eagle",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "161",
+    "name": "Edgar",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "162",
+    "name": "Edison",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "164",
+    "name": "Elgin",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "166",
+    "name": "Elkhorn",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "167",
+    "name": "Elm Creek",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "168",
+    "name": "Elmwood",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "170",
+    "name": "Elwood",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "172",
+    "name": "Emerson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "176",
+    "name": "Eustis",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "177",
+    "name": "Ewing",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "178",
+    "name": "Exeter",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "179",
+    "name": "Fairbury",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "180",
+    "name": "Fairfield",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "182",
+    "name": "Falls City",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "183",
+    "name": "Farnam",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "185",
+    "name": "Filley",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "187",
+    "name": "Fordyce",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "188",
+    "name": "Fort Calhoun",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "190",
+    "name": "Franklin",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "191",
+    "name": "Fremont",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "192",
+    "name": "Friend",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "193",
+    "name": "Fullerton",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "198",
+    "name": "Geneva",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "199",
+    "name": "Genoa",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "200",
+    "name": "Gering",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "201",
+    "name": "Gibbon",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "206",
+    "name": "Gordon",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "207",
+    "name": "Gothenburg",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "208",
+    "name": "Grafton",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "210",
+    "name": "Grand Island",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "211",
+    "name": "Grant",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "212",
+    "name": "Greeley",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "213",
+    "name": "Greenwood",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "214",
+    "name": "Gresham",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "215",
+    "name": "Gretna",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "217",
+    "name": "Guide Rock",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "221",
+    "name": "Hallam",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "222",
+    "name": "Halsey",
+    "rate": 0.005,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "227",
+    "name": "Harrison",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "228",
+    "name": "Hartington",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "229",
+    "name": "Harvard",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "230",
+    "name": "Hastings",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "231",
+    "name": "Hay Springs",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "235",
+    "name": "Hebron",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "236",
+    "name": "Hemingford",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "237",
+    "name": "Henderson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "242",
+    "name": "Hickman",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "243",
+    "name": "Hildreth",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "245",
+    "name": "Holdrege",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "248",
+    "name": "Hooper",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "251",
+    "name": "Howells",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "252",
+    "name": "Hubbard",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "253",
+    "name": "Hubbell",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "254",
+    "name": "Humboldt",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "255",
+    "name": "Humphrey",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "257",
+    "name": "Hyannis",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "258",
+    "name": "Imperial",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "263",
+    "name": "Jackson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "264",
+    "name": "Jansen",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "268",
+    "name": "Juniata",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "269",
+    "name": "Kearney",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "270",
+    "name": "Kenesaw",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "273",
+    "name": "Kimball",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "274",
+    "name": "LaVista",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "276",
+    "name": "Laurel",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "277",
+    "name": "Lawrence",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "279",
+    "name": "Leigh",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "281",
+    "name": "Lewellen",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "283",
+    "name": "Lexington",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "284",
+    "name": "Liberty",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "285",
+    "name": "Lincoln",
+    "rate": 0.0175,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "287",
+    "name": "Linwood",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "291",
+    "name": "Loomis",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "293",
+    "name": "Louisville",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "294",
+    "name": "Loup City",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "298",
+    "name": "Lyons",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "299",
+    "name": "Madison",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "302",
+    "name": "Malcolm",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "304",
+    "name": "Manley",
+    "rate": 0.005,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "305",
+    "name": "Marquette",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "311",
+    "name": "Maywood",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "312",
+    "name": "McCook",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "313",
+    "name": "McCool Junction",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "317",
+    "name": "Meadow Grove",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "322",
+    "name": "Milford",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "325",
+    "name": "Milligan",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "326",
+    "name": "Minatare",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "327",
+    "name": "Minden",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "328",
+    "name": "Mitchell",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "330",
+    "name": "Monroe",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "332",
+    "name": "Morrill",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "334",
+    "name": "Mullen",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "336",
+    "name": "Murray",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "339",
+    "name": "Nebraska City",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "340",
+    "name": "Nehawka",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "341",
+    "name": "Neligh",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "342",
+    "name": "Nelson",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "346",
+    "name": "Newman Grove",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "349",
+    "name": "Niobrara",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "351",
+    "name": "Norfolk",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "353",
+    "name": "North Bend",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "355",
+    "name": "North Platte",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "358",
+    "name": "Oakland",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "360",
+    "name": "Oconto",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "362",
+    "name": "Odell",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "363",
+    "name": "Ogallala",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "365",
+    "name": "Omaha",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "366",
+    "name": "O'Neill",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "368",
+    "name": "Orchard",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "369",
+    "name": "Ord",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "371",
+    "name": "Osceola",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "372",
+    "name": "Oshkosh",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "373",
+    "name": "Osmond",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "376",
+    "name": "Oxford",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "379",
+    "name": "Palmer",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "380",
+    "name": "Palmyra",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "382",
+    "name": "Papillion",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "383",
+    "name": "Pawnee City",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "384",
+    "name": "Paxton",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "385",
+    "name": "Pender",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "386",
+    "name": "Peru",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "387",
+    "name": "Petersburg",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "389",
+    "name": "Pickrell",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "390",
+    "name": "Pierce",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "391",
+    "name": "Pilger",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "392",
+    "name": "Plainview",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "393",
+    "name": "Platte Center",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "394",
+    "name": "Plattsmouth",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "396",
+    "name": "Pleasanton",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "397",
+    "name": "Plymouth",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "399",
+    "name": "Ponca",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "407",
+    "name": "Ralston",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "408",
+    "name": "Randolph",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "409",
+    "name": "Ravenna",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "411",
+    "name": "Red Cloud",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "412",
+    "name": "Republican City",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "415",
+    "name": "Rising City",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "418",
+    "name": "Roca",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "424",
+    "name": "Rulo",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "425",
+    "name": "Rushville",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "428",
+    "name": "Sargent",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "430",
+    "name": "Schuyler",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "432",
+    "name": "Scottsbluff",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "433",
+    "name": "Scribner",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "435",
+    "name": "Seward",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "436",
+    "name": "Shelby",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "437",
+    "name": "Shelton",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "438",
+    "name": "Shickley",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "441",
+    "name": "Sidney",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "442",
+    "name": "Silver Creek",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "446",
+    "name": "South Sioux City",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "447",
+    "name": "Spalding",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "448",
+    "name": "Spencer",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "450",
+    "name": "Springfield",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "451",
+    "name": "Springview",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "452",
+    "name": "St. Edward",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "454",
+    "name": "St. Paul",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "456",
+    "name": "Stanton",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "462",
+    "name": "Sterling",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "467",
+    "name": "Stromsburg",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "468",
+    "name": "Stuart",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "470",
+    "name": "Superior",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "472",
+    "name": "Sutherland",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "473",
+    "name": "Sutton",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "475",
+    "name": "Syracuse",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "481",
+    "name": "Tecumseh",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "482",
+    "name": "Tekamah",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "483",
+    "name": "Terrytown",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "485",
+    "name": "Thedford",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "487",
+    "name": "Tilden",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "489",
+    "name": "Trenton",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "491",
+    "name": "Uehling",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "493",
+    "name": "Unadilla",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "495",
+    "name": "Upland",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "496",
+    "name": "Utica",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "497",
+    "name": "Valentine",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "498",
+    "name": "Valley",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "502",
+    "name": "Verdigre",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "504",
+    "name": "Virginia",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "506",
+    "name": "Wahoo",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "507",
+    "name": "Wakefield",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "512",
+    "name": "Waterloo",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "513",
+    "name": "Wauneta",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "514",
+    "name": "Wausa",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "515",
+    "name": "Waverly",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "516",
+    "name": "Wayne",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "517",
+    "name": "Weeping Water",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "519",
+    "name": "West Point",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "523",
+    "name": "Wilber",
+    "rate": 0.01,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "530",
+    "name": "Wisner",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "533",
+    "name": "Wood River",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "534",
+    "name": "Wymore",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "535",
+    "name": "Wynot",
+    "rate": 0.015,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "536",
+    "name": "York",
+    "rate": 0.02,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "587",
+    "name": "Holmesville",
+    "rate": 0.0,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "801",
+    "name": "GLD Avenue One",
+    "rate": 0.0275,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "802",
+    "name": "GLD NE Crossing",
+    "rate": 0.0275,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "803",
+    "name": "GLD Grand",
+    "rate": 0.0275,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "804",
+    "name": "GLD La Belle",
+    "rate": 0.0275,
+    "state": "NE",
+    "type": "city"
+  },
+  {
+    "code": "922",
+    "name": "Dakota County",
+    "rate": 0.005,
+    "state": "NE",
+    "type": "county"
+  },
+  {
+    "code": "934",
+    "name": "Gage County",
+    "rate": 0.005,
+    "state": "NE",
+    "type": "county"
+  }
+]
