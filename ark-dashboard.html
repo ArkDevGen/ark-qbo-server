@@ -20273,6 +20273,7 @@ let _stfAdHocJurIds = [];        // jurisdiction IDs added just for this filing 
 let _stfImportedTaxable = {};    // {jurisdictionId: taxableAmount} from parsed report, for display
 let _stfSourceTotal = null;      // Total tax from the parsed source report (reconciliation check)
 let _stfSourceFile = null;       // Filename of last parsed source — for audit/debugging
+let _stfPosIssues = [];          // POS-rate mismatches detected from source (persistent after apply)
 
 function stfGetSetupClients(){
   // Clients with at least 1 configured jurisdiction
@@ -20340,6 +20341,7 @@ function stfOpenClient(clientId){
   _stfImportedTaxable = {};
   _stfSourceTotal = null;
   _stfSourceFile = null;
+  _stfPosIssues = [];
   document.getElementById('stf-empty-state').style.display = 'none';
   const active = document.getElementById('stf-active');
   active.style.display = '';
@@ -20419,6 +20421,35 @@ function stfRenderPanel(){
           <button onclick="stfDiscardDraft('${c.id}')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 10px;color:var(--red);border-color:var(--red);">Discard draft</button>
         </div>`;
       })()}
+
+      ${(_stfPosIssues?.length ? (() => {
+        const fmtMoney = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        return `<div style="background:#fff1f1;border:2px solid var(--red);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--red);font-family:'Cormorant Garamond',serif;font-size:18px;">🚨 POS Tax Rate Issue — Contact Client</div>
+              <div style="font-size:11px;color:var(--text-d);margin-top:3px;">${_stfPosIssues.length} jurisdiction${_stfPosIssues.length===1?'':'s'} show${_stfPosIssues.length===1?'s':''} tax that doesn't match the configured rate. The client's POS is likely calibrated wrong — this will keep happening every month until fixed.</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button onclick="stfCopyPosIssues()" class="btn btn-primary btn-sm" style="font-size:11px;background:var(--red);border-color:var(--red);">📋 Copy Client Message</button>
+              <button onclick="stfDismissPosIssues()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 10px;" title="Dismiss banner">✕</button>
+            </div>
+          </div>
+          ${_stfPosIssues.map(i => {
+            const impliedPct = (i.impliedRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+            const crmPct     = (i.crmRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+            return `<div style="background:#fff;border:1px solid #ffd0d0;border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;font-size:11px;">
+              <div style="font-weight:600;color:var(--text);margin-bottom:3px;">${i.name} <span style="color:var(--text-d);font-weight:400;">(${i.state}${i.code?` · ${i.code}`:''})</span></div>
+              <div style="color:var(--text-d);line-height:1.6;">
+                Taxable <strong>${fmtMoney(i.taxable)}</strong> ·
+                POS charged <strong style="color:var(--red);">${fmtMoney(i.reportedTax)} (${impliedPct}%)</strong> ·
+                Should be <strong style="color:var(--green);">${fmtMoney(i.expectedTax)} (${crmPct}%)</strong> ·
+                <strong style="color:var(--red);">${i.direction==='over'?'Over':'Under'}-collected by ${fmtMoney(Math.abs(i.diff))}</strong>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })() : '')}
 
       <!-- Period -->
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:18px;">
@@ -20888,7 +20919,82 @@ function stfMatchJurisdictions(parsed){
 
   const matched = Object.values(matchBuckets).filter(b => !b.isUnmatched);
   const unmatched = Object.values(matchBuckets).filter(b => b.isUnmatched);
-  return { matched, unmatched, warnings };
+
+  // ── POS RATE CHECKER — compares the IMPLIED rate (tax/taxable) in the
+  // source report against the CRM's configured rate. A mismatch is a
+  // major red flag: the client's POS is charging the wrong rate and
+  // needs immediate correction. Only runs when taxable > 0 (i.e., we
+  // have both numbers); skipped for single-number reports.
+  const posIssues = [];
+  for (const b of matched){
+    if (!b.jurisdiction || !(b.taxable > 0)) continue;
+    const impliedRate = b.tax / b.taxable;
+    const crmRate     = b.jurisdiction.rate;
+    const expectedTax = b.taxable * crmRate;
+    const diff        = b.tax - expectedTax;
+    // Tolerance: 50¢ or 1 basis point (0.01%) of taxable, whichever is larger.
+    // Catches real errors without tripping on rounding.
+    const tolerance   = Math.max(0.50, b.taxable * 0.0001);
+    if (Math.abs(diff) > tolerance){
+      const issue = {
+        jurisdictionId: b.jurisdiction.id,
+        name:          b.jurisdiction.name,
+        state:         b.jurisdiction.state,
+        code:          b.jurisdiction.code,
+        taxable:       +b.taxable.toFixed(2),
+        reportedTax:   +b.tax.toFixed(2),
+        expectedTax:   +expectedTax.toFixed(2),
+        diff:          +diff.toFixed(2),
+        impliedRate:   +impliedRate.toFixed(6),
+        crmRate:       +crmRate.toFixed(6),
+        direction:     diff > 0 ? 'over' : 'under',
+      };
+      b.posIssue = issue;
+      posIssues.push(issue);
+    }
+  }
+
+  return { matched, unmatched, warnings, posIssues };
+}
+
+// Format a client-ready POS issue message for copy/paste
+function stfFormatPosIssuesForClient(issues, clientName){
+  if (!issues?.length) return '';
+  const lines = [];
+  lines.push(`Hi,`);
+  lines.push(``);
+  lines.push(`While processing your recent sales tax report for ${clientName||'your business'}, we noticed your POS is charging a different tax rate than what's on file for ${issues.length} jurisdiction${issues.length===1?'':'s'}. Please update your POS configuration to the correct rate${issues.length===1?'':'s'} below so future reports are accurate:`);
+  lines.push(``);
+  for (const i of issues){
+    const impliedPct = (i.impliedRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+    const crmPct     = (i.crmRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+    lines.push(`• ${i.name} (${i.state}${i.code?` · code ${i.code}`:''})`);
+    lines.push(`    Taxable sales: $${i.taxable.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`);
+    lines.push(`    POS charged: $${i.reportedTax.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${impliedPct}%)`);
+    lines.push(`    Correct rate: ${crmPct}% → should have been $${i.expectedTax.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`);
+    lines.push(`    ${i.direction === 'under' ? 'UNDER-collected' : 'OVER-collected'} by $${Math.abs(i.diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`);
+    lines.push(``);
+  }
+  lines.push(`This needs to be corrected in your POS right away so the next filing isn't off too. Let me know when it's updated.`);
+  lines.push(``);
+  lines.push(`Thanks,`);
+  lines.push(`Ark Financial`);
+  return lines.join('\n');
+}
+
+function stfCopyPosIssues(){
+  if (!_stfPosIssues?.length) return;
+  const msg = stfFormatPosIssuesForClient(_stfPosIssues, _stfActiveClient?.biz);
+  navigator.clipboard?.writeText(msg).then(
+    () => showToast('Client message copied to clipboard'),
+    () => showToast('Copy failed — select text manually')
+  );
+}
+
+function stfDismissPosIssues(){
+  if (!confirm('Dismiss POS rate warnings for this filing? You can still see them in the filing history after submit.')) return;
+  _stfPosIssues = [];
+  stfRenderPanel();
 }
 
 // Cached parse result so stfApplyImport can access it after preview
@@ -20906,6 +21012,29 @@ function stfRenderImportPreview(parsed, fileName){
     <div style="font-size:11px;font-weight:700;color:#8a6d00;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">⚠ ${result.warnings.length} Rate Discrepanc${result.warnings.length===1?'y':'ies'} — Verify</div>
     ${result.warnings.map(w => `<div style="font-size:11px;color:#8a6d00;">${w.message}</div>`).join('')}
     <div style="font-size:10px;color:var(--text-d);margin-top:6px;font-style:italic;">Report rate will be used for this filing's calculations. Update the Rate Database if the report is correct.</div>
+  </div>` : '';
+
+  // ── POS Issue Banner — flagged high-prominence at top of preview ──
+  const posHtml = result.posIssues?.length ? `<div style="background:#fff1f1;border:2px solid var(--red);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--red);">🚨 POS TAX RATE ISSUE — Client action needed</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${result.posIssues.length} jurisdiction${result.posIssues.length===1?'':'s'} show tax amounts that don't match the configured rate. This usually means the client's POS is calibrated wrong.</div>
+      </div>
+    </div>
+    ${result.posIssues.map(i => {
+      const impliedPct = (i.impliedRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+      const crmPct     = (i.crmRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+      return `<div style="background:#fff;border:1px solid #ffd0d0;border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;font-size:11px;">
+        <div style="font-weight:600;color:var(--text);margin-bottom:3px;">${i.name} <span style="color:var(--text-d);font-weight:400;">(${i.state}${i.code?` · ${i.code}`:''})</span></div>
+        <div style="color:var(--text-d);line-height:1.5;">
+          Taxable: <strong>${fmt(i.taxable)}</strong> ·
+          POS charged: <strong style="color:var(--red);">${fmt(i.reportedTax)} (${impliedPct}%)</strong> ·
+          Should be: <strong style="color:var(--green);">${fmt(i.expectedTax)} (${crmPct}%)</strong> ·
+          <strong style="color:var(--red);">${i.direction==='over'?'Over':'Under'}-collected by ${fmt(Math.abs(i.diff))}</strong>
+        </div>
+      </div>`;
+    }).join('')}
   </div>` : '';
 
   const matchedRows = result.matched.map(b => {
@@ -20940,6 +21069,7 @@ function stfRenderImportPreview(parsed, fileName){
         </div>
         <button class="btn btn-ghost btn-sm" onclick="stfDismissImport()" style="font-size:10px;padding:4px 10px;">Dismiss</button>
       </div>
+      ${posHtml ? `<div style="padding:12px 16px 0;">${posHtml}</div>` : ''}
       ${warnHtml ? `<div style="padding:12px 16px 0;">${warnHtml}</div>` : ''}
       <div style="padding:8px 16px;">
         <table style="font-size:12px;width:100%;">
@@ -21002,6 +21132,10 @@ function stfApplyImport(){
       // Sum of all extracted tax (selected OR not — what the report actually totaled)
       _stfSourceTotal = (pc.parsed?.lines || []).reduce((s, ln) => s + (ln.tax || 0), 0);
     }
+    // Persist POS issues so they keep showing in the filing panel until
+    // the user dismisses or submits the filing.
+    const matchResult = stfMatchJurisdictions(pc.parsed);
+    _stfPosIssues = matchResult.posIssues || [];
   }
   stfDismissImport();
   stfRenderPanel();
@@ -21016,6 +21150,7 @@ function stfClose(){
   _stfImportedTaxable = {};
   _stfSourceTotal = null;
   _stfSourceFile = null;
+  _stfPosIssues = [];
   document.getElementById('stf-empty-state').style.display = '';
   document.getElementById('stf-active').style.display = 'none';
   stfRenderList();
@@ -21043,6 +21178,7 @@ function stfSaveDraft(){
     importedTaxable: { ..._stfImportedTaxable },
     sourceTotal: _stfSourceTotal,
     sourceFile: _stfSourceFile,
+    posIssues: [..._stfPosIssues],
     confirmationNumber: confirmNum,
     notes,
     savedAt: new Date().toISOString(),
@@ -21072,6 +21208,7 @@ function stfDiscardDraft(clientId){
   _stfImportedTaxable = {};
   _stfSourceTotal = null;
   _stfSourceFile = null;
+  _stfPosIssues = [];
   if (_stfActiveClient?.id === id) stfRenderPanel();
   stfRenderList();
   showToast('Draft discarded');
@@ -21084,6 +21221,7 @@ function stfApplyDraft(draft){
   _stfImportedTaxable = { ...(draft.importedTaxable||{}) };
   _stfSourceTotal = draft.sourceTotal ?? null;
   _stfSourceFile = draft.sourceFile ?? null;
+  _stfPosIssues = Array.isArray(draft.posIssues) ? [...draft.posIssues] : [];
   stfRenderPanel();
   // Period + confirm + notes restored after render (inputs exist by then)
   setTimeout(() => {
@@ -21381,6 +21519,8 @@ function stfSubmit(){
       taxable: r.perJurTax[j.id]?.net || 0,
       tax: r.perJurTax[j.id]?.tax || 0,
     })),
+    posIssues: [..._stfPosIssues],
+    sourceFile: _stfSourceFile,
     _updatedAt: new Date().toISOString(),
   };
   DB.salesTaxFilings = DB.salesTaxFilings || [];
@@ -21430,10 +21570,13 @@ function sthRender(){
   if (!rows.length){ tbody.innerHTML = ''; empty.style.display = ''; return; }
   empty.style.display = 'none';
   const fmt = n => '$' + Number(n||0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  tbody.innerHTML = rows.map(f => `
-    <tr>
+  tbody.innerHTML = rows.map(f => {
+    const posBadge = (f.posIssues?.length)
+      ? `<span style="background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;" title="${f.posIssues.length} POS rate issue${f.posIssues.length===1?'':'s'} flagged when filed">🚨 POS</span>`
+      : '';
+    return `<tr>
       <td style="font-size:12px;">${f.filedDate ? new Date(f.filedDate).toLocaleDateString() : '—'}</td>
-      <td style="font-weight:600;">${f.clientName||'—'}</td>
+      <td style="font-weight:600;">${f.clientName||'—'}${posBadge}</td>
       <td>${f.state||''}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;">${f.period||'—'}</td>
       <td style="text-align:right;font-family:'DM Mono',monospace;">${fmt(f.grossSales)}</td>
@@ -21442,8 +21585,8 @@ function sthRender(){
       <td style="font-family:'DM Mono',monospace;font-size:12px;">${f.confirmationNumber||'<span style="color:var(--text-d);">—</span>'}</td>
       <td style="font-size:11px;color:var(--text-d);">${f.filedBy||''}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="sthView('${f.id}')" style="font-size:10px;padding:3px 7px;">View</button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function sthView(id){
@@ -21472,6 +21615,14 @@ function sthView(id){
       <div><strong>Mode:</strong> ${f.calcMode==='from_tax'?'Back-calc from tax':'Forward from sales'}</div>
     </div>
     ${f.notes ? `<div style="background:var(--surface2);padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;"><strong>Notes:</strong> ${f.notes}</div>` : ''}
+    ${f.posIssues?.length ? `<div style="background:#fff1f1;border:1px solid var(--red);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--red);margin-bottom:6px;">🚨 ${f.posIssues.length} POS Rate Issue${f.posIssues.length===1?'':'s'} flagged when filed</div>
+      ${f.posIssues.map(i => {
+        const impliedPct = (i.impliedRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+        const crmPct     = (i.crmRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'');
+        return `<div style="font-size:11px;color:var(--text-d);padding:3px 0;"><strong style="color:var(--text);">${i.name}</strong> — POS charged ${impliedPct}%, expected ${crmPct}%, ${i.direction}-collected by ${fmt(Math.abs(i.diff))}</div>`;
+      }).join('')}
+    </div>` : ''}
     ${schedRows ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-d);margin-bottom:6px;">Schedule I Detail</div>
     <table style="font-size:12px;width:100%;margin-bottom:14px;"><thead><tr><th>Code</th><th>Jurisdiction</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">Tax</th></tr></thead><tbody>${schedRows}</tbody></table>` : ''}
     <div style="text-align:right;"><button class="btn btn-ghost" onclick="document.getElementById('sth-view-overlay').remove()">Close</button></div>
