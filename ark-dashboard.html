@@ -20781,12 +20781,46 @@ async function stfParsePdf(file){
       });
   }
   // Auto-detect format. Davisware's "Cash Basis Sales Tax Summary" has
-  // a distinctive header + "Totals for X" rows; QBO Sales Tax Liability
+  // a distinctive header + "Totals for X" rows; Toast POS uses "Sales
+  // Summary" + "Establishment(s):" headers; QBO Sales Tax Liability
   // Report uses "(rate%)" in the jurisdiction name. Default to QBO.
   if (/Cash Basis Sales Tax/i.test(fullText) && /Totals for/i.test(fullText)){
     return stfExtractDavisware(fullText);
   }
+  if (/Sales Summary/i.test(fullText) && /Establishment\(s\)/i.test(fullText)){
+    return stfExtractToast(fullText);
+  }
   return stfExtractQboLines(fullText);
+}
+
+// Toast POS "Sales Summary" parser (Round the Bend, various Scooters
+// stores, etc.). Like Lightspeed this is a total-only format — Toast
+// doesn't break tax down by jurisdiction, just by rate category
+// (Prevailing, Reduced, Pass Through Fee). We extract the main Sales
+// Tax figure and let the total-only preview allocate across the
+// client's configured jurisdictions.
+function stfExtractToast(text){
+  const clean = text.replace(/\r/g,'');
+  const grab = (re) => {
+    const m = clean.match(re);
+    return m ? parseFloat(m[1].replace(/,/g,'')) : 0;
+  };
+  const gross       = grab(/\bGross Sales\s+([\d,.]+)/i);
+  const net         = grab(/\bNet Sales\s+([\d,.]+)/i);
+  const taxable     = grab(/\bTaxable Sales\s+([\d,.]+)/i);
+  const nonTaxable  = grab(/\bNon-Taxable Sales\s+([\d,.]+)/i);
+  // "Sales Tax" on its own line — not "Total Tax and Surcharges" etc.
+  const salesTax    = grab(/^\s*Sales Tax\s+([\d,.]+)/im);
+  return {
+    format: 'toast',
+    lines: [],
+    total: salesTax,
+    grossSales: gross,
+    netSales: net,
+    taxableSales: taxable,
+    exemptSales: nonTaxable,
+    rawText: text,
+  };
 }
 
 async function stfParseCsv(file){
