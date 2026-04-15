@@ -592,8 +592,7 @@ textarea.field-input{resize:vertical;min-height:72px;}
 #topbar-clock .tz-sm{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;letter-spacing:.3px;line-height:1;text-align:center;}
 #topbar-clock .tz-sm .tz-label{font-size:7px;color:var(--border2);letter-spacing:.06em;text-transform:uppercase;display:block;margin-top:2px;font-family:'DM Sans',sans-serif;}
 
-/* Hide secondary timezones when viewport is tight */
-@media(max-width:1280px){#topbar-clock .tz-others{display:none;}}
+/* Secondary timezones always visible */
 
 /* Nav badge refinement */
 .nav-badge{font-size:9px;background:var(--gold);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:700;letter-spacing:.04em;}
@@ -8968,7 +8967,14 @@ addrStateEl.innerHTML = '<option value="">— Select —</option>' + US_STATES.m
 //  NAV
 // ══════════════════════════════════════════════
 const PAGE_ACTIONS = {
-  dashboard: ()=>`<button class="btn btn-ghost btn-sm" onclick="wgToggleEdit()" title="Toggle edit mode">${_wgEditMode?'Done Editing':'Edit Layout'}</button> <button class="btn btn-primary btn-sm" onclick="wgbOpen()">+ Add Widget</button> <button class="btn btn-ghost btn-sm" onclick="wgResetWidgets()" title="Reset to defaults">Reset</button>`,
+  dashboard: ()=>`<div id="dash-gear-wrap" style="position:relative;display:inline-block;">
+    <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();dashGearToggle()" title="Dashboard options" style="font-size:16px;line-height:1;padding:4px 8px;">⚙</button>
+    <div id="dash-gear-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:180px;z-index:1000;overflow:hidden;font-family:'DM Sans',sans-serif;">
+      <div onclick="dashGearClose();wgToggleEdit()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">${_wgEditMode?'Done Editing':'Edit Layout'}</div>
+      <div onclick="dashGearClose();wgbOpen()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">+ Add Widget</div>
+      <div onclick="dashGearClose();wgResetWidgets()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">Reset to Defaults</div>
+    </div>
+  </div>`,
   clients: ()=>`<button class="btn btn-primary" onclick="openAddClient()">+ Add Client</button>`,
   acctmgrs: ()=>`<button class="btn btn-primary" onclick="openAddAM()">+ Add Account Manager</button>`,
   employees: ()=>`<button class="btn btn-primary" onclick="openAddEmp()">+ Add New Hire</button>`,
@@ -8976,6 +8982,21 @@ const PAGE_ACTIONS = {
 function closeAllModals(){
   document.querySelectorAll('.overlay').forEach(o=>o.style.display='none');
 }
+
+// Dashboard gear-icon dropdown
+function dashGearToggle(){
+  const m = document.getElementById('dash-gear-menu');
+  if(!m) return;
+  m.style.display = (m.style.display==='block') ? 'none' : 'block';
+}
+function dashGearClose(){
+  const m = document.getElementById('dash-gear-menu');
+  if(m) m.style.display = 'none';
+}
+document.addEventListener('click', (e)=>{
+  const wrap = document.getElementById('dash-gear-wrap');
+  if(wrap && !wrap.contains(e.target)) dashGearClose();
+});
 
 function toggleNavGroup(sectionEl) {
   const group = sectionEl.nextElementSibling;
