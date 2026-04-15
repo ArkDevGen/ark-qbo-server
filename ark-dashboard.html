@@ -13312,6 +13312,12 @@ function saveClient(){
   }
   closeModal('modal-client');
   renderClients();
+  // Refresh any other client-derived views that happen to be mounted so
+  // user doesn't have to reload to see changes (e.g., Sales Tax tab,
+  // File Returns upcoming list, Filing History).
+  if (typeof renderSalesTax === 'function') { try { renderSalesTax(); } catch(_){} }
+  if (typeof stfRenderList   === 'function') { try { stfRenderList();   } catch(_){} }
+  if (typeof sthRender       === 'function') { try { sthRender();       } catch(_){} }
 }
 function deleteClient(id){
   const c=DB.clients.find(x=>x.id===id);if(!c)return;
@@ -13320,6 +13326,9 @@ function deleteClient(id){
   delete DB.notes[id];
   logAct(`Client deleted: ${c.biz}`);
   renderClients();
+  if (typeof renderSalesTax === 'function') { try { renderSalesTax(); } catch(_){} }
+  if (typeof stfRenderList   === 'function') { try { stfRenderList();   } catch(_){} }
+  if (typeof sthRender       === 'function') { try { sthRender();       } catch(_){} }
 }
 
 // ══════════════════════════════════════════════
