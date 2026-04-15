@@ -20791,7 +20791,40 @@ async function stfParsePdf(file){
 
 async function stfParseCsv(file){
   const text = await file.text();
+  // Lightspeed "Sales Report" export — distinctive multi-section CSV with
+  // "Exclusive" / "Inclusive" sales tax rows and a grand "Total Tax" row.
+  if (/Sales Report/i.test(text) && /\bExclusive\b[^\n]*Sales Tax/i.test(text)){
+    return stfExtractLightspeed(text);
+  }
   return stfExtractQboLines(text);
+}
+
+// Lightspeed's multi-section Sales Report. Reports a single total tax
+// across all jurisdictions — no per-jurisdiction breakdown, so we return
+// an empty lines[] and let the preview surface a "total-only" apply flow.
+function stfExtractLightspeed(text){
+  const clean = text.replace(/\r/g,'');
+  const grab = (re) => {
+    const m = clean.match(re);
+    return m ? parseFloat(m[1].replace(/,/g,'')) : 0;
+  };
+  const gross      = grab(/^Gross\s*,\s*([\d,.]+)/im);
+  const net        = grab(/^Net\s*,\s*([\d,.]+)/im);
+  const totalTax   = grab(/^Total Tax\s*,\s*([\d,.]+)/im);
+  const exclusive  = grab(/^\s*Exclusive[,"]+[^,]*Sales Tax[^,]*,\s*([\d,.]+)/im);
+  const inclusive  = grab(/^\s*Inclusive[,"]+[^,]*Sales Tax[^,]*,\s*([\d,.]+)/im);
+  const exemptSales= grab(/^Total Tax Exempt Sales\s*,\s*([\d,.]+)/im);
+  return {
+    format: 'lightspeed',
+    lines: [],           // no per-jurisdiction data in Lightspeed reports
+    total: totalTax,
+    grossSales: gross,
+    netSales: net,
+    exclusiveTax: exclusive,
+    inclusiveTax: inclusive,
+    exemptSales,
+    rawText: text,
+  };
 }
 
 async function stfParseXlsx(file){
@@ -21148,6 +21181,15 @@ let _stfParsedCache = null;
 // Render extraction preview with per-row accept/skip controls
 function stfRenderImportPreview(parsed, fileName){
   _stfParsedCache = { parsed, fileName };
+
+  // Total-only formats (Lightspeed and similar) have no per-jurisdiction
+  // data — just grand totals. Render a simplified preview that applies
+  // the total tax to the client's combined input, and the gross sales
+  // to Line 1. Works cleanly for single-local clients; warns for
+  // multi-local since we can't accurately allocate without source detail.
+  if (parsed && (!parsed.lines || parsed.lines.length === 0) && parsed.total > 0){
+    return stfRenderTotalOnlyPreview(parsed, fileName);
+  }
   const preview = document.getElementById('stf-import-preview');
   if (!preview) return;
   const result = stfMatchJurisdictions(parsed);
@@ -21248,6 +21290,103 @@ function stfDismissImport(){
   if (el){ el.style.display = 'none'; el.innerHTML = ''; }
   const st = document.getElementById('stf-import-status');
   if (st){ st.style.display = 'none'; st.innerHTML = ''; }
+}
+
+// Simplified preview for total-only formats (Lightspeed, etc.): source
+// doesn't provide per-jurisdiction breakdown, so we show the total and
+// apply it to the client's configured jurisdictions proportionally.
+function stfRenderTotalOnlyPreview(parsed, fileName){
+  const preview = document.getElementById('stf-import-preview');
+  if (!preview) return;
+  const locals = _stfLocalJurs();
+  const state  = _stfStateJur();
+  const combinedRate = _stfCombinedRate();
+  const fmt = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const formatLabel = parsed.format === 'lightspeed' ? 'Lightspeed Sales Report' : 'Source Report';
+
+  const multiLocal = locals.length > 1;
+  const noJurs = combinedRate <= 0;
+
+  const warn = noJurs
+    ? `<div style="background:#fff1f1;border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-bottom:10px;">
+        ⚠ This client has no jurisdictions configured. Set them up (Client Modal → Sales Tax → Filing Automation) before applying.
+      </div>`
+    : multiLocal
+    ? `<div style="background:#fff8e6;border:1px solid var(--gold);color:#8a6d00;padding:10px 14px;border-radius:var(--radius);font-size:12px;margin-bottom:10px;">
+        ⚠ Client has multiple local jurisdictions (${locals.length}). ${formatLabel} only reports a total across all of them, so we'll split the total proportionally by rate. Verify the split looks right before submitting.
+      </div>`
+    : '';
+
+  preview.style.display = 'block';
+  preview.innerHTML = `
+    <div style="background:var(--surface);border:2px solid var(--navy);border-radius:var(--radius);overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);">📄 ${formatLabel} — Total Only</div>
+          <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${fileName} · source provides combined totals, not per-jurisdiction</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="stfDismissImport()" style="font-size:10px;padding:4px 10px;">Dismiss</button>
+      </div>
+      <div style="padding:16px 20px;">
+        ${warn}
+        <div style="display:grid;grid-template-columns:auto auto;gap:8px 20px;font-size:13px;margin-bottom:14px;align-items:center;">
+          <div style="color:var(--text-d);">Gross Sales</div>
+          <div style="font-family:'DM Mono',monospace;font-weight:700;text-align:right;">${fmt(parsed.grossSales)}</div>
+          ${parsed.netSales ? `
+          <div style="color:var(--text-d);">Net Sales <span style="font-size:10px;">(from report)</span></div>
+          <div style="font-family:'DM Mono',monospace;font-weight:400;text-align:right;color:var(--text-d);">${fmt(parsed.netSales)}</div>` : ''}
+          ${parsed.exemptSales ? `
+          <div style="color:var(--text-d);">Tax Exempt Sales</div>
+          <div style="font-family:'DM Mono',monospace;font-weight:400;text-align:right;color:var(--text-d);">${fmt(parsed.exemptSales)}</div>` : ''}
+          <div style="color:var(--text-d);border-top:1px solid var(--border);padding-top:6px;">Total Tax Collected</div>
+          <div style="font-family:'DM Mono',monospace;font-weight:700;text-align:right;color:var(--navy);border-top:1px solid var(--border);padding-top:6px;">${fmt(parsed.total)}</div>
+        </div>
+        ${!noJurs ? `<div style="font-size:11px;color:var(--text-d);padding:8px 10px;background:var(--surface2);border-radius:4px;margin-bottom:10px;">
+          Will apply: Line 1 (Gross Sales) = <strong>${fmt(parsed.grossSales)}</strong>, Line 2 (Net Taxable) = <strong>${fmt(parsed.total / combinedRate)}</strong>, back-calculated from total tax ÷ combined rate ${(combinedRate*100).toFixed(4)}%.
+        </div>` : ''}
+      </div>
+      <div style="padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-ghost" onclick="stfDismissImport()">Cancel</button>
+        <button class="btn btn-primary" onclick="stfApplyTotalOnly()" ${noJurs?'disabled':''}>✓ Apply Total</button>
+      </div>
+    </div>
+  `;
+  _stfSetStatus(`✓ Parsed <strong>${fileName}</strong> — total tax ${fmt(parsed.total)}`, 'ok');
+}
+
+// Apply a total-only parse to the client's inputs. Single-local → use
+// combined mode. Multi-local → proportion the total by configured rates.
+function stfApplyTotalOnly(){
+  if (!_stfParsedCache || !_stfActiveClient) return;
+  const { parsed, fileName } = _stfParsedCache;
+  const locals = _stfLocalJurs();
+  const state  = _stfStateJur();
+  const combinedRate = _stfCombinedRate();
+  if (combinedRate <= 0){ alert('Configure jurisdictions before applying.'); return; }
+
+  if (locals.length === 1 && state){
+    // Single-local combined mode: one number in the single-local input
+    _stfPerJurTax[locals[0].id] = (_stfPerJurTax[locals[0].id]||0) + parsed.total;
+  } else {
+    // Multi-jurisdiction: proportion the total by rate
+    const allJurs = [state, ...locals].filter(Boolean);
+    for (const j of allJurs){
+      const share = parsed.total * (j.rate / combinedRate);
+      _stfPerJurTax[j.id] = (_stfPerJurTax[j.id]||0) + share;
+    }
+  }
+  // Populate Line 1 if the source reported gross sales
+  if (parsed.grossSales > 0) _stfGrossInput = parsed.grossSales;
+
+  // Source total for reconciliation
+  _stfSourceFile = fileName;
+  _stfSourceTotal = parsed.total;
+  // Total-only formats can't check per-jurisdiction POS rates
+  _stfPosIssues = [];
+
+  stfDismissImport();
+  stfRenderPanel();
+  showToast(`Applied ${fileName}: total $${parsed.total.toFixed(2)}`);
 }
 
 function stfApplyImport(){
