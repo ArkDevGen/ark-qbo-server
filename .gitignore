@@ -2,3 +2,22 @@ node_modules/
 .env
 tokens.json
 IntDev Keys.txt
+
+# Claude Code local state (per-machine, not for commit)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Secrets & credentials — never commit
+client_secret*.json
+*recovery-codes*
+*.recovery-codes.txt
+google-credentials*.json
+
+# Temp / debug dumps
+qbo_tmp.json
+*_tmp.json
+*.tmp.json
+file-audit.json
+
+# Scratch / planning
+PLAN.md
