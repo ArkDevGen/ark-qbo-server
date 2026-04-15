@@ -11910,10 +11910,10 @@ function renderSalesTax(){
       : `<span style="color:var(--text-d);font-size:11px;font-style:italic;">Never</span>`;
     const actionBtn = r.automated
       ? `<button class="btn btn-ghost btn-sm" onclick="stFileNow('${c.id}')" style="font-size:10px;padding:4px 9px;color:var(--navy);border-color:var(--navy);" title="Jump to File Returns with this client pre-selected">📝 File Now</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}',2)" style="font-size:10px;padding:4px 9px;color:var(--gold);border-color:var(--gold);" title="Set up filing automation">+ Set Up</button>`;
+      : `<button class="btn btn-ghost btn-sm" onclick="stEditClient('${c.id}')" style="font-size:10px;padding:4px 9px;color:var(--gold);border-color:var(--gold);" title="Set up filing automation">+ Set Up</button>`;
     const rowStyle = r.overdue ? 'background:#fff8f8;' : '';
     return `<tr style="${rowStyle}">
-      <td style="cursor:pointer;" onclick="openClient('${c.id}',2)"><strong>${c.biz}</strong>${c.am?`<div style="font-size:11px;color:var(--text-d)">${getAMName(c.am)}</div>`:''}</td>
+      <td style="cursor:pointer;" onclick="stEditClient('${c.id}')"><strong>${c.biz}</strong>${c.am?`<div style="font-size:11px;color:var(--text-d)">${getAMName(c.am)}</div>`:''}</td>
       <td>${c.stMethod||'<span style="color:var(--text-d)">—</span>'}</td>
       <td>${c.stFreq?`<span class="badge b-active">${c.stFreq}</span>`:'<span style="color:var(--text-d)">—</span>'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;">${c.stTaxid||'<span style="color:var(--text-d)">—</span>'}</td>
@@ -11923,7 +11923,7 @@ function renderSalesTax(){
       <td>${lastCell}</td>
       <td style="white-space:nowrap;">
         ${actionBtn}
-        <button class="btn btn-ghost btn-sm" onclick="openClient('${c.id}',2)" style="font-size:10px;padding:4px 9px;">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="stEditClient('${c.id}')" style="font-size:10px;padding:4px 9px;">Edit</button>
       </td>
     </tr>`;
   }).join('');
@@ -11933,6 +11933,12 @@ function renderSalesTax(){
 function stFileNow(clientId){
   stTab('filer');
   setTimeout(() => stfOpenClient(clientId), 50);
+}
+
+// Open the client modal directly on the Sales Tax tab (tab index 2)
+function stEditClient(clientId){
+  openEditClient(clientId);
+  setTimeout(() => { if (typeof mcTab === 'function') mcTab(2); }, 300);
 }
 
 function renderActivityLog(){
@@ -18812,7 +18818,7 @@ function smsOpenThread(phone){
   document.getElementById('sms-thread-phone').textContent = phone;
   const linkEl = document.getElementById('sms-thread-client-link');
   if(convo.clientId){
-    linkEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openClient('${convo.clientId}')" style="font-size:11px;">View Client</button>`;
+    linkEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openEditClient('${convo.clientId}')" style="font-size:11px;">View Client</button>`;
   } else {
     linkEl.innerHTML = '<span style="font-size:10px;color:var(--text-d);">Unknown contact</span>';
   }
