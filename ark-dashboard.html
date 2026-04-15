@@ -6639,6 +6639,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div id="memp-location-hint" style="font-size:11px;color:var(--text-d);margin-top:4px;"></div>
         </div>
 
+        <div class="fg full" id="memp-franchise-row" style="display:none;">
+          <label>Franchise <span style="font-size:11px;color:var(--text-d);font-weight:400;">— which franchise pays this employee (affects EIN on W-2 if that franchise runs separate payroll)</span></label>
+          <select id="memp-franchise-id"
+            style="width:100%;height:40px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);"></select>
+        </div>
+
         <div class="section-label">Personal Information</div>
         <div class="fg"><label>First Name *</label><input id="memp-fname" placeholder="John"></div>
         <div class="fg"><label>Middle Name</label><input id="memp-mname" placeholder="(optional)"></div>
@@ -11922,7 +11928,14 @@ function renderFranchiseList(franchises) {
   if (empty) empty.style.display = 'none';
   list.innerHTML = franchises.map((f, idx) => {
     const linked = !!f.qboRealmId;
-    return `<div class="franchise-row" data-idx="${idx}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
+    const sepPR = !!f.separatePayroll;
+    const payCfg = PAY_DAY_OPTIONS[f.prPayschedule];
+    const payOpts = payCfg ? payCfg.opts : [];
+    const payLbl  = payCfg ? payCfg.label : 'Pay Day';
+    const depOpts = ['Monthly','Semi-Weekly','Next Day','Quarterly'];
+    const schedOpts = ['Weekly (52x/year)','Bi-Weekly (26x/year)','Semi-Monthly (24x/year)','Monthly (12x/year)','Quarterly (4x/year)'];
+    const procOpts = ['Same day as pay day','1 business day prior','2 business days prior','3 business days prior','4 business days prior','5 business days prior'];
+    return `<div class="franchise-row" data-idx="${idx}" data-id="${f.id||''}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
         <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Franchise city" style="font-size:12px;font-weight:600;">
         <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Franchise name" style="font-size:12px;">
@@ -11939,7 +11952,53 @@ function renderFranchiseList(franchises) {
           }
         </div>
       </div>
-      ${f.qboName ? `<div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;">QBO: ${f.qboName}</div>` : ''}
+      ${f.qboName ? `<div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:6px;">QBO: ${f.qboName}</div>` : ''}
+
+      <!-- Separate payroll toggle -->
+      <div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-m);cursor:pointer;user-select:none;">
+          <input type="checkbox" class="fc-sep-pr" ${sepPR?'checked':''} onchange="toggleFranchisePayroll(${idx}, this.checked)">
+          Separate payroll for this franchise
+          <span style="font-weight:400;color:var(--text-d);font-size:10px;">${sepPR?'':'— inherits company-wide payroll settings'}</span>
+        </label>
+        <div class="fc-pr-panel" style="display:${sepPR?'block':'none'};margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-d);">Franchise Payroll Setup</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="copyParentPayrollToFranchise(${idx})" style="font-size:10px;padding:3px 8px;" title="Copy company-wide payroll settings from the Payroll tab">⎘ Copy from parent</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">EIN / FEIN</label><input type="text" class="field-input fc-pr-ein" value="${(f.prEin||'').replace(/"/g,'&quot;')}" placeholder="XX-XXXXXXX" style="font-size:11px;"></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">State Withholding ID</label><input type="text" class="field-input fc-pr-swid" value="${(f.prSwid||'').replace(/"/g,'&quot;')}" placeholder="State WH account #" style="font-size:11px;"></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">SUTA Account #</label><input type="text" class="field-input fc-pr-suta" value="${(f.prSuta||'').replace(/"/g,'&quot;')}" placeholder="SUTA / SUI account #" style="font-size:11px;"></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">Deposit Frequency</label>
+              <select class="fc-pr-depfreq" style="font-size:11px;">
+                <option value="">— Select —</option>
+                ${depOpts.map(o=>`<option ${f.prDepfreq===o?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">Pay Schedule</label>
+              <select class="fc-pr-payschedule" onchange="onFranchisePayScheduleChange(${idx})" style="font-size:11px;">
+                <option value="">— Select —</option>
+                ${schedOpts.map(o=>`<option ${f.prPayschedule===o?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>
+            <div class="fg fc-pr-payday-wrap" style="margin:0;display:${f.prPayschedule?'':'none'};">
+              <label class="fc-pr-payday-label" style="font-size:10px;">${payLbl}</label>
+              <select class="fc-pr-payday" style="font-size:11px;">
+                <option value="">— Select —</option>
+                ${payOpts.map(o=>`<option ${f.prPayday===o?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">Processing Day</label>
+              <select class="fc-pr-processingday" style="font-size:11px;">
+                <option value="">— Select —</option>
+                ${procOpts.map(o=>`<option ${f.prProcessingday===o?'selected':''}>${o}</option>`).join('')}
+              </select>
+            </div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">Next Pay Date</label><input type="date" class="field-input fc-pr-nextpaydate" value="${f.prNextpaydate||''}" style="font-size:11px;"></div>
+          </div>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -11950,7 +12009,7 @@ function addFranchise() {
   if (!list) return;
   if (empty) empty.style.display = 'none';
   const current = getFranchisesFromModal();
-  current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '' });
+  current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '', separatePayroll: false });
   renderFranchiseList(current);
   // Hide parent QBO link when franchises exist
   const linkWrap = document.getElementById('mc-qbo-link-wrap');
@@ -11969,16 +12028,80 @@ function removeFranchise(idx) {
 
 function getFranchisesFromModal() {
   const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
-  return [...rows].map(row => ({
-    id: row.dataset.id || uid(),
-    name: row.querySelector('.fc-name')?.value?.trim() || '',
-    legalName: row.querySelector('.fc-legal')?.value?.trim() || '',
-    qboRealmId: row.querySelector('.fc-realm')?.value?.trim() || '',
-    qboName: row.querySelector('.fc-qboname')?.value?.trim() || '',
-    state: row.querySelector('.fc-state')?.value?.trim().toUpperCase() || '',
-    storeNumber: row.querySelector('.fc-store')?.value?.trim() || '',
-    notes: '',
-  }));
+  return [...rows].map(row => {
+    const separatePayroll = !!row.querySelector('.fc-sep-pr')?.checked;
+    const out = {
+      id: row.dataset.id || uid(),
+      name: row.querySelector('.fc-name')?.value?.trim() || '',
+      legalName: row.querySelector('.fc-legal')?.value?.trim() || '',
+      qboRealmId: row.querySelector('.fc-realm')?.value?.trim() || '',
+      qboName: row.querySelector('.fc-qboname')?.value?.trim() || '',
+      state: row.querySelector('.fc-state')?.value?.trim().toUpperCase() || '',
+      storeNumber: row.querySelector('.fc-store')?.value?.trim() || '',
+      notes: '',
+      separatePayroll,
+    };
+    if (separatePayroll) {
+      out.prEin           = row.querySelector('.fc-pr-ein')?.value?.trim() || '';
+      out.prSwid          = row.querySelector('.fc-pr-swid')?.value?.trim() || '';
+      out.prSuta          = row.querySelector('.fc-pr-suta')?.value?.trim() || '';
+      out.prDepfreq       = row.querySelector('.fc-pr-depfreq')?.value || '';
+      out.prPayschedule   = row.querySelector('.fc-pr-payschedule')?.value || '';
+      out.prPayday        = row.querySelector('.fc-pr-payday')?.value || '';
+      out.prProcessingday = row.querySelector('.fc-pr-processingday')?.value || '';
+      out.prNextpaydate   = row.querySelector('.fc-pr-nextpaydate')?.value || '';
+    }
+    return out;
+  });
+}
+
+function toggleFranchisePayroll(idx, checked) {
+  const current = getFranchisesFromModal();
+  if (!current[idx]) return;
+  current[idx].separatePayroll = checked;
+  // If turning on for the first time with no values, pre-fill from parent
+  if (checked && !current[idx].prPayschedule && !current[idx].prEin) {
+    current[idx].prEin           = document.getElementById('mc-ein')?.value.trim() || '';
+    current[idx].prSwid          = document.getElementById('mc-pr-swid')?.value.trim() || '';
+    current[idx].prSuta          = document.getElementById('mc-pr-suta')?.value.trim() || '';
+    current[idx].prDepfreq       = document.getElementById('mc-pr-depfreq')?.value || '';
+    current[idx].prPayschedule   = document.getElementById('mc-pr-payschedule')?.value || '';
+    current[idx].prPayday        = document.getElementById('mc-pr-payday')?.value || '';
+    current[idx].prProcessingday = document.getElementById('mc-pr-processingday')?.value || '';
+    current[idx].prNextpaydate   = document.getElementById('mc-pr-nextpaydate')?.value || '';
+  }
+  renderFranchiseList(current);
+}
+
+function onFranchisePayScheduleChange(idx) {
+  const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
+  const row = rows[idx]; if (!row) return;
+  const freq = row.querySelector('.fc-pr-payschedule')?.value || '';
+  const wrap = row.querySelector('.fc-pr-payday-wrap');
+  const lbl  = row.querySelector('.fc-pr-payday-label');
+  const sel  = row.querySelector('.fc-pr-payday');
+  const cfg  = PAY_DAY_OPTIONS[freq];
+  if (!cfg) { if (wrap) wrap.style.display='none'; if (sel) sel.value=''; return; }
+  if (lbl) lbl.textContent = cfg.label;
+  if (sel) sel.innerHTML = '<option value="">— Select —</option>' + cfg.opts.map(o=>`<option>${o}</option>`).join('');
+  if (wrap) wrap.style.display='';
+}
+
+function copyParentPayrollToFranchise(idx) {
+  const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
+  const row = rows[idx]; if (!row) return;
+  const set = (cls, v) => { const el = row.querySelector('.'+cls); if (el) el.value = v; };
+  set('fc-pr-ein',          document.getElementById('mc-ein')?.value.trim() || '');
+  set('fc-pr-swid',         document.getElementById('mc-pr-swid')?.value.trim() || '');
+  set('fc-pr-suta',         document.getElementById('mc-pr-suta')?.value.trim() || '');
+  set('fc-pr-depfreq',      document.getElementById('mc-pr-depfreq')?.value || '');
+  set('fc-pr-payschedule',  document.getElementById('mc-pr-payschedule')?.value || '');
+  // Rebuild pay-day options based on newly-copied schedule, then set the value
+  onFranchisePayScheduleChange(idx);
+  set('fc-pr-payday',        document.getElementById('mc-pr-payday')?.value || '');
+  set('fc-pr-processingday', document.getElementById('mc-pr-processingday')?.value || '');
+  set('fc-pr-nextpaydate',   document.getElementById('mc-pr-nextpaydate')?.value || '');
+  if (typeof showToast === 'function') showToast('Copied from parent payroll');
 }
 
 async function linkFranchiseToQBO(idx) {
@@ -13282,6 +13405,23 @@ function selectEmpClient(id,name){
   document.getElementById('memp-client-search').value=name;
   document.getElementById('memp-client-dd').style.display='none';
   populateEmpLocations(id, null);
+  populateEmpFranchises(id, null);
+}
+
+function populateEmpFranchises(clientId, selectedFranchiseId){
+  const client = DB.clients.find(c=>c.id===clientId);
+  const row = document.getElementById('memp-franchise-row');
+  const sel = document.getElementById('memp-franchise-id');
+  if (!row || !sel) return;
+  const franchises = client?.franchises || [];
+  if (!franchises.length) { row.style.display='none'; sel.innerHTML=''; return; }
+  sel.innerHTML = '<option value="">— Parent company (shared payroll) —</option>' +
+    franchises.map(f => {
+      const label = f.name || f.legalName || `Franchise ${f.storeNumber||''}`.trim() || 'Unnamed franchise';
+      const sepTag = f.separatePayroll ? ' · separate payroll' : '';
+      return `<option value="${f.id}" ${selectedFranchiseId===f.id?'selected':''}>${label}${sepTag}</option>`;
+    }).join('');
+  row.style.display='';
 }
 document.addEventListener('click',function(e){
   const inp=document.getElementById('memp-client-search');
@@ -13349,6 +13489,10 @@ function openAddEmp(){
   document.getElementById('memp-location-row').style.display='none';
   document.getElementById('memp-location-id').innerHTML='';
   document.getElementById('memp-location-hint').textContent='';
+  const frRow = document.getElementById('memp-franchise-row');
+  const frSel = document.getElementById('memp-franchise-id');
+  if (frRow) frRow.style.display='none';
+  if (frSel) frSel.innerHTML='';
   document.getElementById('modal-emp').style.display='flex';
 }
 function openEditEmp(id){
@@ -13369,6 +13513,7 @@ function openEditEmp(id){
   document.getElementById('memp-client-search').value=client?client.biz:'';
   document.getElementById('memp-client-dd').style.display='none';
   populateEmpLocations(e.clientId, e.locationId||null);
+  populateEmpFranchises(e.clientId, e.franchiseId||null);
   document.getElementById('modal-emp').style.display='flex';
 }
 function saveEmp(){
@@ -13403,6 +13548,7 @@ function saveEmp(){
     ssn,hiredate,street,city,state,zip,
     clientId:document.getElementById('memp-client-id').value,
     locationId,
+    franchiseId: document.getElementById('memp-franchise-id')?.value || null,
     workState,
   };
   obj._updatedAt = new Date().toISOString();
