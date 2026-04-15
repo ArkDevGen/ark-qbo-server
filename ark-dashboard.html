@@ -24346,53 +24346,12 @@ function ahSave(){
   const afterMeta = { afterHours:true, clientId, clientName, afterHoursNote:note };
 
   if(mode === 'punch'){
-    const { empId, type, date, time } = args;
-    if(!DB.timePunches[empId]) DB.timePunches[empId] = [];
-    const entry = {
-      id:uid(), type, date, time,
-      loggedAt:  new Date().toISOString(),
-      enteredBy: tcEnteredBy(),
-      override:  false,
-      ...afterMeta,
-    };
-    DB.timePunches[empId].push(entry);
-    DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-    saveDB();
-    const label = type==='in' ? 'Clocked in' : 'Clocked out';
-    const emp = (DB.users||[]).find(u=>u.id===empId);
-    const empName = emp ? `${emp.fname} ${emp.lname||''}`.trim() : empId;
-    const ctx = [clientName, note].filter(Boolean).join(' — ');
-    logAct(`🌙 After-hours ${label}: ${empName} at ${tcFmtTime(time)} on ${date}${ctx?' · '+ctx:''}`);
-    tcMsg(`✓ ${label} at ${tcFmtTime(time)} on ${date} (after-hours logged)`, '#2e7d5e');
-    tcRenderTimecard(empId);
-    const now = new Date();
-    document.getElementById('tc-punch-time').value = now.toTimeString().slice(0,5);
-
+    // Route through the normal punch core so it POSTs to /time/punches
+    // and persists server-side (not just local DB)
+    _tcPunchCore(args.type, afterMeta);
   } else if(mode === 'manual'){
-    const { empId, date, inT, outT } = args;
-    if(!DB.timePunches[empId]) DB.timePunches[empId] = [];
-    const loggedAt  = new Date().toISOString();
-    const enteredBy = tcEnteredBy();
-    DB.timePunches[empId].push({ id:uid(), type:'in',  date, time:inT,  loggedAt, enteredBy, override:false, ...afterMeta });
-    if(outT){
-      DB.timePunches[empId].push({ id:uid(), type:'out', date, time:outT, loggedAt, enteredBy, override:false, ...afterMeta });
-    }
-    DB.timePunches[empId].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-    saveDB();
-    const emp = (DB.users||[]).find(u=>u.id===empId);
-    const empName = emp ? `${emp.fname} ${emp.lname||''}`.trim() : empId;
-    const ctx = [clientName, note].filter(Boolean).join(' — ');
-    const shiftDesc = outT
-      ? `🌙 After-hours shift for ${empName}: ${tcFmtTime(inT)} – ${tcFmtTime(outT)} on ${date}${ctx?' · '+ctx:''}`
-      : `🌙 After-hours clock in for ${empName}: ${tcFmtTime(inT)} on ${date}${ctx?' · '+ctx:''}`;
-    logAct(shiftDesc);
-    const msg = outT ? `✓ Shift saved: ${tcFmtTime(inT)} – ${tcFmtTime(outT)} (after-hours logged)` : `✓ Clock In saved: ${tcFmtTime(inT)} (after-hours logged)`;
-    tcMsg(msg, '#2e7d5e');
-    document.getElementById('tc-manual-in').value  = '';
-    document.getElementById('tc-manual-out').value = '';
-    if(document.getElementById('tc-manual-preview'))
-      document.getElementById('tc-manual-preview').textContent = '';
-    tcRenderTimecard(empId);
+    // Route through manual entry core so it POSTs to /time/punches
+    _tcManualEntryCore(afterMeta);
   }
 
   _ahPendingPunch = null;
