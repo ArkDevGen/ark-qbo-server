@@ -37930,10 +37930,21 @@ async function plGenerateMeetingPDF() {
 
   drawFooter();
 
-  // Save
+  // Open in a new tab so the PDF displays inline (no Save As prompt).
+  // The browser's PDF viewer (or Adobe, if set as default) handles it from there.
   const fileName = `PL-Review-${clientName.replace(/[^a-z0-9]/gi, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(fileName);
-  showToast(`PDF generated: ${fileName}`);
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    // Popup blocked — fall back to download
+    doc.save(fileName);
+    showToast(`PDF downloaded: ${fileName} (allow popups to open in tab)`);
+  } else {
+    showToast(`PDF opened in new tab: ${fileName}`);
+  }
+  // Free the blob URL once the new window has had time to load it
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
   qboLog('success', `Meeting prep PDF generated for ${clientName}`);
 }
 
