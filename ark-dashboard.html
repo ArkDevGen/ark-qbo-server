@@ -38439,7 +38439,7 @@ async function plGenerateMeetingPDF() {
   y += 30;
 
   // Headline metric tiles — 2 rows x 3 cols of key numbers
-  const ft = plFleetSalesTrends || {};
+  const fleetT = plFleetSalesTrends || {};
   const fmtTrend = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
   const momPct = plPrevSummary ? ((sales - (plPrevSummary.sales||0)) / (plPrevSummary.sales||1) * 100) : null;
   const cogsPct = sales > 0 ? (summary.cogs / sales) : 0;
@@ -38451,7 +38451,7 @@ async function plGenerateMeetingPDF() {
   const heroW = (MR - ML - 24) / 3;
   const hero = [
     { label: 'Net Sales', value: fmt$(sales),
-      sub: [momPct != null ? `MoM: ${momPct >= 0 ? '+' : ''}${momPct.toFixed(1)}%` : null, ft.yoyPct != null ? `YoY: ${fmtTrend(ft.yoyPct)}` : null].filter(Boolean).join('  ·  ') || periodMonthLabel,
+      sub: [momPct != null ? `MoM: ${momPct >= 0 ? '+' : ''}${momPct.toFixed(1)}%` : null, fleetT.yoyPct != null ? `YoY: ${fmtTrend(fleetT.yoyPct)}` : null].filter(Boolean).join('  ·  ') || periodMonthLabel,
       accent: navy },
     { label: 'COGS', value: fmtPct(cogsPct),
       sub: fmt$(summary.cogs),
@@ -38524,15 +38524,14 @@ async function plGenerateMeetingPDF() {
 
   const metricBoxW = (MR - ML - 20) / 3;
   const metricBoxH = 60;
-  const ft = plFleetSalesTrends || {};
-  const fmtTrend = (v) => v == null ? 'N/A' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  // Reuse fleetT and fmtTrend from cover page (already declared above)
   const metricsGrid = [
     { label: 'Gross Sales', value: fmt$(sales), sub: plPrevSummary ? `MoM: ${((sales - plPrevSummary.sales) / (plPrevSummary.sales || 1) * 100).toFixed(1)}%` : '' },
     { label: 'COGS %', value: fmtPct(summary.cogs / sales), sub: `${fmt$(summary.cogs)}` },
     { label: 'Total Payroll %', value: fmtPct(summary.payroll / sales), sub: `${fmt$(summary.payroll)}` },
     { label: 'Net Income', value: fmt$(summary.netIncome), sub: `${fmtPct(summary.netIncome / sales)} margin` },
-    { label: 'Fleet MOM Sales', value: fmtTrend(ft.momPct), sub: ft.currentStoreCount ? `${ft.currentStoreCount} stores reporting` : '' },
-    { label: 'Fleet YOY Sales', value: fmtTrend(ft.yoyPct), sub: ft.yoyPrevSales ? `vs ${ft.yoyPrevMonth}` : '' },
+    { label: 'Fleet MOM Sales', value: fmtTrend(fleetT.momPct), sub: fleetT.currentStoreCount ? `${fleetT.currentStoreCount} stores reporting` : '' },
+    { label: 'Fleet YOY Sales', value: fmtTrend(fleetT.yoyPct), sub: fleetT.yoyPrevSales ? `vs ${fleetT.yoyPrevMonth}` : '' },
   ];
 
   for (let i = 0; i < metricsGrid.length; i++) {
