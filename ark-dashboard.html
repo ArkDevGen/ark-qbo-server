@@ -35483,6 +35483,11 @@ async function plRunDigest() {
     // ── Step 4: Parse current month + build summary ────────────
     const accounts = plParseReport(plRes.report);
     plAllAccounts = accounts;
+    // Also stash on window so the teach modal can ALWAYS find them even if
+    // let-scoped plAllAccounts gets cleared by a re-render or nav event.
+    window._plLastParsedAccounts = accounts;
+    window._plLastRawReport = plRawReport;
+    window._plLastDetailReport = plDetailReport;
     plCurrentSummary = plBuildSummary(accounts);
 
     // ── Step 5: Load anticipated expenses + overrides + benchmarks ──
@@ -36240,11 +36245,16 @@ function plOpenTeachModal(i) {
   const f = plFlags[i];
   if (!f) return;
 
-  // Build the definitive list of accounts on this P&L — try plAllAccounts first,
-  // fall back to re-parsing the raw report, then the detail report.
+  // Build the definitive list of accounts on this P&L.
+  // Try every possible source — the let-scoped vars can get cleared by nav events
+  // so we also check the window-stashed copies as bulletproof fallbacks.
   let accounts = (plAllAccounts && plAllAccounts.length) ? plAllAccounts : [];
+  if (!accounts.length && window._plLastParsedAccounts?.length) accounts = window._plLastParsedAccounts;
   if (!accounts.length && plRawReport) accounts = plParseReport(plRawReport);
+  if (!accounts.length && window._plLastRawReport) accounts = plParseReport(window._plLastRawReport);
   if (!accounts.length && plDetailReport) accounts = plParseReport(plDetailReport);
+  if (!accounts.length && window._plLastDetailReport) accounts = plParseReport(window._plLastDetailReport);
+  console.log(`[Teach] Account sources: plAllAccounts=${(plAllAccounts||[]).length}, window=${(window._plLastParsedAccounts||[]).length}, raw=${!!plRawReport}, windowRaw=${!!window._plLastRawReport} → final=${accounts.length}`);
   // Deduplicate by name (keep the one with the larger absolute amount)
   const byName = new Map();
   for (const a of accounts) {
