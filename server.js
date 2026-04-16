@@ -118,11 +118,13 @@ function saveUsers() {
 // hand every time. Production should leave AUTO_SEED_ADMIN unset —
 // there, an empty users file means something is wrong, not routine.
 if (process.env.AUTO_SEED_ADMIN === 'true' && _users.length === 0) {
-  const apiKey = process.env.ARK_API_KEY;
-  if (apiKey) {
+  // Prefer AUTO_SEED_PASSWORD (friendly staging password) over ARK_API_KEY.
+  // Falls back to ARK_API_KEY so the feature still works with just the one var.
+  const seedPassword = process.env.AUTO_SEED_PASSWORD || process.env.ARK_API_KEY;
+  if (seedPassword) {
     (async () => {
       try {
-        const hash = await bcrypt.hash(apiKey, 10);
+        const hash = await bcrypt.hash(seedPassword, 10);
         const username = (process.env.AUTO_SEED_USERNAME || 'arkdev').toLowerCase().trim();
         _users.push({
           id: 'usr_' + crypto.randomUUID().slice(0, 8),
@@ -148,7 +150,7 @@ if (process.env.AUTO_SEED_ADMIN === 'true' && _users.length === 0) {
       }
     })();
   } else {
-    console.log('AUTO_SEED_ADMIN=true but ARK_API_KEY not set — skipping auto-seed');
+    console.log('AUTO_SEED_ADMIN=true but neither AUTO_SEED_PASSWORD nor ARK_API_KEY is set — skipping auto-seed');
   }
 }
 
