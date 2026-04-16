@@ -111,6 +111,47 @@ function saveUsers() {
   fs.writeFileSync(USERS_FILE, JSON.stringify(_users, null, 2));
 }
 
+// ─── Auto-seed admin on empty boot (staging self-heal) ───────────
+// When AUTO_SEED_ADMIN=true and the user DB is empty (e.g. after a
+// Render free-tier restart wiped the ephemeral disk), automatically
+// recreate the shared admin so the team doesn't have to re-seed by
+// hand every time. Production should leave AUTO_SEED_ADMIN unset —
+// there, an empty users file means something is wrong, not routine.
+if (process.env.AUTO_SEED_ADMIN === 'true' && _users.length === 0) {
+  const apiKey = process.env.ARK_API_KEY;
+  if (apiKey) {
+    (async () => {
+      try {
+        const hash = await bcrypt.hash(apiKey, 10);
+        const username = (process.env.AUTO_SEED_USERNAME || 'arkdev').toLowerCase().trim();
+        _users.push({
+          id: 'usr_' + crypto.randomUUID().slice(0, 8),
+          username,
+          passwordHash: hash,
+          fname: process.env.AUTO_SEED_FNAME || 'ARK',
+          lname: process.env.AUTO_SEED_LNAME || 'Dev',
+          email: process.env.AUTO_SEED_EMAIL || 'dev@arkfinancialservices.com',
+          role: 'admin',
+          title: 'Shared Staging Admin',
+          phone: '',
+          color: '#f59e0b',
+          status: 'Active',
+          assignedClients: [],
+          permissions: { ...DEFAULT_PERMISSIONS.admin },
+          createdAt: new Date().toISOString(),
+          lastLogin: null,
+        });
+        saveUsers();
+        console.log(`✓ Auto-seeded admin on empty boot: ${username}`);
+      } catch (e) {
+        console.log('Auto-seed failed:', e.message);
+      }
+    })();
+  } else {
+    console.log('AUTO_SEED_ADMIN=true but ARK_API_KEY not set — skipping auto-seed');
+  }
+}
+
 function findUser(username, includeInactive) {
   return _users.find(u => u.username.toLowerCase() === username.toLowerCase() && (includeInactive || (u.status||'').toLowerCase() === 'active'));
 }
