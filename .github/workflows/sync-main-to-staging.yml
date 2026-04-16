@@ -1,0 +1,39 @@
+name: Sync main → staging
+
+# Every time main gets new commits, automatically merge them into the
+# staging branch. Keeps staging always in sync with production code,
+# while still allowing the team to push test changes directly to staging
+# without affecting production.
+#
+# If a merge conflict ever happens (because someone pushed to staging
+# changes that conflict with main), this workflow fails loudly and a
+# human needs to reconcile it manually. That's intentional — we don't
+# want an automation silently overwriting staging-only changes.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # lets you trigger it manually from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout full repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge main into staging
+        run: |
+          git checkout staging
+          git merge origin/main --no-edit
+          git push origin staging
