@@ -5468,6 +5468,46 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
 
 
 // ─────────────────────────────────────────────────────────────────
+// STAGING: Proxy Render API to report staging service deploy status
+// back to the production CRM's Team Hub → Staging tab.
+// ─────────────────────────────────────────────────────────────────
+const STAGING_SERVICE_ID = process.env.RENDER_STAGING_SERVICE_ID || '';
+app.get('/staging/deploy-status', requireAuth, async (req, res) => {
+  const apiKey = process.env.RENDER_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'RENDER_API_KEY not set' });
+  try {
+    let serviceId = STAGING_SERVICE_ID;
+    // Auto-discover the staging service if the env var isn't set yet.
+    if (!serviceId) {
+      const svcResp = await fetch('https://api.render.com/v1/services?limit=50', {
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      });
+      if (!svcResp.ok) return res.status(502).json({ error: 'Render service list failed' });
+      const svcs = await svcResp.json();
+      const match = (svcs || []).map(x => x.service || x).find(s => /staging/i.test(s.name || ''));
+      if (!match) return res.json({ status: 'unknown', note: 'No staging service found' });
+      serviceId = match.id;
+    }
+    const depResp = await fetch(`https://api.render.com/v1/services/${serviceId}/deploys?limit=1`, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    });
+    if (!depResp.ok) return res.status(502).json({ error: 'Render deploy fetch failed' });
+    const list = await depResp.json();
+    const latest = (list[0] && (list[0].deploy || list[0])) || null;
+    if (!latest) return res.json({ status: 'unknown' });
+    res.json({
+      status: latest.status || 'unknown',
+      finishedAt: latest.finishedAt || latest.updatedAt || null,
+      commitId: latest.commit?.id || null,
+      commitMessage: latest.commit?.message || null,
+    });
+  } catch (e) {
+    console.error('staging/deploy-status error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // DATABASE: Server-side persistent storage for dashboard data
 // Both users share the same ark-db.json on disk
 // ─────────────────────────────────────────────────────────────────

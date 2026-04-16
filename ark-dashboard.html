@@ -5822,6 +5822,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">📋 Templates</button>
       <button class="dh-tab" id="dh-tab-mine" onclick="dhSwitchTab('mine')">My Work</button>
       <button class="dh-tab" id="dh-tab-completed" onclick="dhSwitchTab('completed')">Completed</button>
+      <button class="dh-tab" id="dh-tab-staging" onclick="dhSwitchTab('staging')">🧪 Staging</button>
     </div>
 
     <!-- Help Board (Q&A) -->
@@ -5896,6 +5897,32 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- Completed Archive -->
     <div id="dh-panel-completed" style="display:none;">
       <div id="dh-completed-list"></div>
+    </div>
+
+    <!-- Staging Environment Panel -->
+    <div id="dh-panel-staging" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--navy);">Staging Environment</div>
+          <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Test sandbox — safe to experiment. Data does not sync with production.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="stgRefresh()" title="Refresh">🔄 Refresh</button>
+          <a class="btn btn-primary btn-sm" href="https://ark-qbo-server-staging.onrender.com" target="_blank" rel="noopener" style="text-decoration:none;">Open Staging →</a>
+        </div>
+      </div>
+
+      <!-- Deploy status card -->
+      <div class="card" style="padding:16px;margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);margin-bottom:10px;">Deploy Status</div>
+        <div id="stg-deploy-status" style="font-size:13px;color:var(--text);">Loading…</div>
+      </div>
+
+      <!-- Recent commits card -->
+      <div class="card" style="padding:16px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);margin-bottom:10px;">Recent Changes on Staging Branch</div>
+        <div id="stg-commits" style="font-size:13px;">Loading…</div>
+      </div>
     </div>
   </div>
 
@@ -43596,7 +43623,7 @@ function dhInit(){
 }
 
 function dhSwitchTab(tab){
-  ['helpboard','board','help','templates','mine','completed'].forEach(t=>{
+  ['helpboard','board','help','templates','mine','completed','staging'].forEach(t=>{
     const panel = document.getElementById('dh-panel-'+t);
     const btn = document.getElementById('dh-tab-'+t);
     if(panel) panel.style.display = t===tab?'':'none';
@@ -43608,6 +43635,80 @@ function dhSwitchTab(tab){
   if(tab==='templates') dhRenderTemplates();
   if(tab==='mine') dhRenderMine();
   if(tab==='completed') dhRenderCompleted();
+  if(tab==='staging') stgRefresh();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  STAGING ENVIRONMENT PANEL
+//  Shows deploy status from Render + recent commits on staging branch
+//  from GitHub, so the team can see what's being tested without leaving
+//  production.
+// ══════════════════════════════════════════════════════════════════
+async function stgRefresh(){
+  const statusEl = document.getElementById('stg-deploy-status');
+  const commitsEl = document.getElementById('stg-commits');
+  if(statusEl) statusEl.innerHTML = 'Loading…';
+  if(commitsEl) commitsEl.innerHTML = 'Loading…';
+
+  // Recent commits on staging branch (GitHub public API, no auth needed)
+  try {
+    const r = await fetch('https://api.github.com/repos/ArkDevGen/ark-qbo-server/commits?sha=staging&per_page=10');
+    if(r.ok){
+      const commits = await r.json();
+      if(Array.isArray(commits) && commits.length){
+        commitsEl.innerHTML = commits.map(c => {
+          const msg = (c.commit?.message || '').split('\n')[0];
+          const author = c.commit?.author?.name || 'unknown';
+          const when = c.commit?.author?.date ? new Date(c.commit.author.date) : null;
+          const whenStr = when ? when.toLocaleString() : '';
+          const sha = (c.sha || '').slice(0,7);
+          const url = c.html_url || '#';
+          return `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;color:var(--text);">${_escapeHtml(msg)}</div>
+              <div style="font-size:11px;color:var(--text-d);margin-top:3px;">${_escapeHtml(author)} · ${whenStr}</div>
+            </div>
+            <a href="${url}" target="_blank" rel="noopener" style="font-size:11px;font-family:monospace;color:var(--text-d);text-decoration:none;flex-shrink:0;">${sha}</a>
+          </div>`;
+        }).join('');
+      } else {
+        commitsEl.innerHTML = '<div style="color:var(--text-d);font-style:italic;">No commits found.</div>';
+      }
+    } else {
+      commitsEl.innerHTML = '<div style="color:var(--text-d);">Could not load commits (GitHub API rate limit?).</div>';
+    }
+  } catch(e){
+    commitsEl.innerHTML = '<div style="color:var(--text-d);">Could not load commits.</div>';
+  }
+
+  // Deploy status from our server (proxies Render API)
+  try {
+    const r = await authFetch(ARK_SERVER + '/staging/deploy-status');
+    if(r.ok){
+      const d = await r.json();
+      const status = d.status || 'unknown';
+      const color = status === 'live' ? '#10b981' : status === 'build_in_progress' || status === 'update_in_progress' ? '#f59e0b' : status === 'build_failed' || status === 'deactivated' ? '#ef4444' : '#6b7280';
+      const label = status.replace(/_/g,' ').toUpperCase();
+      const when = d.finishedAt ? new Date(d.finishedAt).toLocaleString() : '';
+      const commit = d.commitMessage ? `<div style="font-size:12px;color:var(--text);margin-top:6px;">${_escapeHtml(d.commitMessage.split('\n')[0])}</div>` : '';
+      statusEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+          <div style="font-weight:700;font-size:14px;letter-spacing:.3px;">${label}</div>
+          ${when ? `<div style="font-size:11px;color:var(--text-d);">${when}</div>` : ''}
+        </div>
+        ${commit}
+      `;
+    } else {
+      statusEl.innerHTML = '<div style="color:var(--text-d);">Could not load deploy status.</div>';
+    }
+  } catch(e){
+    statusEl.innerHTML = '<div style="color:var(--text-d);">Could not load deploy status.</div>';
+  }
+}
+
+function _escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ══════════════════════════════════════════════════════════════════
