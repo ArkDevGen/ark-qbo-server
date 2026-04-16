@@ -4122,9 +4122,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
                       <tbody id="pl-anticipated-body"></tbody>
                     </table>
                   </div>
-                  <div style="display:flex;gap:6px;margin-top:6px;">
+                  <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
                     <button class="btn btn-ghost btn-sm" onclick="plAddAnticipatedRow()" style="font-size:10px;">+ Add Row</button>
                     <button class="btn btn-ghost btn-sm" onclick="plApplyTemplate('scooters')" style="font-size:10px;">Apply Scooter's Template</button>
+                    <button class="btn btn-ghost btn-sm" onclick="plAutoPopulateAnticipated()" style="font-size:10px;" title="Pull every account from this client's last P&L and use as the expected checklist">Auto-populate from P&L</button>
                     <div style="flex:1;"></div>
                     <button class="btn btn-ghost btn-sm" onclick="plSaveAnticipated()" style="font-size:10px;color:var(--green);">Save</button>
                   </div>
@@ -35102,6 +35103,87 @@ async function plApplyTemplate(templateName) {
   } catch(e) { showToast('Failed to apply template'); }
 }
 
+// Auto-populate anticipated expenses from the client's actual P&L accounts.
+// Pulls every account with a balance and creates a checklist row for it.
+async function plAutoPopulateAnticipated() {
+  const realmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId;
+  if (!realmId) { showToast('Select a client first'); return; }
+
+  // Try cached accounts first; if unavailable, pull a quick last-month P&L
+  let accounts = (plAllAccounts && plAllAccounts.length) ? plAllAccounts : [];
+  if (!accounts.length && window._plLastParsedAccounts?.length) accounts = window._plLastParsedAccounts;
+  if (!accounts.length) {
+    const dbClient = (DB.clients || []).find(c => c.id === plSelectedClient?.id);
+    if (dbClient?._lastPlAccounts?.length) accounts = dbClient._lastPlAccounts;
+  }
+  if (!accounts.length) {
+    showToast('Pulling last month from QBO…');
+    try {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      const res = await fetch(`${QBO_SERVER}/qbo/api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getProfitAndLoss', realmId, payload: { startDate: start.toISOString().slice(0,10), endDate: end.toISOString().slice(0,10), reportType: 'summary' } }),
+      }).then(r => r.json());
+      if (res.success && res.report) accounts = plParseReport(res.report);
+    } catch (e) { showToast('Failed to pull P&L: ' + e.message); return; }
+  }
+  if (!accounts.length) { showToast('No account data available — run the Digester first, then try again.'); return; }
+
+  // Build anticipated rows from leaf accounts with non-zero balances
+  const sales = Math.abs(accounts.find(a => {
+    const n = plNormalizeName(a.name);
+    return n.includes('income') || n.includes('sale') || n.includes('revenue');
+  })?.amount || 1);
+  const newExpenses = accounts
+    .filter(a => a.type === 'account' && a.name && Math.abs(a.amount || 0) > 0)
+    .map(a => ({
+      name: a.name,
+      amount: Math.abs(a.amount) > 50 ? Math.round(Math.abs(a.amount)) : null,
+      pctOfSales: sales > 0 ? Math.round((Math.abs(a.amount) / sales) * 1000) / 1000 : null,
+      tolerance: 0.20,
+    }));
+  if (!newExpenses.length) { showToast('No leaf accounts found on the P&L'); return; }
+
+  // Merge with existing — don't overwrite manually-configured rows
+  const existingNames = new Set(plAnticipatedExpenses.map(e => plNormalizeName(e.name)));
+  let added = 0;
+  for (const exp of newExpenses) {
+    if (!existingNames.has(plNormalizeName(exp.name))) {
+      plAnticipatedExpenses.push(exp);
+      existingNames.add(plNormalizeName(exp.name));
+      added++;
+    }
+  }
+  plRenderAnticipated();
+  showToast(`${added} accounts added from P&L (${plAnticipatedExpenses.length} total). Click Save to persist.`);
+  const panel = document.getElementById('pl-anticipated-panel');
+  if (panel) panel.style.display = '';
+}
+
+// After a successful digest run, auto-populate if the list is still empty
+function plAutoPopulateAfterDigest() {
+  if (plAnticipatedExpenses.length > 0) return;
+  if (!plAllAccounts?.length) return;
+  const accounts = plAllAccounts.filter(a => a.type === 'account' && a.name && Math.abs(a.amount || 0) > 0);
+  if (!accounts.length) return;
+  const sales = Math.abs(accounts.find(a => {
+    const n = plNormalizeName(a.name);
+    return n.includes('income') || n.includes('sale') || n.includes('revenue');
+  })?.amount || 1);
+  plAnticipatedExpenses = accounts.map(a => ({
+    name: a.name,
+    amount: Math.abs(a.amount) > 50 ? Math.round(Math.abs(a.amount)) : null,
+    pctOfSales: sales > 0 ? Math.round((Math.abs(a.amount) / sales) * 1000) / 1000 : null,
+    tolerance: 0.20,
+  }));
+  plRenderAnticipated();
+  plSaveAnticipated();
+  showToast(`Auto-populated ${plAnticipatedExpenses.length} expected expenses from this P&L`);
+}
+
 async function plSaveAnticipated() {
   if (!plSelectedClient?.qboRealmId) { showToast('Select a client first'); return; }
   try {
@@ -35520,6 +35602,11 @@ async function plRunDigest() {
         plAnticipatedExpenses = baseRes.expenses || [];
       }
     } catch(e) {}
+    // If no anticipated expenses configured for this client, auto-populate
+    // from the P&L we just pulled — gives them a real checklist from day one
+    if (!plAnticipatedExpenses.length && accounts.length) {
+      plAutoPopulateAfterDigest();
+    }
     await plLoadOverrides(effectiveKey);
     await plLoadBenchmarks(effectiveKey);
 
