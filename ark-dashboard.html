@@ -35758,6 +35758,25 @@ async function plRunDigest() {
     // ── Step 9: Merge all flags ────────────────────────────────
     plFlags = plMergeFlags(allLocalFlags, aiFlags);
 
+    // ── Step 9a: Validate MISSING flags against the detail report ──
+    // If we flagged something as MISSING but the detail report has
+    // actual transactions for it, it's NOT missing — QBO just grouped
+    // it differently in the summary. Remove the false flag.
+    if (plDetailReport) {
+      const beforeCount = plFlags.length;
+      plFlags = plFlags.filter(f => {
+        if (f.variance !== 'MISSING') return true; // keep non-MISSING flags
+        const { transactions } = plGetTransactionsForAccount(f.account);
+        if (transactions.length > 0) {
+          console.log(`[PL] Removed false MISSING for "${f.account}" — ${transactions.length} transaction(s) found in detail report`);
+          return false; // has transactions → not actually missing
+        }
+        return true; // genuinely missing
+      });
+      const removed = beforeCount - plFlags.length;
+      if (removed > 0) plProgress(72, `Validated: removed ${removed} false MISSING flag(s)`);
+    }
+
     // ── Step 9b: Final-Pass filter (summary mode = 30k-foot view) ──
     // Only keep client-reportable issues: CRITICAL, MISSING anticipated,
     // or variances exceeding 2x the tolerance threshold. Drop INFO and
