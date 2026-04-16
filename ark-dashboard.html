@@ -37921,16 +37921,42 @@ function plrOpenReview(clientId, reviewId) {
   // Stash for the Digester to pick up after nav
   window._plPendingReviewLoad = { clientId, reviewId };
   nav('qbo');
-  // Update page title so it's clear we're in review mode
-  const titleEl = document.getElementById('page-title');
-  if (titleEl) titleEl.textContent = `Reviewing: ${client.biz}`;
-  // Open the Digester workspace and load the saved review
-  setTimeout(() => {
-    if (typeof qboOpenTool === 'function') qboOpenTool('pldigest');
+
+  // Wait for qboInit to finish rendering, then open the Digester,
+  // set the title, select the client, and load the saved review.
+  // qboInit is async and can take 1-2s on Render free tier.
+  const _plrOpenInterval = setInterval(() => {
+    const ws = document.getElementById('qbo-pl-workspace');
+    if (!ws) return; // QBO page hasn't rendered yet — keep waiting
+    clearInterval(_plrOpenInterval);
+
+    // Open the Digester tool
+    qboOpenTool('pldigest');
+
+    // Override the page title
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.textContent = `Reviewing: ${client.biz}`;
+
+    // Select the client in the dropdown and load saved review
     setTimeout(() => {
-      if (typeof plrLoadFromQueue === 'function') plrLoadFromQueue();
+      const sel = document.getElementById('pl-client-select');
+      if (sel) {
+        // Try to select this client
+        const opt = sel.querySelector(`option[value="${clientId}"]`);
+        if (opt) {
+          sel.value = clientId;
+          plOnClientChange();
+        }
+      }
+      // Give the client load a moment, then restore the review state
+      setTimeout(() => {
+        if (typeof plrLoadFromQueue === 'function') plrLoadFromQueue();
+      }, 800);
     }, 500);
-  }, 300);
+  }, 200);
+
+  // Safety: stop polling after 10s if QBO page never loads
+  setTimeout(() => clearInterval(_plrOpenInterval), 10000);
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────
