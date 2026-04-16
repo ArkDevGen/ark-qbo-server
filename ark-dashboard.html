@@ -44147,6 +44147,7 @@ function dhRenderBoard(){
     tagSel.innerHTML = '<option value="">All Tags</option>'+[...allTags].sort().map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
   }
   const projects = (DB.devProjects||[]).filter(p=>{
+    if(p._deleted) return false;
     if(q && !p.title.toLowerCase().includes(q) && !(p.description||'').toLowerCase().includes(q)) return false;
     if(tagFilter && !(p.tags||[]).includes(tagFilter)) return false;
     return true;
@@ -44216,7 +44217,7 @@ function dhRenderCard(p){
 function dhRenderHelp(){
   const list = document.getElementById('dh-help-list');
   if(!list) return;
-  const helpProjects = (DB.devProjects||[]).filter(p=>p.needsHelp && p.status!=='completed');
+  const helpProjects = (DB.devProjects||[]).filter(p=>!p._deleted && p.needsHelp && p.status!=='completed');
   if(!helpProjects.length){
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No projects need help right now.</div>';
     return;
@@ -44244,7 +44245,7 @@ function dhRenderHelp(){
 function dhRenderMine(){
   const list = document.getElementById('dh-mine-list');
   if(!list||!currentUser) return;
-  const myProjects = (DB.devProjects||[]).filter(p=>(p.assignees||[]).includes(currentUser.id) || p.createdBy===currentUser.id);
+  const myProjects = (DB.devProjects||[]).filter(p=>!p._deleted && ((p.assignees||[]).includes(currentUser.id) || p.createdBy===currentUser.id));
   if(!myProjects.length){
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">You haven\'t joined or created any projects yet.</div>';
     return;
@@ -44267,7 +44268,7 @@ function dhRenderMine(){
 function dhRenderCompleted(){
   const list = document.getElementById('dh-completed-list');
   if(!list) return;
-  const completed = (DB.devProjects||[]).filter(p=>p.status==='completed').sort((a,b)=>(b._updatedAt||b.createdAt||'').localeCompare(a._updatedAt||a.createdAt||''));
+  const completed = (DB.devProjects||[]).filter(p=>!p._deleted && p.status==='completed').sort((a,b)=>(b._updatedAt||b.createdAt||'').localeCompare(a._updatedAt||a.createdAt||''));
   if(!completed.length){
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No completed projects yet.</div>';
     return;
@@ -44419,10 +44420,20 @@ function dhSaveProject(){
 
 function dhDeleteProject(id){
   if(!confirm('Delete this project? This cannot be undone.')) return;
-  DB.devProjects = (DB.devProjects||[]).filter(x=>x.id!==id);
+  // Soft-delete via tombstone: mark _deleted=true and bump _updatedAt so
+  // the server's per-record merge preserves the deletion. Render functions
+  // filter tombstones out, so the user sees it as gone.
+  const p = (DB.devProjects||[]).find(x => x.id === id);
+  if (p) {
+    p._deleted = true;
+    p._updatedAt = new Date().toISOString();
+  }
   saveDB();
   closeModal('modal-dh-detail');
   dhRenderBoard();
+  if(typeof dhRenderHelp === 'function') dhRenderHelp();
+  if(typeof dhRenderMine === 'function') dhRenderMine();
+  if(typeof dhRenderCompleted === 'function') dhRenderCompleted();
   showToast('Project deleted');
 }
 
