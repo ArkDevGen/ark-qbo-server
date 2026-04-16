@@ -1200,6 +1200,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="nav-item" id="nav-tasks" onclick="nav('tasks')"><span class="ni">🏭</span>Production</div>
       <div class="nav-item" id="nav-payrollcenter" onclick="nav('payrollcenter')"><span class="ni">💰</span>Payroll Center</div>
       <div class="nav-item" id="nav-taxcenter" onclick="nav('taxcenter')"><span class="ni">🧮</span>Tax Center</div>
+      <div class="nav-item" id="nav-plreviews" onclick="nav('plreviews')"><span class="ni">📈</span>P&L Reviews <span id="nav-plreviews-badge" class="nav-badge" style="display:none;"></span></div>
       <div class="nav-item" onclick="nav('timecenter')"><span class="ni">⏱</span>Time Center</div>
     </div>
 
@@ -4175,12 +4176,25 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div class="card" style="border-left:4px solid var(--green);overflow:visible;">
                 <div style="padding:16px 18px;">
                   <div id="pl-review-summary" style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;"></div>
+
+                  <!-- AM mode: sign-off prompt -->
+                  <div id="pl-am-signoff-block" style="display:none;background:var(--surface2);border:1px solid var(--gold);border-radius:6px;padding:12px 14px;margin-bottom:12px;">
+                    <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px;">Ready to send to Jacob for client review?</div>
+                    <textarea id="pl-am-signoff-note" placeholder="Optional note for Jacob (context, things to flag, anything you want highlighted)…" class="field-input" style="width:100%;font-size:12px;resize:vertical;min-height:60px;margin-bottom:8px;"></textarea>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;">
+                      <button class="btn btn-primary btn-sm" onclick="plAmSignOff()" style="font-size:11px;background:var(--gold);border-color:var(--gold);color:#fff;">✓ Sign Off &amp; Send to Jacob</button>
+                    </div>
+                  </div>
+
+                  <!-- Jacob review mode: curation panel -->
+                  <div id="pl-curation-panel" style="display:none;margin-bottom:12px;"></div>
+
                   <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <button class="btn btn-primary btn-sm" onclick="plCreateTasksFromFlags()" style="font-size:11px;">Create Tasks for Flagged Items</button>
-                    <button class="btn btn-sm" onclick="plGenerateClientReport()" style="font-size:11px;background:var(--navy);color:#fff;border-color:var(--navy);">Generate Client Summary</button>
+                    <button class="btn btn-sm" onclick="plGenerateClientReport()" style="font-size:11px;background:var(--navy);color:#fff;border-color:var(--navy);">Generate Client Report</button>
                     <button class="btn btn-ghost btn-sm" onclick="plExportReport('audit')" style="font-size:11px;">Export Audit Trail</button>
                     <div style="flex:1;"></div>
-                    <button class="btn btn-sm" onclick="plMarkReviewComplete()" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--green);">Mark Review Complete</button>
+                    <button id="pl-mark-sent-btn" class="btn btn-sm" onclick="plMarkReviewComplete()" style="font-size:11px;background:var(--green);color:#fff;border-color:var(--green);">Mark Review Complete</button>
                   </div>
                 </div>
               </div>
@@ -5771,6 +5785,18 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ INTEGRATIONS CENTER ════ -->
   <div class="view content" id="view-integrations" style="padding:28px 32px;">
     <div id="integrations-root"></div>
+  </div>
+
+  <!-- ══ P&L REVIEWS CENTER ══ -->
+  <div class="view content" id="view-plreviews" style="padding:24px 28px;">
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
+      <button class="dh-tab active" id="plr-tab-pending" onclick="plrSwitchTab('pending')">📥 Pending Reviews <span id="plr-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-weight:700;display:none;"></span></button>
+      <button class="dh-tab" id="plr-tab-sent" onclick="plrSwitchTab('sent')">📤 Sent Reviews</button>
+      <button class="dh-tab" id="plr-tab-library" onclick="plrSwitchTab('library')">📚 Action Library</button>
+    </div>
+    <div id="plr-panel-pending"></div>
+    <div id="plr-panel-sent" style="display:none;"></div>
+    <div id="plr-panel-library" style="display:none;"></div>
   </div>
 
   <!-- ══ DEV HUB ══ -->
@@ -9018,7 +9044,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -9031,7 +9057,7 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -9103,6 +9129,7 @@ function nav(page){
   }
   if(page==='integrations'){ integrationsInit(); }
   if(page==='devhub'){ dhInit(); }
+  if(page==='plreviews'){ plrInit(); }
 }
 
 // ══════════════════════════════════════════════
@@ -36013,6 +36040,7 @@ function plCheckReviewCompletion() {
     pcEl.textContent = 'Review complete';
     pcEl.style.background = 'rgba(46,125,94,.12)';
     pcEl.style.color = 'var(--green)';
+    if (typeof plUpdateReviewModeUI === 'function') plUpdateReviewModeUI();
   } else {
     footer.style.display = 'none';
     pcEl.textContent = `${total - addressed} of ${total} items need attention`;
@@ -36073,8 +36101,34 @@ async function plGenerateClientReport() {
 function plMarkReviewComplete() {
   plReviewState.completedAt = new Date().toISOString();
   plSaveReviewState();
-  plSaveToClient();
-  showToast('Review marked complete and saved');
+
+  // If this is the Jacob review flow, update the existing pending review entry
+  // (don't create a duplicate via plSaveToClient).
+  let updatedExisting = false;
+  if (plActiveReviewId && plSelectedClient) {
+    const c = DB.clients.find(x => x.id === plSelectedClient.id);
+    const r = c?.plReports?.find(x => x.id === plActiveReviewId);
+    if (r) {
+      r.status = 'sent';
+      r.completedAt = plReviewState.completedAt;
+      r.completedBy = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
+      r.curatedActions = JSON.parse(JSON.stringify(plCuratedActions || []));
+      r.snapshot = plBuildReviewSnapshot();
+      r.flags = plFlags.map((f, i) => ({
+        ...f,
+        decision: plReviewState.decisions?.[f.account + '::' + i] || null,
+        note: plReviewState.notes?.[f.account + '::' + i] || null,
+      }));
+      saveDB();
+      updatedExisting = true;
+      if (typeof plrUpdateNavBadge === 'function') plrUpdateNavBadge();
+      showToast('Marked sent — review moved to Sent Reviews');
+    }
+  }
+  if (!updatedExisting) {
+    plSaveToClient();
+    showToast('Review marked complete and saved');
+  }
 
   // Update close tracker with review results
   const realmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '';
@@ -36101,6 +36155,742 @@ function plMarkReviewComplete() {
       }),
     }).catch(e => console.warn('[CloseTracker] Review update failed:', e.message));
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  P&L REVIEW WORKFLOW — AM sign-off, Jacob curation, snapshot/restore
+// ══════════════════════════════════════════════════════════════════
+// State persisted on each client.plReports[i] entry so reviews can flow
+// AM → queue → Jacob → client without losing context across sessions.
+
+let plActiveReviewId = null;     // ID of the plReports entry currently loaded
+let plActiveReviewMode = 'am';   // 'am' = run+signoff, 'jacob' = curate+send
+let plCuratedActions = [];       // [{ id, title, body, source, tag }]
+
+function plIsAdmin() {
+  return !!(currentUser && currentUser.role === 'admin');
+}
+
+// Build a snapshot of the current Digester run for persistence.
+function plBuildReviewSnapshot() {
+  return {
+    period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
+    startDate: document.getElementById('pl-start-date').value,
+    endDate: document.getElementById('pl-end-date').value,
+    realmId: plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '',
+    className: plSelectedClass || null,
+    summary: plCurrentSummary || null,
+    prevSummary: plPrevSummary || null,
+    fleetTrends: plFleetSalesTrends || null,
+    flags: (plFlags || []).map((f, i) => ({
+      ...f,
+      decision: plReviewState.decisions?.[f.account + '::' + i] || null,
+      note: plReviewState.notes?.[f.account + '::' + i] || null,
+    })),
+    meetingPrep: plMeetingPrep || null,
+  };
+}
+
+// AM clicks "Sign Off & Send to Jacob" — persist a 'pending-review' entry.
+function plAmSignOff() {
+  if (!plSelectedClient || !plFlags?.length) { showToast('Run a digest first'); return; }
+  const note = (document.getElementById('pl-am-signoff-note')?.value || '').trim();
+  const client = DB.clients.find(c => c.id === plSelectedClient.id);
+  if (!client) return;
+  if (!client.plReports) client.plReports = [];
+
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
+  const okCount = Object.values(plReviewState.decisions || {}).filter(d => d === 'ok').length;
+  const flagCount = Object.values(plReviewState.decisions || {}).filter(d => d === 'flag').length;
+  const overrideCount = Object.values(plReviewState.decisions || {}).filter(d => d === 'override').length;
+
+  const entry = {
+    id: uid(),
+    status: 'pending-review',
+    date: new Date().toISOString(),
+    period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
+    className: plSelectedClass || null,
+    totalFlags: plFlags.length,
+    critical: plFlags.filter(f => f.severity === 'CRITICAL').length,
+    warnings: plFlags.filter(f => f.severity === 'WARNING').length,
+    approved: okCount,
+    flagged: flagCount,
+    overridden: overrideCount,
+    amSignedOff: { at: new Date().toISOString(), by: who, userId: currentUser?.id || null, note },
+    snapshot: plBuildReviewSnapshot(),
+    flags: plFlags.map((f, i) => ({
+      ...f,
+      decision: plReviewState.decisions?.[f.account + '::' + i] || null,
+      note: plReviewState.notes?.[f.account + '::' + i] || null,
+    })),
+    curatedActions: [],
+  };
+
+  client.plReports.push(entry);
+  plActiveReviewId = entry.id;
+  saveDB();
+  showToast(`Signed off and sent to Jacob for review`);
+  qboLog && qboLog('info', `P&L review signed off by ${who} for ${client.biz}`);
+  if (typeof plrUpdateNavBadge === 'function') plrUpdateNavBadge();
+
+  // Hide the sign-off block to give visual confirmation
+  const block = document.getElementById('pl-am-signoff-block');
+  if (block) block.style.display = 'none';
+}
+
+// Decide which review mode is active and update footer UI accordingly.
+function plUpdateReviewModeUI() {
+  const signoffBlock = document.getElementById('pl-am-signoff-block');
+  const curationPanel = document.getElementById('pl-curation-panel');
+  const sentBtn = document.getElementById('pl-mark-sent-btn');
+  if (!signoffBlock || !curationPanel || !sentBtn) return;
+
+  // Look up the active review (if any) on the selected client.
+  let activeReview = null;
+  if (plSelectedClient && plActiveReviewId) {
+    const c = DB.clients.find(x => x.id === plSelectedClient.id);
+    activeReview = c?.plReports?.find(r => r.id === plActiveReviewId) || null;
+  }
+
+  if (activeReview && (activeReview.status === 'in-review' || activeReview.status === 'pending-review')) {
+    plActiveReviewMode = 'jacob';
+    signoffBlock.style.display = 'none';
+    curationPanel.style.display = '';
+    sentBtn.textContent = '✓ Mark Sent to Client';
+    plRenderCurationPanel();
+  } else if (!plIsAdmin()) {
+    plActiveReviewMode = 'am';
+    signoffBlock.style.display = '';
+    curationPanel.style.display = 'none';
+    sentBtn.style.display = 'none';  // AMs don't mark complete; they sign off
+  } else {
+    // Admin running ad-hoc (no queue) — keep legacy behavior available
+    plActiveReviewMode = 'admin-direct';
+    signoffBlock.style.display = 'none';
+    curationPanel.style.display = '';
+    sentBtn.textContent = 'Mark Review Complete';
+    sentBtn.style.display = '';
+    plRenderCurationPanel();
+  }
+}
+
+// ── CURATION PANEL ────────────────────────────────────────────────
+// Lets Jacob pick AI suggestions + library actions, edit them inline,
+// reorder, add custom items. Deduplicates against previously-sent.
+function plRenderCurationPanel() {
+  const panel = document.getElementById('pl-curation-panel');
+  if (!panel) return;
+
+  const aiActions = (plMeetingPrep?.actionItems || []).map((text, i) => ({
+    id: 'ai-' + i,
+    title: text,
+    body: '',
+    source: 'ai',
+    tag: '',
+  }));
+
+  // Initialize curated list once per review (if empty, pre-fill with AI actions
+  // that haven't been previously sent to this client).
+  const prevTitles = plSelectedClient ? plrPreviouslySentTitles(plSelectedClient.id) : new Set();
+  if (!plCuratedActions.length && aiActions.length) {
+    plCuratedActions = aiActions.filter(a => !prevTitles.has((a.title||'').toLowerCase().trim()));
+  }
+
+  const libActions = (DB.suggestedActions || []);
+  const allTags = [...new Set(libActions.map(a => a.tag).filter(Boolean))].sort();
+  const tagFilter = window._plCurTagFilter || '';
+  const search = (window._plCurLibSearch || '').toLowerCase();
+  const filteredLib = libActions.filter(a => {
+    if (tagFilter && a.tag !== tagFilter) return false;
+    if (search && !((a.title||'').toLowerCase().includes(search) || (a.body||'').toLowerCase().includes(search))) return false;
+    return true;
+  });
+
+  panel.innerHTML = `
+    <div class="card" style="background:var(--surface2);border:1px solid var(--border);overflow:visible;">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--navy);">Suggested Actions for the Client</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:2px;">Curate the actions that will appear in the client's report. Add from your library, accept AI suggestions, or write custom ones.</div>
+      </div>
+
+      <div style="padding:14px 16px;background:#fff;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">In the Report (${plCuratedActions.length})</div>
+        <div id="pl-curation-list" style="display:flex;flex-direction:column;gap:6px;">
+          ${plCuratedActions.length === 0
+            ? '<div style="font-size:12px;color:var(--text-d);font-style:italic;padding:12px;text-align:center;background:var(--surface2);border-radius:4px;">No actions yet — add from library or AI suggestions below.</div>'
+            : plCuratedActions.map((a, i) => plRenderCurationItem(a, i)).join('')}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="plAddCustomCuratedAction()" style="font-size:11px;">+ Add Custom Action</button>
+        </div>
+      </div>
+
+      ${aiActions.length ? `
+      <div style="padding:14px 16px;background:#fff;border-top:1px solid var(--border);">
+        <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">AI Suggestions (${aiActions.length})</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${aiActions.map(a => {
+            const dup = prevTitles.has((a.title||'').toLowerCase().trim());
+            const inList = plCuratedActions.some(x => x.id === a.id);
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface2);border-radius:4px;${inList?'opacity:.45;':''}">
+              <div style="flex:1;font-size:12px;color:${dup?'var(--text-d)':'var(--text)'};">${plrEsc(a.title)}${dup ? ' <span style="font-size:9px;background:#fbbf24;color:#78350f;padding:1px 5px;border-radius:6px;margin-left:4px;font-weight:700;">PREVIOUSLY SENT</span>' : ''}</div>
+              ${inList
+                ? '<span style="font-size:10px;color:var(--green);font-weight:700;">✓ Added</span>'
+                : `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" onclick='plAddCuratedFromObj(${JSON.stringify(a).replace(/'/g,"&#39;")})'>+ Add</button>`}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+
+      <div style="padding:14px 16px;background:#fff;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Library (${libActions.length})</div>
+          <div style="display:flex;gap:6px;">
+            <input class="field-input" placeholder="Search…" value="${plrEsc(window._plCurLibSearch||'')}" oninput="window._plCurLibSearch=this.value;plRenderCurationPanel()" style="font-size:11px;height:26px;width:140px;">
+            <select class="field-input" onchange="window._plCurTagFilter=this.value;plRenderCurationPanel()" style="font-size:11px;height:26px;width:120px;">
+              <option value="">All tags</option>
+              ${allTags.map(t => `<option value="${plrEsc(t)}" ${t===tagFilter?'selected':''}>${plrEsc(t)}</option>`).join('')}
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="nav('plreviews');setTimeout(()=>plrSwitchTab('library'),50)" style="font-size:11px;height:26px;">Manage Library</button>
+          </div>
+        </div>
+        ${filteredLib.length === 0
+          ? `<div style="font-size:12px;color:var(--text-d);font-style:italic;padding:10px;text-align:center;">${libActions.length === 0 ? 'No library actions yet. Build your library in P&L Reviews → Action Library.' : 'No matches.'}</div>`
+          : `<div style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;">
+              ${filteredLib.map(a => {
+                const dup = prevTitles.has((a.title||'').toLowerCase().trim());
+                const inList = plCuratedActions.some(x => x.libId === a.id);
+                return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;background:var(--surface2);border-radius:4px;${inList?'opacity:.45;':''}">
+                  <div style="flex:1;">
+                    <div style="font-size:12px;font-weight:600;color:${dup?'var(--text-d)':'var(--navy)'};">${plrEsc(a.title)}${dup ? ' <span style="font-size:9px;background:#fbbf24;color:#78350f;padding:1px 5px;border-radius:6px;font-weight:700;">PREVIOUSLY SENT</span>' : ''}</div>
+                    ${a.body ? `<div style="font-size:11px;color:var(--text-d);margin-top:2px;line-height:1.4;">${plrEsc(a.body)}</div>` : ''}
+                    ${a.tag ? `<span style="font-size:9px;background:var(--surface);color:var(--text-d);padding:1px 6px;border-radius:6px;margin-top:4px;display:inline-block;font-weight:600;">${plrEsc(a.tag)}</span>` : ''}
+                  </div>
+                  ${inList
+                    ? '<span style="font-size:10px;color:var(--green);font-weight:700;padding-top:2px;">✓ Added</span>'
+                    : `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" onclick="plAddCuratedFromLib('${a.id}')">+ Add</button>`}
+                </div>`;
+              }).join('')}
+            </div>`}
+      </div>
+    </div>
+  `;
+}
+
+function plRenderCurationItem(a, i) {
+  const sourceColor = a.source === 'ai' ? '#7c3aed' : a.source === 'library' ? '#2563eb' : '#5b6770';
+  const sourceLabel = a.source === 'ai' ? 'AI' : a.source === 'library' ? 'LIB' : 'CUSTOM';
+  return `<div style="display:flex;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;align-items:flex-start;">
+    <div style="display:flex;flex-direction:column;gap:2px;padding-top:4px;">
+      <button class="btn btn-ghost btn-sm" onclick="plMoveCurated(${i},-1)" style="font-size:9px;padding:0 4px;line-height:1.2;" ${i===0?'disabled':''}>▲</button>
+      <button class="btn btn-ghost btn-sm" onclick="plMoveCurated(${i},1)" style="font-size:9px;padding:0 4px;line-height:1.2;" ${i===plCuratedActions.length-1?'disabled':''}>▼</button>
+    </div>
+    <div style="flex:1;">
+      <input class="field-input" value="${plrEsc(a.title)}" oninput="plUpdateCurated(${i},'title',this.value)" style="font-size:12px;font-weight:600;width:100%;border:1px dashed transparent;background:transparent;padding:2px 4px;" onfocus="this.style.background='#fff';this.style.borderColor='var(--border)'" onblur="this.style.background='transparent';this.style.borderColor='transparent'">
+      <textarea class="field-input" placeholder="Optional detail…" oninput="plUpdateCurated(${i},'body',this.value)" rows="${(a.body||'').length > 100 ? 3 : 2}" style="font-size:11px;width:100%;border:1px dashed transparent;background:transparent;padding:2px 4px;margin-top:2px;resize:vertical;color:var(--text-d);" onfocus="this.style.background='#fff';this.style.borderColor='var(--border)';this.style.color='var(--text)'" onblur="this.style.background='transparent';this.style.borderColor='transparent';this.style.color='var(--text-d)'">${plrEsc(a.body||'')}</textarea>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+      <span style="font-size:8px;font-weight:700;color:${sourceColor};letter-spacing:.06em;">${sourceLabel}</span>
+      <button class="btn btn-ghost btn-sm" onclick="plRemoveCurated(${i})" style="font-size:11px;padding:0 6px;color:#b03a3a;">×</button>
+    </div>
+  </div>`;
+}
+
+function plAddCuratedFromObj(obj) {
+  if (plCuratedActions.some(x => x.id === obj.id)) return;
+  plCuratedActions.push({ ...obj });
+  plRenderCurationPanel();
+}
+
+function plAddCuratedFromLib(libId) {
+  const a = (DB.suggestedActions || []).find(x => x.id === libId);
+  if (!a) return;
+  if (plCuratedActions.some(x => x.libId === libId)) return;
+  plCuratedActions.push({
+    id: uid(),
+    libId: a.id,
+    title: a.title,
+    body: a.body || '',
+    source: 'library',
+    tag: a.tag || '',
+  });
+  // Bump usage count
+  a.usageCount = (a.usageCount || 0) + 1;
+  saveDB();
+  plRenderCurationPanel();
+}
+
+function plAddCustomCuratedAction() {
+  plCuratedActions.push({
+    id: uid(),
+    title: 'New action…',
+    body: '',
+    source: 'custom',
+    tag: '',
+  });
+  plRenderCurationPanel();
+}
+
+function plUpdateCurated(i, field, value) {
+  if (!plCuratedActions[i]) return;
+  plCuratedActions[i][field] = value;
+}
+
+function plRemoveCurated(i) {
+  plCuratedActions.splice(i, 1);
+  plRenderCurationPanel();
+}
+
+function plMoveCurated(i, delta) {
+  const j = i + delta;
+  if (j < 0 || j >= plCuratedActions.length) return;
+  const tmp = plCuratedActions[i];
+  plCuratedActions[i] = plCuratedActions[j];
+  plCuratedActions[j] = tmp;
+  plRenderCurationPanel();
+}
+
+// ── RESTORE: apply pending review when opened from queue ──────────
+async function plrApplyPendingReviewLoad() {
+  const load = window._plPendingReviewLoad;
+  if (!load) return;
+  window._plPendingReviewLoad = null;
+
+  const client = DB.clients.find(c => c.id === load.clientId);
+  if (!client) return;
+  const review = (client.plReports || []).find(r => r.id === load.reviewId);
+  if (!review) return;
+
+  // Wait for the client dropdown to be populated
+  const sel = document.getElementById('pl-client-select');
+  if (sel) {
+    // Wait up to 2s for options to load
+    for (let i = 0; i < 20; i++) {
+      if (sel.querySelector(`option[value="${client.id}"]`)) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    sel.value = client.id;
+    if (typeof plOnClientChange === 'function') plOnClientChange();
+  }
+
+  // Restore period
+  const snap = review.snapshot || {};
+  if (snap.startDate) document.getElementById('pl-start-date').value = snap.startDate;
+  if (snap.endDate) document.getElementById('pl-end-date').value = snap.endDate;
+
+  // Restore in-memory state from snapshot
+  plActiveReviewId = review.id;
+  plFlags = review.flags || snap.flags || [];
+  plCurrentSummary = snap.summary || null;
+  plPrevSummary = snap.prevSummary || null;
+  plFleetSalesTrends = snap.fleetTrends || null;
+  plMeetingPrep = snap.meetingPrep || null;
+  plReviewState = { decisions: {}, notes: {}, completedAt: review.completedAt || null };
+  for (const f of plFlags) {
+    const idx = plFlags.indexOf(f);
+    const key = f.account + '::' + idx;
+    if (f.decision) plReviewState.decisions[key] = f.decision;
+    if (f.note) plReviewState.notes[key] = f.note;
+  }
+  plCuratedActions = (review.curatedActions && review.curatedActions.length)
+    ? JSON.parse(JSON.stringify(review.curatedActions))
+    : [];
+
+  // Render existing flag results without re-fetching from QBO
+  if (typeof plRenderResults === 'function') plRenderResults();
+  if (typeof plCheckReviewCompletion === 'function') plCheckReviewCompletion();
+
+  // Show banner so Jacob knows what he's looking at
+  const wrap = document.getElementById('pl-results-wrap');
+  if (wrap) {
+    const existing = document.getElementById('pl-jacob-banner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'pl-jacob-banner';
+    banner.className = 'card';
+    banner.style.cssText = 'margin-bottom:12px;border-left:4px solid var(--gold);padding:12px 16px;background:rgba(184,134,11,.06);';
+    banner.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);">📋 Reviewing for ${plrEsc(client.biz)}</div>
+      <div style="font-size:11px;color:var(--text-d);">Submitted by ${plrEsc(review.amSignedOff?.by||'AM')} · ${plrTimeAgo(review.amSignedOff?.at)}</div>
+      ${review.amSignedOff?.note ? `<div style="flex:1 1 100%;font-size:12px;color:var(--text);background:#fff;padding:8px 10px;border-radius:4px;border:1px solid var(--border);margin-top:4px;"><strong>AM note:</strong> ${plrEsc(review.amSignedOff.note)}</div>` : ''}
+    </div>`;
+    wrap.insertBefore(banner, wrap.firstChild);
+  }
+
+  plUpdateReviewModeUI();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  P&L REVIEWS CENTER — Pending Queue + Sent Reviews + Action Library
+// ══════════════════════════════════════════════════════════════════
+// Two-stage workflow:
+//   1. AM runs Digester → clicks "Sign Off & Send to Jacob"
+//   2. Review appears in Pending Reviews queue
+//   3. Jacob opens it → Digester loads with saved state, curation panel shown
+//   4. Jacob curates Suggested Actions, generates client PDF, marks Sent
+//
+// Data model:
+//   DB.suggestedActions[] = [{ id, title, body, tag, severity, createdAt }]
+//   client.plReports[i].status = 'pending-review' | 'in-review' | 'sent'
+//   client.plReports[i].amSignedOff = { at, by, note }
+//   client.plReports[i].curatedActions = [{ id, title, body, source, tag }]
+//   client.plReports[i].snapshot = { period, className, realmId, summary,
+//                                     prevSummary, fleetTrends, flags,
+//                                     decisions, notes, meetingPrep }
+
+function plrInit() {
+  if (!DB.suggestedActions) DB.suggestedActions = [];
+  plrSwitchTab('pending');
+  plrUpdateNavBadge();
+}
+
+function plrSwitchTab(tab) {
+  ['pending','sent','library'].forEach(t => {
+    const panel = document.getElementById('plr-panel-'+t);
+    const btn = document.getElementById('plr-tab-'+t);
+    if (panel) panel.style.display = (t===tab) ? '' : 'none';
+    if (btn) btn.classList.toggle('active', t===tab);
+  });
+  if (tab === 'pending') plrRenderPending();
+  if (tab === 'sent') plrRenderSent();
+  if (tab === 'library') plrRenderLibrary();
+}
+
+// Walk all clients, return reviews in given status(es).
+function plrCollectReviews(statuses) {
+  const set = new Set(Array.isArray(statuses) ? statuses : [statuses]);
+  const out = [];
+  for (const c of (DB.clients || [])) {
+    for (const r of (c.plReports || [])) {
+      if (set.has(r.status)) {
+        out.push({ client: c, review: r });
+      }
+    }
+  }
+  return out;
+}
+
+function plrUpdateNavBadge() {
+  const badge = document.getElementById('nav-plreviews-badge');
+  const tabBadge = document.getElementById('plr-pending-count');
+  if (!badge && !tabBadge) return;
+  const pending = plrCollectReviews(['pending-review','in-review']).length;
+  if (badge) {
+    if (pending > 0) { badge.textContent = pending; badge.style.display = ''; }
+    else badge.style.display = 'none';
+  }
+  if (tabBadge) {
+    if (pending > 0) { tabBadge.textContent = pending; tabBadge.style.display = ''; }
+    else tabBadge.style.display = 'none';
+  }
+}
+
+// ── PENDING REVIEWS QUEUE ─────────────────────────────────────────
+function plrRenderPending() {
+  const panel = document.getElementById('plr-panel-pending');
+  if (!panel) return;
+  const rows = plrCollectReviews(['pending-review','in-review']);
+  // Oldest first (FIFO queue)
+  rows.sort((a,b) => (a.review.amSignedOff?.at || '').localeCompare(b.review.amSignedOff?.at || ''));
+
+  if (!rows.length) {
+    panel.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text-d);">
+      <div style="font-size:32px;margin-bottom:8px;">✓</div>
+      <div style="font-size:14px;font-weight:600;">No reviews waiting</div>
+      <div style="font-size:12px;margin-top:4px;">When an AM signs off on a P&L Digester run, it'll appear here for your review.</div>
+    </div>`;
+    return;
+  }
+
+  panel.innerHTML = `<div class="card" style="overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:1px solid var(--border);">
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Client</th>
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Period</th>
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Submitted by</th>
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Submitted</th>
+          <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Flags</th>
+          <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Status</th>
+          <th style="padding:10px 14px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(({client, review}) => {
+          const ago = plrTimeAgo(review.amSignedOff?.at);
+          const statusColor = review.status === 'in-review' ? 'var(--blue,#2563eb)' : 'var(--gold)';
+          const statusText = review.status === 'in-review' ? 'In Review' : 'Pending';
+          const critical = review.critical || 0;
+          const total = review.totalFlags || 0;
+          return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="plrOpenReview('${client.id}','${review.id||''}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <td style="padding:12px 14px;font-size:13px;font-weight:600;color:var(--navy);">${plrEsc(client.biz)}</td>
+            <td style="padding:12px 14px;font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;">${plrEsc(review.period||'')}</td>
+            <td style="padding:12px 14px;font-size:12px;color:var(--text);">${plrEsc(review.amSignedOff?.by || '—')}</td>
+            <td style="padding:12px 14px;font-size:11px;color:var(--text-d);">${ago}</td>
+            <td style="padding:12px 14px;text-align:center;font-size:12px;">${critical > 0 ? `<span style="color:#b03a3a;font-weight:700;">${critical} critical</span> / ` : ''}${total} total</td>
+            <td style="padding:12px 14px;text-align:center;"><span style="font-size:9px;font-weight:700;padding:3px 10px;border-radius:10px;background:${statusColor};color:#fff;letter-spacing:.04em;text-transform:uppercase;">${statusText}</span></td>
+            <td style="padding:12px 14px;text-align:right;"><button class="btn btn-primary btn-sm" style="font-size:11px;" onclick="event.stopPropagation();plrOpenReview('${client.id}','${review.id||''}')">Open →</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── SENT REVIEWS HISTORY ──────────────────────────────────────────
+function plrRenderSent() {
+  const panel = document.getElementById('plr-panel-sent');
+  if (!panel) return;
+  const rows = plrCollectReviews(['sent']);
+  rows.sort((a,b) => (b.review.completedAt || b.review.date || '').localeCompare(a.review.completedAt || a.review.date || ''));
+
+  if (!rows.length) {
+    panel.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text-d);font-size:13px;">No sent reviews yet.</div>`;
+    return;
+  }
+
+  panel.innerHTML = `<div class="card" style="overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:1px solid var(--border);">
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Client</th>
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Period</th>
+          <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Sent</th>
+          <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Actions sent</th>
+          <th style="padding:10px 14px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(({client, review}) => {
+          const ago = plrTimeAgo(review.completedAt || review.date);
+          const actionCount = (review.curatedActions || []).length;
+          return `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 14px;font-size:13px;font-weight:600;color:var(--navy);">${plrEsc(client.biz)}</td>
+            <td style="padding:12px 14px;font-size:11px;color:var(--text-d);font-family:'DM Mono',monospace;">${plrEsc(review.period||'')}</td>
+            <td style="padding:12px 14px;font-size:11px;color:var(--text-d);">${ago}</td>
+            <td style="padding:12px 14px;text-align:center;font-size:12px;">${actionCount}</td>
+            <td style="padding:12px 14px;text-align:right;"><button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="plrOpenReview('${client.id}','${review.id||''}')">View</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── ACTION LIBRARY ────────────────────────────────────────────────
+let _plrLibSearch = '';
+let _plrLibTagFilter = '';
+
+function plrRenderLibrary() {
+  const panel = document.getElementById('plr-panel-library');
+  if (!panel) return;
+  if (!DB.suggestedActions) DB.suggestedActions = [];
+
+  const allTags = [...new Set(DB.suggestedActions.map(a => a.tag).filter(Boolean))].sort();
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="plr-lib-search" class="field-input" placeholder="Search actions…" value="${plrEsc(_plrLibSearch)}" style="width:240px;height:32px;font-size:12px;" oninput="_plrLibSearch=this.value;plrRenderLibraryList()">
+        <select id="plr-lib-tag" class="field-input" style="height:32px;font-size:12px;width:160px;" onchange="_plrLibTagFilter=this.value;plrRenderLibraryList()">
+          <option value="">All tags</option>
+          ${allTags.map(t => `<option value="${plrEsc(t)}" ${t===_plrLibTagFilter?'selected':''}>${plrEsc(t)}</option>`).join('')}
+        </select>
+        <span style="font-size:11px;color:var(--text-d);">${DB.suggestedActions.length} actions in library</span>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="plrLibOpenEdit()">+ New Action</button>
+    </div>
+    <div id="plr-lib-list"></div>
+  `;
+  plrRenderLibraryList();
+}
+
+function plrRenderLibraryList() {
+  const list = document.getElementById('plr-lib-list');
+  if (!list) return;
+  const q = (_plrLibSearch || '').toLowerCase();
+  let items = (DB.suggestedActions || []).filter(a => {
+    if (_plrLibTagFilter && a.tag !== _plrLibTagFilter) return false;
+    if (q && !((a.title||'').toLowerCase().includes(q) || (a.body||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  items.sort((a,b) => (a.tag||'').localeCompare(b.tag||'') || (a.title||'').localeCompare(b.title||''));
+
+  if (!items.length) {
+    list.innerHTML = `<div class="card" style="padding:32px;text-align:center;color:var(--text-d);font-size:13px;">
+      ${DB.suggestedActions.length === 0
+        ? 'No actions yet. Click "+ New Action" to start building your library.'
+        : 'No matches.'}
+    </div>`;
+    return;
+  }
+
+  const sevColor = { high: '#b03a3a', medium: '#b06a1a', low: '#5b6770' };
+  list.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;">
+    ${items.map(a => {
+      const sevC = sevColor[a.severity || 'medium'];
+      return `<div class="card" style="padding:14px 16px;border-left:3px solid ${sevC};">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+          <div style="font-weight:700;font-size:13px;color:var(--navy);flex:1;">${plrEsc(a.title)}</div>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" onclick="plrLibOpenEdit('${a.id}')">Edit</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:#b03a3a;" onclick="plrLibDelete('${a.id}')">×</button>
+          </div>
+        </div>
+        ${a.body ? `<div style="font-size:11px;color:var(--text);line-height:1.5;margin-bottom:8px;">${plrEsc(a.body)}</div>` : ''}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          ${a.tag ? `<span style="font-size:9px;background:var(--surface2);color:var(--text-d);padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">${plrEsc(a.tag)}</span>` : ''}
+          <span style="font-size:9px;color:${sevC};font-weight:700;letter-spacing:.04em;text-transform:uppercase;">${a.severity || 'medium'}</span>
+          <span style="font-size:10px;color:var(--text-d);margin-left:auto;">Used ${a.usageCount || 0}×</span>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function plrLibOpenEdit(id) {
+  const isEdit = !!id;
+  const a = isEdit ? (DB.suggestedActions || []).find(x => x.id === id) : null;
+  const tags = [...new Set((DB.suggestedActions || []).map(x => x.tag).filter(Boolean))].sort();
+  const html = `<div class="overlay" id="plr-lib-modal" style="display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id==='plr-lib-modal')plrLibCloseEdit()">
+    <div class="modal" style="width:520px;">
+      <div class="modal-head">
+        <div class="modal-title">${isEdit ? 'Edit Action' : 'New Suggested Action'}</div>
+        <span class="modal-x" onclick="plrLibCloseEdit()">&times;</span>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+        <input type="hidden" id="plr-lib-id" value="${a?.id || ''}">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-d);display:block;margin-bottom:4px;">Title</label>
+          <input id="plr-lib-title" class="field-input" placeholder="e.g. Review labor cost trend" value="${plrEsc(a?.title||'')}" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-d);display:block;margin-bottom:4px;">Detail (shown to client in the report)</label>
+          <textarea id="plr-lib-body" class="field-input" rows="4" placeholder="Explain what to do and why…" style="width:100%;resize:vertical;">${plrEsc(a?.body||'')}</textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);display:block;margin-bottom:4px;">Tag</label>
+            <input id="plr-lib-tag" class="field-input" list="plr-lib-tags" placeholder="e.g. labor, cogs, cash flow" value="${plrEsc(a?.tag||'')}" style="width:100%;">
+            <datalist id="plr-lib-tags">${tags.map(t=>`<option value="${plrEsc(t)}">`).join('')}</datalist>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text-d);display:block;margin-bottom:4px;">Severity</label>
+            <select id="plr-lib-severity" class="field-input" style="width:100%;">
+              <option value="low" ${a?.severity==='low'?'selected':''}>Low</option>
+              <option value="medium" ${(!a?.severity||a?.severity==='medium')?'selected':''}>Medium</option>
+              <option value="high" ${a?.severity==='high'?'selected':''}>High</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;justify-content:space-between;">
+        ${isEdit ? `<button class="btn btn-ghost btn-sm" style="color:#b03a3a;" onclick="plrLibDelete('${a.id}',true)">Delete</button>` : '<div></div>'}
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="plrLibCloseEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="plrLibSave()">${isEdit ? 'Save' : 'Add to Library'}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function plrLibCloseEdit() {
+  const m = document.getElementById('plr-lib-modal');
+  if (m) m.remove();
+}
+
+function plrLibSave() {
+  const id = document.getElementById('plr-lib-id').value;
+  const title = document.getElementById('plr-lib-title').value.trim();
+  const body = document.getElementById('plr-lib-body').value.trim();
+  const tag = document.getElementById('plr-lib-tag').value.trim();
+  const severity = document.getElementById('plr-lib-severity').value;
+  if (!title) { showToast('Title required'); return; }
+  if (!DB.suggestedActions) DB.suggestedActions = [];
+  if (id) {
+    const a = DB.suggestedActions.find(x => x.id === id);
+    if (a) { a.title = title; a.body = body; a.tag = tag; a.severity = severity; a.updatedAt = new Date().toISOString(); }
+  } else {
+    DB.suggestedActions.push({
+      id: uid(), title, body, tag, severity,
+      createdAt: new Date().toISOString(),
+      usageCount: 0,
+    });
+  }
+  saveDB();
+  plrLibCloseEdit();
+  plrRenderLibrary();
+  showToast('Saved');
+}
+
+function plrLibDelete(id, fromModal) {
+  if (!confirm('Delete this action from the library?')) return;
+  DB.suggestedActions = (DB.suggestedActions || []).filter(a => a.id !== id);
+  saveDB();
+  if (fromModal) plrLibCloseEdit();
+  plrRenderLibrary();
+  showToast('Deleted');
+}
+
+// ── REVIEW OPENING (queue → Digester in Jacob review mode) ────────
+function plrOpenReview(clientId, reviewId) {
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  if (!client) { showToast('Client not found'); return; }
+  const review = (client.plReports || []).find(r => r.id === reviewId);
+  if (!review) { showToast('Review not found'); return; }
+
+  // Flip status pending-review → in-review
+  if (review.status === 'pending-review') {
+    review.status = 'in-review';
+    review.openedAt = new Date().toISOString();
+    saveDB();
+  }
+
+  // Stash for the Digester to pick up after nav
+  window._plPendingReviewLoad = { clientId, reviewId };
+  nav('qbo');
+  // Open the Digester workspace
+  setTimeout(() => {
+    if (typeof qboShowWorkspace === 'function') qboShowWorkspace('pl');
+    if (typeof plrLoadFromQueue === 'function') plrLoadFromQueue();
+  }, 250);
+}
+
+// ── HELPERS ────────────────────────────────────────────────────────
+function plrEsc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function plrTimeAgo(iso) {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60000) return 'just now';
+  const m = Math.floor(ms/60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h/24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+// Get titles of actions previously sent to this client (any source).
+function plrPreviouslySentTitles(clientId) {
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) return new Set();
+  const titles = new Set();
+  for (const r of (c.plReports || [])) {
+    if (r.status !== 'sent') continue;
+    for (const a of (r.curatedActions || [])) {
+      if (a.title) titles.add(a.title.toLowerCase().trim());
+    }
+  }
+  return titles;
+}
+
+// Stub — defined inside the Digester section so the queue-open flow can call it
+function plrLoadFromQueue() {
+  if (typeof plrApplyPendingReviewLoad === 'function') plrApplyPendingReviewLoad();
 }
 
 // ── Legacy render functions (kept for PDF/export compatibility) ──
@@ -36367,17 +37157,26 @@ async function plGenerateMeetingPDF() {
   let y = MT;
   let pageNum = 1;
 
-  const navy = [26, 36, 64];
-  const dark = [30, 30, 30];
-  const gray = [100, 100, 100];
-  const lgray = [200, 200, 200];
-  const white = [255, 255, 255];
-  const green = [46, 125, 94];
-  const red = [176, 58, 58];
-  const amber = [176, 106, 26];
+  // Brand palette — must match dashboard
+  const navy   = [26, 36, 64];
+  const navyLt = [62, 80, 122];
+  const gold   = [184, 134, 11];
+  const goldLt = [240, 226, 188];
+  const cream  = [250, 247, 240];
+  const dark   = [30, 30, 30];
+  const text   = [55, 55, 60];
+  const gray   = [100, 100, 100];
+  const lgray  = [200, 200, 200];
+  const xlgray = [232, 230, 226];
+  const white  = [255, 255, 255];
+  const green  = [46, 125, 94];
+  const red    = [176, 58, 58];
+  const amber  = [176, 106, 26];
   const accent = [31, 78, 121];
 
   const setFont = (style, size, color) => { doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(...(color || dark)); };
+  // Use times for headings to evoke the Cormorant Garamond serif look
+  const setSerif = (style, size, color) => { doc.setFont('times', style); doc.setFontSize(size); doc.setTextColor(...(color || dark)); };
   const drawLine = (x1, yy, x2, w, color) => { doc.setLineWidth(w || 0.5); doc.setDrawColor(...(color || lgray)); doc.line(x1, yy, x2, yy); };
   const fmt$ = (n) => '$' + Math.abs(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
   const fmtPct = (n) => (n * 100).toFixed(1) + '%';
@@ -36386,35 +37185,183 @@ async function plGenerateMeetingPDF() {
   const clientName = plSelectedClient.biz || 'Client';
   const summary = plCurrentSummary;
   const sales = summary.sales || 1;
+  const calendlyUrl = (DB.calendlyBookingUrl || '').trim();
+  const amName = plSelectedClient.am
+    ? (DB.users || []).find(u => u.id === plSelectedClient.am)
+    : null;
+  const amDisplay = amName ? `${amName.fname||''} ${amName.lname||''}`.trim() : 'Your Account Manager';
+  const reviewerName = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
 
-  const drawFooter = () => {
-    setFont('normal', 7, gray);
-    doc.text('Prepared by Ark Financial Services', ML, PH - 30);
-    doc.text(`Page ${pageNum}`, MR - 30, PH - 30);
-    setFont('normal', 6, lgray);
-    doc.text('Confidential — for client use only', PW / 2, PH - 20, { align: 'center' });
+  // Niceties: nice month label like "October 2026"
+  const periodMonthLabel = (() => {
+    const sd = document.getElementById('pl-start-date').value;
+    if (!sd) return period;
+    try {
+      const d = new Date(sd + 'T12:00:00');
+      return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch(_) { return period; }
+  })();
+
+  // Try to grab the ARK logo from the sidebar (it's a base64 PNG)
+  const logoImg = document.querySelector('.logo-area img');
+  const logoSrc = logoImg?.src || null;
+  const logoAspect = logoImg ? (logoImg.naturalWidth / logoImg.naturalHeight) : (399 / 255);
+
+  // ── Recurring page chrome ─────────────────────────────────────────
+  const drawHeader = (title, subtitle) => {
+    // Slim brand bar
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, PW, 36, 'F');
+    setSerif('bold', 14, white);
+    doc.text('ARK', ML, 22);
+    setFont('normal', 7, [200, 215, 235]);
+    doc.text('FINANCIAL SERVICES', ML + 32, 22);
+    // Right side: client + period
+    setFont('normal', 7, [200, 215, 235]);
+    const rightTxt = `${clientName}  ·  ${periodMonthLabel}`;
+    doc.text(rightTxt, MR, 22, { align: 'right' });
+    // Title block under bar
+    if (title) {
+      setSerif('bold', 22, navy);
+      doc.text(title, ML, 70);
+      if (subtitle) {
+        setFont('normal', 9, gray);
+        doc.text(subtitle.toUpperCase(), ML, 86);
+        // letter-spacing fake via re-render
+      }
+      // Gold accent rule
+      doc.setFillColor(...gold);
+      doc.rect(ML, 92, 36, 2, 'F');
+      y = 112;
+    } else {
+      y = 60;
+    }
   };
 
-  const newPage = () => { drawFooter(); pageNum++; doc.addPage(); y = MT; };
+  const drawFooter = () => {
+    // Subtle bottom rule
+    drawLine(ML, PH - 38, MR, 0.4, xlgray);
+    setFont('normal', 7, gray);
+    doc.text('Prepared by ARK Financial Services', ML, PH - 24);
+    doc.text(`Page ${pageNum}`, MR, PH - 24, { align: 'right' });
+    setFont('italic', 6, lgray);
+    doc.text('Confidential — for client use only', PW / 2, PH - 14, { align: 'center' });
+  };
+
+  const newPage = (title, subtitle) => { drawFooter(); pageNum++; doc.addPage(); drawHeader(title, subtitle); };
   const checkY = (needed) => { if (y + needed > PH - 60) newPage(); };
 
   // ═══════════════════════════════════════════════════════════════
-  //  PAGE 1 — EXECUTIVE DASHBOARD
+  //  PAGE 1 — COVER (presentation-ready)
   // ═══════════════════════════════════════════════════════════════
-
-  // Header bar
+  // Full-bleed navy band
   doc.setFillColor(...navy);
-  doc.rect(0, 0, PW, 80, 'F');
-  setFont('bold', 20, white);
-  doc.text('Ark Financial', ML, 32);
-  setFont('normal', 9, [150, 170, 200]);
-  doc.text('MONTHLY P&L REVIEW', ML, 46);
-  setFont('bold', 11, white);
-  doc.text(clientName, ML, 64);
-  setFont('normal', 9, [150, 170, 200]);
-  doc.text(period, MR - doc.getTextWidth(period), 64);
+  doc.rect(0, 0, PW, 240, 'F');
+  // Diagonal gold accent
+  doc.setFillColor(...gold);
+  doc.rect(0, 240, PW, 4, 'F');
 
-  y = 100;
+  // Brand mark — use real logo if available
+  if (logoSrc) {
+    try {
+      // Logo lives on white; place on a white pill so it pops on navy
+      const logoH = 60;
+      const logoW = logoH * logoAspect;
+      doc.setFillColor(...white);
+      doc.roundedRect(ML, 50, logoW + 24, logoH + 20, 6, 6, 'F');
+      doc.addImage(logoSrc, 'PNG', ML + 12, 60, logoW, logoH);
+    } catch(e) {
+      setSerif('bold', 22, white);
+      doc.text('ARK FINANCIAL', ML, 70);
+    }
+  } else {
+    setSerif('bold', 22, white);
+    doc.text('ARK', ML, 70);
+    setFont('normal', 8, [200, 215, 235]);
+    doc.text('FINANCIAL SERVICES', ML + 48, 70);
+    doc.setLineWidth(0.5); doc.setDrawColor(...gold);
+    doc.line(ML, 78, ML + 60, 78);
+  }
+
+  // Big title
+  setSerif('italic', 15, [200, 215, 235]);
+  doc.text('Monthly Profit & Loss', ML, 156);
+  setSerif('bold', 34, white);
+  doc.text('Performance Review', ML, 190);
+  setFont('normal', 10, [200, 215, 235]);
+  doc.text(periodMonthLabel.toUpperCase(), ML, 212);
+
+  // Below-band: client + meta block
+  y = 290;
+  setFont('normal', 8, gray);
+  doc.text('PREPARED FOR', ML, y); y += 14;
+  setSerif('bold', 28, navy);
+  doc.text(clientName, ML, y); y += 28;
+
+  // Meta two-column block
+  y += 10;
+  setFont('normal', 8, gray);
+  doc.text('PERIOD', ML, y);
+  doc.text('PREPARED BY', ML + 200, y);
+  doc.text('REVIEWED BY', ML + 380, y);
+  y += 14;
+  setFont('bold', 11, dark);
+  doc.text(period, ML, y);
+  doc.text(amDisplay || '—', ML + 200, y);
+  doc.text(reviewerName || '—', ML + 380, y);
+  y += 30;
+
+  // Headline metric tiles — three big numbers
+  const heroH = 110;
+  const heroW = (MR - ML - 24) / 3;
+  const hero = [
+    { label: 'Total Sales',  value: fmt$(sales),                             accent: navy },
+    { label: 'Net Income',   value: fmt$(summary.netIncome),                  accent: summary.netIncome >= 0 ? green : red },
+    { label: 'Net Margin',   value: fmtPct(summary.netIncome / sales),       accent: summary.netIncome / sales >= 0.10 ? green : amber },
+  ];
+  for (let i = 0; i < hero.length; i++) {
+    const x = ML + i * (heroW + 12);
+    // Card
+    doc.setFillColor(...cream);
+    doc.roundedRect(x, y, heroW, heroH, 6, 6, 'F');
+    // Top accent
+    doc.setFillColor(...hero[i].accent);
+    doc.rect(x, y, heroW, 4, 'F');
+    // Label
+    setFont('normal', 8, gray);
+    doc.text(hero[i].label.toUpperCase(), x + 14, y + 28);
+    // Value
+    setSerif('bold', 26, hero[i].accent);
+    doc.text(hero[i].value, x + 14, y + 66);
+    // Period sub
+    setFont('italic', 8, gray);
+    doc.text(periodMonthLabel, x + 14, y + 92);
+  }
+  y += heroH + 30;
+
+  // Quote / one-line takeaway from exec summary if present
+  if (plMeetingPrep?.executiveSummary) {
+    const summaryLine = plMeetingPrep.executiveSummary.split(/[\.\n]/)[0].trim();
+    if (summaryLine && summaryLine.length < 220) {
+      doc.setFillColor(...goldLt);
+      doc.rect(ML, y, MR - ML, 56, 'F');
+      doc.setFillColor(...gold);
+      doc.rect(ML, y, 3, 56, 'F');
+      setSerif('italic', 12, navy);
+      const wrapped = doc.splitTextToSize(`"${summaryLine}."`, MR - ML - 30);
+      doc.text(wrapped, ML + 16, y + 24);
+      y += 70;
+    }
+  }
+
+  drawFooter();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 2 — EXECUTIVE DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+  pageNum++;
+  doc.addPage();
+  drawHeader('Executive Dashboard', 'Performance at a glance');
 
   // Key Metrics Grid (2 rows x 3 cols)
   setFont('bold', 12, navy);
@@ -36498,64 +37445,40 @@ async function plGenerateMeetingPDF() {
     y += 10;
   }
 
-  // Executive Summary
+  // Executive Summary (full paragraph)
   if (plMeetingPrep?.executiveSummary) {
     checkY(80);
-    setFont('bold', 10, navy);
-    doc.text('Executive Summary', ML, y); y += 14;
-    setFont('normal', 9, dark);
+    setSerif('bold', 13, navy);
+    doc.text('Executive Summary', ML, y); y += 18;
+    setFont('normal', 10, text);
     const lines = doc.splitTextToSize(plMeetingPrep.executiveSummary, MR - ML);
-    doc.text(lines, ML, y); y += lines.length * 12 + 10;
+    doc.text(lines, ML, y); y += lines.length * 14 + 12;
   }
 
-  // Talking Points
+  // Talking Points — kept here as discussion topics, distinct from action plan
   if (plMeetingPrep?.talkingPoints?.length) {
     checkY(60);
-    setFont('bold', 10, navy);
-    doc.text('Discussion Points', ML, y); y += 14;
+    setSerif('bold', 13, navy);
+    doc.text('Discussion Points', ML, y); y += 18;
     for (const tp of plMeetingPrep.talkingPoints) {
       checkY(30);
-      setFont('normal', 8, dark);
-      const lines = doc.splitTextToSize(tp, MR - ML - 14);
-      doc.text('\u2022', ML, y);
-      doc.text(lines, ML + 14, y);
-      y += lines.length * 11 + 4;
-    }
-    y += 6;
-  }
-
-  // Action Items
-  if (plMeetingPrep?.actionItems?.length) {
-    checkY(60);
-    setFont('bold', 10, navy);
-    doc.text('Action Items', ML, y); y += 14;
-    for (const ai of plMeetingPrep.actionItems) {
-      checkY(30);
-      setFont('normal', 8, dark);
-      const lines = doc.splitTextToSize(ai, MR - ML - 14);
-      doc.setFillColor(...red);
-      doc.circle(ML + 4, y - 3, 2, 'F');
-      doc.text(lines, ML + 14, y);
-      y += lines.length * 11 + 4;
+      setFont('normal', 9, text);
+      const lines = doc.splitTextToSize(tp, MR - ML - 18);
+      doc.setFillColor(...gold);
+      doc.circle(ML + 4, y - 2, 2, 'F');
+      doc.text(lines, ML + 16, y);
+      y += lines.length * 12 + 6;
     }
   }
 
   drawFooter();
 
   // ═══════════════════════════════════════════════════════════════
-  //  PAGE 2 — P&L STATEMENT
+  //  PAGE 3 — P&L STATEMENT
   // ═══════════════════════════════════════════════════════════════
-  newPage();
-
-  // Header
-  doc.setFillColor(...navy);
-  doc.rect(0, 0, PW, 50, 'F');
-  setFont('bold', 14, white);
-  doc.text('Profit & Loss Statement', ML, 32);
-  setFont('normal', 9, [150, 170, 200]);
-  doc.text(`${clientName} — ${period}`, MR - doc.getTextWidth(`${clientName} — ${period}`), 32);
-
-  y = 70;
+  pageNum++;
+  doc.addPage();
+  drawHeader('Profit & Loss Statement', `${period}${plSelectedClass ? ' · ' + plSelectedClass : ''}`);
 
   // Parse and render P&L in a clean format
   const plAccounts = plParseReport(plRawReport);
@@ -36647,22 +37570,294 @@ async function plGenerateMeetingPDF() {
   drawFooter();
 
   // ═══════════════════════════════════════════════════════════════
-  //  PAGE 3+ — DETAIL REPORT
+  //  PAGE 4 — VERIFICATION CHECKLIST + ITEMS UNDER REVIEW
+  // ═══════════════════════════════════════════════════════════════
+  pageNum++;
+  doc.addPage();
+  drawHeader('What We Verified', 'Quality assurance on this month\u2019s books');
+
+  const verifiedFlags = (plFlags || []).filter((f, i) => plReviewState.decisions?.[f.account + '::' + i] === 'ok');
+  const overrideFlags = (plFlags || []).filter((f, i) => plReviewState.decisions?.[f.account + '::' + i] === 'override');
+  const openFlags = (plFlags || []).filter((f, i) => plReviewState.decisions?.[f.account + '::' + i] === 'flag');
+
+  // Intro paragraph
+  setFont('normal', 10, text);
+  const introLines = doc.splitTextToSize(
+    'Each month, ARK reviews your books line-by-line. Below is a record of what we checked and confirmed for this period, plus any items still being worked on. Our goal is full transparency — you should always know exactly where your numbers stand.',
+    MR - ML
+  );
+  doc.text(introLines, ML, y); y += introLines.length * 14 + 16;
+
+  // Stats row
+  const totalChecked = (plFlags || []).length;
+  const stats = [
+    { label: 'Items reviewed', value: String(totalChecked), color: navy },
+    { label: 'Verified clean', value: String(verifiedFlags.length), color: green },
+    { label: 'Notes on file',  value: String(overrideFlags.length), color: amber },
+    { label: 'Being worked',   value: String(openFlags.length), color: openFlags.length > 0 ? red : gray },
+  ];
+  const sw = (MR - ML - 36) / 4;
+  for (let i = 0; i < stats.length; i++) {
+    const x = ML + i * (sw + 12);
+    doc.setFillColor(...cream);
+    doc.roundedRect(x, y, sw, 56, 4, 4, 'F');
+    setSerif('bold', 22, stats[i].color);
+    doc.text(stats[i].value, x + 12, y + 30);
+    setFont('normal', 8, gray);
+    doc.text(stats[i].label.toUpperCase(), x + 12, y + 46);
+  }
+  y += 76;
+
+  // Verified list
+  if (verifiedFlags.length) {
+    checkY(40);
+    setSerif('bold', 13, navy);
+    doc.text('Reviewed & Confirmed', ML, y); y += 18;
+    for (const f of verifiedFlags.slice(0, 18)) {
+      checkY(18);
+      doc.setFillColor(...green);
+      doc.circle(ML + 4, y - 3, 2.5, 'F');
+      setFont('normal', 9, text);
+      const txt = `${f.account || '\u2014'}${f.message ? '  \u00b7  ' + f.message.substring(0, 90) : ''}`;
+      const lines = doc.splitTextToSize(txt, MR - ML - 18);
+      doc.text(lines, ML + 14, y);
+      y += lines.length * 12 + 4;
+    }
+    if (verifiedFlags.length > 18) {
+      setFont('italic', 8, gray);
+      doc.text(`+ ${verifiedFlags.length - 18} additional items reviewed`, ML + 14, y); y += 14;
+    }
+    y += 8;
+  }
+
+  // Items with notes/overrides
+  if (overrideFlags.length) {
+    checkY(40);
+    setSerif('bold', 13, navy);
+    doc.text('Notes on File', ML, y); y += 18;
+    setFont('normal', 9, text);
+    doc.text('These items had context that was investigated and documented for the record.', ML, y); y += 14;
+    for (const f of overrideFlags.slice(0, 8)) {
+      checkY(20);
+      doc.setFillColor(...amber);
+      doc.circle(ML + 4, y - 3, 2.5, 'F');
+      setFont('bold', 9, text);
+      doc.text(f.account || '\u2014', ML + 14, y);
+      if (f.message) {
+        setFont('normal', 9, text);
+        const lines = doc.splitTextToSize(f.message.substring(0, 180), MR - ML - 18);
+        y += 12;
+        doc.text(lines, ML + 14, y);
+        y += lines.length * 12 + 4;
+      } else { y += 14; }
+    }
+    y += 6;
+  }
+
+  // Open items
+  if (openFlags.length) {
+    checkY(40);
+    setSerif('bold', 13, navy);
+    doc.text('Items Being Worked', ML, y); y += 18;
+    setFont('normal', 9, text);
+    doc.text('We\u2019re actively addressing these and will follow up directly.', ML, y); y += 14;
+    for (const f of openFlags.slice(0, 10)) {
+      checkY(20);
+      doc.setFillColor(...red);
+      doc.circle(ML + 4, y - 3, 2.5, 'F');
+      setFont('bold', 9, text);
+      doc.text(f.account || '\u2014', ML + 14, y);
+      if (f.message) {
+        setFont('normal', 9, text);
+        const lines = doc.splitTextToSize(f.message.substring(0, 180), MR - ML - 18);
+        y += 12;
+        doc.text(lines, ML + 14, y);
+        y += lines.length * 12 + 4;
+      } else { y += 14; }
+    }
+  }
+
+  drawFooter();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 5 — INSIGHTS FOR YOUR BUSINESS (if any)
+  // ═══════════════════════════════════════════════════════════════
+  const insights = (plMeetingPrep?.clientInsights || []).filter(Boolean);
+  if (insights.length) {
+    pageNum++;
+    doc.addPage();
+    drawHeader('Insights for Your Business', 'What the numbers are telling us');
+
+    setFont('normal', 10, text);
+    const ipara = doc.splitTextToSize(
+      'These observations come from comparing this month against your historical pattern, the broader Scooters fleet, and benchmarks for stores at your stage. Use them as conversation starters \u2014 we\u2019ll dig into the ones that matter most on our call.',
+      MR - ML
+    );
+    doc.text(ipara, ML, y); y += ipara.length * 14 + 18;
+
+    for (const insight of insights) {
+      checkY(60);
+      doc.setFillColor(...cream);
+      doc.roundedRect(ML, y, MR - ML, 0, 4, 4, 'F'); // placeholder — will resize
+      const lines = doc.splitTextToSize(insight, MR - ML - 32);
+      const blockH = lines.length * 14 + 24;
+      doc.setFillColor(...cream);
+      doc.roundedRect(ML, y, MR - ML, blockH, 4, 4, 'F');
+      doc.setFillColor(...gold);
+      doc.rect(ML, y, 3, blockH, 'F');
+      setFont('normal', 10, text);
+      doc.text(lines, ML + 18, y + 18);
+      y += blockH + 10;
+    }
+
+    drawFooter();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 6 — RECOMMENDED ACTIONS (curated)
+  // ═══════════════════════════════════════════════════════════════
+  const actions = (typeof plCuratedActions !== 'undefined' && plCuratedActions.length)
+    ? plCuratedActions
+    : (plMeetingPrep?.actionItems || []).map((t, i) => ({ id: 'ai-'+i, title: t, body: '', source: 'ai' }));
+
+  if (actions.length) {
+    pageNum++;
+    doc.addPage();
+    drawHeader('Recommended Actions', 'Where to focus this month');
+
+    setFont('normal', 10, text);
+    const apara = doc.splitTextToSize(
+      'These are the specific moves we recommend you make this month to improve performance, protect cash, and stay ahead. Each one is yours to act on \u2014 we\u2019ll walk through them together on our call.',
+      MR - ML
+    );
+    doc.text(apara, ML, y); y += apara.length * 14 + 20;
+
+    let aNum = 1;
+    for (const a of actions) {
+      const titleLines = doc.splitTextToSize(a.title || '', MR - ML - 60);
+      const bodyLines = a.body ? doc.splitTextToSize(a.body, MR - ML - 60) : [];
+      const blockH = 24 + titleLines.length * 16 + (bodyLines.length ? bodyLines.length * 13 + 8 : 0);
+      checkY(blockH + 16);
+
+      // Card background
+      doc.setFillColor(252, 250, 246);
+      doc.roundedRect(ML, y, MR - ML, blockH, 6, 6, 'F');
+      // Number badge (gold disc)
+      doc.setFillColor(...gold);
+      doc.circle(ML + 22, y + 24, 13, 'F');
+      setSerif('bold', 13, white);
+      doc.text(String(aNum), ML + 22, y + 28, { align: 'center' });
+      // Title
+      setSerif('bold', 13, navy);
+      doc.text(titleLines, ML + 46, y + 22);
+      let by = y + 22 + titleLines.length * 16;
+      // Body
+      if (bodyLines.length) {
+        setFont('normal', 9, text);
+        doc.text(bodyLines, ML + 46, by + 8);
+      }
+      y += blockH + 12;
+      aNum++;
+    }
+
+    drawFooter();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 7 — STRATEGY CALL CTA
+  // ═══════════════════════════════════════════════════════════════
+  pageNum++;
+  doc.addPage();
+  // Full-bleed top band
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, PW, 220, 'F');
+  doc.setFillColor(...gold);
+  doc.rect(0, 220, PW, 4, 'F');
+
+  if (logoSrc) {
+    try {
+      const logoH = 50;
+      const logoW = logoH * logoAspect;
+      doc.setFillColor(...white);
+      doc.roundedRect(ML, 30, logoW + 20, logoH + 16, 5, 5, 'F');
+      doc.addImage(logoSrc, 'PNG', ML + 10, 38, logoW, logoH);
+    } catch(e) {
+      setSerif('bold', 14, white);
+      doc.text('ARK FINANCIAL', ML, 50);
+    }
+  } else {
+    setSerif('bold', 14, white);
+    doc.text('ARK', ML, 50);
+    setFont('normal', 7, [200, 215, 235]);
+    doc.text('FINANCIAL SERVICES', ML + 32, 50);
+    doc.setLineWidth(0.5); doc.setDrawColor(...gold);
+    doc.line(ML, 56, ML + 60, 56);
+  }
+
+  setSerif('italic', 14, [200, 215, 235]);
+  doc.text('Let\u2019s talk through your numbers', ML, 130);
+  setSerif('bold', 30, white);
+  doc.text('Book a Strategy Call', ML, 168);
+  setFont('normal', 11, [200, 215, 235]);
+  const ctaSubLines = doc.splitTextToSize(
+    'Numbers on a page only go so far. Pick a time and we\u2019ll walk through this report together \u2014 the wins, the watch-items, and what to do next.',
+    MR - ML
+  );
+  doc.text(ctaSubLines, ML, 178);
+
+  // Body — calendly URL block
+  y = 270;
+  if (calendlyUrl) {
+    doc.setFillColor(...cream);
+    doc.roundedRect(ML, y, MR - ML, 100, 8, 8, 'F');
+    doc.setFillColor(...gold);
+    doc.rect(ML, y, 4, 100, 'F');
+    setFont('normal', 9, gray);
+    doc.text('SCHEDULE A TIME', ML + 24, y + 28);
+    setSerif('bold', 16, navy);
+    doc.text('calendly.com', ML + 24, y + 56);
+    setFont('normal', 9, accent);
+    // Truncate display URL but keep clickable link to full URL
+    const display = calendlyUrl.replace(/^https?:\/\//, '').substring(0, 70);
+    doc.textWithLink(display, ML + 24, y + 76, { url: calendlyUrl });
+    y += 120;
+  } else {
+    setFont('italic', 10, gray);
+    doc.text('Reach out to your account manager to set up a time.', ML, y); y += 30;
+  }
+
+  // Contact card
+  y += 10;
+  setFont('normal', 9, gray);
+  doc.text('YOUR ACCOUNT TEAM', ML, y); y += 18;
+  setSerif('bold', 14, navy);
+  doc.text(amDisplay, ML, y);
+  setFont('italic', 10, gray);
+  doc.text('Account Manager', ML + 220, y);
+  y += 18;
+  setSerif('bold', 14, navy);
+  doc.text(reviewerName, ML, y);
+  setFont('italic', 10, gray);
+  doc.text('Reviewing Partner', ML + 220, y);
+
+  // Closing line
+  y = PH - 110;
+  drawLine(ML, y, MR, 0.5, lgray); y += 18;
+  setSerif('italic', 12, navy);
+  doc.text('Thank you for trusting ARK with your books.', ML, y);
+
+  drawFooter();
+
+  // ═══════════════════════════════════════════════════════════════
+  //  APPENDIX — TRANSACTION DETAIL (only if pulled)
   // ═══════════════════════════════════════════════════════════════
   if (plDetailReport) {
-    newPage();
+    pageNum++;
+    doc.addPage();
+    drawHeader('Appendix: Transaction Detail', 'Line-by-line activity');
 
-    doc.setFillColor(...navy);
-    doc.rect(0, 0, PW, 50, 'F');
-    setFont('bold', 14, white);
-    doc.text('Transaction Detail', ML, 32);
-    setFont('normal', 9, [150, 170, 200]);
-    doc.text(`${clientName} — ${period}`, MR - doc.getTextWidth(`${clientName} — ${period}`), 32);
-
-    y = 70;
-
-    setFont('normal', 8, gray);
-    doc.text('This section shows individual transactions that compose the P&L above.', ML, y); y += 16;
+    setFont('normal', 9, gray);
+    doc.text('Individual transactions that compose the P&L statement above.', ML, y); y += 16;
 
     // Parse detail report — it has a deeper structure with transaction rows
     const detailSections = [];
@@ -36727,25 +37922,6 @@ async function plGenerateMeetingPDF() {
         y += 10;
       }
       y += 8;
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  FINAL SECTION — CLIENT INSIGHTS
-  // ═══════════════════════════════════════════════════════════════
-  if (plMeetingPrep?.clientInsights?.length) {
-    checkY(80);
-    y += 10;
-    drawLine(ML, y, MR, 1, navy); y += 16;
-    setFont('bold', 10, navy);
-    doc.text('Insights for Your Business', ML, y); y += 16;
-    for (const ci of plMeetingPrep.clientInsights) {
-      checkY(30);
-      setFont('normal', 9, dark);
-      const lines = doc.splitTextToSize(ci, MR - ML - 14);
-      doc.text('\u2022', ML, y);
-      doc.text(lines, ML + 14, y);
-      y += lines.length * 12 + 6;
     }
   }
 
@@ -41098,6 +42274,17 @@ const INTEGRATIONS = [
     desc: 'Scheduling links, meeting bookings, event tracking',
     statusUrl: '/calendly/status', authUrl: '/calendly/auth', disconnectUrl: '/calendly/disconnect',
     supportsToken: true,
+    customContent: () => {
+      const url = (DB.calendlyBookingUrl || '').replace(/"/g, '&quot;');
+      return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <label style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Default Booking URL</label>
+        <div style="display:flex;gap:6px;">
+          <input id="calendly-booking-url-input" type="text" class="field-input" value="${url}" placeholder="https://calendly.com/arkfinancial/..." style="flex:1;font-size:11px;font-family:'DM Mono',monospace;">
+          <button class="btn btn-sm" onclick="intSaveCalendlyUrl()" style="font-size:11px;">Save</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-d);margin-top:4px;">Used in P&L review reports and other client-facing materials.</div>
+      </div>`;
+    },
   },
   {
     key: 'letters', name: 'Engagement Letters', icon: '✍️', color: '#EC1C24',
@@ -42276,6 +43463,7 @@ function intRenderCards() {
         ${extra ? `<p style="font-size:12px;color:var(--muted);margin:0 0 4px;">${extra}</p>` : ''}
         ${expiry ? `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;">${expiry}</p>` : ''}
         <div style="display:flex;gap:8px;align-items:center;">${actions}</div>
+        ${svc.customContent ? svc.customContent(st) : ''}
       </div>
     `;
   }).join('');
@@ -42316,6 +43504,19 @@ function intShowTokenModal(key) {
 
 function intCloseTokenModal() {
   document.getElementById('int-token-modal').style.display = 'none';
+}
+
+function intSaveCalendlyUrl() {
+  const input = document.getElementById('calendly-booking-url-input');
+  if (!input) return;
+  const v = input.value.trim();
+  if (v && !/^https?:\/\//i.test(v)) {
+    showToast('URL must start with http:// or https://');
+    return;
+  }
+  DB.calendlyBookingUrl = v;
+  saveDB();
+  showToast(v ? 'Booking URL saved' : 'Booking URL cleared');
 }
 
 async function intConnectWithToken() {
