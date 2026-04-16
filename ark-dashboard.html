@@ -35884,40 +35884,71 @@ function plBuildSummary(accounts) {
 }
 
 // ── Pattern Learning Engine ───────────────────────────────────────
+// Strip QBO account numbers and redundant parent prefixes from names.
+// e.g. "Cost of Goods Sold:53000 Cost of Goods Sold:Consumable COGS" → "consumable cogs"
+function plCleanAccountName(name) {
+  if (!name) return '';
+  let n = String(name);
+  // Take the last segment after the last colon (the leaf account)
+  const parts = n.split(':');
+  n = parts[parts.length - 1].trim();
+  // Strip leading QBO account numbers (e.g., "53000 Cost of Goods Sold" → "Cost of Goods Sold")
+  n = n.replace(/^\d{3,6}\s+/g, '').trim();
+  return plNormalizeName(n);
+}
+
 function plAnalyzePatterns(currentAccounts, historyData) {
   const flags = [];
   const periods = Object.keys(historyData || {}).sort();
   if (periods.length < 2) return flags; // need at least 2 months
 
-  // Build a map of account → [amounts across months]
+  // Build a map of CLEANED account name → [amounts across months]
+  // This collapses "Cost of Goods Sold:53000 Cost of Goods Sold:Consumable COGS"
+  // and "Consumable COGS" into the same key.
   const accountHistory = {};
+  const histNameToClean = {};  // original name → cleaned name
   for (const p of periods) {
     const accts = historyData[p]?.accounts || [];
     const acctList = Array.isArray(accts) ? accts : [];
     for (const a of acctList) {
-      const name = typeof a === 'string' ? a : a.name;
+      const origName = typeof a === 'string' ? a : a.name;
       const amount = typeof a === 'object' ? a.amount : 0;
-      if (!name) continue;
-      if (!accountHistory[name]) accountHistory[name] = [];
-      accountHistory[name].push({ period: p, amount: Math.abs(amount || 0) });
+      if (!origName) continue;
+      const cleaned = plCleanAccountName(origName);
+      if (!cleaned) continue;
+      histNameToClean[origName] = cleaned;
+      if (!accountHistory[cleaned]) accountHistory[cleaned] = { origName, amounts: [] };
+      accountHistory[cleaned].amounts.push({ period: p, amount: Math.abs(amount || 0) });
+      // Keep the shortest original name for display
+      if (origName.length < accountHistory[cleaned].origName.length) accountHistory[cleaned].origName = origName;
     }
   }
 
-  const currentNames = new Set(currentAccounts.map(a => a.name.toLowerCase()));
+  // Build a set of cleaned names for current month's accounts
+  const currentNamesClean = new Set(currentAccounts.map(a => plCleanAccountName(a.name)).filter(Boolean));
+  // Also build a map from cleaned → current account (for variance lookups)
+  const currentByClean = new Map();
+  for (const a of currentAccounts) {
+    const c = plCleanAccountName(a.name);
+    if (c) currentByClean.set(c, a);
+  }
   const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
   // Check for missing recurring accounts — skip overridden
-  for (const [name, history] of Object.entries(accountHistory)) {
-    if (plIsOverridden(name, null)) continue;
-    const appearedCount = history.filter(h => h.amount > 0).length;
-    if (appearedCount >= Math.min(4, periods.length) && !currentNames.has(name.toLowerCase())) {
-      const avgAmount = history.reduce((s, h) => s + h.amount, 0) / history.length;
+  for (const [cleaned, { origName, amounts }] of Object.entries(accountHistory)) {
+    if (plIsOverridden(origName, null) || plIsOverridden(cleaned, null)) continue;
+    const appearedCount = amounts.filter(h => h.amount > 0).length;
+    if (appearedCount >= Math.min(4, periods.length) && !currentNamesClean.has(cleaned)) {
+      const avgAmount = amounts.reduce((s, h) => s + h.amount, 0) / amounts.length;
+      // Only flag if the average is meaningful (>$100/mo)
+      if (avgAmount < 100) continue;
+      const displayName = origName.split(':').pop().replace(/^\d{3,6}\s+/g, '').trim() || origName;
       flags.push({
         severity: avgAmount > 500 ? 'CRITICAL' : 'WARNING',
         category: 'Missing Recurring',
-        account: name,
+        account: displayName,
         amount: null,
-        message: `"${name}" appeared in ${appearedCount} of the last ${periods.length} months (avg ${fmt$(avgAmount)}/mo) but is MISSING this month.`,
+        message: `"${displayName}" appeared in ${appearedCount} of the last ${periods.length} months (avg ${fmt$(avgAmount)}/mo) but is MISSING this month.`,
         suggestedAccount: null,
         variance: 'MISSING',
         source: 'pattern',
@@ -35928,7 +35959,9 @@ function plAnalyzePatterns(currentAccounts, historyData) {
   // Check for significant variance from historical average — skip overridden
   for (const acct of currentAccounts) {
     if (plIsOverridden(acct.name, acct.amount)) continue;
-    const history = accountHistory[acct.name];
+    const cleaned = plCleanAccountName(acct.name);
+    const hist = accountHistory[cleaned];
+    const history = hist?.amounts;
     if (!history || history.length < 3) continue;
     const amounts = history.map(h => h.amount).filter(a => a > 0);
     if (amounts.length < 2) continue;
@@ -35936,6 +35969,9 @@ function plAnalyzePatterns(currentAccounts, historyData) {
     if (avg < 50) continue;
     const currentAmt = Math.abs(acct.amount);
     const variancePct = avg > 0 ? ((currentAmt - avg) / avg) * 100 : 0;
+
+    // Skip small-dollar variances (<$200 difference) regardless of %
+    if (Math.abs(currentAmt - avg) < 200) continue;
 
     if (Math.abs(variancePct) > 50) {
       flags.push({
@@ -35982,9 +36018,10 @@ function plAnalyzePatterns(currentAccounts, historyData) {
     }
   }
 
-  // Detect new accounts (not seen in any prior month)
+  // Detect new accounts (not seen in any prior month) — use cleaned names
   for (const acct of currentAccounts) {
-    if (!accountHistory[acct.name] && Math.abs(acct.amount) > 100) {
+    const cleaned = plCleanAccountName(acct.name);
+    if (cleaned && !accountHistory[cleaned] && Math.abs(acct.amount) > 100) {
       flags.push({
         severity: 'INFO', category: 'New Account', account: acct.name,
         amount: acct.amount,
@@ -36313,6 +36350,45 @@ function plRenderReviewMode() {
   plCheckReviewCompletion();
 }
 
+function plBatchResolve(severity, action) {
+  let resolved = 0;
+  plFlags.forEach((f, i) => {
+    const key = f.account + '::' + i;
+    if (!plReviewState.decisions[key] && f.severity === severity) {
+      plReviewState.decisions[key] = action;
+      resolved++;
+    }
+  });
+  if (resolved) {
+    plSaveReviewState();
+    plCheckReviewCompletion();
+    plRenderProblemCards();
+    showToast(`${resolved} ${severity} item(s) marked as ${action}`);
+  }
+}
+
+function plBatchResolveChecked(action) {
+  const checked = document.querySelectorAll('.pl-batch-check:checked');
+  let resolved = 0;
+  checked.forEach(cb => {
+    const i = parseInt(cb.dataset.index);
+    const f = plFlags[i];
+    if (f) {
+      const key = f.account + '::' + i;
+      if (!plReviewState.decisions[key]) {
+        plReviewState.decisions[key] = action;
+        resolved++;
+      }
+    }
+  });
+  if (resolved) {
+    plSaveReviewState();
+    plCheckReviewCompletion();
+    plRenderProblemCards();
+    showToast(`${resolved} item(s) marked as ${action}`);
+  }
+}
+
 function plRenderProblemCards() {
   const container = document.getElementById('pl-review-cards');
   if (!container) return;
@@ -36326,6 +36402,28 @@ function plRenderProblemCards() {
       <div style="font-size:12px;color:var(--text-d);margin-top:4px;">No issues found — all ${plAllAccounts.length} accounts look good.</div>
     </div>`;
     return;
+  }
+
+  // Count unresolved flags by severity for batch toolbar
+  const counts = { CRITICAL: 0, WARNING: 0, INFO: 0 };
+  plFlags.forEach((f, i) => {
+    if (!plReviewState.decisions[f.account + '::' + i]) counts[f.severity] = (counts[f.severity] || 0) + 1;
+  });
+  const totalUnresolved = counts.CRITICAL + counts.WARNING + counts.INFO;
+
+  // Batch toolbar — show when 3+ items to resolve
+  let batchToolbar = '';
+  if (totalUnresolved >= 3) {
+    const btns = [];
+    if (counts.INFO >= 2) btns.push(`<button class="btn btn-sm" onclick="plBatchResolve('INFO','ok')" style="font-size:10px;background:rgba(46,125,94,.08);color:var(--green);border-color:rgba(46,125,94,.2);">✓ Approve all ${counts.INFO} INFO</button>`);
+    if (counts.WARNING >= 2) btns.push(`<button class="btn btn-sm" onclick="plBatchResolve('WARNING','ok')" style="font-size:10px;background:rgba(176,106,26,.08);color:var(--amber);border-color:rgba(176,106,26,.2);">✓ Approve all ${counts.WARNING} WARNING</button>`);
+    btns.push(`<div style="flex:1;"></div>`);
+    btns.push(`<button class="btn btn-ghost btn-sm" onclick="plBatchResolveChecked('ok')" style="font-size:10px;">✓ Approve checked</button>`);
+    btns.push(`<button class="btn btn-ghost btn-sm" onclick="plBatchResolveChecked('flag')" style="font-size:10px;color:var(--red);">🔧 Flag checked</button>`);
+    batchToolbar = `<div class="card" style="padding:8px 14px;margin-bottom:8px;background:var(--surface2);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-right:6px;">${totalUnresolved} items</span>
+      ${btns.join('')}
+    </div>`;
   }
 
   container.innerHTML = plFlags.map((f, i) => {
@@ -36353,6 +36451,7 @@ function plRenderProblemCards() {
     return `<div class="card pl-problem-card" id="pl-card-${i}" style="margin-bottom:8px;border-left:4px solid ${borderColor};overflow:visible;transition:opacity .3s,transform .3s;">
       <div style="padding:12px 16px;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
+          <input type="checkbox" class="pl-batch-check" data-index="${i}" style="margin-top:4px;flex-shrink:0;cursor:pointer;" title="Select for batch action">
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
               <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${isCritical?'rgba(176,58,58,.12)':isWarning?'rgba(176,106,26,.12)':'rgba(37,99,235,.1)'};color:${borderColor};letter-spacing:.04em;text-transform:uppercase;">${sevLabel}</span>
@@ -36396,7 +36495,10 @@ function plRenderProblemCards() {
     </div>`;
   }).filter(Boolean).join('');
 
-  if (!container.innerHTML.trim()) {
+  // Prepend batch toolbar
+  container.innerHTML = batchToolbar + container.innerHTML;
+
+  if (!container.innerHTML.trim() || !container.querySelector('.pl-problem-card')) {
     container.innerHTML = `<div class="card" style="padding:24px;text-align:center;">
       <div style="font-size:14px;font-weight:600;color:var(--green);">&#10003; All items addressed</div>
       <div style="font-size:11px;color:var(--text-d);margin-top:4px;">Review the summary below to finalize.</div>
