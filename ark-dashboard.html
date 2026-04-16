@@ -36074,7 +36074,13 @@ function plCreateTasksFromFlags() {
 }
 
 async function plGenerateClientReport() {
-  // Generate meeting prep if not already done
+  if (!plSelectedClient || !plCurrentSummary) {
+    showToast('Run a digest first');
+    return;
+  }
+  // Try to fetch AI meeting prep — but don't block the report on it.
+  // The PDF handles a null plMeetingPrep gracefully and uses plCuratedActions
+  // for the action items section.
   if (!plMeetingPrep) {
     try {
       const prepRes = await fetch(`${QBO_SERVER}/pl/digest/meeting-prep`, {
@@ -36087,15 +36093,13 @@ async function plGenerateClientReport() {
           period: `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`,
         }),
       }).then(r => r.json());
-      if (prepRes.success) plMeetingPrep = prepRes.prep;
-    } catch(e) {}
+      if (prepRes && prepRes.success) plMeetingPrep = prepRes.prep;
+    } catch(e) {
+      console.warn('[PL] Meeting-prep fetch failed (continuing without AI commentary):', e.message);
+    }
   }
-  if (plMeetingPrep) {
-    plRenderMeetingPrep();
-    plGenerateMeetingPDF();
-  } else {
-    showToast('Failed to generate report');
-  }
+  if (plMeetingPrep) plRenderMeetingPrep();
+  await plGenerateMeetingPDF();
 }
 
 function plMarkReviewComplete() {
