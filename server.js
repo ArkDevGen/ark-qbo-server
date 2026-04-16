@@ -140,20 +140,29 @@ setInterval(() => {
 }, 3600000);
 
 // ─── Seed initial admin user (one-time) ──────────────────────────
+// Accepts optional { username, fname, lname, email } in the request body
+// so the first user on a fresh environment (e.g. staging) can be whoever
+// is actually bootstrapping it. Password is always ARK_API_KEY.
 app.post('/auth/seed', async (req, res) => {
   if (_users.length > 0) return res.json({ message: 'Users already exist', count: _users.length });
 
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ARK_API_KEY not set' });
 
+  const b = req.body || {};
+  const username = (b.username || 'admin').toLowerCase().trim();
+  const fname    = b.fname || 'Admin';
+  const lname    = b.lname || '';
+  const email    = b.email || `${username}@arkfinancialservices.com`;
+
   const hash = await bcrypt.hash(apiKey, 10);
   const admin = {
     id: 'usr_' + crypto.randomUUID().slice(0, 8),
-    username: 'jacob',
+    username,
     passwordHash: hash,
-    fname: 'Jacob',
-    lname: 'Malousek',
-    email: 'jacob@arkfinancialservices.com',
+    fname,
+    lname,
+    email,
     role: 'admin',
     title: 'Owner / Admin',
     phone: '',
@@ -166,8 +175,8 @@ app.post('/auth/seed', async (req, res) => {
   };
   _users.push(admin);
   saveUsers();
-  console.log('✓ Seeded initial admin user: jacob');
-  res.json({ success: true, message: 'Admin user created', username: 'jacob' });
+  console.log(`✓ Seeded initial admin user: ${username}`);
+  res.json({ success: true, message: 'Admin user created', username });
 });
 
 // ─── Login ───────────────────────────────────────────────────────
