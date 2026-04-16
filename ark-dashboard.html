@@ -35319,31 +35319,54 @@ async function plContributeVendorPatterns(detailReport) {
 
 // Get transactions from the detail report for a specific account name.
 // Used by the per-flag transaction detail panel.
+// Get transactions from the detail report for a specific account.
+// Uses EXACT match on the section header name (not substring) to avoid
+// pulling the entire ledger. Returns { transactions[], relatedAccounts[] }.
 function plGetTransactionsForAccount(accountName) {
-  if (!plDetailReport || !accountName) return [];
-  const out = [];
-  const target = String(accountName).toLowerCase();
-  function walkDetail(rows, currentAccount) {
+  if (!plDetailReport || !accountName) return { transactions: [], relatedAccounts: [] };
+  const targetN = plNormalizeName(accountName);
+  const targetParts = accountName.split(':').map(s => s.trim().toLowerCase());
+  const transactions = [];
+  const relatedAccounts = []; // accounts in the same parent section (useful for MISSING)
+
+  function walkDetail(rows, parentName, depth, inTargetSection) {
     if (!rows) return;
     for (const row of rows) {
       if (row.Header?.ColData) {
         const acct = row.Header.ColData[0]?.value || '';
-        const matches = acct && (
-          acct.toLowerCase() === target ||
-          acct.toLowerCase().endsWith(':' + target) ||
-          target.endsWith(':' + acct.toLowerCase()) ||
-          acct.toLowerCase().includes(target) ||
-          target.includes(acct.toLowerCase())
-        );
-        if (row.Rows?.Row) walkDetail(row.Rows.Row, matches ? acct : currentAccount);
-      } else if (row.ColData && currentAccount) {
+        const acctN = plNormalizeName(acct);
+        const acctLow = acct.toLowerCase().trim();
+
+        // Exact match: this header IS the target account
+        const isExact = (acctN === targetN) ||
+          (acctLow === targetParts[targetParts.length - 1]) ||
+          (parentName && plNormalizeName(parentName + ':' + acct) === targetN);
+
+        // Parent match: target is a child of this section header
+        // (e.g., target = "Payroll:Wages", header = "Payroll")
+        const isParent = targetParts[0] === acctLow && targetParts.length > 1;
+
+        // Same parent: this section shares a parent with the target
+        // (e.g., target = "Rent", this = "Utilities" — both under "Expenses")
+        const sameParent = inTargetSection && depth > 0;
+
+        if (row.Rows?.Row) {
+          walkDetail(row.Rows.Row, acct, depth + 1, isExact || isParent || sameParent);
+        }
+
+        // Collect related accounts at same depth (siblings)
+        if (inTargetSection && !isExact && row.Summary?.ColData) {
+          const total = parseFloat(row.Summary.ColData[1]?.value) || 0;
+          if (total !== 0) relatedAccounts.push({ name: acct, amount: total });
+        }
+
+      } else if (row.ColData && inTargetSection) {
         const cols = row.ColData.map(c => c.value || '');
-        if (cols.length >= 2 && cols[0]) {
-          // QBO detail rows typically: Date, Type, Num, Name, Memo, Split, Amount, Balance
+        if (cols.length >= 2) {
           const last = cols.length - 1;
           const amount = parseFloat(cols[last]) || parseFloat(cols[last - 1]) || 0;
-          if (amount !== 0 || cols[0]) {
-            out.push({
+          if (cols[0] && (amount !== 0 || cols[1])) {
+            transactions.push({
               date: cols[0] || '',
               type: cols[1] || '',
               num: cols[2] || '',
@@ -35351,16 +35374,41 @@ function plGetTransactionsForAccount(accountName) {
               memo: cols[4] || '',
               split: cols[5] || '',
               amount,
-              account: currentAccount,
+              account: parentName || accountName,
             });
           }
         }
       }
-      if (row.Rows?.Row && !row.Header) walkDetail(row.Rows.Row, currentAccount);
+      if (row.Rows?.Row && !row.Header) {
+        walkDetail(row.Rows.Row, parentName, depth, inTargetSection);
+      }
     }
   }
-  walkDetail(plDetailReport?.Rows?.Row || [], null);
-  return out;
+
+  // First pass: try to find exact account transactions
+  walkDetail(plDetailReport?.Rows?.Row || [], '', 0, false);
+
+  // If no transactions found (common for MISSING flags), do a broader search
+  // within the parent section to show what IS there
+  if (!transactions.length && !relatedAccounts.length) {
+    // Walk again but match parent sections more loosely
+    function walkForRelated(rows, parentName) {
+      if (!rows) return;
+      for (const row of rows) {
+        if (row.Header?.ColData) {
+          const acct = row.Header.ColData[0]?.value || '';
+          if (row.Rows?.Row) walkForRelated(row.Rows.Row, acct);
+          if (row.Summary?.ColData) {
+            const total = parseFloat(row.Summary.ColData[1]?.value) || 0;
+            if (acct && total !== 0) relatedAccounts.push({ name: parentName ? `${parentName}:${acct}` : acct, amount: total });
+          }
+        }
+      }
+    }
+    walkForRelated(plDetailReport?.Rows?.Row || [], '');
+  }
+
+  return { transactions, relatedAccounts };
 }
 
 // ── Load Auto-Learned Benchmarks ────────────────────────────────
@@ -36509,59 +36557,87 @@ function plRenderTransactions(i) {
   const panel = document.getElementById(`pl-tx-panel-${i}`);
   const f = plFlags[i];
   if (!panel || !f) return;
+  const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const fmt$ = (v) => '$' + Math.abs(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const isMissing = f.variance === 'MISSING';
 
   if (!plDetailReport) {
-    panel.innerHTML = '<div style="font-size:11px;color:var(--text-d);font-style:italic;">Detail report not loaded for this run. Re-run with detail to see transactions.</div>';
-    return;
-  }
-  const txns = plGetTransactionsForAccount(f.account);
-  if (!txns.length) {
-    panel.innerHTML = `<div style="font-size:11px;color:var(--text-d);font-style:italic;">No transactions found for "${(f.account||'').replace(/</g,'&lt;')}" in this period.</div>`;
+    panel.innerHTML = '<div style="font-size:11px;color:var(--text-d);font-style:italic;">Detail report not loaded. Re-run with First Pass to see transactions.</div>';
     return;
   }
 
-  // Vendor frequency for context (which accounts these vendors normally hit fleet-wide)
+  const { transactions: txns, relatedAccounts } = plGetTransactionsForAccount(f.account);
+
+  // Vendor fleet hints
   const vendorHints = (vendor) => {
     if (!vendor || !plFleetKnowledge?.vendorPatterns) return '';
-    const v = vendor.toLowerCase();
-    const pat = plFleetKnowledge.vendorPatterns[v];
+    const pat = plFleetKnowledge.vendorPatterns[vendor.toLowerCase()];
     if (!pat) return '';
-    const top = Object.entries(pat).sort((a, b) => b[1] - a[1]).slice(0, 1)[0];
-    if (!top) return '';
-    const [acct, cnt] = top;
-    if (acct.toLowerCase() === (f.account||'').toLowerCase()) return '';
-    return `<div style="font-size:9px;color:#7c3aed;margin-top:2px;">Fleet: this vendor usually hits "${acct.replace(/</g,'&lt;')}" (${cnt}\u00d7)</div>`;
+    const top = Object.entries(pat).sort((a, b) => b[1] - a[1])[0];
+    if (!top || top[0].toLowerCase() === (f.account||'').toLowerCase()) return '';
+    return `<div style="font-size:9px;color:#7c3aed;margin-top:2px;">Fleet: this vendor usually hits "${esc(top[0])}" (${top[1]}\u00d7)</div>`;
   };
 
-  panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Transactions \u00b7 ${txns.length} found</div>
-      <div style="font-size:10px;color:var(--text-d);">Open QBO side-by-side to fix.</div>
-    </div>
-    <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#fff;">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <thead>
-          <tr style="background:var(--surface2);position:sticky;top:0;">
-            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Date</th>
-            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Type</th>
-            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Vendor / Payee</th>
-            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Memo</th>
-            <th style="text-align:right;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${txns.map(t => `<tr style="border-top:1px solid var(--border);">
-            <td style="padding:5px 8px;font-family:'DM Mono',monospace;color:var(--text-d);white-space:nowrap;">${(t.date||'').slice(0,10)}</td>
-            <td style="padding:5px 8px;color:var(--text);">${(t.type||'').replace(/</g,'&lt;')}</td>
-            <td style="padding:5px 8px;color:var(--text);">${(t.vendor||'').replace(/</g,'&lt;')}${vendorHints(t.vendor)}</td>
-            <td style="padding:5px 8px;color:var(--text-d);">${(t.memo||'').replace(/</g,'&lt;').substring(0,80)}</td>
-            <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;color:${t.amount<0?'#b03a3a':'var(--text)'};white-space:nowrap;">${fmt$(t.amount)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+  let html = '';
+
+  if (txns.length) {
+    // CASE 1: We found actual transactions for this account — show them
+    html = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Transactions for "${esc(f.account)}" \u00b7 ${txns.length} found</div>
+        <div style="font-size:10px;color:var(--text-d);">Open QBO side-by-side to follow along.</div>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#fff;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:var(--surface2);position:sticky;top:0;">
+              <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Date</th>
+              <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Type</th>
+              <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Vendor / Payee</th>
+              <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Memo</th>
+              <th style="text-align:right;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${txns.map(t => `<tr style="border-top:1px solid var(--border);">
+              <td style="padding:5px 8px;font-family:'DM Mono',monospace;color:var(--text-d);white-space:nowrap;">${esc(t.date).slice(0,10)}</td>
+              <td style="padding:5px 8px;color:var(--text);">${esc(t.type)}</td>
+              <td style="padding:5px 8px;color:var(--text);">${esc(t.vendor)}${vendorHints(t.vendor)}</td>
+              <td style="padding:5px 8px;color:var(--text-d);">${esc(t.memo).substring(0,80)}</td>
+              <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;color:${t.amount<0?'#b03a3a':'var(--text)'};white-space:nowrap;">${fmt$(t.amount)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else if (isMissing && relatedAccounts.length) {
+    // CASE 2: MISSING flag — no transactions for this account, but we can
+    // show what IS on the P&L so the AM can identify where it may be booked
+    html = `
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Where is "${esc(f.account)}"?</div>
+        <div style="font-size:11px;color:var(--text-d);margin-bottom:8px;">No transactions found under this name. Here\u2019s what IS on the P&L — the expected account may be booked under a different name below. Click "Not actually missing" to teach the engine.</div>
+      </div>
+      <div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#fff;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:var(--surface2);position:sticky;top:0;">
+              <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Account on P&L</th>
+              <th style="text-align:right;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${relatedAccounts.map(a => `<tr style="border-top:1px solid var(--border);">
+              <td style="padding:6px 8px;color:var(--text);">${esc(a.name)}</td>
+              <td style="padding:6px 8px;text-align:right;font-family:'DM Mono',monospace;color:${a.amount<0?'#b03a3a':'var(--text)'};white-space:nowrap;">${fmt$(a.amount)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else {
+    html = `<div style="font-size:11px;color:var(--text-d);font-style:italic;">No transactions found for "${esc(f.account)}" in this period.${isMissing ? ' This account is genuinely missing from the P&L.' : ''}</div>`;
+  }
+
+  panel.innerHTML = html;
 }
 
 function plReviewAction(i, action) {
