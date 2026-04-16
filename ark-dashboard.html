@@ -35927,13 +35927,28 @@ function plBuildSummary(accounts) {
     const acct = accounts.find(a => a.name.toLowerCase().includes(pattern.toLowerCase()));
     return acct ? acct.amount : 0;
   };
-  const sales = find('Store Sales') || find('Sales') || find('Total Income') || find('Income');
-  const cogs = find('Cost of Goods Sold') || find('COGS');
-  const payroll = accounts.filter(a => a.name.toLowerCase().includes('payroll')).reduce((s,a) => s + Math.abs(a.amount), 0);
-  const royalty = find('Royalty Fees') || find('Royalty');
-  const rent = find('Rent');
-  const net = find('Net Income') || find('Net Ordinary Income');
-  return { sales: Math.abs(sales), cogs: Math.abs(cogs), payroll, royalty: Math.abs(royalty), rent: Math.abs(rent), netIncome: net, accountCount: accounts.length };
+  // Smart multi-pattern search — try specific names first, then broader
+  const findAny = (...patterns) => {
+    for (const p of patterns) { const v = find(p); if (v) return v; }
+    return 0;
+  };
+  const sales = findAny('Store Sales', 'Net Sales', 'Sales', 'Total Income', 'Income');
+  const cogs = findAny('Cost of Goods Sold', 'COGS', 'Cost of Sales');
+  const payroll = accounts.filter(a => {
+    const n = a.name.toLowerCase();
+    return n.includes('payroll') || n.includes('wages') || n.includes('salaries') || n.includes('salary');
+  }).reduce((s, a) => s + Math.abs(a.amount), 0);
+  const royalty = findAny('Royalty Fees', 'Royalty');
+  const rent = findAny('Rent Expense', 'Rent', 'Lease');
+  const net = findAny('Net Income', 'Net Ordinary Income');
+  // Discounts — look for employee discount and store discount accounts
+  const empDiscount = Math.abs(findAny('Employee Discount', 'Emp Discount', 'Employee Meals'));
+  const storeDiscount = Math.abs(findAny('Store Discount', 'Store Discounts', 'Promotional Discount', 'Discount'));
+  return {
+    sales: Math.abs(sales), cogs: Math.abs(cogs), payroll, royalty: Math.abs(royalty),
+    rent: Math.abs(rent), netIncome: net, accountCount: accounts.length,
+    empDiscount, storeDiscount,
+  };
 }
 
 // ── Pattern Learning Engine ───────────────────────────────────────
@@ -37149,6 +37164,8 @@ function plBuildReviewSnapshot() {
     summary: plCurrentSummary || null,
     prevSummary: plPrevSummary || null,
     fleetTrends: plFleetSalesTrends || null,
+    rawReport: plRawReport || null,
+    detailReport: plDetailReport || null,
     flags: (plFlags || []).map((f, i) => ({
       ...f,
       decision: plReviewState.decisions?.[f.account + '::' + i] || null,
@@ -37451,6 +37468,9 @@ async function plrApplyPendingReviewLoad() {
   plPrevSummary = snap.prevSummary || null;
   plFleetSalesTrends = snap.fleetTrends || null;
   plMeetingPrep = snap.meetingPrep || null;
+  plRawReport = snap.rawReport || null;
+  plDetailReport = snap.detailReport || null;
+  if (plRawReport) plAllAccounts = plParseReport(plRawReport);
   plReviewState = { decisions: {}, notes: {}, completedAt: review.completedAt || null };
   for (const f of plFlags) {
     const idx = plFlags.indexOf(f);
@@ -38418,33 +38438,61 @@ async function plGenerateMeetingPDF() {
   doc.text(reviewerName || '—', ML + 380, y);
   y += 30;
 
-  // Headline metric tiles — three big numbers
-  const heroH = 110;
+  // Headline metric tiles — 2 rows x 3 cols of key numbers
+  const ft = plFleetSalesTrends || {};
+  const fmtTrend = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const momPct = plPrevSummary ? ((sales - (plPrevSummary.sales||0)) / (plPrevSummary.sales||1) * 100) : null;
+  const cogsPct = sales > 0 ? (summary.cogs / sales) : 0;
+  const payrollPct = sales > 0 ? (summary.payroll / sales) : 0;
+  const empDisc = summary.empDiscount || 0;
+  const storeDiscPct = sales > 0 ? ((summary.storeDiscount||0) / sales) : 0;
+
+  const heroH = 90;
   const heroW = (MR - ML - 24) / 3;
   const hero = [
-    { label: 'Total Sales',  value: fmt$(sales),                             accent: navy },
-    { label: 'Net Income',   value: fmt$(summary.netIncome),                  accent: summary.netIncome >= 0 ? green : red },
-    { label: 'Net Margin',   value: fmtPct(summary.netIncome / sales),       accent: summary.netIncome / sales >= 0.10 ? green : amber },
+    { label: 'Net Sales', value: fmt$(sales),
+      sub: [momPct != null ? `MoM: ${momPct >= 0 ? '+' : ''}${momPct.toFixed(1)}%` : null, ft.yoyPct != null ? `YoY: ${fmtTrend(ft.yoyPct)}` : null].filter(Boolean).join('  ·  ') || periodMonthLabel,
+      accent: navy },
+    { label: 'COGS', value: fmtPct(cogsPct),
+      sub: fmt$(summary.cogs),
+      accent: cogsPct > 0.35 ? red : cogsPct > 0.30 ? amber : green },
+    { label: 'Total Payroll', value: fmtPct(payrollPct),
+      sub: fmt$(summary.payroll),
+      accent: payrollPct > 0.35 ? red : payrollPct > 0.30 ? amber : green },
+    { label: 'Net Income', value: fmt$(summary.netIncome),
+      sub: `${fmtPct(summary.netIncome / sales)} margin`,
+      accent: summary.netIncome >= 0 ? green : red },
+    { label: 'Employee Discounts', value: fmt$(empDisc),
+      sub: empDisc > 0 && sales > 0 ? `${fmtPct(empDisc / sales)} of sales` : '—',
+      accent: empDisc > 500 ? amber : gray },
+    { label: 'Store Discounts', value: fmtPct(storeDiscPct),
+      sub: fmt$(summary.storeDiscount || 0),
+      accent: storeDiscPct > 0.03 ? amber : gray },
   ];
   for (let i = 0; i < hero.length; i++) {
-    const x = ML + i * (heroW + 12);
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const x = ML + col * (heroW + 12);
+    const by = y + row * (heroH + 10);
     // Card
     doc.setFillColor(...cream);
-    doc.roundedRect(x, y, heroW, heroH, 6, 6, 'F');
+    doc.roundedRect(x, by, heroW, heroH, 6, 6, 'F');
     // Top accent
     doc.setFillColor(...hero[i].accent);
-    doc.rect(x, y, heroW, 4, 'F');
+    doc.rect(x, by, heroW, 4, 'F');
     // Label
     setFont('normal', 8, gray);
-    doc.text(hero[i].label.toUpperCase(), x + 14, y + 28);
+    doc.text(hero[i].label.toUpperCase(), x + 14, by + 24);
     // Value
-    setSerif('bold', 26, hero[i].accent);
-    doc.text(hero[i].value, x + 14, y + 66);
-    // Period sub
-    setFont('italic', 8, gray);
-    doc.text(periodMonthLabel, x + 14, y + 92);
+    setSerif('bold', 22, hero[i].accent);
+    doc.text(hero[i].value, x + 14, by + 52);
+    // Sub
+    if (hero[i].sub) {
+      setFont('italic', 8, gray);
+      doc.text(String(hero[i].sub), x + 14, by + 72);
+    }
   }
-  y += heroH + 30;
+  y += 2 * (heroH + 10) + 20;
 
   // Quote / one-line takeaway from exec summary if present
   if (plMeetingPrep?.executiveSummary) {
