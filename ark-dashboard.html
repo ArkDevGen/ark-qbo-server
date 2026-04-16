@@ -5816,9 +5816,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-devhub">
     <!-- Tab bar -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
-      <button class="dh-tab active" id="dh-tab-helpboard" onclick="dhSwitchTab('helpboard')">🆘 Help Board</button>
+      <button class="dh-tab active" id="dh-tab-helpboard" onclick="dhSwitchTab('helpboard')">🆘 General Help</button>
       <button class="dh-tab" id="dh-tab-board" onclick="dhSwitchTab('board')">🛠 Project Board</button>
-      <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">🙋 Help Wanted</button>
+      <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">🛠️ Development Help</button>
       <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">📋 Templates</button>
       <button class="dh-tab" id="dh-tab-mine" onclick="dhSwitchTab('mine')">My Work</button>
       <button class="dh-tab" id="dh-tab-completed" onclick="dhSwitchTab('completed')">Completed</button>
@@ -43889,7 +43889,7 @@ async function hbSubmitPost(){
     });
     if(!resp.ok){ const err=await resp.json(); throw new Error(err.error||'Failed'); }
     closeModal('modal-hb-compose');
-    showToast(id ? '✓ Post updated' : '✓ Posted to Help Board');
+    showToast(id ? '✓ Post updated' : '✓ Posted to General Help');
     await hbLoadAndRender();
   } catch(e) {
     alert('Failed to save post: ' + e.message);
