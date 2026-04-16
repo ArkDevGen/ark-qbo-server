@@ -35490,10 +35490,19 @@ function plGetEffectiveRealmKey() {
 
 // ── Check if override applies to a flag ─────────────────────────
 function plIsOverridden(accountName, amount) {
-  const ov = plOverrides[accountName];
+  // Check by exact name first, then by cleaned/normalized name
+  let ov = plOverrides[accountName];
+  if (!ov) {
+    const cleaned = plCleanAccountName(accountName);
+    for (const [key, val] of Object.entries(plOverrides)) {
+      if (plCleanAccountName(key) === cleaned) { ov = val; break; }
+    }
+  }
   if (!ov) return false;
   // Check expiry
   if (ov.expiresAt && new Date(ov.expiresAt) < new Date()) return false;
+  // Permanent dismissals (no expected amount, no expiry) always apply
+  if (ov.permanent) return true;
   // If override has an expected amount, check tolerance
   if (ov.expectedAmount && amount != null) {
     const tolerance = ov.tolerance || 0.15;
@@ -36562,6 +36571,7 @@ function plRenderProblemCards() {
           <button class="btn btn-sm" onclick="plShowOverrideForm(${i})" style="font-size:10px;background:rgba(37,99,235,.08);color:var(--blue);border-color:rgba(37,99,235,.2);">&#x1F4DD; Override w/ Note</button>
           <button class="btn btn-sm" onclick="plReviewAction(${i},'flag')" style="font-size:10px;background:rgba(176,58,58,.08);color:var(--red);border-color:rgba(176,58,58,.2);">&#x1F527; Flag for Fix</button>
           <button class="btn btn-ghost btn-sm" onclick="plToggleTransactions(${i})" style="font-size:10px;" title="Show underlying transactions">&#x1F50D; Show transactions</button>
+          <button class="btn btn-ghost btn-sm" onclick="plDismissPermanently(${i})" style="font-size:10px;color:var(--text-d);" title="Never show this flag again for this client">&#x1F6AB; Don&apos;t show again</button>
         </div>
         <!-- Transactions panel (hidden) -->
         <div id="pl-tx-panel-${i}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);"></div>
@@ -36599,6 +36609,26 @@ function plRenderProblemCards() {
 
 function plShowOverrideForm(i) {
   document.getElementById(`pl-override-form-${i}`).style.display = '';
+}
+
+// Permanently suppress a flag for this client — saves an override with
+// no expiry and permanent=true. plIsOverridden will skip it on every
+// future run. The override is stored on the server keyed by realmId.
+async function plDismissPermanently(i) {
+  const f = plFlags[i];
+  if (!f) return;
+  const displayName = (f.account || '').split(':').pop().replace(/^\d{3,6}\s+/g, '').trim() || f.account;
+  if (!confirm(`Permanently hide "${displayName}" for this client?\n\nThis flag won't appear on any future run. You can undo this in the Override settings.`)) return;
+  const who = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'AM';
+  const override = {
+    permanent: true,
+    note: `Permanently dismissed by ${who} — not a real error for this client`,
+    setBy: who,
+    setAt: new Date().toISOString(),
+  };
+  await plSaveOverride(f.account, override);
+  plReviewAction(i, 'ok');
+  showToast(`"${displayName}" permanently dismissed — won't appear on future runs`);
 }
 
 // ── Teach modal: map a 'MISSING' canonical to a real account on this P&L
