@@ -37921,11 +37921,16 @@ function plrOpenReview(clientId, reviewId) {
   // Stash for the Digester to pick up after nav
   window._plPendingReviewLoad = { clientId, reviewId };
   nav('qbo');
-  // Open the Digester workspace
+  // Update page title so it's clear we're in review mode
+  const titleEl = document.getElementById('page-title');
+  if (titleEl) titleEl.textContent = `Reviewing: ${client.biz}`;
+  // Open the Digester workspace and load the saved review
   setTimeout(() => {
-    if (typeof qboShowWorkspace === 'function') qboShowWorkspace('pl');
-    if (typeof plrLoadFromQueue === 'function') plrLoadFromQueue();
-  }, 250);
+    if (typeof qboOpenTool === 'function') qboOpenTool('pldigest');
+    setTimeout(() => {
+      if (typeof plrLoadFromQueue === 'function') plrLoadFromQueue();
+    }, 500);
+  }, 300);
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────
