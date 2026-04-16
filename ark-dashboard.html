@@ -7427,7 +7427,18 @@ function logAct(desc, clientId=null, amId=null){
 //  Sample/seed data loads ONLY if no saved data exists.
 // ══════════════════════════════════════════════════════════════════
 const ARK_DB_KEY = 'ark_db_v1';
-const ARK_SERVER = 'https://ark-qbo-server.onrender.com';
+// Environment-aware server URL: use whatever host this page was served from,
+// falling back to production when the page is opened from file:// locally.
+const ARK_SERVER = (function(){
+  try {
+    const h = window.location.hostname;
+    // file:// or empty → default to production
+    if (!h || window.location.protocol === 'file:') return 'https://ark-qbo-server.onrender.com';
+    // Any other host (localhost, staging, production) → use the same origin
+    return window.location.origin;
+  } catch(e){ return 'https://ark-qbo-server.onrender.com'; }
+})();
+const ARK_IS_STAGING = /staging/i.test(ARK_SERVER);
 
 const DB = { clients:[], accountManagers:[], employees:[], postage:[], notes:{}, activity:[], notifications:[], salesTaxRates:[], salesTaxFilings:[], salesTaxClientSetup:[], salesTaxDrafts:[], _editClient:null, _editAM:null, _editEmp:null, _detailId:null };
 
