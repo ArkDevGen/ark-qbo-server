@@ -4086,15 +4086,18 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 </select>
               </div>
               <!-- Report type -->
-              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;margin-bottom:14px;">
-                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;">Report</label>
-                <div style="display:flex;gap:8px;">
-                  <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
-                    <input type="radio" name="pl-report-type" value="summary" checked> Summary
-                  </label>
-                  <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
-                    <input type="radio" name="pl-report-type" value="detail"> Detail
-                  </label>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:start;margin-bottom:14px;">
+                <label style="font-size:11px;font-weight:600;color:var(--text-d);text-align:right;padding-top:4px;">Mode</label>
+                <div>
+                  <div style="display:flex;gap:12px;margin-bottom:4px;">
+                    <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+                      <input type="radio" name="pl-report-type" value="detail" checked> First Pass
+                    </label>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+                      <input type="radio" name="pl-report-type" value="summary"> Final Pass
+                    </label>
+                  </div>
+                  <div style="font-size:10px;color:var(--text-d);line-height:1.4;">First Pass: line-by-line deep check (run as many times as needed). Final Pass: 30k-foot view of client-reportable items only.</div>
                 </div>
               </div>
               <!-- Anticipated Expenses (collapsible) -->
@@ -35568,6 +35571,25 @@ async function plRunDigest() {
     // ── Step 9: Merge all flags ────────────────────────────────
     plFlags = plMergeFlags(allLocalFlags, aiFlags);
 
+    // ── Step 9b: Final-Pass filter (summary mode = 30k-foot view) ──
+    // Only keep client-reportable issues: CRITICAL, MISSING anticipated,
+    // or variances exceeding 2x the tolerance threshold. Drop INFO and
+    // minor warnings — those belong in the First Pass (detail) runs.
+    if (reportType === 'summary') {
+      plFlags = plFlags.filter(f => {
+        if (f.severity === 'CRITICAL') return true;
+        if (f.variance === 'MISSING' && f.source === 'anticipated') return true;
+        if (f.variance === 'MISSING' && f.severity === 'CRITICAL') return true;
+        if (f.severity === 'WARNING') {
+          // Keep warnings with >2x tolerance (serious variances)
+          const pctMatch = (f.variance||'').match(/([\d.]+)%/);
+          if (pctMatch && parseFloat(pctMatch[1]) > 30) return true;
+        }
+        return false;
+      });
+      plProgress(78, `Final Pass: ${plFlags.length} client-reportable items`);
+    }
+
     // ── Step 10: AI Pass 2 — Meeting Prep ──────────────────────
     plProgress(75, 'Generating meeting prep...');
     try {
@@ -36210,62 +36232,93 @@ function plShowOverrideForm(i) {
 }
 
 // ── Teach modal: map a 'MISSING' canonical to a real account on this P&L
+// Stash the full account list for the teach modal so it survives across renders.
+// We populate this from plAllAccounts + a fresh parse fallback.
+let _plTeachAccountList = [];
+
 function plOpenTeachModal(i) {
   const f = plFlags[i];
   if (!f) return;
-  const accounts = plAllAccounts || [];
-  // Rank candidates by name similarity to the canonical so the obvious pick
-  // surfaces first.
-  const targetN = (typeof plNormalizeName === 'function') ? plNormalizeName(f.account) : (f.account||'').toLowerCase();
-  const ranked = accounts.slice().map(a => {
-    const n = (typeof plNormalizeName === 'function') ? plNormalizeName(a.name) : (a.name||'').toLowerCase();
+
+  // Build the definitive list of accounts on this P&L — try plAllAccounts first,
+  // fall back to re-parsing the raw report, then the detail report.
+  let accounts = (plAllAccounts && plAllAccounts.length) ? plAllAccounts : [];
+  if (!accounts.length && plRawReport) accounts = plParseReport(plRawReport);
+  if (!accounts.length && plDetailReport) accounts = plParseReport(plDetailReport);
+  // Deduplicate by name (keep the one with the larger absolute amount)
+  const byName = new Map();
+  for (const a of accounts) {
+    const key = (a.name||'').toLowerCase();
+    const existing = byName.get(key);
+    if (!existing || Math.abs(a.amount||0) > Math.abs(existing.amount||0)) byName.set(key, a);
+  }
+  accounts = [...byName.values()].filter(a => a.name);
+  _plTeachAccountList = accounts;
+
+  // Rank by similarity to the flagged canonical name
+  const targetN = plNormalizeName(f.account);
+  const ranked = accounts.map(a => {
+    const n = plNormalizeName(a.name);
     let score = 0;
     if (n === targetN) score = 1000;
     else if (n.includes(targetN) || targetN.includes(n)) score = 500;
-    // Token-overlap bonus
     const targetTokens = new Set(targetN.split(' '));
     for (const tok of n.split(' ')) if (tok && targetTokens.has(tok)) score += 25;
     return { a, score };
   }).sort((x, y) => y.score - x.score);
 
   const top = ranked.slice(0, 5).filter(r => r.score > 0);
-  const rest = ranked.filter(r => !top.includes(r)).map(r => r.a);
+  // "rest" is everything NOT in top — for the full scrollable list
+  const topSet = new Set(top.map(r => r.a));
+  const rest = ranked.filter(r => !topSet.has(r.a)).map(r => r.a);
+  // Also sort rest alphabetically for easy scanning
+  rest.sort((a, b) => (a.name||'').localeCompare(b.name||''));
 
-  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const fmt$ = (v) => '$' + Math.abs(v||0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
   const html = `<div class="overlay" id="pl-teach-modal" style="display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id==='pl-teach-modal')plCloseTeachModal()">
-    <div class="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column;">
+    <div class="modal" style="width:580px;max-height:80vh;display:flex;flex-direction:column;">
       <div class="modal-head">
         <div class="modal-title">Teach the Engine</div>
         <span class="modal-x" onclick="plCloseTeachModal()">&times;</span>
       </div>
       <div class="modal-body" style="overflow-y:auto;flex:1;">
-        <div style="font-size:13px;color:var(--text);margin-bottom:6px;">The engine flagged <strong>"${(f.account||'').replace(/</g,'&lt;')}"</strong> as missing.</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:6px;">The engine flagged <strong>"${esc(f.account)}"</strong> as missing.</div>
         <div style="font-size:12px;color:var(--text-d);margin-bottom:14px;">If it&apos;s actually on this P&amp;L under a different name, pick it below. The engine will remember this for every Scooters store going forward.</div>
 
         ${top.length ? `<div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Likely matches</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;">
-          ${top.map(({a, score}) => `<button class="btn btn-ghost btn-sm" onclick='plConfirmTeach(${i}, ${JSON.stringify(a.name).replace(/'/g,"&#39;")})' style="text-align:left;justify-content:flex-start;padding:8px 10px;font-size:12px;border:1px solid var(--border);">
-            <span style="font-weight:600;color:var(--navy);">${(a.name||'').replace(/</g,'&lt;')}</span>
+          ${top.map(({a}) => `<button class="btn btn-ghost btn-sm" onclick='plConfirmTeach(${i}, ${JSON.stringify(a.name).replace(/'/g,"&#39;")})' style="text-align:left;justify-content:flex-start;padding:8px 10px;font-size:12px;border:1px solid var(--border);width:100%;">
+            <span style="font-weight:600;color:var(--navy);">${esc(a.name)}</span>
             <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--text-d);">${fmt$(a.amount)}</span>
           </button>`).join('')}
         </div>` : ''}
 
-        <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">All accounts on this P&L</div>
-        <select id="pl-teach-select" class="field-input" style="width:100%;font-size:12px;">
-          <option value="">— Pick an account —</option>
-          ${rest.map(a => `<option value="${(a.name||'').replace(/"/g,'&quot;')}">${(a.name||'').replace(/</g,'&lt;')}  (${fmt$(a.amount)})</option>`).join('')}
-        </select>
+        <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">All accounts on this P&L (${accounts.length})</div>
+        <input id="pl-teach-search" class="field-input" placeholder="Search accounts\u2026" oninput="plFilterTeachList()" style="width:100%;font-size:12px;margin-bottom:6px;">
+        <div id="pl-teach-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#fff;">
+          ${rest.map(a => `<div class="pl-teach-row" data-name="${esc(a.name)}" onclick="plConfirmTeach(${i}, '${esc(a.name)}')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <span style="color:var(--text);">${esc(a.name)}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-d);white-space:nowrap;margin-left:12px;">${fmt$(a.amount)}</span>
+          </div>`).join('')}
+        </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
           <div style="font-size:11px;color:var(--text-d);">This teaches the fleet — saves time for every other store next month.</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="plCloseTeachModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="plConfirmTeachFromSelect(${i})">Save Mapping</button>
-          </div>
+          <button class="btn btn-ghost btn-sm" onclick="plCloseTeachModal()">Cancel</button>
         </div>
       </div>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function plFilterTeachList() {
+  const q = (document.getElementById('pl-teach-search')?.value || '').toLowerCase();
+  document.querySelectorAll('.pl-teach-row').forEach(el => {
+    const name = (el.dataset.name || '').toLowerCase();
+    el.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
 }
 
 function plCloseTeachModal() {
