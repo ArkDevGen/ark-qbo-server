@@ -35148,40 +35148,52 @@ async function plRemoveOverride(account) {
 // ── Fleet Knowledge: teach an alias (canonical → actual found at this client)
 async function plTeachFleetAlias(canonical, actual) {
   if (!canonical || !actual) return false;
+
+  // Always save locally first so the user's work is never lost even if the
+  // server call fails (offline, deploy in progress, etc.)
+  if (plSelectedClient) {
+    const dbClient = (DB.clients || []).find(c => c.id === plSelectedClient.id);
+    if (dbClient) {
+      if (!dbClient.plAccountAliases) dbClient.plAccountAliases = {};
+      if (!dbClient.plAccountAliases[canonical]) dbClient.plAccountAliases[canonical] = [];
+      if (!dbClient.plAccountAliases[canonical].includes(actual)) {
+        dbClient.plAccountAliases[canonical].push(actual);
+        saveDB();
+      }
+    }
+    // Also update in-memory plFleetKnowledge so this session sees it immediately
+    if (!plFleetKnowledge.aliases[canonical]) plFleetKnowledge.aliases[canonical] = { candidates: [], rejected: [] };
+    const bucket = plFleetKnowledge.aliases[canonical];
+    if (!bucket.candidates.find(c => c.actual.toLowerCase() === actual.toLowerCase())) {
+      bucket.candidates.unshift({ actual, votes: 1, stores: [], firstTaught: { by: 'local' }, lastTaught: { by: 'local' } });
+    }
+  }
+
+  // Then try to teach the fleet server (non-blocking — local save already happened)
   try {
     const realmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || null;
     const by = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Unknown';
-    const res = await fetch(`${ARK_SERVER}/pl/fleet-knowledge/alias`, {
+    const fetchFn = typeof authFetch === 'function' ? authFetch : fetch;
+    const resp = await fetchFn(`${ARK_SERVER}/pl/fleet-knowledge/alias`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ canonical, actual, realmId, by }),
-    }).then(r => r.json());
-    if (res.success && res.candidate) {
-      // Update the cached fleet knowledge so the rest of this session sees it
-      if (!plFleetKnowledge.aliases[canonical]) plFleetKnowledge.aliases[canonical] = { candidates: [], rejected: [] };
-      const bucket = plFleetKnowledge.aliases[canonical];
-      const existing = bucket.candidates.find(c => c.actual.toLowerCase() === actual.toLowerCase());
-      if (existing) { existing.votes = res.candidate.votes; existing.lastTaught = res.candidate.lastTaught; }
-      else bucket.candidates.unshift(res.candidate);
-      bucket.candidates.sort((a, b) => b.votes - a.votes);
-    }
-    // Also remember locally on this client (so it works even if server is offline)
-    if (plSelectedClient) {
-      const dbClient = (DB.clients || []).find(c => c.id === plSelectedClient.id);
-      if (dbClient) {
-        if (!dbClient.plAccountAliases) dbClient.plAccountAliases = {};
-        if (!dbClient.plAccountAliases[canonical]) dbClient.plAccountAliases[canonical] = [];
-        if (!dbClient.plAccountAliases[canonical].includes(actual)) {
-          dbClient.plAccountAliases[canonical].push(actual);
-          saveDB();
-        }
+    });
+    if (!resp.ok) {
+      console.warn(`[PL] Fleet teach failed: HTTP ${resp.status}`);
+      // Local save already succeeded, so we still return true
+    } else {
+      const res = await resp.json();
+      if (res.success && res.candidate) {
+        const bucket = plFleetKnowledge.aliases[canonical];
+        const existing = bucket.candidates.find(c => c.actual.toLowerCase() === actual.toLowerCase());
+        if (existing) { existing.votes = res.candidate.votes; existing.lastTaught = res.candidate.lastTaught; }
       }
     }
-    return true;
   } catch(e) {
-    console.warn('[PL] Teach alias failed:', e.message);
-    return false;
+    console.warn('[PL] Fleet teach server call failed (local save OK):', e.message);
   }
+  return true;
 }
 
 // ── Fleet Knowledge: silently push vendor → account observations
