@@ -35529,9 +35529,12 @@ function plSetQuickPeriod(val) {
 }
 
 // ── Run the full v2 digest (12-step pipeline) ───────────────────
+let _plDigestRunning = false;
 async function plRunDigest() {
+  if (_plDigestRunning) { showToast('Digest already running — please wait'); return; }
+  _plDigestRunning = true;
   const plRealmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || '';
-  if (!plRealmId) { showToast('Select a client with a QBO Realm ID'); return; }
+  if (!plRealmId) { _plDigestRunning = false; showToast('Select a client with a QBO Realm ID'); return; }
   const startDate = document.getElementById('pl-start-date').value;
   const endDate   = document.getElementById('pl-end-date').value;
   if (!startDate || !endDate) { showToast('Select a date range'); return; }
@@ -35813,6 +35816,8 @@ async function plRunDigest() {
     progWrap.style.display = 'none';
     showToast('Error: ' + e.message);
     qboLog('error', 'P&L Digest failed: ' + e.message);
+  } finally {
+    _plDigestRunning = false;
   }
 }
 
@@ -36017,9 +36022,11 @@ function plResolveAccount(canonical, accounts, sectionNames) {
   const findByActual = (actual) => {
     const n = plNormalizeName(actual);
     if (accountIndex.has(n)) return accountIndex.get(n);
-    // also try substring on normalized form
+    // Substring match — but only if the shorter name is >50% of the longer
+    // (prevents "Rent" matching "Rental Income" or "Sales" matching "Sales Tax")
     for (const [k, a] of accountIndex) {
-      if (k.includes(n) || n.includes(k)) return a;
+      if (k.includes(n) && n.length > k.length * 0.4) return a;
+      if (n.includes(k) && k.length > n.length * 0.4) return a;
     }
     return null;
   };
@@ -36065,7 +36072,8 @@ function plResolveAccount(canonical, accounts, sectionNames) {
 function plCheckAnticipated(accounts, summary) {
   const flags = [];
   if (!plAnticipatedExpenses.length) return flags;
-  const sales = summary?.sales || 1;
+  const sales = Math.abs(summary?.sales || 0);
+  if (sales < 1) return flags; // No revenue — skip % checks to avoid division by zero
   const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
   // Build a set of section/header names (normalized) from the parsed accounts
@@ -36093,8 +36101,8 @@ function plCheckAnticipated(accounts, summary) {
       let varianceMsg = '';
 
       if (exp.amount) {
-        expectedAmt = exp.amount;
-        const diff = (actualAmt - expectedAmt) / expectedAmt;
+        expectedAmt = Math.abs(exp.amount);
+        const diff = expectedAmt > 0 ? (actualAmt - expectedAmt) / expectedAmt : 0;
         if (Math.abs(diff) > tolerance) {
           varianceMsg = `${fmt$(actualAmt)} actual vs ${fmt$(expectedAmt)} expected (${(diff*100).toFixed(0)}% ${diff > 0 ? 'over' : 'under'})`;
         }
@@ -36309,6 +36317,7 @@ function plRenderProblemCards() {
   const container = document.getElementById('pl-review-cards');
   if (!container) return;
   const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
   if (!plFlags.length) {
     container.innerHTML = `<div class="card" style="padding:32px;text-align:center;">
@@ -36350,10 +36359,10 @@ function plRenderProblemCards() {
               ${f.amount != null ? `<span style="font-size:12px;font-weight:700;color:var(--navy);font-family:'DM Mono',monospace;">${fmt$(f.amount)}</span>` : ''}
               ${f.source === 'ai' ? '<span title="AI flagged" style="font-size:10px;opacity:.5;">&#x1F916;</span>' : ''}
             </div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);">${f.account || '—'}</div>
-            <div style="font-size:11px;color:var(--text-m);margin-top:2px;line-height:1.5;">${f.message}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">${esc(f.account) || '—'}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px;line-height:1.5;">${esc(f.message)}</div>
             ${trendLine ? `<div style="margin-top:4px;">${trendLine}</div>` : ''}
-            ${f.suggestedAccount ? `<div style="font-size:10px;margin-top:4px;color:var(--green);"><strong>Suggested:</strong> ${f.suggestedAccount}</div>` : ''}
+            ${f.suggestedAccount ? `<div style="font-size:10px;margin-top:4px;color:var(--green);"><strong>Suggested:</strong> ${esc(f.suggestedAccount)}</div>` : ''}
           </div>
         </div>
         <!-- Action buttons -->
@@ -36640,7 +36649,7 @@ function plRenderTransactions(i) {
   panel.innerHTML = html;
 }
 
-function plReviewAction(i, action) {
+async function plReviewAction(i, action) {
   const f = plFlags[i];
   if (!f) return;
   const key = f.account + '::' + i;
@@ -36658,8 +36667,8 @@ function plReviewAction(i, action) {
     }, 300);
   }
 
-  // Auto-save review state
-  plSaveReviewState();
+  // Auto-save review state (awaited so data is persisted before user navigates)
+  await plSaveReviewState();
 }
 
 async function plSubmitOverride(i) {
@@ -37960,7 +37969,7 @@ async function plGenerateMeetingPDF() {
   const period = `${document.getElementById('pl-start-date').value} to ${document.getElementById('pl-end-date').value}`;
   const clientName = plSelectedClient.biz || 'Client';
   const summary = plCurrentSummary;
-  const sales = summary.sales || 1;
+  const sales = Math.max(Math.abs(summary.sales || 0), 1); // Protect against 0/$1 sales
   const calendlyUrl = (DB.calendlyBookingUrl || '').trim();
   const amName = plSelectedClient.am
     ? (DB.users || []).find(u => u.id === plSelectedClient.am)
@@ -38025,7 +38034,13 @@ async function plGenerateMeetingPDF() {
   };
 
   const newPage = (title, subtitle) => { drawFooter(); pageNum++; doc.addPage(); drawHeader(title, subtitle); };
-  const checkY = (needed) => { if (y + needed > PH - 60) newPage(); };
+  const checkY = (needed) => {
+    if (y + needed > PH - 60) {
+      if (y <= MT + 50) return false; // Already at top of fresh page — content too tall, skip
+      newPage();
+    }
+    return true;
+  };
 
   // ═══════════════════════════════════════════════════════════════
   //  PAGE 1 — COVER (presentation-ready)
