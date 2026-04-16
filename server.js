@@ -3287,6 +3287,7 @@ const PL_ANTICIPATED_FILE = path.join(DATA_DIR, 'pl-anticipated.json');
 const PL_OVERRIDES_FILE = path.join(DATA_DIR, 'pl-overrides.json');
 const PL_REVIEWS_FILE = path.join(DATA_DIR, 'pl-reviews.json');
 const CLOSE_TRACKER_FILE = path.join(DATA_DIR, 'close-tracker.json');
+const PL_FLEET_KNOWLEDGE_FILE = path.join(DATA_DIR, 'pl-fleet-knowledge.json');
 
 // Load persisted data
 let plHistory = {};       // { [realmId]: { [period]: { metrics, accounts, savedAt } } }
@@ -3308,6 +3309,15 @@ plThresholds = loadJsonFile(PL_THRESHOLDS_FILE, { _global: {} });
 plOverrides  = loadJsonFile(PL_OVERRIDES_FILE, {});
 plReviews    = loadJsonFile(PL_REVIEWS_FILE, {});
 closeTracker = loadJsonFile(CLOSE_TRACKER_FILE, {});
+
+// Fleet-wide P&L knowledge — aliases (account name → real account name)
+// learned across all stores, plus vendor → typical-account patterns.
+//   aliases: { [canonical]: { candidates: [{ actual, votes, stores[], firstTaught, lastTaught }], rejected: [...] } }
+//   vendorPatterns: { [vendor_lower]: { [accountName]: count } }
+let plFleetKnowledge = loadJsonFile(PL_FLEET_KNOWLEDGE_FILE, { aliases: {}, vendorPatterns: {} });
+if (!plFleetKnowledge.aliases) plFleetKnowledge.aliases = {};
+if (!plFleetKnowledge.vendorPatterns) plFleetKnowledge.vendorPatterns = {};
+function savePlFleetKnowledge() { fs.writeFileSync(PL_FLEET_KNOWLEDGE_FILE, JSON.stringify(plFleetKnowledge, null, 2)); }
 plAnticipated = loadJsonFile(PL_ANTICIPATED_FILE, {
   _templates: {
     scooters: [
@@ -3804,6 +3814,97 @@ app.post('/pl/close-tracker/:realmId/:period/check', (req, res) => {
 });
 
 // Fleet Scoreboard — aggregated view across all stores for a period
+// ── P&L Fleet Knowledge ──────────────────────────────────────────
+// Cross-store learning so the Digester gets smarter as AMs use it.
+//
+// Aliases: when an AM teaches "this account is what we mean by 'Sales'",
+// every other store benefits. Stored with provenance so bad mappings can
+// be audited and removed.
+//
+// Vendor patterns: silent accumulation — every detail report run, the
+// dashboard POSTs vendor → account observations. Future misposted-detection
+// will use this to flag charges in unusual accounts for known vendors.
+
+app.get('/pl/fleet-knowledge', (req, res) => {
+  res.json({ knowledge: plFleetKnowledge });
+});
+
+// Teach: an AM/admin says "anticipated 'Sales' was actually found at 'Coffee Sales'".
+// Upserts into candidates and increments vote counter.
+app.post('/pl/fleet-knowledge/alias', (req, res) => {
+  const { canonical, actual, realmId, by } = req.body || {};
+  if (!canonical || !actual) return res.status(400).json({ error: 'canonical and actual required' });
+
+  const c = String(canonical).trim();
+  const a = String(actual).trim();
+  if (!c || !a) return res.status(400).json({ error: 'empty values not allowed' });
+
+  if (!plFleetKnowledge.aliases[c]) plFleetKnowledge.aliases[c] = { candidates: [], rejected: [] };
+  const bucket = plFleetKnowledge.aliases[c];
+
+  // If this exact mapping is on the rejected list, ignore the teach
+  if (bucket.rejected.some(r => r.actual.toLowerCase() === a.toLowerCase())) {
+    return res.json({ success: false, error: 'mapping was previously rejected; un-reject first' });
+  }
+
+  let cand = bucket.candidates.find(x => x.actual.toLowerCase() === a.toLowerCase());
+  const now = new Date().toISOString();
+  if (!cand) {
+    cand = {
+      actual: a,
+      votes: 0,
+      stores: [],
+      firstTaught: { by: by || 'Unknown', at: now, realmId: realmId || null },
+      lastTaught: { by: by || 'Unknown', at: now, realmId: realmId || null },
+    };
+    bucket.candidates.push(cand);
+  }
+  cand.votes++;
+  if (realmId && !cand.stores.includes(realmId)) cand.stores.push(realmId);
+  cand.lastTaught = { by: by || 'Unknown', at: now, realmId: realmId || null };
+
+  // Sort candidates by votes desc so consumers can take the top easily
+  bucket.candidates.sort((x, y) => y.votes - x.votes);
+
+  savePlFleetKnowledge();
+  res.json({ success: true, candidate: cand });
+});
+
+// Reject: admin removes a bad mapping (e.g., someone taught "Sales" → "Frozen Yogurt")
+app.post('/pl/fleet-knowledge/alias/reject', (req, res) => {
+  const { canonical, actual, by } = req.body || {};
+  if (!canonical || !actual) return res.status(400).json({ error: 'canonical and actual required' });
+  const c = String(canonical).trim();
+  const a = String(actual).trim();
+  const bucket = plFleetKnowledge.aliases[c];
+  if (!bucket) return res.json({ success: true, removed: 0 });
+  const before = bucket.candidates.length;
+  bucket.candidates = bucket.candidates.filter(x => x.actual.toLowerCase() !== a.toLowerCase());
+  if (!bucket.rejected.some(r => r.actual.toLowerCase() === a.toLowerCase())) {
+    bucket.rejected.push({ actual: a, by: by || 'Unknown', at: new Date().toISOString() });
+  }
+  savePlFleetKnowledge();
+  res.json({ success: true, removed: before - bucket.candidates.length });
+});
+
+// Vendor pattern accumulation — bulk increment from a detail-report run
+app.post('/pl/fleet-knowledge/vendors', (req, res) => {
+  const { patterns } = req.body || {};
+  if (!Array.isArray(patterns)) return res.status(400).json({ error: 'patterns array required' });
+  let added = 0;
+  for (const p of patterns) {
+    if (!p || !p.vendor || !p.account) continue;
+    const v = String(p.vendor).toLowerCase().trim();
+    const a = String(p.account).trim();
+    if (!v || !a) continue;
+    if (!plFleetKnowledge.vendorPatterns[v]) plFleetKnowledge.vendorPatterns[v] = {};
+    plFleetKnowledge.vendorPatterns[v][a] = (plFleetKnowledge.vendorPatterns[v][a] || 0) + 1;
+    added++;
+  }
+  if (added > 0) savePlFleetKnowledge();
+  res.json({ success: true, added });
+});
+
 app.get('/pl/fleet/scoreboard', (req, res) => {
   const now = new Date();
   const period = req.query.period || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

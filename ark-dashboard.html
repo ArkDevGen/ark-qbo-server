@@ -5793,10 +5793,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <button class="dh-tab active" id="plr-tab-pending" onclick="plrSwitchTab('pending')">📥 Pending Reviews <span id="plr-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-weight:700;display:none;"></span></button>
       <button class="dh-tab" id="plr-tab-sent" onclick="plrSwitchTab('sent')">📤 Sent Reviews</button>
       <button class="dh-tab" id="plr-tab-library" onclick="plrSwitchTab('library')">📚 Action Library</button>
+      <button class="dh-tab" id="plr-tab-fleet" onclick="plrSwitchTab('fleet')">🧠 Fleet Knowledge</button>
     </div>
     <div id="plr-panel-pending"></div>
     <div id="plr-panel-sent" style="display:none;"></div>
     <div id="plr-panel-library" style="display:none;"></div>
+    <div id="plr-panel-fleet" style="display:none;"></div>
   </div>
 
   <!-- ══ DEV HUB ══ -->
@@ -34944,6 +34946,7 @@ let plPrevSummary = null;      // prior month summary for MoM comparison
 let plFleetData = null;        // fleet data for current run
 let plAnticipatedExpenses = []; // loaded anticipated expenses for selected client
 let plOverrides = {};          // { accountName: { expectedAmount, tolerance, note, expiresAt, setBy, setAt } }
+let plFleetKnowledge = { aliases: {}, vendorPatterns: {} }; // cached per digest run
 let plReviewState = {};        // { decisions: {}, notes: {}, completedAt }
 let plStoreBenchmarks = {};    // auto-learned from store history { accountName: { avg, stdDev, months } }
 let plAllAccounts = [];        // all parsed accounts for current run (for review mode)
@@ -35137,6 +35140,130 @@ async function plRemoveOverride(account) {
     await fetch(`${QBO_SERVER}/pl/overrides/${realmKey}/${encodeURIComponent(account)}`, { method: 'DELETE' });
     delete plOverrides[account];
   } catch(e) {}
+}
+
+// ── Fleet Knowledge: teach an alias (canonical → actual found at this client)
+async function plTeachFleetAlias(canonical, actual) {
+  if (!canonical || !actual) return false;
+  try {
+    const realmId = plSelectedClient?.qboRealmId || plSelectedClient?._plRealmId || null;
+    const by = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Unknown';
+    const res = await fetch(`${ARK_SERVER}/pl/fleet-knowledge/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canonical, actual, realmId, by }),
+    }).then(r => r.json());
+    if (res.success && res.candidate) {
+      // Update the cached fleet knowledge so the rest of this session sees it
+      if (!plFleetKnowledge.aliases[canonical]) plFleetKnowledge.aliases[canonical] = { candidates: [], rejected: [] };
+      const bucket = plFleetKnowledge.aliases[canonical];
+      const existing = bucket.candidates.find(c => c.actual.toLowerCase() === actual.toLowerCase());
+      if (existing) { existing.votes = res.candidate.votes; existing.lastTaught = res.candidate.lastTaught; }
+      else bucket.candidates.unshift(res.candidate);
+      bucket.candidates.sort((a, b) => b.votes - a.votes);
+    }
+    // Also remember locally on this client (so it works even if server is offline)
+    if (plSelectedClient) {
+      const dbClient = (DB.clients || []).find(c => c.id === plSelectedClient.id);
+      if (dbClient) {
+        if (!dbClient.plAccountAliases) dbClient.plAccountAliases = {};
+        if (!dbClient.plAccountAliases[canonical]) dbClient.plAccountAliases[canonical] = [];
+        if (!dbClient.plAccountAliases[canonical].includes(actual)) {
+          dbClient.plAccountAliases[canonical].push(actual);
+          saveDB();
+        }
+      }
+    }
+    return true;
+  } catch(e) {
+    console.warn('[PL] Teach alias failed:', e.message);
+    return false;
+  }
+}
+
+// ── Fleet Knowledge: silently push vendor → account observations
+async function plContributeVendorPatterns(detailReport) {
+  if (!detailReport) return;
+  const patterns = [];
+  const seen = new Set();
+  function walkDetail(rows, parentName) {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.Header?.ColData) {
+        const accountName = row.Header.ColData[0]?.value || '';
+        if (row.Rows?.Row) walkDetail(row.Rows.Row, accountName || parentName);
+      } else if (row.ColData && parentName) {
+        const cols = row.ColData.map(c => c.value || '');
+        // QBO detail rows: Date, Type, Num, Name (vendor), Memo, Split, Amount
+        const vendor = cols[3] || '';
+        if (vendor) {
+          const key = `${vendor.toLowerCase()}::${parentName}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            patterns.push({ vendor, account: parentName });
+          }
+        }
+      }
+      if (row.Rows?.Row && !row.Header) walkDetail(row.Rows.Row, parentName);
+    }
+  }
+  walkDetail(detailReport?.Rows?.Row || [], '');
+  if (!patterns.length) return;
+  try {
+    await fetch(`${ARK_SERVER}/pl/fleet-knowledge/vendors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patterns }),
+    });
+  } catch(e) {
+    console.warn('[PL] Vendor patterns POST failed:', e.message);
+  }
+}
+
+// Get transactions from the detail report for a specific account name.
+// Used by the per-flag transaction detail panel.
+function plGetTransactionsForAccount(accountName) {
+  if (!plDetailReport || !accountName) return [];
+  const out = [];
+  const target = String(accountName).toLowerCase();
+  function walkDetail(rows, currentAccount) {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.Header?.ColData) {
+        const acct = row.Header.ColData[0]?.value || '';
+        const matches = acct && (
+          acct.toLowerCase() === target ||
+          acct.toLowerCase().endsWith(':' + target) ||
+          target.endsWith(':' + acct.toLowerCase()) ||
+          acct.toLowerCase().includes(target) ||
+          target.includes(acct.toLowerCase())
+        );
+        if (row.Rows?.Row) walkDetail(row.Rows.Row, matches ? acct : currentAccount);
+      } else if (row.ColData && currentAccount) {
+        const cols = row.ColData.map(c => c.value || '');
+        if (cols.length >= 2 && cols[0]) {
+          // QBO detail rows typically: Date, Type, Num, Name, Memo, Split, Amount, Balance
+          const last = cols.length - 1;
+          const amount = parseFloat(cols[last]) || parseFloat(cols[last - 1]) || 0;
+          if (amount !== 0 || cols[0]) {
+            out.push({
+              date: cols[0] || '',
+              type: cols[1] || '',
+              num: cols[2] || '',
+              vendor: cols[3] || '',
+              memo: cols[4] || '',
+              split: cols[5] || '',
+              amount,
+              account: currentAccount,
+            });
+          }
+        }
+      }
+      if (row.Rows?.Row && !row.Header) walkDetail(row.Rows.Row, currentAccount);
+    }
+  }
+  walkDetail(plDetailReport?.Rows?.Row || [], null);
+  return out;
 }
 
 // ── Load Auto-Learned Benchmarks ────────────────────────────────
@@ -35384,12 +35511,30 @@ async function plRunDigest() {
       plFleetSalesTrends = trendsRes;
     } catch(e) { plFleetData = null; plFleetSalesTrends = null; }
 
-    // ── Step 7: Run enhanced local rule engine ─────────────────
+    // ── Step 7a: Load fleet knowledge (aliases + vendor patterns) ─
+    plProgress(40, 'Loading fleet knowledge...');
+    try {
+      const fkRes = await fetch(`${ARK_SERVER}/pl/fleet-knowledge`).then(r => r.json());
+      plFleetKnowledge = (fkRes && fkRes.knowledge) || { aliases: {}, vendorPatterns: {} };
+      if (!plFleetKnowledge.aliases) plFleetKnowledge.aliases = {};
+      if (!plFleetKnowledge.vendorPatterns) plFleetKnowledge.vendorPatterns = {};
+    } catch(e) {
+      console.warn('[PL] Fleet knowledge load failed (continuing without):', e.message);
+      plFleetKnowledge = { aliases: {}, vendorPatterns: {} };
+    }
+
+    // ── Step 7b: Run enhanced local rule engine ─────────────────
     plProgress(42, 'Running rule engine + pattern analysis...');
     const ruleFlags = plRunRuleEngine(accounts);
     const patternFlags = plAnalyzePatterns(accounts, plHistoryData);
     const anticipatedFlags = plCheckAnticipated(accounts, plCurrentSummary);
     const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags];
+
+    // ── Step 7c: Silently accumulate vendor → account patterns ─
+    if (plDetailReport) {
+      try { await plContributeVendorPatterns(plDetailReport); }
+      catch(e) { console.warn('[PL] Vendor pattern contribution failed:', e.message); }
+    }
 
     plProgress(50, `${allLocalFlags.length} local flags — sending to AI for deep analysis...`);
 
@@ -35500,7 +35645,7 @@ function plProgress(pct, msg) {
 // ── Parse QBO report JSON into flat account list ─────────────────
 function plParseReport(report) {
   const accounts = [];
-  function walk(rows, parentName) {
+  function walk(rows, parentName, sectionName) {
     if (!rows) return;
     for (const row of rows) {
       if (row.Header?.ColData) {
@@ -35508,20 +35653,22 @@ function plParseReport(report) {
         const fullName = parentName ? `${parentName}:${name}` : name;
         // Check for amount in header
         const amt = parseFloat(row.Header.ColData[1]?.value) || 0;
+        // Top-level header (no parent yet) becomes the section for everything below
+        const childSection = sectionName || name;
         if (row.Rows?.Row) {
-          walk(row.Rows.Row, fullName);
+          walk(row.Rows.Row, fullName, childSection);
         }
         // Summary row from header
         if (row.Summary?.ColData) {
           const total = parseFloat(row.Summary.ColData[1]?.value) || 0;
-          if (name && total !== 0) accounts.push({ name: fullName, amount: total, type: 'section' });
+          if (name && total !== 0) accounts.push({ name: fullName, amount: total, type: 'section', _section: childSection, _sectionN: typeof plNormalizeName==='function' ? plNormalizeName(childSection) : (childSection||'').toLowerCase() });
         }
       } else if (row.ColData) {
         const name = row.ColData[0]?.value || '';
         const amt = parseFloat(row.ColData[1]?.value) || 0;
         const fullName = parentName ? `${parentName}:${name}` : name;
         if (name && name !== '' && amt !== 0) {
-          accounts.push({ name: fullName, amount: amt, type: 'account' });
+          accounts.push({ name: fullName, amount: amt, type: 'account', _section: sectionName || null, _sectionN: typeof plNormalizeName==='function' ? plNormalizeName(sectionName||'') : (sectionName||'').toLowerCase() });
         }
       }
       if (row.Rows?.Row && !row.Header) {
@@ -35531,7 +35678,7 @@ function plParseReport(report) {
   }
 
   const rows = report?.Rows?.Row || [];
-  walk(rows, '');
+  walk(rows, '', null);
   return accounts;
 }
 
@@ -35665,17 +35812,90 @@ function plAnalyzePatterns(currentAccounts, historyData) {
 }
 
 // ── Anticipated Expense Checker ──────────────────────────────────
+// Normalize an account name for matching: lowercase, strip non-alphanumerics,
+// drop trailing 's' to handle simple plurals.
+function plNormalizeName(s) {
+  if (!s) return '';
+  let n = String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Strip trailing 's' on individual words for crude singular/plural folding
+  return n.split(' ').map(w => w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w).join(' ');
+}
+
+// Layered account-match resolution. Returns the matching account object
+// (with .name and .amount) or null.
+//
+// Order of precedence:
+//   1. Per-client alias (client.plAccountAliases[canonical] = ['Coffee Sales', ...])
+//   2. Fleet alias (DB-wide knowledge from any other store)
+//   3. Section/parent header match (treats account headers as candidates)
+//   4. Fuzzy leaf match (substring on normalized form)
+function plResolveAccount(canonical, accounts, sectionNames) {
+  if (!canonical || !accounts) return null;
+  const targetN = plNormalizeName(canonical);
+  const accountIndex = new Map(accounts.map(a => [plNormalizeName(a.name), a]));
+  const findByActual = (actual) => {
+    const n = plNormalizeName(actual);
+    if (accountIndex.has(n)) return accountIndex.get(n);
+    // also try substring on normalized form
+    for (const [k, a] of accountIndex) {
+      if (k.includes(n) || n.includes(k)) return a;
+    }
+    return null;
+  };
+
+  // 1. Per-client alias
+  const clientAliases = plSelectedClient?.plAccountAliases || {};
+  const cAliases = clientAliases[canonical] || clientAliases[targetN] || [];
+  for (const actual of cAliases) {
+    const m = findByActual(actual);
+    if (m) return { ...m, _matchSource: 'client-alias', _matchActual: actual };
+  }
+
+  // 2. Fleet alias (top-voted candidate that exists in this P&L)
+  const fleetBucket = plFleetKnowledge?.aliases?.[canonical] || plFleetKnowledge?.aliases?.[targetN];
+  if (fleetBucket && Array.isArray(fleetBucket.candidates)) {
+    // candidates are sorted by votes desc on the server
+    for (const cand of fleetBucket.candidates) {
+      const m = findByActual(cand.actual);
+      if (m) return { ...m, _matchSource: 'fleet-alias', _matchActual: cand.actual, _matchVotes: cand.votes };
+    }
+  }
+
+  // 3. Section/parent header match — sectionNames is a Set of normalized names
+  if (sectionNames && sectionNames.has(targetN)) {
+    // The canonical IS a section. Sum the section's children if we can identify them.
+    // For now, return a synthetic match using the section name with summed amount.
+    const childAccounts = accounts.filter(a => a._sectionN === targetN);
+    if (childAccounts.length) {
+      const sum = childAccounts.reduce((t, a) => t + (a.amount || 0), 0);
+      return { name: canonical, amount: sum, _matchSource: 'section', _matchActual: canonical };
+    }
+  }
+
+  // 4. Fuzzy substring match on normalized form
+  for (const [k, a] of accountIndex) {
+    if (k.includes(targetN) || targetN.includes(k)) {
+      return { ...a, _matchSource: 'fuzzy' };
+    }
+  }
+  return null;
+}
+
 function plCheckAnticipated(accounts, summary) {
   const flags = [];
   if (!plAnticipatedExpenses.length) return flags;
   const sales = summary?.sales || 1;
   const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
+  // Build a set of section/header names (normalized) from the parsed accounts
+  // — relies on _sectionN being set during parsing (we'll add that next).
+  const sectionNames = new Set(accounts.map(a => a._sectionN).filter(Boolean));
+
   for (const exp of plAnticipatedExpenses) {
     if (!exp.name) continue;
     if (plIsOverridden(exp.name, null)) continue;
     const tolerance = exp.tolerance || 0.15;
-    const match = accounts.find(a => a.name.toLowerCase().includes(exp.name.toLowerCase()));
+    const match = plResolveAccount(exp.name, accounts, sectionNames);
 
     if (!match) {
       const expectedAmt = exp.amount || (exp.pctOfSales ? exp.pctOfSales * sales : null);
@@ -35929,6 +36149,8 @@ function plRenderProblemCards() {
       trendLine = `<span style="font-size:10px;color:${borderColor};font-family:'DM Mono',monospace;">${f.variance}</span>`;
     }
 
+    const isMissing = f.variance === 'MISSING';
+
     return `<div class="card pl-problem-card" id="pl-card-${i}" style="margin-bottom:8px;border-left:4px solid ${borderColor};overflow:visible;transition:opacity .3s,transform .3s;">
       <div style="padding:12px 16px;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -35947,14 +36169,22 @@ function plRenderProblemCards() {
         <!-- Action buttons -->
         <div style="display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap;">
           <button class="btn btn-sm" onclick="plReviewAction(${i},'ok')" style="font-size:10px;background:rgba(46,125,94,.08);color:var(--green);border-color:rgba(46,125,94,.2);">&#10003; Looks OK</button>
-          <button class="btn btn-sm" onclick="plShowOverrideForm(${i})" style="font-size:10px;background:rgba(37,99,235,.08);color:var(--blue);border-color:rgba(37,99,235,.2);">&#x1F4CC; Override</button>
+          ${isMissing ? `<button class="btn btn-sm" onclick="plOpenTeachModal(${i})" style="font-size:10px;background:rgba(124,58,237,.08);color:#7c3aed;border-color:rgba(124,58,237,.2);" title="Map this to the real account on this P&L (teaches the fleet)">&#x1F4CC; Not actually missing</button>` : ''}
+          <button class="btn btn-sm" onclick="plShowOverrideForm(${i})" style="font-size:10px;background:rgba(37,99,235,.08);color:var(--blue);border-color:rgba(37,99,235,.2);">&#x1F4DD; Override w/ Note</button>
           <button class="btn btn-sm" onclick="plReviewAction(${i},'flag')" style="font-size:10px;background:rgba(176,58,58,.08);color:var(--red);border-color:rgba(176,58,58,.2);">&#x1F527; Flag for Fix</button>
+          <button class="btn btn-ghost btn-sm" onclick="plToggleTransactions(${i})" style="font-size:10px;" title="Show underlying transactions">&#x1F50D; Show transactions</button>
         </div>
+        <!-- Transactions panel (hidden) -->
+        <div id="pl-tx-panel-${i}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);"></div>
         <!-- Override form (hidden) -->
         <div id="pl-override-form-${i}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);">
-          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:6px;">Why is this expected?</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:6px;">Why is this expected? (this becomes the AM note)</div>
           <textarea id="pl-override-note-${i}" class="field-input" rows="2" placeholder="e.g., Landlord gave discount through Dec 2026" style="font-size:11px;width:100%;resize:vertical;margin-bottom:6px;"></textarea>
-          <div style="display:flex;gap:8px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);margin-bottom:8px;cursor:pointer;">
+            <input type="checkbox" id="pl-override-include-${i}" style="margin:0;">
+            <span>Include this note in the client&apos;s P&amp;L report</span>
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <label style="font-size:10px;color:var(--text-d);">Expires:</label>
             <input type="date" id="pl-override-exp-${i}" class="field-input" style="font-size:11px;width:auto;">
             ${f.amount != null ? `<label style="font-size:10px;color:var(--text-d);margin-left:8px;">Expected $:</label><input type="number" id="pl-override-amt-${i}" class="field-input" value="${Math.abs(f.amount)}" style="font-size:11px;width:80px;">` : ''}
@@ -35977,6 +36207,158 @@ function plRenderProblemCards() {
 
 function plShowOverrideForm(i) {
   document.getElementById(`pl-override-form-${i}`).style.display = '';
+}
+
+// ── Teach modal: map a 'MISSING' canonical to a real account on this P&L
+function plOpenTeachModal(i) {
+  const f = plFlags[i];
+  if (!f) return;
+  const accounts = plAllAccounts || [];
+  // Rank candidates by name similarity to the canonical so the obvious pick
+  // surfaces first.
+  const targetN = (typeof plNormalizeName === 'function') ? plNormalizeName(f.account) : (f.account||'').toLowerCase();
+  const ranked = accounts.slice().map(a => {
+    const n = (typeof plNormalizeName === 'function') ? plNormalizeName(a.name) : (a.name||'').toLowerCase();
+    let score = 0;
+    if (n === targetN) score = 1000;
+    else if (n.includes(targetN) || targetN.includes(n)) score = 500;
+    // Token-overlap bonus
+    const targetTokens = new Set(targetN.split(' '));
+    for (const tok of n.split(' ')) if (tok && targetTokens.has(tok)) score += 25;
+    return { a, score };
+  }).sort((x, y) => y.score - x.score);
+
+  const top = ranked.slice(0, 5).filter(r => r.score > 0);
+  const rest = ranked.filter(r => !top.includes(r)).map(r => r.a);
+
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const html = `<div class="overlay" id="pl-teach-modal" style="display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id==='pl-teach-modal')plCloseTeachModal()">
+    <div class="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <div class="modal-title">Teach the Engine</div>
+        <span class="modal-x" onclick="plCloseTeachModal()">&times;</span>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;">
+        <div style="font-size:13px;color:var(--text);margin-bottom:6px;">The engine flagged <strong>"${(f.account||'').replace(/</g,'&lt;')}"</strong> as missing.</div>
+        <div style="font-size:12px;color:var(--text-d);margin-bottom:14px;">If it&apos;s actually on this P&amp;L under a different name, pick it below. The engine will remember this for every Scooters store going forward.</div>
+
+        ${top.length ? `<div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Likely matches</div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;">
+          ${top.map(({a, score}) => `<button class="btn btn-ghost btn-sm" onclick='plConfirmTeach(${i}, ${JSON.stringify(a.name).replace(/'/g,"&#39;")})' style="text-align:left;justify-content:flex-start;padding:8px 10px;font-size:12px;border:1px solid var(--border);">
+            <span style="font-weight:600;color:var(--navy);">${(a.name||'').replace(/</g,'&lt;')}</span>
+            <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--text-d);">${fmt$(a.amount)}</span>
+          </button>`).join('')}
+        </div>` : ''}
+
+        <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">All accounts on this P&L</div>
+        <select id="pl-teach-select" class="field-input" style="width:100%;font-size:12px;">
+          <option value="">— Pick an account —</option>
+          ${rest.map(a => `<option value="${(a.name||'').replace(/"/g,'&quot;')}">${(a.name||'').replace(/</g,'&lt;')}  (${fmt$(a.amount)})</option>`).join('')}
+        </select>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--text-d);">This teaches the fleet — saves time for every other store next month.</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="plCloseTeachModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="plConfirmTeachFromSelect(${i})">Save Mapping</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function plCloseTeachModal() {
+  const m = document.getElementById('pl-teach-modal');
+  if (m) m.remove();
+}
+
+function plConfirmTeachFromSelect(i) {
+  const sel = document.getElementById('pl-teach-select');
+  if (!sel || !sel.value) { showToast('Pick an account first'); return; }
+  plConfirmTeach(i, sel.value);
+}
+
+async function plConfirmTeach(i, actual) {
+  const f = plFlags[i];
+  if (!f) return;
+  plCloseTeachModal();
+  const ok = await plTeachFleetAlias(f.account, actual);
+  if (!ok) { showToast('Failed to save mapping'); return; }
+  showToast(`Mapping saved: "${f.account}" → "${actual}"`);
+  // Mark this flag as resolved (counts as 'ok')
+  plReviewAction(i, 'ok');
+}
+
+// ── Transaction detail panel: show underlying QBO transactions for the flag
+function plToggleTransactions(i) {
+  const panel = document.getElementById(`pl-tx-panel-${i}`);
+  if (!panel) return;
+  if (panel.style.display === 'none' || panel.style.display === '') {
+    plRenderTransactions(i);
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function plRenderTransactions(i) {
+  const panel = document.getElementById(`pl-tx-panel-${i}`);
+  const f = plFlags[i];
+  if (!panel || !f) return;
+  const fmt$ = (v) => '$' + Math.abs(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+  if (!plDetailReport) {
+    panel.innerHTML = '<div style="font-size:11px;color:var(--text-d);font-style:italic;">Detail report not loaded for this run. Re-run with detail to see transactions.</div>';
+    return;
+  }
+  const txns = plGetTransactionsForAccount(f.account);
+  if (!txns.length) {
+    panel.innerHTML = `<div style="font-size:11px;color:var(--text-d);font-style:italic;">No transactions found for "${(f.account||'').replace(/</g,'&lt;')}" in this period.</div>`;
+    return;
+  }
+
+  // Vendor frequency for context (which accounts these vendors normally hit fleet-wide)
+  const vendorHints = (vendor) => {
+    if (!vendor || !plFleetKnowledge?.vendorPatterns) return '';
+    const v = vendor.toLowerCase();
+    const pat = plFleetKnowledge.vendorPatterns[v];
+    if (!pat) return '';
+    const top = Object.entries(pat).sort((a, b) => b[1] - a[1]).slice(0, 1)[0];
+    if (!top) return '';
+    const [acct, cnt] = top;
+    if (acct.toLowerCase() === (f.account||'').toLowerCase()) return '';
+    return `<div style="font-size:9px;color:#7c3aed;margin-top:2px;">Fleet: this vendor usually hits "${acct.replace(/</g,'&lt;')}" (${cnt}\u00d7)</div>`;
+  };
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Transactions \u00b7 ${txns.length} found</div>
+      <div style="font-size:10px;color:var(--text-d);">Open QBO side-by-side to fix.</div>
+    </div>
+    <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#fff;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--surface2);position:sticky;top:0;">
+            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Date</th>
+            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Type</th>
+            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Vendor / Payee</th>
+            <th style="text-align:left;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Memo</th>
+            <th style="text-align:right;padding:6px 8px;font-size:9px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${txns.map(t => `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:5px 8px;font-family:'DM Mono',monospace;color:var(--text-d);white-space:nowrap;">${(t.date||'').slice(0,10)}</td>
+            <td style="padding:5px 8px;color:var(--text);">${(t.type||'').replace(/</g,'&lt;')}</td>
+            <td style="padding:5px 8px;color:var(--text);">${(t.vendor||'').replace(/</g,'&lt;')}${vendorHints(t.vendor)}</td>
+            <td style="padding:5px 8px;color:var(--text-d);">${(t.memo||'').replace(/</g,'&lt;').substring(0,80)}</td>
+            <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;color:${t.amount<0?'#b03a3a':'var(--text)'};white-space:nowrap;">${fmt$(t.amount)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function plReviewAction(i, action) {
@@ -36008,18 +36390,26 @@ async function plSubmitOverride(i) {
   const expiresAt = document.getElementById(`pl-override-exp-${i}`)?.value || null;
   const amtEl = document.getElementById(`pl-override-amt-${i}`);
   const expectedAmount = amtEl ? parseFloat(amtEl.value) || null : null;
+  const includeInReport = !!document.getElementById(`pl-override-include-${i}`)?.checked;
 
+  const who = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'AM';
   const override = {
     expectedAmount,
     tolerance: 0.15,
     note,
     expiresAt: expiresAt || null,
-    setBy: 'AM',
+    setBy: who,
+    includeInReport,
   };
 
   await plSaveOverride(f.account, override);
+  // Stash on the local review state so the Sent-to-Client section in the PDF
+  // can pick it up even before the next digest run.
+  if (!plReviewState.notes) plReviewState.notes = {};
+  const key = f.account + '::' + i;
+  plReviewState.notes[key] = { text: note, includeInReport, by: who, at: new Date().toISOString(), account: f.account };
   plReviewAction(i, 'override');
-  showToast(`Override saved for ${f.account}`);
+  showToast(`Override saved for ${f.account}${includeInReport ? ' (will appear on client report)' : ''}`);
 }
 
 function plCheckReviewCompletion() {
@@ -36548,7 +36938,7 @@ function plrInit() {
 }
 
 function plrSwitchTab(tab) {
-  ['pending','sent','library'].forEach(t => {
+  ['pending','sent','library','fleet'].forEach(t => {
     const panel = document.getElementById('plr-panel-'+t);
     const btn = document.getElementById('plr-tab-'+t);
     if (panel) panel.style.display = (t===tab) ? '' : 'none';
@@ -36557,6 +36947,110 @@ function plrSwitchTab(tab) {
   if (tab === 'pending') plrRenderPending();
   if (tab === 'sent') plrRenderSent();
   if (tab === 'library') plrRenderLibrary();
+  if (tab === 'fleet') plrRenderFleet();
+}
+
+// ── FLEET KNOWLEDGE TAB ──────────────────────────────────────────
+async function plrRenderFleet() {
+  const panel = document.getElementById('plr-panel-fleet');
+  if (!panel) return;
+  panel.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">Loading fleet knowledge\u2026</div>';
+  let knowledge = { aliases: {}, vendorPatterns: {} };
+  try {
+    const res = await fetch(`${ARK_SERVER}/pl/fleet-knowledge`).then(r => r.json());
+    knowledge = (res && res.knowledge) || knowledge;
+  } catch(e) {
+    panel.innerHTML = `<div class="card" style="padding:24px;color:var(--red);">Failed to load: ${e.message}</div>`;
+    return;
+  }
+
+  const aliases = knowledge.aliases || {};
+  const aliasKeys = Object.keys(aliases).sort();
+  const vendorPatterns = knowledge.vendorPatterns || {};
+  const vendorKeys = Object.keys(vendorPatterns).sort();
+  const totalCandidates = aliasKeys.reduce((s, k) => s + (aliases[k].candidates?.length || 0), 0);
+  const totalVendorObs = vendorKeys.reduce((s, k) => s + Object.values(vendorPatterns[k]).reduce((a, b) => a + b, 0), 0);
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+      <div class="card" style="padding:14px;">
+        <div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Account Aliases</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--navy);margin-top:4px;">${aliasKeys.length}</div>
+        <div style="font-size:11px;color:var(--text-d);">${totalCandidates} mappings learned</div>
+      </div>
+      <div class="card" style="padding:14px;">
+        <div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Vendors Known</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--navy);margin-top:4px;">${vendorKeys.length}</div>
+        <div style="font-size:11px;color:var(--text-d);">${totalVendorObs} observations</div>
+      </div>
+      <div class="card" style="padding:14px;background:var(--surface2);">
+        <div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">How this works</div>
+        <div style="font-size:11px;color:var(--text);margin-top:4px;line-height:1.5;">Every "Not actually missing" click teaches the engine for every Scooters store. Vendor patterns accumulate silently to power future misposting detection.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;overflow:hidden;">
+      <div style="padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Account Aliases</div>
+      ${aliasKeys.length === 0 ? '<div style="padding:24px;text-align:center;color:var(--text-d);font-size:12px;font-style:italic;">No aliases learned yet. Click "Not actually missing" on a flag to teach.</div>' :
+        aliasKeys.map(canonical => {
+          const bucket = aliases[canonical];
+          const cands = (bucket.candidates || []).slice().sort((a, b) => b.votes - a.votes);
+          return `<div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+            <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;">${plrEsc(canonical)}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              ${cands.map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border-radius:4px;">
+                <div style="flex:1;font-size:12px;color:var(--text);">${plrEsc(c.actual)}</div>
+                <span style="font-size:9px;color:var(--text-d);font-family:'DM Mono',monospace;" title="Last taught by ${plrEsc(c.lastTaught?.by||'?')} on ${plrEsc((c.lastTaught?.at||'').slice(0,10))}">${c.votes}\u00d7</span>
+                <span style="font-size:9px;color:var(--text-d);">${(c.stores||[]).length} stores</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;color:#b03a3a;padding:2px 6px;" onclick="plrFleetReject('${plrEsc(canonical)}', '${plrEsc(c.actual)}')">Remove</button>
+              </div>`).join('')}
+              ${(bucket.rejected||[]).length ? `<div style="font-size:10px;color:var(--text-d);margin-top:4px;font-style:italic;">${bucket.rejected.length} rejected mapping(s)</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+    </div>
+
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Vendor Patterns (top 50)</div>
+      ${vendorKeys.length === 0 ? '<div style="padding:24px;text-align:center;color:var(--text-d);font-size:12px;font-style:italic;">No vendor data yet. Run the Digester on a few stores to start accumulating.</div>' :
+        `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:var(--surface2);">
+            <th style="text-align:left;padding:8px 14px;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Vendor</th>
+            <th style="text-align:left;padding:8px 14px;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Most-common account</th>
+            <th style="text-align:right;padding:8px 14px;font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;">Hits</th>
+          </tr></thead>
+          <tbody>
+            ${vendorKeys
+              .map(v => {
+                const top = Object.entries(vendorPatterns[v]).sort((a, b) => b[1] - a[1])[0];
+                const total = Object.values(vendorPatterns[v]).reduce((a, b) => a + b, 0);
+                return { v, account: top[0], hits: top[1], total };
+              })
+              .sort((a, b) => b.total - a.total)
+              .slice(0, 50)
+              .map(r => `<tr style="border-top:1px solid var(--border);">
+                <td style="padding:8px 14px;color:var(--text);">${plrEsc(r.v)}</td>
+                <td style="padding:8px 14px;color:var(--text-d);">${plrEsc(r.account)}</td>
+                <td style="padding:8px 14px;text-align:right;font-family:'DM Mono',monospace;color:var(--text-d);">${r.hits} / ${r.total}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+    </div>
+  `;
+}
+
+async function plrFleetReject(canonical, actual) {
+  if (!confirm(`Remove the mapping "${canonical}" → "${actual}"? This will affect every store going forward.`)) return;
+  try {
+    const by = currentUser ? `${currentUser.fname||''} ${currentUser.lname||''}`.trim() : 'Unknown';
+    await fetch(`${ARK_SERVER}/pl/fleet-knowledge/alias/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canonical, actual, by }),
+    });
+    showToast('Mapping removed');
+    plrRenderFleet();
+  } catch(e) { showToast('Failed: ' + e.message); }
 }
 
 // Walk all clients, return reviews in given status(es).
@@ -37711,6 +38205,70 @@ async function plGenerateMeetingPDF() {
       setFont('normal', 10, text);
       doc.text(lines, ML + 18, y + 18);
       y += blockH + 10;
+    }
+
+    drawFooter();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  PAGE 5b — NOTES FROM YOUR TEAM (only the AM-flagged-for-client notes)
+  // ═══════════════════════════════════════════════════════════════
+  // Pull notes the AM explicitly marked "include in client report".
+  // Source 1: in-memory plReviewState.notes (current run, set via override form)
+  // Source 2: persisted plOverrides keyed by account name (with includeInReport flag)
+  const teamNotes = [];
+  const seenAccounts = new Set();
+  if (plReviewState && plReviewState.notes) {
+    for (const k of Object.keys(plReviewState.notes)) {
+      const n = plReviewState.notes[k];
+      if (n && n.includeInReport && n.text && !seenAccounts.has(n.account)) {
+        teamNotes.push({ account: n.account, text: n.text, by: n.by });
+        seenAccounts.add(n.account);
+      }
+    }
+  }
+  if (typeof plOverrides === 'object' && plOverrides) {
+    for (const acct of Object.keys(plOverrides)) {
+      const ov = plOverrides[acct];
+      if (ov && ov.includeInReport && ov.note && !seenAccounts.has(acct)) {
+        teamNotes.push({ account: acct, text: ov.note, by: ov.setBy });
+        seenAccounts.add(acct);
+      }
+    }
+  }
+
+  if (teamNotes.length) {
+    pageNum++;
+    doc.addPage();
+    drawHeader('Notes from Your Team', 'Context and observations');
+
+    setFont('normal', 10, text);
+    const notesIntro = doc.splitTextToSize(
+      'These are short notes from the team that worked on your books this month. They cover anything we noticed, items we want to bring to your attention, or context behind specific lines on your P&L.',
+      MR - ML
+    );
+    doc.text(notesIntro, ML, y); y += notesIntro.length * 14 + 18;
+
+    for (const n of teamNotes) {
+      const titleLines = doc.splitTextToSize(n.account || '', MR - ML - 32);
+      const bodyLines = doc.splitTextToSize(n.text, MR - ML - 32);
+      const blockH = 18 + titleLines.length * 14 + bodyLines.length * 13 + 14;
+      checkY(blockH + 10);
+      doc.setFillColor(...cream);
+      doc.roundedRect(ML, y, MR - ML, blockH, 5, 5, 'F');
+      doc.setFillColor(...gold);
+      doc.rect(ML, y, 3, blockH, 'F');
+      setSerif('bold', 12, navy);
+      doc.text(titleLines, ML + 18, y + 18);
+      let by = y + 18 + titleLines.length * 14;
+      setFont('normal', 10, text);
+      doc.text(bodyLines, ML + 18, by + 6);
+      by += bodyLines.length * 13 + 6;
+      if (n.by) {
+        setFont('italic', 8, gray);
+        doc.text(`— ${n.by}`, ML + 18, by + 6);
+      }
+      y += blockH + 8;
     }
 
     drawFooter();
