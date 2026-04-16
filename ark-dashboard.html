@@ -9445,7 +9445,7 @@ function wgRenderWidget(w, data){
           <span id="cal-header-actions"><a href="https://calendar.google.com" target="_blank" class="btn btn-ghost btn-sm">Open Google Calendar ↗</a></span>
         </div>
       </div>
-      <div id="cal-widget" style="padding:0 4px 16px;overflow:hidden;flex:1;"></div>
+      <div id="cal-widget" style="padding:0 4px 16px;overflow-y:auto;overflow-x:hidden;flex:1;max-height:480px;"></div>
     </div>`;
   }
 
@@ -14982,7 +14982,7 @@ function renderCalWidget(){
   const catLabel   = { client:'CLIENT', internal:'INTERNAL', personal:'PERSONAL' };
 
   const colCount = CAL_DAYS.length || 7;
-  let html = `<div style="display:grid;grid-template-columns:repeat(${colCount},minmax(0,1fr));gap:0;border-top:1px solid var(--border);overflow:hidden;">`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(${colCount},minmax(0,1fr));gap:0;border-top:1px solid var(--border);">`;
 
   CAL_DAYS.forEach((day, di) => {
     const isToday = day.date === todayStr;
