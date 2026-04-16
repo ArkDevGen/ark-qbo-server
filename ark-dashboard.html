@@ -35040,6 +35040,15 @@ function plOnClientChange() {
       classWrap.style.display = 'none';
     }
 
+    // Default period to Last Month if dates are empty
+    const startEl = document.getElementById('pl-start-date');
+    const endEl = document.getElementById('pl-end-date');
+    if (startEl && endEl && (!startEl.value || !endEl.value)) {
+      plSetQuickPeriod('last-month');
+      const qp = document.getElementById('pl-quick-period');
+      if (qp) qp.value = 'last-month';
+    }
+
     // Load anticipated expenses + overrides + benchmarks
     plLoadAnticipated(effectiveRealm);
     plLoadOverrides(effectiveRealm);
