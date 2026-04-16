@@ -3548,12 +3548,12 @@ Return JSON array of flags: [{ severity, category, account, amount, message, sug
 P&L Data:
 ${JSON.stringify(plData, null, 2)}
 
-${preFlags ? `Pre-analysis flags from rule engine:\n${JSON.stringify(preFlags, null, 2)}` : ''}
+${preFlags ? `Pre-analysis flags from rule engine (DO NOT re-flag these — they are already shown to the user):\n${JSON.stringify(preFlags, null, 2)}` : ''}
 ${summary ? `Summary metrics:\n${JSON.stringify(summary, null, 2)}` : ''}
 ${history ? `Historical comparison data:\n${JSON.stringify(history, null, 2)}` : ''}
 ${fleetContext ? `Fleet intelligence (other stores):\n${JSON.stringify(fleetContext, null, 2)}` : ''}
 
-Analyze this P&L and return a JSON array of flags. Each flag: { severity: "CRITICAL"|"WARNING"|"INFO", category: string, account: string, amount: number|null, message: string, suggestedAccount: string|null, variance: string|null }`;
+Analyze this P&L and return a JSON array of flags. DO NOT include flags for accounts already in the pre-analysis list above — focus only on NEW findings. Each flag: { severity: "CRITICAL"|"WARNING"|"INFO", category: string, account: string, amount: number|null, message: string, suggestedAccount: string|null, variance: string|null }`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -4019,9 +4019,12 @@ You have access to:
 - Pre-flags from our automated rule engine
 - AM overrides (accounts the AM has previously reviewed and marked as acceptable — DO NOT re-flag these unless the amount has changed significantly beyond the override tolerance)
 
+IMPORTANT — AVOID DUPLICATE FLAGS:
+The pre-flags from our rule engine are already shown to the user. DO NOT re-flag accounts that already appear in the pre-flags list. Instead, focus on finding NEW issues the rule engine missed. If an account is already flagged as MISSING, VARIANCE, or any other issue in the pre-flags, skip it entirely. Your value is catching things the rule engine cannot see.
+
 YOUR ANALYSIS MUST COVER:
 
-1. MISSING EXPENSES: Compare against anticipated expenses list AND historical patterns. If rent has posted every month for 6 months but not this month, that's a CRITICAL flag. If an anticipated expense of $2,500/mo for rent is missing, flag it.
+1. MISSING EXPENSES — ONLY flag items NOT already in the pre-flags. Check anticipated expenses and historical patterns, but skip any account already flagged by the rule engine.
 
 2. VARIANCE ALERTS: For each account, compare the current amount against:
    - The store's own rolling 6-month average (flag >25% variance)

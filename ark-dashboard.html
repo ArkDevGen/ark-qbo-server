@@ -36037,21 +36037,9 @@ function plRunRuleEngine(accounts) {
     }
   }
 
-  // Missing expected accounts — skip if overridden
-  for (const expected of PL_EXPECTED_MONTHLY) {
-    if (plIsOverridden(expected, null)) continue;
-    const found = accounts.some(a => a.name.toLowerCase().includes(expected.toLowerCase()));
-    if (!found) {
-      // Check store benchmark for context
-      const bench = plStoreBenchmarks[expected];
-      const avgMsg = bench ? ` (store avg: $${bench.avg.toLocaleString('en-US',{minimumFractionDigits:0})}/mo over ${bench.months} months)` : '';
-      flags.push({
-        severity: 'WARNING', category: 'Missing Account', account: expected,
-        amount: null, message: `Expected monthly account "${expected}" has no balance this period${avgMsg}.`,
-        suggestedAccount: null, variance: 'MISSING', source: 'rule',
-      });
-    }
-  }
+  // NOTE: Missing-account checks removed from rule engine — they're handled
+  // by plCheckAnticipated (which uses the Scooters template + fleet aliases
+  // for smarter matching). This eliminates duplicate MISSING flags.
 
   // Benchmark checks — skip if overridden and within override tolerance
   for (const [name, bench] of Object.entries(PL_BENCHMARKS)) {
@@ -36091,18 +36079,39 @@ function plRunRuleEngine(accounts) {
 
 // ── Merge rule + AI flags ────────────────────────────────────────
 function plMergeFlags(ruleFlags, aiFlags) {
-  const merged = [...ruleFlags];
-  for (const af of aiFlags) {
-    af.source = 'ai';
-    // Avoid exact dupes
-    const isDupe = merged.some(rf =>
-      rf.account === af.account && rf.category === af.category
-    );
-    if (!isDupe) merged.push(af);
+  // Combine all flags from every source into one pool.
+  const all = [...ruleFlags];
+  for (const af of aiFlags) { af.source = 'ai'; all.push(af); }
+
+  // Deduplicate on NORMALIZED ACCOUNT NAME — keep the highest-severity,
+  // most-informative flag per account. This collapses the 4 "Missing"
+  // categories (Rule Engine, Anticipated, Pattern, AI) into one flag.
+  const sevRank = { CRITICAL: 0, WARNING: 1, INFO: 2 };
+  const byAccount = new Map();
+  for (const f of all) {
+    const key = plNormalizeName(f.account || '');
+    if (!key) continue;
+    const existing = byAccount.get(key);
+    if (!existing) {
+      byAccount.set(key, f);
+    } else {
+      // Keep the one with higher severity; break ties by preferring
+      // the one with more detail (longer message, has suggested account, etc.)
+      const existingRank = sevRank[existing.severity] ?? 9;
+      const newRank = sevRank[f.severity] ?? 9;
+      if (newRank < existingRank) {
+        byAccount.set(key, f);
+      } else if (newRank === existingRank) {
+        // Same severity: prefer the one with more context
+        const existingScore = (existing.message||'').length + (existing.suggestedAccount ? 50 : 0) + (existing.amount != null ? 20 : 0);
+        const newScore = (f.message||'').length + (f.suggestedAccount ? 50 : 0) + (f.amount != null ? 20 : 0);
+        if (newScore > existingScore) byAccount.set(key, f);
+      }
+    }
   }
-  // Sort: CRITICAL first, then WARNING, then INFO
-  const order = { CRITICAL: 0, WARNING: 1, INFO: 2 };
-  merged.sort((a,b) => (order[a.severity]||9) - (order[b.severity]||9));
+
+  const merged = [...byAccount.values()];
+  merged.sort((a, b) => (sevRank[a.severity]||9) - (sevRank[b.severity]||9));
   return merged;
 }
 
