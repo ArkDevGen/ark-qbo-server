@@ -36253,23 +36253,22 @@ function plUpdateReviewModeUI() {
   }
 
   if (activeReview && (activeReview.status === 'in-review' || activeReview.status === 'pending-review')) {
+    // Reviewer mode (review opened from queue): hide signoff, show curation
     plActiveReviewMode = 'jacob';
     signoffBlock.style.display = 'none';
     curationPanel.style.display = '';
     sentBtn.textContent = '✓ Mark Sent to Client';
-    plRenderCurationPanel();
-  } else if (!plIsAdmin()) {
-    plActiveReviewMode = 'am';
-    signoffBlock.style.display = '';
-    curationPanel.style.display = 'none';
-    sentBtn.style.display = 'none';  // AMs don't mark complete; they sign off
-  } else {
-    // Admin running ad-hoc (no queue) — keep legacy behavior available
-    plActiveReviewMode = 'admin-direct';
-    signoffBlock.style.display = 'none';
-    curationPanel.style.display = '';
-    sentBtn.textContent = 'Mark Review Complete';
     sentBtn.style.display = '';
+    plRenderCurationPanel();
+  } else {
+    // Fresh Digester run (anyone, including admin): show Sign Off block
+    // so the run can be queued. Hide the Mark Complete button (it's only for
+    // the reviewer stage). Curation panel is also shown so the user can
+    // optionally pre-curate before sign-off.
+    plActiveReviewMode = 'fresh';
+    signoffBlock.style.display = '';
+    curationPanel.style.display = '';
+    sentBtn.style.display = 'none';
     plRenderCurationPanel();
   }
 }
