@@ -36420,6 +36420,7 @@ function plRenderProblemCards() {
     btns.push(`<div style="flex:1;"></div>`);
     btns.push(`<button class="btn btn-ghost btn-sm" onclick="plBatchResolveChecked('ok')" style="font-size:10px;">✓ Approve checked</button>`);
     btns.push(`<button class="btn btn-ghost btn-sm" onclick="plBatchResolveChecked('flag')" style="font-size:10px;color:var(--red);">🔧 Flag checked</button>`);
+    btns.push(`<button class="btn btn-ghost btn-sm" onclick="plClearOkDecisions()" style="font-size:10px;color:var(--text-d);" title="Re-show items you previously marked OK">↺ Clear OKs</button>`);
     batchToolbar = `<div class="card" style="padding:8px 14px;margin-bottom:8px;background:var(--surface2);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
       <span style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-right:6px;">${totalUnresolved} items</span>
       ${btns.join('')}
@@ -36428,8 +36429,14 @@ function plRenderProblemCards() {
 
   container.innerHTML = plFlags.map((f, i) => {
     const key = f.account + '::' + i;
-    const decision = plReviewState.decisions[key];
-    if (decision) return ''; // Already addressed — hide it
+    // Check both exact key AND normalized-name match (survives re-runs)
+    let decision = plReviewState.decisions[key];
+    if (!decision) decision = plFlagPreviouslyAddressed(f);
+    if (decision) {
+      // Re-save under the current key so future lookups are fast
+      if (!plReviewState.decisions[key]) plReviewState.decisions[key] = decision;
+      return ''; // Already addressed — hide it
+    }
 
     const isCritical = f.severity === 'CRITICAL';
     const isWarning = f.severity === 'WARNING';
@@ -36751,6 +36758,35 @@ function plRenderTransactions(i) {
   panel.innerHTML = html;
 }
 
+// Check if a flag was already addressed in a previous run (by normalized name).
+// This survives re-runs where the array index changes.
+// Tries both leaf-cleaned name AND full normalized name for broader matching.
+function plFlagPreviouslyAddressed(f) {
+  if (!plReviewState?.decisions) return null;
+  const targetClean = plCleanAccountName(f.account);
+  const targetNorm = plNormalizeName(f.account);
+  for (const [key, decision] of Object.entries(plReviewState.decisions)) {
+    const acctPart = key.split('::')[0];
+    if (plCleanAccountName(acctPart) === targetClean) return decision;
+    if (plNormalizeName(acctPart) === targetNorm) return decision;
+  }
+  return null;
+}
+
+// Clear all 'ok' decisions (keep 'flag' and 'override' decisions intact)
+function plClearOkDecisions() {
+  if (!plReviewState?.decisions) return;
+  const newDecisions = {};
+  for (const [key, decision] of Object.entries(plReviewState.decisions)) {
+    if (decision !== 'ok') newDecisions[key] = decision;
+  }
+  plReviewState.decisions = newDecisions;
+  plSaveReviewState();
+  plCheckReviewCompletion();
+  plRenderProblemCards();
+  showToast('Cleared OK decisions — those items will reappear');
+}
+
 async function plReviewAction(i, action) {
   const f = plFlags[i];
   if (!f) return;
@@ -36805,7 +36841,12 @@ async function plSubmitOverride(i) {
 function plCheckReviewCompletion() {
   const total = plFlags.length;
   if (!total) return;
-  const addressed = Object.keys(plReviewState.decisions).length;
+  // Count addressed flags using normalized match (not just exact key count)
+  let addressed = 0;
+  for (let i = 0; i < plFlags.length; i++) {
+    const key = plFlags[i].account + '::' + i;
+    if (plReviewState.decisions[key] || plFlagPreviouslyAddressed(plFlags[i])) addressed++;
+  }
   const footer = document.getElementById('pl-review-footer');
   const pcEl = document.getElementById('pl-review-problem-count');
 
