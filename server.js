@@ -150,10 +150,10 @@ app.post('/auth/seed', async (req, res) => {
   if (!apiKey) return res.status(500).json({ error: 'ARK_API_KEY not set' });
 
   const b = req.body || {};
-  const username = (b.username || 'admin').toLowerCase().trim();
-  const fname    = b.fname || 'Admin';
-  const lname    = b.lname || '';
-  const email    = b.email || `${username}@arkfinancialservices.com`;
+  const username = (b.username || 'arkdev').toLowerCase().trim();
+  const fname    = b.fname || 'ARK';
+  const lname    = b.lname || 'Dev';
+  const email    = b.email || `dev@arkfinancialservices.com`;
 
   const hash = await bcrypt.hash(apiKey, 10);
   const admin = {
