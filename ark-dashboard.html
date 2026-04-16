@@ -35693,7 +35693,8 @@ async function plRunDigest() {
     const ruleFlags = plRunRuleEngine(accounts);
     const patternFlags = plAnalyzePatterns(accounts, plHistoryData);
     const anticipatedFlags = plCheckAnticipated(accounts, plCurrentSummary);
-    const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags];
+    const momFlags = plCheckMoM(accounts, plHistoryData);
+    const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags, ...momFlags];
 
     // ── Step 7c: Silently accumulate vendor → account patterns ─
     if (plDetailReport) {
@@ -35702,6 +35703,20 @@ async function plRunDigest() {
     }
 
     plProgress(50, `${allLocalFlags.length} local flags — sending to AI for deep analysis...`);
+
+    // ── Step 7d: Fetch the client's real Chart of Accounts from QBO
+    let plClientCOA = [];
+    try {
+      plProgress(52, 'Fetching Chart of Accounts...');
+      const coaRes = await fetch(`${QBO_SERVER}/qbo/api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getAccounts', realmId: plRealmId, payload: {} }),
+      }).then(r => r.json());
+      if (coaRes.success && coaRes.accounts) plClientCOA = coaRes.accounts;
+    } catch(e) {
+      console.warn('[PL] COA fetch failed (AI will use generic template):', e.message);
+    }
 
     // ── Step 8: AI Pass 1 — Structural Analysis ────────────────
     plProgress(55, 'AI analyzing P&L structure...');
@@ -35719,6 +35734,7 @@ async function plRunDigest() {
           overrides: plOverrides,
           clientName: plSelectedClient.biz,
           period: `${startDate} to ${endDate}`,
+          coaAccounts: plClientCOA,
         }),
       }).then(r => r.json());
       if (analyzeRes.success) {
@@ -36029,6 +36045,74 @@ function plAnalyzePatterns(currentAccounts, historyData) {
         suggestedAccount: null, variance: 'NEW', source: 'pattern',
       });
     }
+  }
+
+  return flags;
+}
+
+// ── Month-over-Month Comparison ─────────────────────────────────
+// Dedicated last-month vs this-month check. More reliable than the
+// rolling-average variance in plAnalyzePatterns because bookkeepers
+// care about "what changed since last month" specifically.
+function plCheckMoM(currentAccounts, historyData) {
+  const flags = [];
+  const periods = Object.keys(historyData || {}).sort();
+  if (!periods.length) return flags;
+
+  // Get the most recent prior period
+  const lastPeriod = periods[periods.length - 1];
+  const lastAccounts = historyData[lastPeriod]?.accounts || [];
+  if (!Array.isArray(lastAccounts) || !lastAccounts.length) return flags;
+
+  // Build cleaned-name → amount maps for both months
+  const lastByClean = new Map();
+  for (const a of lastAccounts) {
+    const name = typeof a === 'string' ? a : a.name;
+    const amount = typeof a === 'object' ? Math.abs(a.amount || 0) : 0;
+    const cleaned = plCleanAccountName(name);
+    if (cleaned && amount > 0) {
+      const existing = lastByClean.get(cleaned);
+      if (!existing || amount > existing.amount) {
+        lastByClean.set(cleaned, { name, amount });
+      }
+    }
+  }
+
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0 });
+  const fmtPct = (v) => (v >= 0 ? '+' : '') + v.toFixed(0) + '%';
+
+  for (const acct of currentAccounts) {
+    if (acct.type === 'section') continue; // skip section totals, only check leaf accounts
+    if (plIsOverridden(acct.name, acct.amount)) continue;
+    const cleaned = plCleanAccountName(acct.name);
+    if (!cleaned) continue;
+    const last = lastByClean.get(cleaned);
+    if (!last) continue; // new account or not in last month — handled by plAnalyzePatterns
+
+    const currentAmt = Math.abs(acct.amount || 0);
+    const lastAmt = last.amount;
+    const diff = currentAmt - lastAmt;
+    const pct = lastAmt > 0 ? (diff / lastAmt) * 100 : 0;
+
+    // Dollar floor: skip if the absolute change is under $200
+    if (Math.abs(diff) < 200) continue;
+    // Percentage floor: skip if under 25% change
+    if (Math.abs(pct) < 25) continue;
+
+    const displayName = acct.name.split(':').pop().replace(/^\d{3,6}\s+/g, '').trim() || acct.name;
+    const direction = diff > 0 ? 'up' : 'down';
+    const severity = Math.abs(pct) > 50 || Math.abs(diff) > 2000 ? 'WARNING' : 'INFO';
+
+    flags.push({
+      severity,
+      category: 'Month-over-Month',
+      account: displayName,
+      amount: acct.amount,
+      message: `${displayName} is ${fmt$(currentAmt)} this month vs ${fmt$(lastAmt)} last month (${fmtPct(pct)}, ${direction} ${fmt$(Math.abs(diff))}). Worth a look if unexpected.`,
+      suggestedAccount: null,
+      variance: fmtPct(pct),
+      source: 'mom',
+    });
   }
 
   return flags;

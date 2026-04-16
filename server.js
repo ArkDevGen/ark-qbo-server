@@ -3519,26 +3519,35 @@ app.post('/pl/digest', async (req, res) => {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
   }
 
-  const { plData, preFlags, summary, history, fleetContext, clientName } = req.body;
+  const { plData, preFlags, summary, history, fleetContext, clientName, coaAccounts } = req.body;
+
+  // Use real COA if provided, otherwise fall back to generic template
+  let coaBlock = `Known Scooters COA structure:
+- Revenue: Sales (may also appear as "Store Sales"), Catering Income, Tip Income
+- COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
+- Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
+- Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses
+- Occupancy: Rent, CAM, Utilities, Property Tax
+- Operating: Bank Charges, Insurance, Repairs, Supplies, Marketing`;
+
+  if (coaAccounts && coaAccounts.length > 0) {
+    coaBlock = `This client's actual Chart of Accounts (${coaAccounts.length} accounts from QBO):\n` +
+      coaAccounts.map(a => `- ${a.name} (${a.type}${a.subType ? '/' + a.subType : ''})`).join('\n') +
+      '\n\nWhen suggesting reclassifications, ONLY suggest accounts from this list.';
+  }
 
   const systemPrompt = `You are a senior forensic bookkeeper reviewing a monthly P&L for a Scooters Coffee franchise store.
 You work for ARK Financial Services. Your job is to identify errors, misclassifications, missing items, and anomalies.
 
 RULES:
 - Always include dollar amounts and percentages in your explanations
-- When flagging a misclassification, suggest the SPECIFIC correct account from the Scooters COA
+- When flagging a misclassification, suggest the SPECIFIC correct account from the COA below
 - Severity levels: CRITICAL (likely error), WARNING (review needed), INFO (informational)
 - Be specific — "COGS is 42% of sales ($7,560 / $18,000) which exceeds the 35% benchmark" not "COGS seems high"
 - If history data is provided, compare against rolling average and same-month-last-year
 - If fleet data is provided, flag accounts that differ from 75%+ of other stores
 
-Known Scooters COA structure:
-- Revenue: Sales (may also appear as "Store Sales"), Catering Income, Tip Income
-- COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
-- Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
-- Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses
-- Occupancy: Rent, CAM, Utilities, Property Tax
-- Operating: Bank Charges, Insurance, Repairs, Supplies, Marketing
+${coaBlock}
 - ALWAYS FLAG: Uncategorized Expense, Uncategorized Income, Uncategorized Asset, Ask My Accountant, Reconciliation Discrepancies
 
 Return JSON array of flags: [{ severity, category, account, amount, message, suggestedAccount, variance }]`;
@@ -4007,7 +4016,30 @@ app.post('/pl/digest/analyze', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
-  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period, overrides } = req.body;
+  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period, overrides, coaAccounts } = req.body;
+
+  // Build COA context string — use client's real COA if available, fall back to generic template
+  let coaSection = '';
+  if (coaAccounts && coaAccounts.length > 0) {
+    const byType = {};
+    for (const a of coaAccounts) {
+      const t = a.type || 'Other';
+      if (!byType[t]) byType[t] = [];
+      byType[t].push(a.name + (a.subType ? ` (${a.subType})` : ''));
+    }
+    coaSection = `\n\nTHIS CLIENT'S ACTUAL CHART OF ACCOUNTS (${coaAccounts.length} accounts from QBO):
+${Object.entries(byType).map(([type, names]) => `${type}:\n${names.map(n => '  - ' + n).join('\n')}`).join('\n')}
+
+IMPORTANT: When suggesting account reclassifications, ONLY suggest accounts from this list. Do not invent account names.`;
+  } else {
+    coaSection = `\n\nKnown Scooters COA structure (generic — client's actual COA was not available):
+- Revenue: Sales (may also appear as "Store Sales"), Catering Income, Tip Income
+- COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
+- Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
+- Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses
+- Occupancy: Rent, CAM, Utilities, Property Tax
+- Operating: Bank Charges, Insurance, Repairs, Supplies, Marketing`;
+  }
 
   const systemPrompt = `You are a senior forensic bookkeeper and financial analyst reviewing a monthly P&L for a Scooters Coffee franchise store. You work for ARK Financial Services. Your job is to find EVERYTHING that is wrong, missing, unusual, or noteworthy.
 
@@ -4018,6 +4050,7 @@ You have access to:
 - A list of anticipated/expected monthly expenses configured for this store
 - Pre-flags from our automated rule engine
 - AM overrides (accounts the AM has previously reviewed and marked as acceptable — DO NOT re-flag these unless the amount has changed significantly beyond the override tolerance)
+- The client's actual Chart of Accounts from QuickBooks Online${coaSection}
 
 IMPORTANT — AVOID DUPLICATE FLAGS:
 The pre-flags from our rule engine are already shown to the user. DO NOT re-flag accounts that already appear in the pre-flags list. Instead, focus on finding NEW issues the rule engine missed. If an account is already flagged as MISSING, VARIANCE, or any other issue in the pre-flags, skip it entirely. Your value is catching things the rule engine cannot see.
