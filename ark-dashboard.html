@@ -34880,13 +34880,18 @@ function batchRefreshTable() {
 
     // Build connect/link params
     const connectArgs = item.franchiseId ? `'${item.clientId}','${item.franchiseId}'` : `'${item.clientId}'`;
+    const unlinkArgs = item.franchiseId ? `'${item.clientId}','${item.franchiseId}'` : `'${item.clientId}'`;
     const linkArgs = item.franchiseId
       ? `batchLinkToExisting('${item.clientId}', this.value, '${item.franchiseId}')`
       : `batchLinkToExisting('${item.clientId}', this.value)`;
 
     let actionHtml;
     if (isLinked) {
-      actionHtml = `<span style="font-size:11px;color:var(--green);font-weight:600;">✓ Linked</span>`;
+      actionHtml = `
+        <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+          <span style="font-size:11px;color:var(--green);font-weight:600;">✓ Linked</span>
+          <button onclick="batchUnlinkClient(${unlinkArgs})" class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:var(--red);background:transparent;">Unlink</button>
+        </div>`;
     } else if (realmOpts) {
       actionHtml = `
         <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
@@ -35041,6 +35046,42 @@ function batchConnectClient(clientId, franchiseId) {
   pending.popup = popup;
   window.addEventListener('message', pending.handler);
   _batchConnectPending = pending;
+}
+
+async function batchUnlinkClient(clientId, franchiseId) {
+  const client = DB.clients.find(c => c.id === clientId);
+  if (!client) { showToast('Client not found'); return; }
+
+  const franchise = franchiseId ? (client.franchises || []).find(f => f.id === franchiseId) : null;
+  const realmId = franchise ? franchise.qboRealmId : client.qboRealmId;
+  if (!realmId) { showToast('Not linked'); return; }
+
+  const displayName = franchise ? (client.biz + ' → ' + (franchise.name || 'Franchise')) : (client.biz || 'Unknown');
+  if (!confirm(`Unlink ${displayName} from QBO? The QBO connection stays active — only this client is unlinked.`)) return;
+
+  try {
+    await fetch(`${QBO_SERVER}/qbo/unlink-client`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realmId, clientId, franchiseId: franchiseId || undefined })
+    });
+  } catch(e) { console.warn('Unlink call failed:', e); }
+
+  if (franchise) {
+    franchise.qboRealmId = '';
+    franchise.qboName = '';
+  } else {
+    client.qboRealmId = '';
+  }
+  saveDB();
+
+  try {
+    const statusRes = await fetch(`${QBO_SERVER}/qbo/status`).then(r => r.json());
+    if (statusRes.companies) qboAllCompanies = statusRes.companies;
+  } catch(e) {}
+
+  showToast(`✓ ${displayName} unlinked`);
+  qboLog('info', `Unlinked <strong>${displayName}</strong> from realm ${realmId.slice(0,10)}…`);
+  renderBatchConnect();
 }
 
 async function batchLinkToExisting(clientId, realmId, franchiseId) {
