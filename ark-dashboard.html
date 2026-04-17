@@ -7944,6 +7944,7 @@ function renderIdeas(){
   const isAdmin = currentUser?.role === 'admin';
 
   let list = DB.ideas.filter(i => {
+    if(i._deleted) return false;
     if(catF  && i.category !== catF)  return false;
     if(statF && i.status   !== statF) return false;
     return true;
@@ -8014,7 +8015,8 @@ function ideaUpdateNote(id, note){
 
 function ideaDelete(id){
   if(!confirm('Delete this idea?')) return;
-  DB.ideas = (DB.ideas||[]).filter(x=>x.id!==id);
+  const x = (DB.ideas||[]).find(x=>x.id===id);
+  if(x){ x._deleted = true; x._updatedAt = new Date().toISOString(); }
   saveDB();
   renderIdeas();
   showToast('Idea deleted');
@@ -10405,7 +10407,7 @@ function populateEmpClientFilter(){
   if(!sel) return;
   const current = sel.value;
   // Get only clients that have at least one hire
-  const usedClientIds = [...new Set(DB.employees.map(e=>e.clientId).filter(Boolean))];
+  const usedClientIds = [...new Set(DB.employees.filter(e=>!e._deleted).map(e=>e.clientId).filter(Boolean))];
   const usedClients = DB.clients.filter(c=>usedClientIds.includes(c.id)).sort((a,b)=>a.biz.localeCompare(b.biz));
   sel.innerHTML = '<option value="">All Clients</option>' +
     usedClients.map(c=>`<option value="${c.id}" ${c.id===current?'selected':''}>${c.biz}</option>`).join('');
@@ -10442,7 +10444,7 @@ function renderEmps(){
     return;
   }
 
-  let list=[...DB.employees];
+  let list=DB.employees.filter(e=>!e._deleted);
 
   // Sort: date entered (id order = insertion order) then by client name
   list.sort((a,b)=>{
@@ -11283,7 +11285,7 @@ function nachaClear(){
 
 
 function nachaRenderHistory(){
-  const log=(DB.nachaLog||[]);
+  const log=(DB.nachaLog||[]).filter(x=>!x._deleted);
   const body=document.getElementById('nacha-history-body');
   const sub=document.getElementById('nacha-history-subtitle');
   if(!body) return;
@@ -11297,6 +11299,7 @@ function nachaRenderHistory(){
     return;
   }
 
+  log.forEach(x=>{ if(!x.id) x.id = uid(); });
   body.innerHTML = log.map((entry,i)=>{
     const dt = new Date(entry.generatedAt);
     const dtStr = dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -11326,11 +11329,11 @@ function nachaRenderHistory(){
           style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;font-family:'DM Sans',sans-serif;color:var(--text-d);cursor:pointer;transition:all .15s;"
           onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--text)'"
           onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-d)'">Details</button>
-        <button onclick="nachaHistoryRedownload(${i})"
+        <button onclick="nachaHistoryRedownload('${entry.id}')"
           style="padding:6px 12px;background:#0d3d1a;border:1px solid #1a6b30;border-radius:var(--radius);font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;color:#4dffa0;cursor:pointer;transition:all .15s;"
           onmouseover="this.style.background='#1a5a25'"
           onmouseout="this.style.background='#0d3d1a'">⬇ Re-download</button>
-        <button onclick="nachaHistoryDelete(${i})"
+        <button onclick="nachaHistoryDelete('${entry.id}')"
           style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;font-family:'DM Sans',sans-serif;color:var(--text-d);cursor:pointer;transition:all .15s;"
           title="Remove from history"
           onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'"
@@ -11381,8 +11384,8 @@ function nachaHistoryExpand(i){
   if(btn) btn.textContent=open?'Hide':'Details';
 }
 
-function nachaHistoryRedownload(i){
-  const entry=(DB.nachaLog||[])[i];
+function nachaHistoryRedownload(id){
+  const entry=(DB.nachaLog||[]).find(x=>x.id===id && !x._deleted);
   if(!entry || !entry.fileContent){ alert('File content not available.'); return; }
   const blob=new Blob([entry.fileContent],{type:'text/plain'});
   const url=URL.createObjectURL(blob);
@@ -11392,18 +11395,20 @@ function nachaHistoryRedownload(i){
   logAct(`NACHA re-downloaded: ${entry.fname}`);
 }
 
-function nachaHistoryDelete(i){
+function nachaHistoryDelete(id){
   if(!confirm('Remove this file from history?')) return;
-  if(!DB.nachaLog) return;
-  DB.nachaLog.splice(i,1);
+  const entry = (DB.nachaLog||[]).find(x=>x.id===id);
+  if(entry){ entry._deleted = true; entry._updatedAt = new Date().toISOString(); }
   saveDB();
   nachaRenderHistory();
 }
 
 function nachaClearHistory(){
-  if(!(DB.nachaLog||[]).length) return;
-  if(!confirm(`Clear all ${DB.nachaLog.length} files from history? The files themselves are not deleted from your computer.`)) return;
-  DB.nachaLog=[];
+  const live = (DB.nachaLog||[]).filter(x=>!x._deleted);
+  if(!live.length) return;
+  if(!confirm(`Clear all ${live.length} files from history? The files themselves are not deleted from your computer.`)) return;
+  const now = new Date().toISOString();
+  live.forEach(x => { x._deleted = true; x._updatedAt = now; });
   saveDB();
   nachaRenderHistory();
 }
@@ -14073,7 +14078,8 @@ function saveEmp(){
 function deleteEmp(id){
   const e=DB.employees.find(x=>x.id===id);if(!e)return;
   if(!confirm(`Delete new hire ${e.fname} ${e.lname}?`))return;
-  DB.employees=DB.employees.filter(x=>x.id!==id);
+  const victim=(DB.employees||[]).find(x=>x.id===id);
+  if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   logAct(`New hire deleted: ${e.fname} ${e.lname}`);
   renderEmps();
 }
@@ -14454,7 +14460,7 @@ function filterFaxTable(q){ renderFaxTable(q); }
 // ══════════════════════════════════════════════
 function generateNHReport(){
   // Only show employees whose report has NOT been filed yet
-  const hires = DB.employees.filter(e => !e.reportPrinted && e.fname);
+  const hires = DB.employees.filter(e => !e._deleted && !e.reportPrinted && e.fname);
 
   const output = document.getElementById('nh-report-output');
 
@@ -15180,6 +15186,7 @@ function plAutoGenerateMonthlyReviewTasks(){
     const amId = client.am || '';
     // Check if a P&L Review task already exists for this client this month
     const exists = DB.tasks.some(t =>
+      !t._deleted &&
       t.clientId === client.id &&
       t.name && t.name.startsWith('P&L Review') &&
       t.dueDate && t.dueDate.startsWith(monthKey)
@@ -15305,7 +15312,7 @@ function renderVendors(q=''){
     return;
   }
   tbody.innerHTML = list.map(v => {
-    const count = DB.form1099s.filter(f=>f.vendorId===v.id).length;
+    const count = DB.form1099s.filter(f=>!f._deleted && f.vendorId===v.id).length;
     const hasW9 = v.w9FileName ? `<span style="color:#2e7d5e;font-weight:700;">✓ ${v.w9FileName}</span>` : `<span style="color:var(--text-d);">—</span>`;
     return `<tr style="cursor:pointer;" onclick="openEditVendor('${v.id}')">
       <td><div style="font-weight:600;">${v.name}</div>${v.dba?`<div style="font-size:11px;color:var(--text-d);">DBA: ${v.dba}</div>`:''}</td>
@@ -15380,6 +15387,7 @@ function render1099s(){
   const typeBg    = { NEC:'#eef2fb', INT:'#eaf4ef', MISC:'#fdf6e8', 'W-2G':'#fdecea' };
 
   let list = DB.form1099s.filter(f => {
+    if(f._deleted) return false;
     if(f.exported) return false;
     if(year && String(f.year) !== String(year)) return false;
     if(type && f.type !== type) return false;
@@ -15743,7 +15751,8 @@ function save1099(){
 
 function delete1099(id){
   if(!confirm('Delete this 1099 entry?')) return;
-  DB.form1099s = DB.form1099s.filter(f=>f.id!==id);
+  const f=(DB.form1099s||[]).find(x=>x.id===id);
+  if(f){ f._deleted=true; f._updatedAt=new Date().toISOString(); }
   _1099Selected.delete(id);
   saveDB();
   logAct('1099 entry deleted');
@@ -15771,6 +15780,7 @@ function renderSubmitted1099s(){
   const typeBg    = { NEC:'#eef2fb', INT:'#eaf4ef', MISC:'#fdf6e8', 'W-2G':'#fdecea' };
 
   let list = DB.form1099s.filter(f => {
+    if(f._deleted) return false;
     if(!f.exported) return false;
     if(year && String(f.year) !== String(year)) return false;
     if(type && f.type !== type) return false;
@@ -16307,6 +16317,7 @@ function renderW2s(){
   if(prompt) prompt.style.display='none';
   if(wrap)   wrap.style.display='';
   const list=(DB.w2s||[]).filter(w=>{
+    if(w._deleted) return false;
     if(year && w.year!==year) return false;
     if(cFilter && w.employerId!==cFilter) return false;
     if(q){ const h=[w.empFirst,w.empLast,w.empSsn,(DB.clients.find(c=>c.id===w.employerId)?.biz||''),(w.employerOverride?.name||''),(w.employerOverride?.ein||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
@@ -16355,6 +16366,7 @@ function renderW2cs(){
   if(prompt) prompt.style.display='none';
   if(wrap)   wrap.style.display='';
   const list=(DB.w2cs||[]).filter(w=>{
+    if(w._deleted) return false;
     if(year && w.year!==year) return false;
     if(cFilter && w.employerId!==cFilter) return false;
     if(q){ const h=[w.empFirst,w.empLast,w.empSsn,w.corrFirst||'',w.corrLast||'',(DB.clients.find(c=>c.id===w.employerId)?.biz||''),(w.employerOverride?.name||''),(w.employerOverride?.ein||'')].join(' ').toLowerCase(); if(!h.includes(q)) return false; }
@@ -16510,7 +16522,8 @@ function saveW2(){
 function deleteW2(id){
   const w=(DB.w2s||[]).find(x=>x.id===id); if(!w) return;
   if(!confirm(`Delete W-2 for ${w.empFirst} ${w.empLast} (${w.year})?`)) return;
-  DB.w2s=DB.w2s.filter(x=>x.id!==id);
+  const victim=(DB.w2s||[]).find(x=>x.id===id);
+  if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   saveDB();
   logAct(`W-2 deleted: ${w.empFirst} ${w.empLast}`);
   renderW2s();
@@ -16686,7 +16699,8 @@ function saveW2c(){
 function deleteW2c(id){
   const w=(DB.w2cs||[]).find(x=>x.id===id); if(!w) return;
   if(!confirm(`Delete W-2c for ${w.empFirst} ${w.empLast} (${w.year})?`)) return;
-  DB.w2cs=DB.w2cs.filter(x=>x.id!==id);
+  const victim=(DB.w2cs||[]).find(x=>x.id===id);
+  if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   saveDB();
   logAct(`W-2c deleted: ${w.empFirst} ${w.empLast}`);
   renderW2cs();
@@ -16991,7 +17005,7 @@ function runEFW2Export(){
   const year=parseInt(document.getElementById('efw2-year').value);
   const cFilter=document.getElementById('efw2-client').value;
   const preview=document.getElementById('efw2-preview');
-  let records=(DB.w2s||[]).filter(w=>w.year===year);
+  let records=(DB.w2s||[]).filter(w=>!w._deleted && w.year===year);
   if(cFilter) records=records.filter(w=>w.employerId===cFilter);
   if(!records.length){ preview.innerHTML='<span style="color:var(--red)">⚠ No W-2 entries found for the selected filters.</span>'; return; }
   // Pre-export readiness: verify each employer client has required SSA fields.
@@ -17609,7 +17623,7 @@ function runEFW2CExport() {
   const clientFilter = document.getElementById('efw2c-client').value;
   const preview = document.getElementById('efw2c-preview');
 
-  let records = (DB.w2cs || []).filter(w => w.year === year);
+  let records = (DB.w2cs || []).filter(w => !w._deleted && w.year === year);
   if (clientFilter) records = records.filter(w => w.employerId === clientFilter);
 
   if (!records.length) {
@@ -17679,9 +17693,9 @@ function _runEFW2CExportActual(year, records, preview){
 // ══════════════════════════════════════════════════════════════════
 function renderTaxHub(){
   // 1099 stats
-  const total1099 = (DB.form1099s||[]).length;
+  const total1099 = (DB.form1099s||[]).filter(f=>!f._deleted).length;
   const curYear1099 = new Date().getFullYear()-1;
-  const this1099 = (DB.form1099s||[]).filter(f=>f.year==curYear1099).length;
+  const this1099 = (DB.form1099s||[]).filter(f=>!f._deleted && f.year==curYear1099).length;
   const el1099 = document.getElementById('hub-stat-1099');
   if(el1099) el1099.textContent = total1099
     ? `${total1099} entr${total1099!==1?'ies':'y'} total · ${this1099} for ${curYear1099}`
@@ -17695,10 +17709,10 @@ function renderTaxHub(){
     : 'No client filing info yet';
 
   // W-2 stats
-  const totalW2  = (DB.w2s||[]).length;
-  const totalW2c = (DB.w2cs||[]).length;
+  const totalW2  = (DB.w2s||[]).filter(w=>!w._deleted).length;
+  const totalW2c = (DB.w2cs||[]).filter(w=>!w._deleted).length;
   const curYearW2 = new Date().getFullYear()-1;
-  const thisW2 = (DB.w2s||[]).filter(w=>w.year==curYearW2).length;
+  const thisW2 = (DB.w2s||[]).filter(w=>!w._deleted && w.year==curYearW2).length;
   const elW2 = document.getElementById('hub-stat-w2');
   if(elW2) elW2.textContent = totalW2
     ? `${totalW2} W-2${totalW2!==1?'s':''} · ${totalW2c} W-2c${totalW2c!==1?'s':''} · ${thisW2} for ${curYearW2}`
@@ -18810,7 +18824,7 @@ function ccLogInboundFax(){
 // ── Render outbox ──
 function ccRenderOutbox(){
   const el = document.getElementById('fax-outbox-list'); if(!el) return;
-  const list = DB.faxOutbox||[];
+  const list = (DB.faxOutbox||[]).filter(f=>!f._deleted);
   if(!list.length){
     el.innerHTML = '<div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:32px 0;">No faxes sent yet.</div>';
     return;
@@ -18837,7 +18851,7 @@ function ccRenderOutbox(){
 // ── Render inbox ──
 function ccRenderInbox(){
   const el = document.getElementById('fax-inbox-list'); if(!el) return;
-  const list = DB.faxInbox||[];
+  const list = (DB.faxInbox||[]).filter(f=>!f._deleted);
   if(!list.length){
     el.innerHTML = '<div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:24px 0;">No inbound faxes logged yet.</div>';
     return;
@@ -18854,8 +18868,8 @@ function ccRenderInbox(){
     </div>`).join('');
 }
 
-function ccDeleteFaxOut(id){ DB.faxOutbox=(DB.faxOutbox||[]).filter(f=>f.id!==id); saveDB(); ccRenderOutbox(); }
-function ccDeleteFaxIn(id) { DB.faxInbox=(DB.faxInbox||[]).filter(f=>f.id!==id);  saveDB(); ccRenderInbox();  }
+function ccDeleteFaxOut(id){ const f=(DB.faxOutbox||[]).find(x=>x.id===id); if(f){ f._deleted=true; f._updatedAt=new Date().toISOString(); } saveDB(); ccRenderOutbox(); }
+function ccDeleteFaxIn(id) { const f=(DB.faxInbox||[]).find(x=>x.id===id);  if(f){ f._deleted=true; f._updatedAt=new Date().toISOString(); } saveDB(); ccRenderInbox();  }
 
 // ══════════════════════════════════════════════
 //  SMS — SEND
@@ -19144,7 +19158,7 @@ function ccRenderSMSLog(q){
   const el = document.getElementById('sms-log-list'); if(!el) return;
   const f  = (q||'').toLowerCase();
   const list = (DB.smsLog||[]).filter(m=>
-    !f || m.clientName?.toLowerCase().includes(f) || m.toNumber?.includes(f) || m.message?.toLowerCase().includes(f)
+    !m._deleted && (!f || m.clientName?.toLowerCase().includes(f) || m.toNumber?.includes(f) || m.message?.toLowerCase().includes(f))
   );
   const countEl = document.getElementById('sms-log-count');
   if(countEl) countEl.textContent = `${list.length} message${list.length!==1?'s':''}`;
@@ -19171,7 +19185,7 @@ function ccRenderSMSLog(q){
 }
 
 function smsFilterLog(q){ ccRenderSMSLog(q); }
-function ccDeleteSMS(id){ DB.smsLog=(DB.smsLog||[]).filter(m=>m.id!==id); saveDB(); ccRenderSMSLog(); }
+function ccDeleteSMS(id){ const m=(DB.smsLog||[]).find(x=>x.id===id); if(m){ m._deleted=true; m._updatedAt=new Date().toISOString(); } saveDB(); ccRenderSMSLog(); }
 
 // ════════════════════════════════════════════════════════════════
 // ════ SMS CONVERSATIONS ════
@@ -20436,7 +20450,7 @@ let _mcStJurSelected = [];
 function mcStJurRefreshStateDD(){
   const sel = document.getElementById('mc-st-jur-state');
   if (!sel) return;
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
   const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
   const cur = sel.value;
   sel.innerHTML = '<option value="">All States</option>' +
@@ -20448,7 +20462,7 @@ function mcStJurDD(){
   if (!dd) return;
   const q  = (document.getElementById('mc-st-jur-search')?.value||'').toLowerCase().trim();
   const fs = document.getElementById('mc-st-jur-state')?.value || '';
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
   const pool = rates.filter(r => {
     if (fs && r.state !== fs) return false;
     if (_mcStJurSelected.includes(r.id)) return false;
@@ -20492,7 +20506,7 @@ function mcStJurRenderChips(){
     wrap.innerHTML = '<span style="font-size:11px;color:var(--text-d);font-style:italic;">No jurisdictions selected — required for filing automation.</span>';
     return;
   }
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
   wrap.innerHTML = _mcStJurSelected.map(id => {
     const r = rates.find(x=>x.id===id);
     if (!r) return `<span style="background:var(--surface);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:12px;font-size:11px;">Unknown (${id.slice(0,6)}…) <button onclick="mcStJurRemove('${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0 0 0 4px;">✕</button></span>`;
@@ -20520,7 +20534,7 @@ function strRender(){
   const stats = document.getElementById('str-stats');
   const stateSel = document.getElementById('str-filter-state');
   if (!tbody) return;
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
 
   // Populate state filter dropdown once per render (cheap)
   const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
@@ -20577,7 +20591,7 @@ function strRender(){
 }
 
 async function strSeedNebraska(){
-  const existing = (DB.salesTaxRates||[]).filter(r=>r.state==='NE');
+  const existing = (DB.salesTaxRates||[]).filter(r=>!r._deleted && r.state==='NE');
   if (existing.length > 0){
     if (!confirm(`You already have ${existing.length} Nebraska jurisdictions. Seeding will ADD any missing ones but won't overwrite your current rates. Continue?`)) return;
   }
@@ -20586,7 +20600,7 @@ async function strSeedNebraska(){
     if (!resp.ok) { showToast('Failed to load seed data'); return; }
     const data = await resp.json();
     const jurs = data.jurisdictions || [];
-    const existingKeys = new Set((DB.salesTaxRates||[]).map(r => `${r.state}:${r.code}`));
+    const existingKeys = new Set((DB.salesTaxRates||[]).filter(r=>!r._deleted).map(r => `${r.state}:${r.code}`));
     let added = 0;
 
     // State-level NE entry if missing (5.5%)
@@ -20709,7 +20723,8 @@ function strMarkVerified(id){
 function strDelete(id){
   const r = (DB.salesTaxRates||[]).find(x=>x.id===id); if (!r) return;
   if (!confirm(`Delete ${r.name} (${r.state})? This cannot be undone.`)) return;
-  DB.salesTaxRates = DB.salesTaxRates.filter(x=>x.id!==id);
+  const victim=(DB.salesTaxRates||[]).find(x=>x.id===id);
+  if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   saveDB();
   strRender();
   logAct(`Sales tax rate deleted: ${r.name} ${r.state}`);
@@ -21065,7 +21080,7 @@ function stfAdHocPickerOpen(){
   `;
   document.body.appendChild(overlay);
   // Populate state dropdown
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
   const states = [...new Set(rates.map(r=>r.state).filter(Boolean))].sort();
   const stateSel = document.getElementById('stf-adhoc-state');
   stateSel.innerHTML = '<option value="">All States</option>' +
@@ -21076,7 +21091,7 @@ function stfAdHocPickerOpen(){
 function stfAdHocDD(){
   const q = (document.getElementById('stf-adhoc-search')?.value||'').toLowerCase().trim();
   const fs = document.getElementById('stf-adhoc-state')?.value || '';
-  const rates = DB.salesTaxRates || [];
+  const rates = (DB.salesTaxRates || []).filter(r=>!r._deleted);
   const alreadyIn = new Set([...(_stfActiveClient?.stJurisdictionIds||[]), ..._stfAdHocJurIds]);
   const pool = rates.filter(r => {
     if (fs && r.state !== fs) return false;
@@ -21397,7 +21412,7 @@ function stfMatchJurisdictions(parsed){
   if (!c) return { matched: [], unmatched: [], warnings: [] };
   const configured = (c.stJurisdictionIds||[]).map(id => (DB.salesTaxRates||[]).find(r=>r.id===id)).filter(Boolean);
   const stateCode = configured.find(j=>j.type==='state')?.state || '';
-  const allInState = (DB.salesTaxRates||[]).filter(r => r.state === stateCode);
+  const allInState = (DB.salesTaxRates||[]).filter(r => !r._deleted && r.state === stateCode);
 
   // Group extracted lines by (fuzzy-matched jurisdiction, rate)
   // Same jurisdiction + same rate → sum amounts. Different rate → separate entry with warning.
@@ -21905,7 +21920,7 @@ function stfClose(){
 
 // ── Drafts ───────────────────────────────────────────────────────
 function stfGetDraft(clientId){
-  return (DB.salesTaxDrafts||[]).find(d => d.clientId === clientId) || null;
+  return (DB.salesTaxDrafts||[]).find(d => !d._deleted && d.clientId === clientId) || null;
 }
 
 function stfSaveDraft(){
@@ -21947,7 +21962,8 @@ function stfDiscardDraft(clientId){
   const id = clientId || _stfActiveClient?.id;
   if (!id) return;
   if (!confirm('Discard the saved draft? Any unsaved numbers will be lost.')) return;
-  DB.salesTaxDrafts = (DB.salesTaxDrafts||[]).filter(d => d.clientId !== id);
+  const now = new Date().toISOString();
+  (DB.salesTaxDrafts||[]).forEach(d => { if(d.clientId === id){ d._deleted = true; d._updatedAt = now; } });
   saveDB();
   _stfPerJurTax = {};
   _stfGrossInput = null;
@@ -22284,7 +22300,8 @@ function stfSubmit(){
   }
 
   // Submitting a filing invalidates any saved draft for this client
-  DB.salesTaxDrafts = (DB.salesTaxDrafts||[]).filter(d => d.clientId !== c.id);
+  const _nowDraft = new Date().toISOString();
+  (DB.salesTaxDrafts||[]).forEach(d => { if(d.clientId === c.id){ d._deleted = true; d._updatedAt = _nowDraft; } });
 
   saveDB();
   logAct(`Sales tax filed: ${c.biz} ${period} ($${r.totalTaxDue.toFixed(2)})`);
@@ -22394,7 +22411,7 @@ const NH_FAX_SCHED_KEY = 'ark_nh_fax_last_run'; // localStorage key
 
 function nhSchedulerGetPending(){
   // Returns employees grouped by state that still need their report filed
-  const pending = (DB.employees||[]).filter(e => !e.reportPrinted && e.fname);
+  const pending = (DB.employees||[]).filter(e => !e._deleted && !e.reportPrinted && e.fname);
   const byState = {};
   pending.forEach(e => {
     const client = (DB.clients||[]).find(c => c.id === e.clientId);
@@ -22652,7 +22669,7 @@ const PROP_OPTIONAL_SERVICES = [
 let _propEditId = null;
 
 function propRender(){
-  const list = DB.proposals || [];
+  const list = (DB.proposals || []).filter(p=>!p._deleted);
   const tbody = document.getElementById('prop-tbody');
   const countEl = document.getElementById('prop-count');
   if(countEl) countEl.textContent = list.length + ' record' + (list.length!==1?'s':'');
@@ -22782,7 +22799,8 @@ function propEdit(id){
 
 function propDelete(id){
   if(!confirm('Delete this proposal? This cannot be undone.')) return;
-  DB.proposals = (DB.proposals||[]).filter(p=>p.id!==id);
+  const p = (DB.proposals||[]).find(x=>x.id===id);
+  if(p){ p._deleted = true; p._updatedAt = new Date().toISOString(); }
   saveDB();
   logAct('Proposal deleted');
   propRender();
@@ -23634,7 +23652,7 @@ async function tcPopulateFilters(){
   const clientSel = document.getElementById('tc-filter-client');
   const amSel     = document.getElementById('tc-filter-am');
   if(!clientSel || !amSel) return;
-  const usedClients = [...new Set((DB.tasks||[]).map(t=>t.clientId).filter(Boolean))];
+  const usedClients = [...new Set((DB.tasks||[]).filter(t=>!t._deleted).map(t=>t.clientId).filter(Boolean))];
   const cVal = clientSel.value;
   clientSel.innerHTML = '<option value="">All Clients</option>' +
     (DB.clients||[]).filter(c=>usedClients.includes(c.id))
@@ -23945,7 +23963,8 @@ function tcToggleComplete(id){
     t.reviewStatus = null;
     // If there's a linked review task still open, remove it
     if(t.reviewTaskId){
-      DB.tasks = DB.tasks.filter(x => x.id !== t.reviewTaskId);
+      const _rt = (DB.tasks||[]).find(x => x.id === t.reviewTaskId);
+      if(_rt){ _rt._deleted = true; _rt._updatedAt = new Date().toISOString(); }
       t.reviewTaskId = null;
     }
     logAct(`Task "${t.name}" reopened (${t.clientName})`);
@@ -24219,8 +24238,9 @@ function tcRejectReview(reviewTaskId){
   const when = new Date().toISOString();
   const reason = prompt('Reason for rejection (optional):') ?? '';
 
-  // Remove the review task
-  DB.tasks = DB.tasks.filter(x=>x.id!==reviewTaskId);
+  // Remove the review task (tombstone)
+  const _rt2 = (DB.tasks||[]).find(x=>x.id===reviewTaskId);
+  if(_rt2){ _rt2._deleted = true; _rt2._updatedAt = when; }
 
   // Return original to open
   if(parent){
@@ -24242,7 +24262,8 @@ function tcRejectReview(reviewTaskId){
 
 // ── Dismiss a notify task ────────────────────────────────────────────
 function tcDismissNotify(taskId){
-  DB.tasks = DB.tasks.filter(x=>x.id!==taskId);
+  const _nt = (DB.tasks||[]).find(x=>x.id===taskId);
+  if(_nt){ _nt._deleted = true; _nt._updatedAt = new Date().toISOString(); }
   saveDB(); tcRender();
   closeModal('modal-task-workflow');
   showToast('✓ Notification dismissed');
@@ -24251,7 +24272,7 @@ function tcDismissNotify(taskId){
 function tcDeleteTask(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
   if(!confirm(`Delete task "${t.name}"? This cannot be undone.`)) return;
-  DB.tasks = DB.tasks.filter(x=>x.id!==id);
+  t._deleted = true; t._updatedAt = new Date().toISOString();
   saveDB(); logAct(`Task "${t.name}" deleted`); tcRender();
 }
 
@@ -24409,7 +24430,7 @@ async function tcRender(){
     if (!t.type) t.type = t.dueDate ? 'task' : 'note';
   });
 
-  const tasks  = DB.tasks || [];
+  const tasks  = (DB.tasks || []).filter(t=>!t._deleted);
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
   const fStat  = document.getElementById('tc-filter-status')?.value || 'open';
   const fClient= document.getElementById('tc-filter-client')?.value || '';
@@ -24737,7 +24758,7 @@ function tcBuildProjectSidebar() {
   const sidebar = document.getElementById('tc-project-sidebar');
   if (!sidebar) return;
 
-  const tasks = DB.tasks || [];
+  const tasks = (DB.tasks || []).filter(t=>!t._deleted);
   const fAM = document.getElementById('tc-filter-am')?.value || '';
   const myTasks = fAM ? tasks.filter(t => t.amId === fAM) : tasks;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -24783,7 +24804,7 @@ function tcBuildProjectSidebar() {
     </div>`;
 
   // Build grouped sidebar
-  const groups = (DB.projectGroups || []).filter(g => g.userId === (currentUser?.id || ''));
+  const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
   const groupedClientIds = new Set();
   groups.forEach(g => (g.clientIds || []).forEach(id => groupedClientIds.add(id)));
   const ungroupedProjects = clientProjects.filter(p => !groupedClientIds.has(p.id));
@@ -24849,7 +24870,7 @@ function nbMigrateToTasks() {
   const notebooks = DB.notebooks || [];
   (DB.notebookEntries || []).forEach(entry => {
     // Check if already migrated (avoid duplicates)
-    if ((DB.tasks || []).some(t => t.type === 'note' && t.name === entry.title && t.notes === entry.content)) return;
+    if ((DB.tasks || []).some(t => !t._deleted && t.type === 'note' && t.name === entry.title && t.notes === entry.content)) return;
 
     const nb = notebooks.find(n => n.id === entry.notebookId);
     if (!DB.tasks) DB.tasks = [];
@@ -24881,12 +24902,12 @@ function nbMigrateToTasks() {
 function nbMigrateFromTasks() { }
 
 function nbMyNotebooks() {
-  return (DB.notebooks||[]).filter(nb => nb.userId === (currentUser?.id || ''));
+  return (DB.notebooks||[]).filter(nb => !nb._deleted && nb.userId === (currentUser?.id || ''));
 }
 
 function nbMyEntries(notebookId) {
   const nbs = nbMyNotebooks().map(n => n.id);
-  let entries = (DB.notebookEntries||[]).filter(e => nbs.includes(e.notebookId));
+  let entries = (DB.notebookEntries||[]).filter(e => !e._deleted && nbs.includes(e.notebookId));
   if (notebookId && notebookId !== 'all') entries = entries.filter(e => e.notebookId === notebookId);
   return entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 }
@@ -25011,7 +25032,8 @@ function nbCancelEdit() {
 
 function nbDeleteEntry(id) {
   if (!confirm('Delete this note?')) return;
-  DB.notebookEntries = (DB.notebookEntries||[]).filter(e => e.id !== id);
+  const e = (DB.notebookEntries||[]).find(x=>x.id===id);
+  if(e){ e._deleted = true; e._updatedAt = new Date().toISOString(); }
   saveDB();
   nbRenderNotebooks();
   nbRenderEntries();
@@ -25085,8 +25107,10 @@ function nbDeleteNotebook(id) {
   const nb = (DB.notebooks||[]).find(n => n.id === id);
   if (!nb) return;
   if (!confirm(`Delete notebook "${nb.name}" and all its notes?`)) return;
-  DB.notebooks = DB.notebooks.filter(n => n.id !== id);
-  DB.notebookEntries = (DB.notebookEntries||[]).filter(e => e.notebookId !== id);
+  const now = new Date().toISOString();
+  const nbVictim = (DB.notebooks||[]).find(n=>n.id===id);
+  if(nbVictim){ nbVictim._deleted = true; nbVictim._updatedAt = now; }
+  (DB.notebookEntries||[]).forEach(e => { if(e.notebookId === id){ e._deleted = true; e._updatedAt = now; } });
   saveDB();
   nbSelectNotebook('all');
   nbRenderNotebooks();
@@ -25109,7 +25133,7 @@ function notesRender() {
   }
 
   // Get no-date tasks only
-  let notes = (DB.tasks || []).filter(t => !t.dueDate && t.status !== 'completed');
+  let notes = (DB.tasks || []).filter(t => !t._deleted &&!t.dueDate && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
   if (fClient) notes = notes.filter(t => t.clientId === fClient);
   if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''} ${t.clientName || ''}`.toLowerCase().includes(search));
@@ -25206,7 +25230,7 @@ function tcToggleGroup(groupId) {
 }
 
 function tcManageGroups() {
-  const groups = (DB.projectGroups || []).filter(g => g.userId === (currentUser?.id || ''));
+  const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
   overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
@@ -25270,7 +25294,8 @@ function tcCreateGroup() {
 
 function tcDeleteGroup(groupId) {
   if (!confirm('Delete this group? Projects inside will become ungrouped.')) return;
-  DB.projectGroups = (DB.projectGroups || []).filter(g => g.id !== groupId);
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if(g){ g._deleted = true; g._updatedAt = new Date().toISOString(); }
   saveDB();
   document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
   tcManageGroups();
@@ -25335,7 +25360,7 @@ function tcRenderProjectNotes() {
   const fClient = document.getElementById('tc-filter-client')?.value || '';
   const fAM = document.getElementById('tc-filter-am')?.value || '';
 
-  let notes = (DB.tasks || []).filter(t => t.type === 'note' && t.status !== 'completed');
+  let notes = (DB.tasks || []).filter(t => !t._deleted &&t.type === 'note' && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
   if (fClient && fClient !== '_noClient') notes = notes.filter(t => t.clientId === fClient);
   else if (fClient === '_noClient') notes = notes.filter(t => !t.clientId);
@@ -25442,7 +25467,7 @@ function tcNoteSelectClient(clientId, clientName) {
       // Get tasks for this client
       const fAM = document.getElementById('tc-filter-am')?.value || '';
       const tasks = (DB.tasks || []).filter(t =>
-        t.clientId === clientId && t.type !== 'note' && !t.parentId && t.status !== 'completed'
+        !t._deleted && t.clientId === clientId && t.type !== 'note' && !t.parentId && t.status !== 'completed'
         && (!fAM || t.amId === fAM)
       ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
@@ -25555,7 +25580,7 @@ function tcCancelProjectNote() {
 
 // ── Subtask Support ─────────────────────────────────────────────
 function tcGetSubtasks(parentId) {
-  return (DB.tasks || []).filter(t => t.parentId === parentId);
+  return (DB.tasks || []).filter(t => !t._deleted &&t.parentId === parentId);
 }
 
 function tcAddSubtask(parentId) {
@@ -25730,7 +25755,7 @@ function tcRenderCalendar(container, list, today, todayStr) {
 
 function tcCalShowDay(dateStr) {
   // Show overlay with all tasks for a specific day
-  const tasks = (DB.tasks||[]).filter(t => t.dueDate === dateStr && t.status !== 'completed');
+  const tasks = (DB.tasks||[]).filter(t => !t._deleted && t.dueDate === dateStr && t.status !== 'completed');
   if (!tasks.length) return;
   const d = new Date(dateStr + 'T12:00:00');
   const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -27079,21 +27104,21 @@ function renderInsightsTiles(){
   const in7Str   = in7.toISOString().slice(0,10);
 
   // ── Data ──────────────────────────────────────────────────────────
-  const overdueTasks = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.status!=='review'&&t.dueDate<todayStr&&!t.isReviewTask&&!t.isNotifyTask);
-  const overdueLeads = (DB.leads||[]).filter(l=>l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
+  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.status!=='review'&&t.dueDate<todayStr&&!t.isReviewTask&&!t.isNotifyTask);
+  const overdueLeads = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   const stCritical   = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue<=in3Str&&c.status==='Active');
-  const unfiledOld   = (DB.employees||[]).filter(e=>!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
+  const unfiledOld   = (DB.employees||[]).filter(e=>!e._deleted&&!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
   const urgentCount  = overdueTasks.length+overdueLeads.length+stCritical.length+unfiledOld.length;
 
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.status!=='review'&&t.dueDate>=todayStr&&t.dueDate<=in7Str&&!t.isReviewTask&&!t.isNotifyTask);
-  const followsWeek  = (DB.leads||[]).filter(l=>l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.status!=='review'&&t.dueDate>=todayStr&&t.dueDate<=in7Str&&!t.isReviewTask&&!t.isNotifyTask);
+  const followsWeek  = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
   const stWeek       = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue>in3Str&&c.stNextdue<=in7Str&&c.status==='Active');
 
-  const mrr      = (DB.proposals||[]).filter(p=>p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
-  const pipeVal  = (DB.leads||[]).filter(l=>!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
+  const mrr      = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
+  const pipeVal  = (DB.leads||[]).filter(l=>!l._deleted &&!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
   const monthStart = new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10);
-  const wonMonth = (DB.leads||[]).filter(l=>l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart).length;
-  const propsOut = (DB.proposals||[]).filter(p=>p.status==='Sent').length;
+  const wonMonth = (DB.leads||[]).filter(l=>!l._deleted &&l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart).length;
+  const propsOut = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Sent').length;
 
   const activeClients = (DB.clients||[]).filter(c=>c.status==='Active');
   const healthGroups  = { green:0, yellow:0, red:0 };
@@ -27102,7 +27127,7 @@ function renderInsightsTiles(){
   const ams = DB.accountManagers||[];
   const amWorkload = ams.filter(a=>a.status==='Active').map(a=>({
     name: a.fname+' '+(a.lname||''),
-    tasks: (DB.tasks||[]).filter(t=>t.amId===a.id&&t.status!=='completed').length,
+    tasks: (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===a.id&&t.status!=='completed').length,
     clients: (DB.clients||[]).filter(c=>c.am===a.id&&c.status==='Active').length,
   })).sort((a,b)=>b.tasks-a.tasks);
 
@@ -27469,10 +27494,10 @@ function renderDashboardIntel(){
   const in7Str = in7.toISOString().slice(0,10);
 
   // Panel A: Urgent Actions
-  const overdueTasks  = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate<todayStr);
-  const overdueLeads  = (DB.leads||[]).filter(l=>l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
+  const overdueTasks  = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueLeads  = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   const stCritical    = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue<=in3Str&&c.status==='Active');
-  const unfiledOld    = (DB.employees||[]).filter(e=>!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
+  const unfiledOld    = (DB.employees||[]).filter(e=>!e._deleted&&!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
   const urgentCount   = overdueTasks.length + overdueLeads.length + stCritical.length + unfiledOld.length;
   const urgentColor   = urgentCount>0 ? '#b03a3a' : '#1a6b30';
   const urgentBg      = urgentCount>0 ? '#1a0a0a' : '#0a140a';
@@ -27486,8 +27511,8 @@ function renderDashboardIntel(){
   ];
 
   // Panel B: Coming This Week
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7Str);
-  const followupsWeek= (DB.leads||[]).filter(l=>l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7Str);
+  const followupsWeek= (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
   const stWeek       = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue>in3Str&&c.stNextdue<=in7Str&&c.status==='Active');
 
   const weekItems = [
@@ -27497,13 +27522,13 @@ function renderDashboardIntel(){
   ];
 
   // Panel C: Revenue Pulse
-  const mrr      = (DB.proposals||[]).filter(p=>p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
-  const pipeVal  = (DB.leads||[]).filter(l=>!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
+  const mrr      = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
+  const pipeVal  = (DB.leads||[]).filter(l=>!l._deleted &&!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
   const monthStart = new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10);
-  const wonMonth = (DB.leads||[]).filter(l=>l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart).length;
-  const propsOut = (DB.proposals||[]).filter(p=>p.status==='Sent').length;
+  const wonMonth = (DB.leads||[]).filter(l=>!l._deleted &&l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart).length;
+  const propsOut = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Sent').length;
   const atRisk   = (DB.clients||[]).filter(c=>c.status==='Active').reduce((s,c)=>{
-    const h = betaClientHealth(c); return h.score < 40 ? s + (((DB.proposals||[]).find(p=>p.clientId===c.id&&p.status==='Active'))?.totalFee||0) : s;
+    const h = betaClientHealth(c); return h.score < 40 ? s + (((DB.proposals||[]).find(p=>!p._deleted && p.clientId===c.id&&p.status==='Active'))?.totalFee||0) : s;
   },0);
 
   grid.innerHTML = `
@@ -27591,10 +27616,10 @@ function amWorkloadCells(am){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
   const clients   = (DB.clients||[]).filter(c=>c.am===am.id&&c.status==='Active').length;
-  const tasks     = (DB.tasks||[]).filter(t=>t.amId===am.id&&t.status!=='completed');
+  const tasks     = (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===am.id&&t.status!=='completed');
   const overdue   = tasks.filter(t=>t.dueDate<todayStr).length;
-  const leads     = (DB.leads||[]).filter(l=>l.amId===am.id&&!['Won','Lost'].includes(l.stage)).length;
-  const mrr       = (DB.proposals||[]).filter(p=>p.amId===am.id&&p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
+  const leads     = (DB.leads||[]).filter(l=>!l._deleted &&l.amId===am.id&&!['Won','Lost'].includes(l.stage)).length;
+  const mrr       = (DB.proposals||[]).filter(p=>!p._deleted && p.amId===am.id&&p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
   const overdueColor = overdue>0?'#ff6b6b':'var(--text)';
   return {
     clientsCell: `<span style="font-weight:700;color:var(--navy)">${clients}</span>`,
@@ -27611,7 +27636,7 @@ function tcRenderSmartBanner(){
   const todayStr = today.toISOString().slice(0,10);
   // Filter by current AM selection
   const fAM = document.getElementById('tc-filter-am')?.value || '';
-  const myTasks = (DB.tasks||[]).filter(t => !fAM || t.amId === fAM);
+  const myTasks = (DB.tasks||[]).filter(t => !t._deleted && (!fAM || t.amId === fAM));
   const overdue = myTasks.filter(t=>t.status!=='completed' && t.dueDate && t.dueDate<todayStr);
   const dueToday= myTasks.filter(t=>t.status!=='completed' && t.dueDate===todayStr);
   if(!overdue.length && !dueToday.length){ banner.innerHTML=''; return; }
@@ -27631,7 +27656,7 @@ function lcRenderFunnelView(){
   const sourcesEl = document.getElementById('lc-funnel-sources');
   if(!stagesEl || !sourcesEl) return;
 
-  const leads = DB.leads||[];
+  const leads = (DB.leads||[]).filter(l=>!l._deleted);
   const total = Math.max(leads.length, 1);
   const LC_STAGE_COLORS2 = {'New Lead':'#4a6f8a','Contacted':'#2e75b6','Meeting Set':'#b8922a','Proposal Sent':'#6b3fa0','Negotiating':'#2e7d5e','Won':'#1a6b30','Lost':'#6b1a1a'};
 
@@ -27761,7 +27786,7 @@ function betaRenderAlerts(){
 
   // ── CRITICAL ──────────────────────────────────────────────────
   // Overdue tasks
-  const overdueTasks = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
   if(overdueTasks.length) cats.critical.push({
     icon:'⏰', text:`${overdueTasks.length} overdue task${overdueTasks.length>1?'s':''} in Production`,
     detail: overdueTasks.slice(0,3).map(t=>`${t.name} (${t.clientName})`).join(' · ')
@@ -27769,6 +27794,7 @@ function betaRenderAlerts(){
 
   // New hire reports unfiled 15+ days
   const unfiledOld = (DB.employees||[]).filter(e=>{
+    if(e._deleted) return false;
     if(e.reportPrinted||!e.hiredate) return false;
     return betaDaysFrom(e.hiredate) <= -15;
   });
@@ -27785,14 +27811,14 @@ function betaRenderAlerts(){
   });
 
   // Proposals expiring in 3 days
-  const propExpiring = (DB.proposals||[]).filter(p=>p.validUntil&&p.validUntil>=todayStr&&p.validUntil<=in3s&&p.status==='Sent');
+  const propExpiring = (DB.proposals||[]).filter(p=>!p._deleted && p.validUntil&&p.validUntil>=todayStr&&p.validUntil<=in3s&&p.status==='Sent');
   if(propExpiring.length) cats.critical.push({
     icon:'📄', text:`${propExpiring.length} proposal${propExpiring.length>1?'s':''} expiring within 3 days`,
     detail: propExpiring.map(p=>p.clientName).join(', ')
   });
 
   // Leads overdue for follow-up
-  const leadsOverdue = (DB.leads||[]).filter(l=>l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
+  const leadsOverdue = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   if(leadsOverdue.length) cats.critical.push({
     icon:'🎯', text:`${leadsOverdue.length} lead${leadsOverdue.length>1?'s':''} overdue for follow-up`,
     detail: leadsOverdue.slice(0,3).map(l=>l.biz).join(' · ')
@@ -27807,14 +27833,14 @@ function betaRenderAlerts(){
   });
 
   // Tasks due this week
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7s);
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7s);
   if(tasksDueWeek.length) cats.warning.push({
     icon:'✅', text:`${tasksDueWeek.length} task${tasksDueWeek.length>1?'s':''} due this week`,
     detail: tasksDueWeek.slice(0,3).map(t=>t.name).join(' · ')
   });
 
   // Proposals expiring 7-14 days
-  const propExp14 = (DB.proposals||[]).filter(p=>p.validUntil&&p.validUntil>in3s&&p.validUntil<=in14s&&p.status==='Sent');
+  const propExp14 = (DB.proposals||[]).filter(p=>!p._deleted && p.validUntil&&p.validUntil>in3s&&p.validUntil<=in14s&&p.status==='Sent');
   if(propExp14.length) cats.warning.push({
     icon:'📄', text:`${propExp14.length} proposal${propExp14.length>1?'s':''} expiring within 14 days`,
     detail: propExp14.map(p=>p.clientName).join(', ')
@@ -27822,6 +27848,7 @@ function betaRenderAlerts(){
 
   // New hire reports unfiled 7-14 days
   const unfiledWarn = (DB.employees||[]).filter(e=>{
+    if(e._deleted) return false;
     if(e.reportPrinted||!e.hiredate) return false;
     const d = betaDaysFrom(e.hiredate);
     return d<=-7 && d>-15;
@@ -27833,6 +27860,7 @@ function betaRenderAlerts(){
 
   // Leads with no activity in 14 days
   const leadsStale = (DB.leads||[]).filter(l=>{
+    if(l._deleted) return false;
     if(['Won','Lost'].includes(l.stage)) return false;
     const last = l.activity?.[0]?.at || l.createdAt;
     return !last || last < ago14.toISOString();
@@ -27873,7 +27901,7 @@ function betaRenderAlerts(){
 
   // ── SALES ─────────────────────────────────────────────────────
   // Leads due follow-up today/tomorrow
-  const leadsDueToday = (DB.leads||[]).filter(l=>l.followupDate<=in3s&&l.followupDate>=todayStr&&!['Won','Lost'].includes(l.stage));
+  const leadsDueToday = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<=in3s&&l.followupDate>=todayStr&&!['Won','Lost'].includes(l.stage));
   if(leadsDueToday.length) cats.sales.push({
     icon:'📞', text:`${leadsDueToday.length} lead follow-up${leadsDueToday.length>1?'s':''} due in next 3 days`,
     detail: leadsDueToday.map(l=>l.biz).join(' · ')
@@ -27881,6 +27909,7 @@ function betaRenderAlerts(){
 
   // Proposals in Sent > 7 days with no follow-up logged
   const propNoFU = (DB.proposals||[]).filter(p=>{
+    if(p._deleted) return false;
     if(p.status!=='Sent') return false;
     const sent = p.updatedAt||p.createdAt;
     return sent && new Date(sent)<in7;
@@ -27892,7 +27921,7 @@ function betaRenderAlerts(){
 
   // Won deals this month — positive signal
   const monthStart = new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10);
-  const wonMonth = (DB.leads||[]).filter(l=>l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart);
+  const wonMonth = (DB.leads||[]).filter(l=>!l._deleted &&l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=monthStart);
   if(wonMonth.length) cats.sales.push({
     icon:'🏆', text:`${wonMonth.length} deal${wonMonth.length>1?'s':''} won this month`,
     detail: wonMonth.map(l=>l.biz).join(' · '), positive:true
@@ -27938,7 +27967,7 @@ function betaClientHealth(c){
   else signals.push({label:'AM Assigned',val:betaAmName(c.am),ok:true});
 
   // Signal 4: Overdue tasks
-  const overdueT = (DB.tasks||[]).filter(t=>t.clientId===c.id&&t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueT = (DB.tasks||[]).filter(t=>!t._deleted &&t.clientId===c.id&&t.status!=='completed'&&t.dueDate<todayStr);
   if(overdueT.length){ score-=overdueT.length*8; signals.push({label:'Overdue Tasks',val:overdueT.length,ok:false}); }
   else signals.push({label:'Tasks',val:'None overdue',ok:true});
 
@@ -27966,7 +27995,7 @@ function betaClientHealth(c){
   }
 
   // Signal 8: Active proposal / fee on file
-  const activeProp = (DB.proposals||[]).find(p=>p.clientId===c.id&&p.status==='Active');
+  const activeProp = (DB.proposals||[]).find(p=>!p._deleted && p.clientId===c.id&&p.status==='Active');
   if(!activeProp){ score-=5; signals.push({label:'Proposal',val:'No active proposal',ok:false}); }
   else signals.push({label:'MRR',val:betaFmt$(activeProp.totalFee)+'/mo',ok:true});
 
@@ -28020,8 +28049,8 @@ function betaRenderBriefing(){
   // (reference existing clocked-in logic if possible)
 
   // Tasks due today
-  const dueToday = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate===todayStr);
-  const overdueTasks = (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate<todayStr);
+  const dueToday = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate===todayStr);
+  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
 
   sections.push({ icon:'✅', title:'Production Tasks', items:[
     ...overdueTasks.map(t=>`<span style="color:#ff6b6b;">⚠ OVERDUE:</span> <strong>${t.name}</strong> — ${t.clientName} <span style="color:var(--text-d);">(${betaAmName(t.amId)})</span>`),
@@ -28029,8 +28058,8 @@ function betaRenderBriefing(){
   ], empty:'No tasks due today.' });
 
   // Lead follow-ups
-  const followupsToday = (DB.leads||[]).filter(l=>l.followupDate===todayStr&&!['Won','Lost'].includes(l.stage));
-  const followupsOverdue = (DB.leads||[]).filter(l=>l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
+  const followupsToday = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate===todayStr&&!['Won','Lost'].includes(l.stage));
+  const followupsOverdue = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   sections.push({ icon:'📞', title:'Lead Follow-ups', items:[
     ...followupsOverdue.map(l=>`<span style="color:#ff6b6b;">⚠ OVERDUE:</span> <strong>${l.biz}</strong> ${l.contact?'— '+l.contact:''} <span style="color:var(--text-d);">[${l.stage}]</span>`),
     ...followupsToday.map(l=>`<strong>${l.biz}</strong> ${l.contact?'— '+l.contact:''} <span style="color:var(--text-d);">[${l.stage}]</span>`),
@@ -28051,7 +28080,7 @@ function betaRenderBriefing(){
   ], empty:'No payroll processing days in next 3 days.' });
 
   // New hire reports unfiled
-  const unfiled = (DB.employees||[]).filter(e=>!e.reportPrinted&&e.hiredate);
+  const unfiled = (DB.employees||[]).filter(e=>!e._deleted&&!e.reportPrinted&&e.hiredate);
   sections.push({ icon:'👤', title:'Unfiled New Hire Reports', items:
     unfiled.map(e=>{
       const d = Math.abs(betaDaysFrom(e.hiredate));
@@ -28101,7 +28130,7 @@ function betaRenderDeadlines(){
   const items = [];
 
   if(!typeFilter||typeFilter==='task'){
-    (DB.tasks||[]).filter(t=>t.status!=='completed'&&t.dueDate<=futureStr).forEach(t=>{
+    (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<=futureStr).forEach(t=>{
       items.push({date:t.dueDate,type:'task',label:t.name,sub:t.clientName+' · '+betaAmName(t.amId),tag:'Task',tagColor:'#2e75b6',priority:t.priority});
     });
   }
@@ -28124,12 +28153,12 @@ function betaRenderDeadlines(){
     });
   }
   if(!typeFilter||typeFilter==='proposal'){
-    (DB.proposals||[]).filter(p=>p.validUntil&&p.validUntil>=todayStr&&p.validUntil<=futureStr&&p.status==='Sent').forEach(p=>{
+    (DB.proposals||[]).filter(p=>!p._deleted && p.validUntil&&p.validUntil>=todayStr&&p.validUntil<=futureStr&&p.status==='Sent').forEach(p=>{
       items.push({date:p.validUntil,type:'proposal',label:p.clientName+' — Proposal Expires',sub:betaFmt$(p.totalFee)+'/mo · '+betaAmName(p.amId),tag:'Proposal',tagColor:'#6b3fa0'});
     });
   }
   if(!typeFilter||typeFilter==='lead'){
-    (DB.leads||[]).filter(l=>l.followupDate&&l.followupDate<=futureStr&&!['Won','Lost'].includes(l.stage)).forEach(l=>{
+    (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate&&l.followupDate<=futureStr&&!['Won','Lost'].includes(l.stage)).forEach(l=>{
       items.push({date:l.followupDate,type:'lead',label:l.biz+' — Follow-up',sub:(l.contact||l.stage)+' · '+betaAmName(l.amId),tag:'Lead',tagColor:'var(--accent)'});
     });
   }
@@ -28167,11 +28196,11 @@ function betaRenderDeadlines(){
 // ══════════════════════════════════════════════════════════════════
 function betaRenderRevenue(){
   // MRR from Active proposals
-  const activeProps = (DB.proposals||[]).filter(p=>p.status==='Active');
+  const activeProps = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Active');
   const mrr = activeProps.reduce((s,p)=>s+(p.totalFee||0),0);
 
   // Pipeline from leads
-  const pipelineVal = (DB.leads||[]).filter(l=>!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
+  const pipelineVal = (DB.leads||[]).filter(l=>!l._deleted &&!['Won','Lost'].includes(l.stage)).reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
 
   // Avg client value
   const activeClients = (DB.clients||[]).filter(c=>c.status==='Active');
@@ -28179,7 +28208,7 @@ function betaRenderRevenue(){
   const avgVal = clientsWithProp.length ? Math.round(mrr/clientsWithProp.length) : 0;
 
   // Revenue at risk (Inactive clients that had Active proposals)
-  const riskProps = (DB.proposals||[]).filter(p=>p.status==='Active'&&(DB.clients||[]).find(c=>c.id===p.clientId&&c.status==='Inactive'));
+  const riskProps = (DB.proposals||[]).filter(p=>!p._deleted && p.status==='Active'&&(DB.clients||[]).find(c=>c.id===p.clientId&&c.status==='Inactive'));
   const atRisk = riskProps.reduce((s,p)=>s+(p.totalFee||0),0);
 
   const s = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
@@ -28237,13 +28266,13 @@ function betaRenderWorkload(){
 
   body.innerHTML = ams.map(am=>{
     const clients   = (DB.clients||[]).filter(c=>c.am===am.id&&c.status==='Active');
-    const tasks     = (DB.tasks||[]).filter(t=>t.amId===am.id&&t.status!=='completed');
+    const tasks     = (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===am.id&&t.status!=='completed');
     const overdue   = tasks.filter(t=>t.dueDate<todayStr);
-    const leads     = (DB.leads||[]).filter(l=>l.amId===am.id&&!['Won','Lost'].includes(l.stage));
+    const leads     = (DB.leads||[]).filter(l=>!l._deleted &&l.amId===am.id&&!['Won','Lost'].includes(l.stage));
     const pipeVal   = leads.reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
-    const proposals = (DB.proposals||[]).filter(p=>p.amId===am.id&&p.status==='Sent');
-    const mrr       = (DB.proposals||[]).filter(p=>p.amId===am.id&&p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
-    const wonMonth  = (DB.leads||[]).filter(l=>l.amId===am.id&&l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10));
+    const proposals = (DB.proposals||[]).filter(p=>!p._deleted && p.amId===am.id&&p.status==='Sent');
+    const mrr       = (DB.proposals||[]).filter(p=>!p._deleted && p.amId===am.id&&p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
+    const wonMonth  = (DB.leads||[]).filter(l=>!l._deleted &&l.amId===am.id&&l.stage==='Won'&&l.wonAt&&l.wonAt.slice(0,10)>=new Date(today.getFullYear(),today.getMonth(),1).toISOString().slice(0,10));
 
     const health = overdue.length>3?'red':overdue.length>0||leads.filter(l=>l.followupDate<todayStr).length>0?'yellow':'green';
     const hColor = health==='green'?'var(--green)':health==='yellow'?'#f0b429':'#ff6b6b';
@@ -28293,7 +28322,7 @@ function betaRenderFunnel(){
   const metricsEl = document.getElementById('beta-funnel-metrics');
   if(!stagesEl||!sourcesEl||!metricsEl) return;
 
-  const leads = DB.leads||[];
+  const leads = (DB.leads||[]).filter(l=>!l._deleted);
   const total = leads.length || 1;
   const LC_STAGES_ALL = ['New Lead','Contacted','Meeting Set','Proposal Sent','Negotiating','Won','Lost'];
   const stageColors  = {'New Lead':'#4a6f8a','Contacted':'#2e75b6','Meeting Set':'#b8922a','Proposal Sent':'#6b3fa0','Negotiating':'#2e7d5e','Won':'#1a6b30','Lost':'#6b1a1a'};
@@ -28386,16 +28415,16 @@ function betaC360Load(clientId){
   const todayStr = today.toISOString().slice(0,10);
 
   // Gather all cross-linked data
-  const tasks   = (DB.tasks||[]).filter(t=>t.clientId===clientId);
+  const tasks   = (DB.tasks||[]).filter(t=>!t._deleted &&t.clientId===clientId);
   const openT   = tasks.filter(t=>t.status!=='completed');
   const overdueT= openT.filter(t=>t.dueDate<todayStr);
-  const proposals= (DB.proposals||[]).filter(p=>p.clientId===clientId);
+  const proposals= (DB.proposals||[]).filter(p=>!p._deleted && p.clientId===clientId);
   const activeProp= proposals.find(p=>p.status==='Active');
-  const leads   = (DB.leads||[]).filter(l=>l.clientId===clientId);
-  const employees= (DB.employees||[]).filter(e=>e.clientId===clientId);
+  const leads   = (DB.leads||[]).filter(l=>!l._deleted &&l.clientId===clientId);
+  const employees= (DB.employees||[]).filter(e=>!e._deleted&&e.clientId===clientId);
   const notes   = ((DB.notes||{})[clientId]||[]).slice(0,3);
   const activity= (DB.activity||[]).filter(a=>a.clientId===clientId).slice(0,5);
-  const faxes   = (DB.faxOutbox||[]).filter(f=>f.clientId===clientId).slice(0,3);
+  const faxes   = (DB.faxOutbox||[]).filter(f=>!f._deleted && f.clientId===clientId).slice(0,3);
   const {score,tier,signals} = betaClientHealth(c);
   const hColor  = tier==='green'?'var(--green)':tier==='yellow'?'#f0b429':'#ff6b6b';
 
@@ -28559,7 +28588,7 @@ function lcSetStageFilter(val){
 // ── KPIs ─────────────────────────────────────────────────────────
 function lcRenderKPIs(){
   lcInitDB();
-  const leads = DB.leads || [];
+  const leads = (DB.leads || []).filter(l=>!l._deleted);
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
@@ -28584,7 +28613,7 @@ function lcRenderKPIs(){
 function lcRenderKanban(){
   lcInitDB();
   lcRenderKPIs();
-  const leads = DB.leads || [];
+  const leads = (DB.leads || []).filter(l=>!l._deleted);
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
   const container = document.getElementById('lc-kanban');
@@ -28657,6 +28686,7 @@ function lcRenderList(){
   const todayStr = today.toISOString().slice(0,10);
 
   let list = (DB.leads||[]).filter(l => {
+    if(l._deleted) return false;
     if(fStage === 'overdue') return l.followupDate && l.followupDate < todayStr && !['Won','Lost'].includes(l.stage);
     if(fStage && l.stage !== fStage) return false;
     if(fAM && l.amId !== fAM) return false;
@@ -28821,7 +28851,8 @@ function lcSaveLead(){
 function lcDelete(id){
   const l = (DB.leads||[]).find(x=>x.id===id); if(!l) return;
   if(!confirm(`Delete lead "${l.biz}"? This cannot be undone.`)) return;
-  DB.leads = DB.leads.filter(x=>x.id!==id);
+  const victim = (DB.leads||[]).find(x=>x.id===id);
+  if(victim){ victim._deleted = true; victim._updatedAt = new Date().toISOString(); }
   saveDB(); logAct(`Lead "${l.biz}" deleted`); lcInit();
 }
 
@@ -39609,7 +39640,7 @@ function mtgShowPrep(meetingId) {
   if (!panel || !content) return;
 
   // Open tasks for this client
-  const openTasks = (DB.tasks || []).filter(t => t.clientId === m.clientId && t.status === 'open');
+  const openTasks = (DB.tasks || []).filter(t => !t._deleted &&t.clientId === m.clientId && t.status === 'open');
   // Latest P&L report
   const latestPL = client?.plReports?.length ? client.plReports[client.plReports.length - 1] : null;
   // Last meeting with this client
@@ -40472,7 +40503,7 @@ function sjeRenderHistory(){
   const list = document.getElementById('sje-history-list');
   if(!list) return;
   const filter = document.getElementById('sje-hist-filter-type')?.value || '';
-  let batches = (DB.sjePushLog||[]).slice();
+  let batches = (DB.sjePushLog||[]).filter(b=>!b._deleted);
   if(filter) batches = batches.filter(b=>b.type===filter);
   if(!batches.length){
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No push history yet. Push some journal entries to see them here.</div>';
@@ -40574,7 +40605,8 @@ function sjeExportBatch(id){
 
 function sjeDeleteBatch(id){
   if(!confirm('Delete this push log entry? This does not affect the journal entries in QBO.')) return;
-  DB.sjePushLog = (DB.sjePushLog||[]).filter(b=>b.id!==id);
+  const b = (DB.sjePushLog||[]).find(x=>x.id===id);
+  if(b){ b._deleted = true; b._updatedAt = new Date().toISOString(); }
   saveDB();
   sjeRenderHistory();
 }
@@ -44153,7 +44185,7 @@ function dhRenderBoard(){
     return true;
   });
   // Ideas inbox — open ideas that haven't been converted to projects yet
-  const openIdeas = (DB.ideas||[]).filter(i => i.status === 'open' || i.status === 'planned');
+  const openIdeas = (DB.ideas||[]).filter(i => !i._deleted && (i.status === 'open' || i.status === 'planned'));
   const ideasHtml = openIdeas.length ? openIdeas.map(i => `<div class="dh-card" style="border-left:3px solid var(--gold);" onclick="dhConvertIdea('${i.id}')">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
       <span style="font-size:9px;font-weight:700;background:var(--gold-pale);color:var(--gold);padding:2px 7px;border-radius:10px;">💡 Idea</span>
@@ -44525,13 +44557,14 @@ function dhRenderTemplates(){
   const tagFilter = document.getElementById('dh-tpl-filter-tag')?.value||'';
   // Populate tag filter
   const allTags = new Set();
-  (DB.devTemplates||[]).forEach(t=>(t.tags||[]).forEach(tag=>allTags.add(tag)));
+  (DB.devTemplates||[]).forEach(t=>{ if(!t._deleted) (t.tags||[]).forEach(tag=>allTags.add(tag)); });
   const tagSel = document.getElementById('dh-tpl-filter-tag');
   if(tagSel){
     const cur = tagSel.value;
     tagSel.innerHTML = '<option value="">All Tags</option>'+[...allTags].sort().map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
   }
   const templates = (DB.devTemplates||[]).filter(t=>{
+    if(t._deleted) return false;
     if(q && !t.title.toLowerCase().includes(q) && !(t.description||'').toLowerCase().includes(q) && !(t.code||'').toLowerCase().includes(q)) return false;
     if(tagFilter && !(t.tags||[]).includes(tagFilter)) return false;
     return true;
@@ -44616,7 +44649,8 @@ function dhSaveTemplate(){
 
 function dhDeleteTemplate(id){
   if(!confirm('Delete this template?')) return;
-  DB.devTemplates = (DB.devTemplates||[]).filter(x=>x.id!==id);
+  const t = (DB.devTemplates||[]).find(x=>x.id===id);
+  if(t){ t._deleted = true; t._updatedAt = new Date().toISOString(); }
   saveDB();
   dhRenderTemplates();
   showToast('Template deleted');
