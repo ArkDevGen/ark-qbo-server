@@ -912,6 +912,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .hb-cat-client{background:#eaf4ef;color:var(--green);}
 .hb-cat-bookkeeping{background:#fdf3e3;color:var(--amber);}
 .hb-cat-general{background:var(--surface2);color:var(--text-m);}
+.hb-cat-development{background:#ecebf5;color:#4c4aa8;}
 .hb-cat-urgent{background:#fde8e8;color:var(--red);animation:pulseRed 2s ease-in-out infinite;}
 @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(176,58,58,0);}50%{box-shadow:0 0 0 4px rgba(176,58,58,.15);}}
 .hb-pri{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:var(--transition);}
@@ -5816,7 +5817,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-devhub">
     <!-- Tab bar -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
-      <button class="dh-tab active" id="dh-tab-helpboard" onclick="dhSwitchTab('helpboard')">🆘 General Help</button>
+      <button class="dh-tab active" id="dh-tab-helpboard" onclick="dhSwitchTab('helpboard')">🙋 Help Wanted</button>
       <button class="dh-tab" id="dh-tab-board" onclick="dhSwitchTab('board')">🛠 Project Board</button>
       <button class="dh-tab" id="dh-tab-help" onclick="dhSwitchTab('help')">🛠️ Development Help</button>
       <button class="dh-tab" id="dh-tab-templates" onclick="dhSwitchTab('templates')">📋 Templates</button>
@@ -5830,13 +5831,14 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input id="hb-search" class="field-input" placeholder="Search posts..." style="width:220px;height:34px;font-size:12px;" oninput="hbRenderList()">
-          <select id="hb-filter-cat" class="field-input" style="height:34px;font-size:12px;width:130px;" onchange="hbRenderList()">
+          <select id="hb-filter-cat" class="field-input" style="height:34px;font-size:12px;width:140px;" onchange="hbRenderList()">
             <option value="">All Categories</option>
-            <option value="tax">Tax</option>
-            <option value="payroll">Payroll</option>
-            <option value="client">Client</option>
-            <option value="bookkeeping">Bookkeeping</option>
             <option value="general">General</option>
+            <option value="tax">Taxes</option>
+            <option value="payroll">Payroll</option>
+            <option value="bookkeeping">Bookkeeping</option>
+            <option value="client">Client</option>
+            <option value="development">Development</option>
           </select>
           <select id="hb-filter-pri" class="field-input" style="height:34px;font-size:12px;width:130px;" onchange="hbRenderList()">
             <option value="">All Priorities</option>
@@ -5851,7 +5853,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <option value="closed">Closed</option>
           </select>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="hbOpenComposeModal()">+ New Post</button>
+        <button class="btn btn-primary btn-sm" onclick="hbOpenComposeModal()">+ Ask for Help</button>
       </div>
       <div id="hb-list"></div>
     </div>
@@ -6032,7 +6034,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="overlay" id="modal-hb-compose" style="display:none" onclick="overlayClose(event,'modal-hb-compose')">
     <div class="modal" style="width:640px;max-height:88vh;display:flex;flex-direction:column;">
       <div class="modal-head">
-        <div class="modal-title" id="hb-compose-title">New Help Post</div>
+        <div class="modal-title" id="hb-compose-title">Ask for Help</div>
         <span class="modal-x" onclick="closeModal('modal-hb-compose')">&times;</span>
       </div>
       <div class="modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;">
@@ -6045,12 +6047,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
           <div>
             <label class="field-label">Category</label>
-            <select id="hb-category" class="field-input" style="height:36px;">
+            <select id="hb-category" class="field-input" style="height:36px;" onchange="hbOnCategoryChange && hbOnCategoryChange()">
               <option value="general">General</option>
-              <option value="tax">Tax</option>
+              <option value="tax">Taxes</option>
               <option value="payroll">Payroll</option>
-              <option value="client">Client</option>
               <option value="bookkeeping">Bookkeeping</option>
+              <option value="client">Client</option>
+              <option value="development">Development</option>
             </select>
           </div>
           <div>
@@ -43757,6 +43760,17 @@ async function hbLoadAndRender(){
   hbRenderList();
 }
 
+// Pretty display label for a category code (tax → Taxes, development → Development, etc.)
+const HB_CATEGORY_LABELS = {
+  general: 'General',
+  tax: 'Taxes',
+  payroll: 'Payroll',
+  bookkeeping: 'Bookkeeping',
+  client: 'Client',
+  development: 'Development',
+};
+function hbCategoryLabel(code){ return HB_CATEGORY_LABELS[code] || (code ? code.charAt(0).toUpperCase() + code.slice(1) : ''); }
+
 function hbRenderList(){
   const list = document.getElementById('hb-list');
   if(!list) return;
@@ -43814,7 +43828,7 @@ function hbRenderList(){
         <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${_hbEscape((p.body||'').slice(0,180))}</div>
         <div class="hb-post-meta">
           <span class="hb-pri hb-pri-${priority}">${priIcon} ${priority}</span>
-          <span class="hb-cat hb-cat-${p.category}">${p.category}</span>
+          <span class="hb-cat hb-cat-${p.category}">${hbCategoryLabel(p.category)}</span>
           <span class="hb-status hb-status-${p.status}">${statusIcon} ${p.status}</span>
           <span>by <strong>${_hbEscape(p.authorName || 'Unknown')}</strong> · ${fmtDate(p.createdAt)}</span>
           ${attachCount ? `<span>📎 ${attachCount}</span>` : ''}
@@ -43836,7 +43850,7 @@ function _hbEscape(s){
 
 function hbOpenComposeModal(editPostId){
   const editingPost = editPostId ? _hbPosts.find(p=>p.id===editPostId) : null;
-  document.getElementById('hb-compose-title').textContent = editingPost ? 'Edit Post' : 'New Help Post';
+  document.getElementById('hb-compose-title').textContent = editingPost ? 'Edit Post' : 'Ask for Help';
   document.getElementById('hb-post-id').value = editingPost?.id || '';
   document.getElementById('hb-title').value = editingPost?.title || '';
   document.getElementById('hb-body').value = editingPost?.body || '';
@@ -43921,7 +43935,7 @@ async function hbSubmitPost(){
     });
     if(!resp.ok){ const err=await resp.json(); throw new Error(err.error||'Failed'); }
     closeModal('modal-hb-compose');
-    showToast(id ? '✓ Post updated' : '✓ Posted to General Help');
+    showToast(id ? '✓ Post updated' : '✓ Posted to Help Wanted');
     await hbLoadAndRender();
   } catch(e) {
     alert('Failed to save post: ' + e.message);
@@ -43996,7 +44010,7 @@ function hbRenderDetail(p){
   body.innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
       <span class="hb-pri hb-pri-${priority}" onclick="hbOpenPriorityModal('${p.id}')" title="Click to change priority">${priIcon} ${priority}</span>
-      <span class="hb-cat hb-cat-${p.category}">${p.category}</span>
+      <span class="hb-cat hb-cat-${p.category}">${hbCategoryLabel(p.category)}</span>
       <span class="hb-status hb-status-${p.status}">${p.status === 'answered' ? '✓' : p.status === 'closed' ? '🔒' : '●'} ${p.status}</span>
       <span style="font-size:11px;color:var(--text-d);">posted by <strong>${_hbEscape(p.authorName)}</strong> on ${fmtDate(p.createdAt)}</span>
       ${(p.mentionIds||[]).length ? `<span class="hb-mention">@${(p.mentionIds||[]).map(id=>_hbUserName(id)||'').filter(Boolean).join(', ')}</span>` : ''}
