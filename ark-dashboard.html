@@ -34867,7 +34867,9 @@ function batchRefreshTable() {
   if (emptyMsg) emptyMsg.style.display = 'none';
 
   const realmOpts = Object.entries(qboAllCompanies || {})
-    .map(([rid, info]) => `<option value="${rid}">${info.companyName || rid.slice(0,10) + '…'}</option>`)
+    .map(([rid, info]) => ({ rid, label: info.companyName || rid.slice(0,10) + '…' }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+    .map(({ rid, label }) => `<option value="${rid}">${label}</option>`)
     .join('');
 
   tbody.innerHTML = items.map(item => {
