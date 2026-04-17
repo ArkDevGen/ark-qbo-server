@@ -34952,14 +34952,39 @@ function batchConnectClient(clientId, franchiseId) {
   const nextName = document.getElementById('batch-next-name');
   if (nextName) nextName.textContent = '🔄 Connecting: ' + displayName;
 
-  const popup = window.open(
-    `${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId)}`,
-    'qbo-auth', 'width=600,height=700,left=200,top=100'
-  );
+  const authUrl = `${QBO_SERVER}/qbo/auth?clientId=${encodeURIComponent(clientId)}` +
+    (franchiseId ? `&franchiseId=${encodeURIComponent(franchiseId)}` : '');
+  const popup = window.open(authUrl, 'qbo-auth', 'width=600,height=700,left=200,top=100');
 
-  window.addEventListener('message', async function handler(e) {
-    if (e.data?.type !== 'qbo-connected') return;
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
     window.removeEventListener('message', handler);
+    clearInterval(closedChecker);
+  };
+
+  // Watchdog: if popup is closed without completing auth, remove the stale
+  // listener so it can't fire against a later successful connect.
+  const closedChecker = setInterval(() => {
+    if (popup && popup.closed) {
+      cleanup();
+      renderBatchConnect();
+    }
+  }, 500);
+
+  async function handler(e) {
+    if (e.data?.type !== 'qbo-connected') return;
+    // Only accept messages originating from our QBO server
+    if (e.origin && e.origin !== QBO_SERVER) return;
+    // Route by clientId + franchiseId so a stale handler from a prior popup
+    // does not claim this message (the root cause of wrong-client linking).
+    const msgClientId = e.data.clientId || '';
+    const msgFranchiseId = e.data.franchiseId || '';
+    if (msgClientId !== clientId) return;
+    if ((franchiseId || '') !== msgFranchiseId) return;
+
+    cleanup();
     if (popup && !popup.closed) popup.close();
 
     const realmId = e.data.realmId;
@@ -35007,7 +35032,9 @@ function batchConnectClient(clientId, franchiseId) {
     showToast(`✓ ${displayName} linked to QBO`);
     qboLog('success', `Batch linked <strong>${displayName}</strong> → realm ${realmId.slice(0,10)}…`);
     renderBatchConnect();
-  });
+  }
+
+  window.addEventListener('message', handler);
 }
 
 async function batchLinkToExisting(clientId, realmId, franchiseId) {

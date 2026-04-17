@@ -735,12 +735,16 @@ async function getGCalClient() {
 // the Intuit authorization URL and redirects the user there.
 // ─────────────────────────────────────────────────────────────────
 app.get('/qbo/auth', (req, res) => {
-  const stateData = { ts: Date.now(), clientId: req.query.clientId || '' };
+  const stateData = {
+    ts: Date.now(),
+    clientId: req.query.clientId || '',
+    franchiseId: req.query.franchiseId || '',
+  };
   const authUri = oauthClient.authorizeUri({
     scope: [OAuthClient.scopes.Accounting],
     state: JSON.stringify(stateData),
   });
-  console.log('Redirecting to Intuit auth (clientId:', stateData.clientId || 'none', ')');
+  console.log('Redirecting to Intuit auth (clientId:', stateData.clientId || 'none', stateData.franchiseId ? 'franchiseId: ' + stateData.franchiseId : '', ')');
   res.redirect(authUri);
 });
 
@@ -761,11 +765,17 @@ app.get('/qbo/callback', async (req, res) => {
     activeRealmId = rid;
     setTokenData(rid, newTokens);
 
-    // Parse clientId from OAuth state parameter
+    // Parse clientId / franchiseId from OAuth state parameter
     let clientId = '';
-    try { const sd = JSON.parse(req.query.state || '{}'); clientId = sd.clientId || ''; } catch(_) {}
-    if (clientId && tokenStore[rid] && !tokenStore[rid].linkedClients.includes(clientId)) {
-      tokenStore[rid].linkedClients.push(clientId);
+    let franchiseId = '';
+    try {
+      const sd = JSON.parse(req.query.state || '{}');
+      clientId = sd.clientId || '';
+      franchiseId = sd.franchiseId || '';
+    } catch(_) {}
+    const linkKey = clientId && franchiseId ? `${clientId}:${franchiseId}` : clientId;
+    if (linkKey && tokenStore[rid] && !tokenStore[rid].linkedClients.includes(linkKey)) {
+      tokenStore[rid].linkedClients.push(linkKey);
       saveTokenStore();
     }
 
@@ -787,7 +797,7 @@ app.get('/qbo/callback', async (req, res) => {
   </div>
   <script>
     if (window.opener) {
-      window.opener.postMessage({ type: 'qbo-connected', realmId: '${rid}', clientId: '${clientId}' }, '*');
+      window.opener.postMessage({ type: 'qbo-connected', realmId: '${rid}', clientId: '${clientId}', franchiseId: '${franchiseId}' }, '*');
     }
     setTimeout(() => window.close(), 3000);
   </script>
