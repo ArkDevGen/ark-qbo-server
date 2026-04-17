@@ -43772,11 +43772,13 @@ function dhSwitchTab(tab){
     if(btn) btn.classList.toggle('active', t===tab);
   });
   if(tab==='helpboard') hbLoadAndRender();
-  if(tab==='board') dhRenderBoard();
-  if(tab==='help') dhRenderHelp();
+  // Dev-related tabs pull from both DB.devProjects AND dev-category help
+  // posts, so refresh the help post cache before rendering.
+  if(tab==='board')     _hbLoadOnly().then(dhRenderBoard);
+  if(tab==='help')      _hbLoadOnly().then(dhRenderHelp);
   if(tab==='templates') dhRenderTemplates();
-  if(tab==='mine') dhRenderMine();
-  if(tab==='completed') dhRenderCompleted();
+  if(tab==='mine')      _hbLoadOnly().then(dhRenderMine);
+  if(tab==='completed') _hbLoadOnly().then(dhRenderCompleted);
   if(tab==='staging') stgRefresh();
 }
 
@@ -43860,11 +43862,50 @@ let _hbPosts = [];
 let _hbStagedAttachments = []; // attachments pending upload for new post
 
 async function hbLoadAndRender(){
+  await _hbLoadOnly();
+  hbRenderList();
+}
+
+// Just refresh the _hbPosts cache without rendering — used by dev tabs
+// that need the data but don't own the Help Wanted list UI.
+async function _hbLoadOnly(){
   try {
     const resp = await authFetch(ARK_SERVER + '/help/posts');
     if(resp.ok) _hbPosts = await resp.json();
   } catch(_) {}
-  hbRenderList();
+}
+
+// Return dev-category help posts, optionally filtered by status predicate.
+// Used by the Project Board / Dev Help / My Work / Completed tabs.
+function _dhGetDevHelpPosts(statusPred){
+  return (_hbPosts || []).filter(p => {
+    if (p.category !== 'development') return false;
+    const st = p.status || 'open';
+    return !statusPred || statusPred(st);
+  });
+}
+
+// Render a dev help post as a card styled to live inside the dev tabs.
+// Clicking opens hbOpenDetail (not dhOpenDetail — they're different data).
+function dhRenderHelpPostCard(p){
+  const pri = p.priority || 'low';
+  const priIcon = pri === 'urgent' ? '🔴' : pri === 'high' ? '🟠' : '🟢';
+  const mentionNames = (p.mentionIds||[]).map(id => _dhUserName(id)).filter(Boolean).join(', ');
+  const status = p.status || 'open';
+  const statusIcon = status === 'answered' ? '✓' : status === 'closed' ? '🔒' : '●';
+  return `<div class="dh-card" style="border-left:3px solid #4c4aa8;" onclick="hbOpenDetail('${p.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-size:9px;font-weight:700;background:#ecebf5;color:#4c4aa8;padding:2px 7px;border-radius:10px;">🙋 Help Wanted</span>
+      <span style="font-size:11px;">${priIcon}</span>
+    </div>
+    <div class="dh-card-title">${_hbEscape(p.title)}</div>
+    <div class="dh-card-desc">${_hbEscape((p.body||'').slice(0,120))}</div>
+    <div style="font-size:10px;color:var(--text-d);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">
+      <span>${statusIcon} ${status}</span>
+      <span>by ${_hbEscape(p.authorName||'Unknown')}</span>
+      ${mentionNames ? `<span>@${_hbEscape(mentionNames)}</span>` : ''}
+    </div>
+  </div>`;
 }
 
 // Pretty display label for a category code (tax → Taxes, development → Development, etc.)
@@ -44417,6 +44458,15 @@ function dhRenderBoard(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;">${onHoldItems.map(p=>dhRenderCard(p)).join('')}</div>
     </div></div>`;
   }
+
+  // "From Help Wanted" full-width row — dev-category help posts still open
+  const devHelpPosts = _dhGetDevHelpPosts(s => s !== 'closed' && s !== 'answered');
+  if (devHelpPosts.length) {
+    board.innerHTML += `<div style="grid-column:1/-1;margin-top:4px;"><div class="dh-col" style="background:linear-gradient(180deg,#ecebf5 0%,var(--surface2) 30%);">
+      <div class="dh-col-title"><span style="color:#4c4aa8;">🙋 From Help Wanted</span><span class="dh-col-count">${devHelpPosts.length}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${devHelpPosts.map(p=>dhRenderHelpPostCard(p)).join('')}</div>
+    </div></div>`;
+  }
 }
 
 function dhRenderCard(p){
@@ -44450,27 +44500,66 @@ function dhRenderHelp(){
   const list = document.getElementById('dh-help-list');
   if(!list) return;
   const helpProjects = (DB.devProjects||[]).filter(p=>!p._deleted && p.needsHelp && p.status!=='completed');
-  if(!helpProjects.length){
-    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No projects need help right now.</div>';
+  // Dev help posts that are still open / answered (not closed)
+  const devHelpPosts = _dhGetDevHelpPosts(s => s !== 'closed');
+
+  if(!helpProjects.length && !devHelpPosts.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No dev help requests right now.</div>';
     return;
   }
-  list.innerHTML = helpProjects.map(p=>{
-    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
-    const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
-    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;" onclick="dhOpenDetail('${p.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}</div>
-        <span class="dh-badge-help">🆘 Needs Help</span>
-      </div>
-      <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;">${p.helpDescription||p.description||''}</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        ${tags}
-        <span style="font-size:10px;color:var(--text-d);">Status: ${DH_STATUS_LABELS[p.status]||p.status}</span>
-        ${assignees?`<span style="font-size:10px;color:var(--text-d);">Assigned: ${assignees}</span>`:''}
-      </div>
-      <button onclick="event.stopPropagation();dhJoinProject('${p.id}')" class="btn btn-primary btn-sm" style="margin-top:8px;">Join This Project</button>
-    </div>`;
-  }).join('');
+
+  let html = '';
+
+  // Section 1: Dev help posts from the unified Help Wanted tab (indigo)
+  if (devHelpPosts.length) {
+    html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4c4aa8;margin:4px 0 10px;">🙋 From Help Wanted (${devHelpPosts.length})</div>`;
+    html += devHelpPosts.map(p => {
+      const pri = p.priority || 'low';
+      const priIcon = pri === 'urgent' ? '🔴' : pri === 'high' ? '🟠' : '🟢';
+      const areaLabel = p.devArea ? (HB_DEV_AREA_LABELS[p.devArea] || p.devArea) : '';
+      const mentionNames = (p.mentionIds||[]).map(id => _dhUserName(id)).filter(Boolean).join(', ');
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;" onclick="hbOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
+          <span style="font-size:10px;font-weight:700;background:#ecebf5;color:#4c4aa8;padding:2px 8px;border-radius:10px;">🙋 Help Wanted</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;">${_hbEscape((p.devGoal || p.body || '').slice(0,200))}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:10px;">${priIcon} ${pri}</span>
+          <span style="font-size:10px;color:var(--text-d);">Status: ${p.status || 'open'}</span>
+          ${areaLabel ? `<span style="font-size:10px;color:var(--text-d);">Area: <strong>${_hbEscape(areaLabel)}</strong></span>` : ''}
+          <span style="font-size:10px;color:var(--text-d);">by ${_hbEscape(p.authorName||'Unknown')}</span>
+          ${mentionNames ? `<span style="font-size:10px;color:#4c4aa8;">@${_hbEscape(mentionNames)}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Section 2: Legacy devProjects with needsHelp flag (kept for existing data)
+  if (helpProjects.length) {
+    if (devHelpPosts.length) {
+      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-d);margin:16px 0 10px;">🛠 From Project Board (${helpProjects.length})</div>`;
+    }
+    html += helpProjects.map(p=>{
+      const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+      const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;" onclick="dhOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}</div>
+          <span class="dh-badge-help">🆘 Needs Help</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;">${p.helpDescription||p.description||''}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${tags}
+          <span style="font-size:10px;color:var(--text-d);">Status: ${DH_STATUS_LABELS[p.status]||p.status}</span>
+          ${assignees?`<span style="font-size:10px;color:var(--text-d);">Assigned: ${assignees}</span>`:''}
+        </div>
+        <button onclick="event.stopPropagation();dhJoinProject('${p.id}')" class="btn btn-primary btn-sm" style="margin-top:8px;">Join This Project</button>
+      </div>`;
+    }).join('');
+  }
+
+  list.innerHTML = html;
 }
 
 // ── My Work ──
@@ -44478,22 +44567,54 @@ function dhRenderMine(){
   const list = document.getElementById('dh-mine-list');
   if(!list||!currentUser) return;
   const myProjects = (DB.devProjects||[]).filter(p=>!p._deleted && ((p.assignees||[]).includes(currentUser.id) || p.createdBy===currentUser.id));
-  if(!myProjects.length){
-    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">You haven\'t joined or created any projects yet.</div>';
+  // Dev help posts where current user is the author or has been @mentioned
+  const myDevPosts = _dhGetDevHelpPosts(s => s !== 'closed').filter(p =>
+    p.authorId === currentUser.id || (p.mentionIds||[]).includes(currentUser.id)
+  );
+
+  if(!myProjects.length && !myDevPosts.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">You haven\'t joined or created any projects yet, and no dev help posts are waiting on you.</div>';
     return;
   }
-  list.innerHTML = myProjects.map(p=>{
-    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
-    const statusColor = DH_STATUS_COLORS[p.status]||'var(--text-d)';
-    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid ${statusColor};" onclick="dhOpenDetail('${p.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:14px;font-weight:700;color:var(--navy);">${p.title}</div>
-        <span style="font-size:10px;font-weight:600;color:${statusColor};">${DH_STATUS_LABELS[p.status]||p.status}</span>
-      </div>
-      <div style="font-size:12px;color:var(--text-m);margin:4px 0 6px;">${p.description||''}</div>
-      ${tags}
-    </div>`;
-  }).join('');
+
+  let html = '';
+
+  if (myDevPosts.length) {
+    html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4c4aa8;margin:4px 0 10px;">🙋 Help Wanted (${myDevPosts.length})</div>`;
+    html += myDevPosts.map(p => {
+      const pri = p.priority || 'low';
+      const priIcon = pri === 'urgent' ? '🔴' : pri === 'high' ? '🟠' : '🟢';
+      const why = p.authorId === currentUser.id ? 'You posted this' : 'You were @mentioned';
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;" onclick="hbOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
+          <span style="font-size:10px;font-weight:600;color:#4c4aa8;">${priIcon} ${pri}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin:4px 0 6px;">${_hbEscape((p.devGoal || p.body || '').slice(0,180))}</div>
+        <div style="font-size:10px;color:var(--text-d);">${why} · status: ${p.status || 'open'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (myProjects.length) {
+    if (myDevPosts.length) {
+      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-d);margin:16px 0 10px;">🛠 Projects (${myProjects.length})</div>`;
+    }
+    html += myProjects.map(p=>{
+      const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+      const statusColor = DH_STATUS_COLORS[p.status]||'var(--text-d)';
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid ${statusColor};" onclick="dhOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);">${p.title}</div>
+          <span style="font-size:10px;font-weight:600;color:${statusColor};">${DH_STATUS_LABELS[p.status]||p.status}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin:4px 0 6px;">${p.description||''}</div>
+        ${tags}
+      </div>`;
+    }).join('');
+  }
+
+  list.innerHTML = html;
 }
 
 // ── Completed Archive ──
@@ -44501,28 +44622,58 @@ function dhRenderCompleted(){
   const list = document.getElementById('dh-completed-list');
   if(!list) return;
   const completed = (DB.devProjects||[]).filter(p=>!p._deleted && p.status==='completed').sort((a,b)=>(b._updatedAt||b.createdAt||'').localeCompare(a._updatedAt||a.createdAt||''));
-  if(!completed.length){
-    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No completed projects yet.</div>';
+  // Dev help posts that have been answered or closed
+  const closedDevPosts = _dhGetDevHelpPosts(s => s === 'answered' || s === 'closed')
+    .sort((a,b) => (b._updatedAt||b.createdAt||'').localeCompare(a._updatedAt||a.createdAt||''));
+
+  if(!completed.length && !closedDevPosts.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-d);font-style:italic;">No completed projects or resolved help posts yet.</div>';
     return;
   }
-  list.innerHTML = completed.map(p=>{
-    const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
-    const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
-    const commentCount = (p.comments||[]).length;
-    const approved = p.reviewStatus==='approved' ? '<span style="font-size:9px;background:#eaf4ef;color:#2e7d5e;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">✅ Approved</span>' : '';
-    return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--green);" onclick="dhOpenDetail('${p.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}${approved}</div>
-        <span style="font-size:10px;color:var(--text-d);">${p._updatedAt?new Date(p._updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
-      </div>
-      <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;">${p.description||''}</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        ${tags}
-        ${assignees?`<span style="font-size:10px;color:var(--text-d);">Team: ${assignees}</span>`:''}
-        ${commentCount?`<span style="font-size:10px;color:var(--text-d);">💬 ${commentCount} comments</span>`:''}
-      </div>
-    </div>`;
-  }).join('');
+
+  let html = '';
+
+  if (closedDevPosts.length) {
+    html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4c4aa8;margin:4px 0 10px;">🙋 Resolved Help Requests (${closedDevPosts.length})</div>`;
+    html += closedDevPosts.map(p => {
+      const when = p._updatedAt ? new Date(p._updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+      const statusIcon = p.status === 'answered' ? '✓ Answered' : '🔒 Closed';
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;opacity:.85;" onclick="hbOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
+          <span style="font-size:10px;color:var(--text-d);">${when}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;">${_hbEscape((p.devGoal || p.body || '').slice(0,180))}</div>
+        <div style="font-size:10px;color:#4c4aa8;">${statusIcon} · by ${_hbEscape(p.authorName||'Unknown')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (completed.length) {
+    if (closedDevPosts.length) {
+      html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-d);margin:16px 0 10px;">🛠 Completed Projects (${completed.length})</div>`;
+    }
+    html += completed.map(p=>{
+      const tags = (p.tags||[]).map(t=>`<span class="dh-tag">${t}</span>`).join('');
+      const assignees = (p.assignees||[]).map(id=>_dhUserName(id)).join(', ');
+      const commentCount = (p.comments||[]).length;
+      const approved = p.reviewStatus==='approved' ? '<span style="font-size:9px;background:#eaf4ef;color:#2e7d5e;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px;">✅ Approved</span>' : '';
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--green);" onclick="dhOpenDetail('${p.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">${p.title}${approved}</div>
+          <span style="font-size:10px;color:var(--text-d);">${p._updatedAt?new Date(p._updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-m);margin-bottom:6px;line-height:1.4;">${p.description||''}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${tags}
+          ${assignees?`<span style="font-size:10px;color:var(--text-d);">Team: ${assignees}</span>`:''}
+          ${commentCount?`<span style="font-size:10px;color:var(--text-d);">💬 ${commentCount} comments</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  list.innerHTML = html;
 }
 
 // ── Project Detail Modal ──
