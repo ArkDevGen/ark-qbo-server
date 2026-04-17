@@ -30774,6 +30774,8 @@ let _appVersion = null;       // version when page loaded
 let _appChanges = [];          // changelog at page load (baseline for "what's new")
 let _newChanges = [];          // changes added in the new deploy
 let _versionPollTimer = null;
+let _latestServerVersion = null;  // most recent version seen from /version
+let _latestServerChanges = null;  // most recent changes list seen from /version
 
 async function versionInit() {
   // Get current version on page load (with cache-buster)
@@ -30834,7 +30836,11 @@ async function versionCheck() {
     // Retry init if it failed the first time
     try {
       const resp = await fetch(ARK_SERVER + '/version?t=' + Date.now(), { cache: 'no-store' });
-      if (resp.ok) { _appVersion = (await resp.json()).version; }
+      if (resp.ok) {
+        const data = await resp.json();
+        _appVersion = data.version;
+        _appChanges = data.changes || [];
+      }
     } catch(_){}
     return;
   }
@@ -30851,6 +30857,8 @@ async function versionCheck() {
       // Compute diff: changes that are in the new list but not in the old
       const oldHashes = new Set((_appChanges||[]).map(c=>c.hash));
       _newChanges = (data.changes||[]).filter(c=>!oldHashes.has(c.hash));
+      _latestServerVersion = data.version;
+      _latestServerChanges = data.changes || [];
       versionShowBanner();
     }
   } catch (e) {
@@ -30924,8 +30932,13 @@ function versionShowBanner() {
 
   document.body.appendChild(banner);
 
-  // Stop polling once we've shown the banner
-  if (_versionPollTimer) { clearInterval(_versionPollTimer); _versionPollTimer = null; }
+  // Adopt the new version as the current baseline so the same banner
+  // doesn't re-show every 30s, but KEEP polling so the next deploy after
+  // this one (or a dismissed banner) still triggers a fresh banner.
+  if (_latestServerVersion) {
+    _appVersion = _latestServerVersion;
+    _appChanges = (_latestServerChanges || _appChanges || []);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
