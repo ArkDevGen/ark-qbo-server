@@ -143,8 +143,28 @@ if (process.env.AUTO_SEED_ADMIN === 'true' && _users.length === 0) {
           createdAt: new Date().toISOString(),
           lastLogin: null,
         });
+        // Also seed a test user so @mentions and notifications can be
+        // actually exercised on staging (mentions to yourself are skipped).
+        _users.push({
+          id: 'usr_' + crypto.randomUUID().slice(0, 8),
+          username: 'testuser',
+          passwordHash: hash, // same password as admin for simplicity
+          fname: 'Test',
+          lname: 'User',
+          email: 'test@arkfinancialservices.com',
+          role: 'am',
+          title: 'Staging Test Account',
+          phone: '',
+          color: '#4c4aa8',
+          status: 'Active',
+          assignedClients: [],
+          permissions: { ...DEFAULT_PERMISSIONS.am },
+          createdAt: new Date().toISOString(),
+          lastLogin: null,
+        });
         saveUsers();
         console.log(`✓ Auto-seeded admin on empty boot: ${username}`);
+        console.log(`✓ Auto-seeded test user: testuser (role: am)`);
       } catch (e) {
         console.log('Auto-seed failed:', e.message);
       }
