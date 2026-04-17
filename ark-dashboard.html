@@ -34942,12 +34942,24 @@ function batchConnectNext() {
   batchConnectClient(first.clientId, first.franchiseId || undefined);
 }
 
+let _batchConnectPending = null;
+
 function batchConnectClient(clientId, franchiseId) {
   const client = DB.clients.find(c => c.id === clientId);
   if (!client) { showToast('Client not found'); return; }
 
   const franchise = franchiseId ? (client.franchises || []).find(f => f.id === franchiseId) : null;
   const displayName = franchise ? (client.biz + ' → ' + (franchise.name || 'Franchise')) : (client.biz || client.nameQb || 'Unknown');
+
+  // Cancel any prior pending connection so a stale listener can't claim this realm
+  if (_batchConnectPending) {
+    window.removeEventListener('message', _batchConnectPending.handler);
+    clearInterval(_batchConnectPending.pollId);
+    if (_batchConnectPending.popup && !_batchConnectPending.popup.closed) {
+      try { _batchConnectPending.popup.close(); } catch(e) {}
+    }
+    _batchConnectPending = null;
+  }
 
   const nextName = document.getElementById('batch-next-name');
   if (nextName) nextName.textContent = '🔄 Connecting: ' + displayName;
@@ -34957,9 +34969,26 @@ function batchConnectClient(clientId, franchiseId) {
     'qbo-auth', 'width=600,height=700,left=200,top=100'
   );
 
-  window.addEventListener('message', async function handler(e) {
+  const pending = { clientId, franchiseId: franchiseId || null };
+
+  const cleanup = () => {
+    window.removeEventListener('message', pending.handler);
+    clearInterval(pending.pollId);
+    if (_batchConnectPending === pending) _batchConnectPending = null;
+  };
+
+  // Detect popup close without authorizing (user skipped) and drop the listener
+  pending.pollId = setInterval(() => {
+    if (popup && popup.closed) {
+      cleanup();
+      renderBatchConnect();
+    }
+  }, 500);
+
+  pending.handler = async function(e) {
     if (e.data?.type !== 'qbo-connected') return;
-    window.removeEventListener('message', handler);
+    if (_batchConnectPending !== pending) return; // superseded
+    cleanup();
     if (popup && !popup.closed) popup.close();
 
     const realmId = e.data.realmId;
@@ -35007,7 +35036,11 @@ function batchConnectClient(clientId, franchiseId) {
     showToast(`✓ ${displayName} linked to QBO`);
     qboLog('success', `Batch linked <strong>${displayName}</strong> → realm ${realmId.slice(0,10)}…`);
     renderBatchConnect();
-  });
+  };
+
+  pending.popup = popup;
+  window.addEventListener('message', pending.handler);
+  _batchConnectPending = pending;
 }
 
 async function batchLinkToExisting(clientId, realmId, franchiseId) {
