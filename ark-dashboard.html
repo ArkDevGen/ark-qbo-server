@@ -913,6 +913,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .hb-cat-bookkeeping{background:#fdf3e3;color:var(--amber);}
 .hb-cat-general{background:var(--surface2);color:var(--text-m);}
 .hb-cat-development{background:#ecebf5;color:#4c4aa8;}
+/* SMS message delete button: hidden by default, shown on hover of its wrapper */
+.sms-msg-wrap:hover .sms-msg-del{display:flex !important;}
+.sms-msg-del:hover{background:var(--red) !important;color:#fff !important;}
 .hb-cat-urgent{background:#fde8e8;color:var(--red);animation:pulseRed 2s ease-in-out infinite;}
 @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(176,58,58,0);}50%{box-shadow:0 0 0 4px rgba(176,58,58,.15);}}
 .hb-pri{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:var(--transition);}
@@ -19218,7 +19221,9 @@ function smsMatchClient(phone){
 
 // ── Get all conversations grouped by phone ──
 function smsGetConversations(){
-  const msgs = DB.smsMessages || [];
+  // Filter out tombstoned messages so deleted texts don't appear in threads,
+  // previews, conversation counts, or search matches.
+  const msgs = (DB.smsMessages || []).filter(m => !m._deleted);
   const byPhone = {};
   msgs.forEach(m=>{
     const key = m.phone;
@@ -19309,6 +19314,7 @@ function smsOpenThread(phone){
   // Messages
   const msgEl = document.getElementById('sms-thread-messages');
   const msgs = convo.messages.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+  const canDelete = (currentUser?.role === 'admin');
   let html = '';
   let lastDate = '';
   msgs.forEach(m=>{
@@ -19320,12 +19326,18 @@ function smsOpenThread(phone){
     }
     const timeStr = dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     const isOut = m.direction==='outbound';
-    html += `<div style="display:flex;justify-content:${isOut?'flex-end':'flex-start'};padding:2px 0;">
+    // Admin-only delete: tiny × button appears on hover (see CSS .sms-msg-wrap:hover .sms-msg-del)
+    const delBtn = canDelete && m.id
+      ? `<button class="sms-msg-del" title="Delete message" onclick="event.stopPropagation();smsDeleteMessage('${m.id}')"
+          style="position:absolute;top:-8px;${isOut?'left:-8px':'right:-8px'};width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:#fff;color:var(--red);font-size:12px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);padding:0;">×</button>`
+      : '';
+    html += `<div class="sms-msg-wrap" style="display:flex;justify-content:${isOut?'flex-end':'flex-start'};padding:2px 0;">
       <div style="max-width:75%;padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.4;position:relative;
         ${isOut
           ? 'background:#2e7d5e;color:#fff;border-bottom-right-radius:4px;'
           : 'background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;'
         }">
+        ${delBtn}
         ${m.body||''}
         <div style="font-size:9px;margin-top:4px;opacity:.7;text-align:${isOut?'right':'left'};">${timeStr}</div>
       </div>
@@ -19338,6 +19350,55 @@ function smsOpenThread(phone){
   document.getElementById('sms-thread-reply').style.display = '';
   document.getElementById('sms-reply-input').value = '';
   document.getElementById('sms-reply-input').focus();
+
+  // Admin-only "Delete conversation" button in the thread header
+  const linkEl2 = document.getElementById('sms-thread-client-link');
+  if(canDelete && linkEl2){
+    const existing = linkEl2.innerHTML;
+    linkEl2.innerHTML = existing + `<button class="btn btn-ghost btn-sm" onclick="smsDeleteConversation('${phone.replace(/'/g,"\\'")}')"
+      style="font-size:11px;color:var(--red);margin-left:6px;" title="Delete entire conversation">🗑 Delete</button>`;
+  }
+}
+
+// ── Delete SMS (admin-only, tombstone pattern) ──
+function smsDeleteMessage(id){
+  if(currentUser?.role !== 'admin'){ showToast('Only admins can delete messages'); return; }
+  if(!id) return;
+  if(!confirm('Delete this message? This cannot be undone.')) return;
+  const m = (DB.smsMessages||[]).find(x => x.id === id);
+  if(!m) return;
+  m._deleted = true;
+  m._updatedAt = new Date().toISOString();
+  saveDB();
+  // Re-render the thread to reflect the deletion
+  if(_smsActivePhone) smsOpenThread(_smsActivePhone);
+  showToast('Message deleted');
+}
+
+function smsDeleteConversation(phone){
+  if(currentUser?.role !== 'admin'){ showToast('Only admins can delete conversations'); return; }
+  if(!phone) return;
+  const convos = smsGetConversations();
+  const c = convos.find(x => x.phone === phone);
+  const count = c ? c.messages.length : 0;
+  if(!count){ showToast('Nothing to delete'); return; }
+  if(!confirm(`Delete this entire conversation (${count} message${count===1?'':'s'})? This cannot be undone.`)) return;
+  const now = new Date().toISOString();
+  (DB.smsMessages||[]).forEach(m => {
+    if(m.phone === phone && !m._deleted){
+      m._deleted = true;
+      m._updatedAt = now;
+    }
+  });
+  saveDB();
+  _smsActivePhone = null;
+  // Reset thread view + refresh sidebar
+  const msgEl = document.getElementById('sms-thread-messages');
+  if(msgEl) msgEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-d);font-size:12px;font-style:italic;">Select a conversation</div>';
+  document.getElementById('sms-thread-header').style.display = 'none';
+  document.getElementById('sms-thread-reply').style.display = 'none';
+  smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
+  showToast('Conversation deleted');
 }
 
 // ── Send reply from thread ──
