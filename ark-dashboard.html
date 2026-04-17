@@ -35081,6 +35081,19 @@ async function batchUnlinkClient(clientId, franchiseId) {
     if (statusRes.companies) qboAllCompanies = statusRes.companies;
   } catch(e) {}
 
+  // Refresh the Client Center list so the QB badge / linked state reflects the unlink
+  if (typeof renderClients === 'function') {
+    renderClients(document.getElementById('client-search')?.value || '');
+  }
+  // If the client edit modal is currently open for this client, refresh its QBO fields
+  if (DB._editClient === clientId) {
+    if (typeof setQBType === 'function') {
+      setQBType(client.qbType || '', client.qboBilling || '', client.qbdUser || '', client.qbdPass || '', client.qboRealmId || '', client.franchises || []);
+    }
+    const realmEl = document.getElementById('mc-qbo-realm-id');
+    if (realmEl && !franchise) realmEl.value = '';
+  }
+
   showToast(`✓ ${displayName} unlinked`);
   qboLog('info', `Unlinked <strong>${displayName}</strong> from realm ${realmId.slice(0,10)}…`);
   renderBatchConnect();
