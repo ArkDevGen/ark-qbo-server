@@ -6892,11 +6892,22 @@ app.get('/help/posts', requireAuth, (req, res) => {
 // Create or update a help post
 app.post('/help/posts', requireAuth, (req, res) => {
   try {
-    const { id, title, body, category, priority, mentionIds, attachments, status } = req.body;
+    const { id, title, body, category, priority, mentionIds, attachments, status,
+            devGoal, devCurrent, devTried, devCode, devErrors, devArea } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
     const userId = req.arkUser.userId;
     const userName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
     const validPri = ['urgent','high','low'].includes(priority) ? priority : 'low';
+    // Dev-specific fields only get applied when category=development.
+    // Strings that weren't sent stay undefined (not saved).
+    const devFields = (category === 'development') ? {
+      devGoal:    (devGoal    ?? '').toString(),
+      devCurrent: (devCurrent ?? '').toString(),
+      devTried:   (devTried   ?? '').toString(),
+      devCode:    (devCode    ?? '').toString(),
+      devErrors:  (devErrors  ?? '').toString(),
+      devArea:    (devArea    ?? '').toString(),
+    } : null;
     const posts = _loadHelpPosts();
     let post;
     if (id) {
@@ -6914,6 +6925,7 @@ app.post('/help/posts', requireAuth, (req, res) => {
         _updatedAt: new Date().toISOString(),
         _updatedBy: userName,
       });
+      if (devFields) Object.assign(post, devFields);
       // Priority changes go through dedicated endpoint with required note
     } else {
       post = {
@@ -6934,6 +6946,7 @@ app.post('/help/posts', requireAuth, (req, res) => {
         _updatedAt: new Date().toISOString(),
         _updatedBy: userName,
       };
+      if (devFields) Object.assign(post, devFields);
       posts.push(post);
     }
     _saveHelpPosts(posts);

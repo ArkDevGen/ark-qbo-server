@@ -6075,9 +6075,55 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
         </div>
         <div>
-          <label class="field-label">Details</label>
+          <label class="field-label" id="hb-body-label">Details</label>
           <textarea id="hb-body" class="field-input" rows="6" placeholder="Describe the issue or question. Include relevant client/account details..." style="resize:vertical;font-family:inherit;"></textarea>
         </div>
+
+        <!-- Development-only fields (hidden unless category=development) -->
+        <div id="hb-dev-fields" style="display:none;border-top:2px dashed var(--border);padding-top:14px;margin-top:4px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4c4aa8;margin-bottom:10px;">🛠️ Development Details</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div>
+              <label class="field-label">What I'm trying to do</label>
+              <textarea id="hb-dev-goal" class="field-input" rows="3" placeholder="Goal or desired outcome..." style="resize:vertical;font-family:inherit;"></textarea>
+            </div>
+            <div>
+              <label class="field-label">What's happening instead</label>
+              <textarea id="hb-dev-current" class="field-input" rows="3" placeholder="Actual behavior or bug..." style="resize:vertical;font-family:inherit;"></textarea>
+            </div>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label class="field-label">What I've already tried <span style="font-weight:400;color:var(--text-d);">(save the helper from repeating dead ends)</span></label>
+            <textarea id="hb-dev-tried" class="field-input" rows="3" placeholder="E.g. Tried clearing localStorage, checked console for errors, confirmed the env var is set..." style="resize:vertical;font-family:inherit;"></textarea>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label class="field-label">Relevant code <span style="font-weight:400;color:var(--text-d);">(paste code snippets, file paths, line numbers)</span></label>
+            <textarea id="hb-dev-code" class="field-input" rows="6" placeholder="// paste code here" style="resize:vertical;font-family:Consolas,Monaco,'Courier New',monospace;font-size:12px;background:#f7f8fa;"></textarea>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label class="field-label">Error messages / logs</label>
+            <textarea id="hb-dev-errors" class="field-input" rows="4" placeholder="Paste any console errors, server logs, or stack traces..." style="resize:vertical;font-family:Consolas,Monaco,'Courier New',monospace;font-size:12px;background:#f7f8fa;"></textarea>
+          </div>
+          <div>
+            <label class="field-label">Which area of the CRM</label>
+            <select id="hb-dev-area" class="field-input" style="height:36px;">
+              <option value="">— Select an area —</option>
+              <option value="dashboard">Dashboard UI (frontend)</option>
+              <option value="server">Server / API (backend)</option>
+              <option value="client-center">Client Center</option>
+              <option value="payroll">Payroll Center</option>
+              <option value="tax">Sales Tax Filing Center</option>
+              <option value="qbo">QBO Integration</option>
+              <option value="fax">Fax</option>
+              <option value="sms">SMS</option>
+              <option value="team-hub">Team Hub</option>
+              <option value="auth">Auth / Users / Permissions</option>
+              <option value="deployment">Deployment / Render</option>
+              <option value="other">Other / Not Sure</option>
+            </select>
+          </div>
+        </div>
+
         <div>
           <label class="field-label">Attachments <span style="font-weight:400;color:var(--text-d);">(PDFs, screenshots, forms — up to 15MB each, 10 files)</span></label>
           <input type="file" id="hb-files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
@@ -43921,6 +43967,15 @@ function hbOpenComposeModal(editPostId){
   document.getElementById('hb-files').value = '';
   _hbStagedAttachments = editingPost?.attachments?.slice() || [];
 
+  // Development-specific fields (empty for non-dev posts, populated when editing a dev post)
+  document.getElementById('hb-dev-goal').value    = editingPost?.devGoal    || '';
+  document.getElementById('hb-dev-current').value = editingPost?.devCurrent || '';
+  document.getElementById('hb-dev-tried').value   = editingPost?.devTried   || '';
+  document.getElementById('hb-dev-code').value    = editingPost?.devCode    || '';
+  document.getElementById('hb-dev-errors').value  = editingPost?.devErrors  || '';
+  document.getElementById('hb-dev-area').value    = editingPost?.devArea    || '';
+  hbOnCategoryChange();
+
   // Populate mention dropdown
   const sel = document.getElementById('hb-mention');
   const users = (_cachedServerUsers||[]).filter(u => u.id !== currentUser?.id && (!u.status || u.status.toLowerCase()==='active'));
@@ -43937,6 +43992,64 @@ function hbOpenComposeModal(editPostId){
   };
 
   openModal('modal-hb-compose');
+}
+
+// Toggle the Development-specific section of the compose modal based on
+// the selected category. Also tweaks the generic "Details" label so the
+// user knows the dev fields are the primary inputs when category=dev.
+function hbOnCategoryChange(){
+  const cat = document.getElementById('hb-category')?.value;
+  const devFields = document.getElementById('hb-dev-fields');
+  const bodyLabel = document.getElementById('hb-body-label');
+  const body = document.getElementById('hb-body');
+  if(!devFields) return;
+  const isDev = cat === 'development';
+  devFields.style.display = isDev ? '' : 'none';
+  if (bodyLabel) bodyLabel.textContent = isDev ? 'Brief summary' : 'Details';
+  if (body) body.placeholder = isDev
+    ? 'One-line summary of the problem (the detail fields below are where you\'ll paste code, errors, etc.)'
+    : 'Describe the issue or question. Include relevant client/account details...';
+}
+
+// Pretty-print the Development-specific fields in the detail modal.
+// Returns empty string for non-dev posts or dev posts with no extra fields.
+const HB_DEV_AREA_LABELS = {
+  'dashboard':'Dashboard UI (frontend)',
+  'server':'Server / API (backend)',
+  'client-center':'Client Center',
+  'payroll':'Payroll Center',
+  'tax':'Sales Tax Filing Center',
+  'qbo':'QBO Integration',
+  'fax':'Fax',
+  'sms':'SMS',
+  'team-hub':'Team Hub',
+  'auth':'Auth / Users / Permissions',
+  'deployment':'Deployment / Render',
+  'other':'Other / Not Sure',
+};
+function hbRenderDevDetails(p){
+  if (!p || p.category !== 'development') return '';
+  const hasAny = p.devGoal || p.devCurrent || p.devTried || p.devCode || p.devErrors || p.devArea;
+  if (!hasAny) return '';
+  const section = (label, value, mono) => {
+    if (!value) return '';
+    return `<div style="margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4c4aa8;margin-bottom:4px;">${label}</div>
+      <div style="${mono?"font-family:Consolas,Monaco,'Courier New',monospace;font-size:12px;background:#f7f8fa;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);":"font-size:13px;color:var(--text);line-height:1.5;"}white-space:pre-wrap;">${_hbEscape(value)}</div>
+    </div>`;
+  };
+  const areaLabel = p.devArea ? (HB_DEV_AREA_LABELS[p.devArea] || p.devArea) : '';
+  return `<div style="border:1px solid #d4d3e8;background:#fafafc;border-radius:8px;padding:14px;margin:8px 0 14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4c4aa8;">🛠️ Development Details</div>
+      ${areaLabel ? `<div style="font-size:11px;color:var(--text-d);">Area: <strong style="color:var(--text);">${_hbEscape(areaLabel)}</strong></div>` : ''}
+    </div>
+    ${section('Goal', p.devGoal)}
+    ${section('Current behavior', p.devCurrent)}
+    ${section('Already tried', p.devTried)}
+    ${section('Relevant code', p.devCode, true)}
+    ${section('Error messages / logs', p.devErrors, true)}
+  </div>`;
 }
 
 function hbRenderFilesPreview(newFiles){
@@ -43988,11 +44101,22 @@ async function hbSubmitPost(){
     } catch(e) { alert('Upload error: ' + e.message); }
   }
 
+  // Development-only fields (only sent when category=development so we
+  // don't pollute non-dev posts with empty strings)
+  const devPayload = (category === 'development') ? {
+    devGoal:    document.getElementById('hb-dev-goal').value.trim(),
+    devCurrent: document.getElementById('hb-dev-current').value.trim(),
+    devTried:   document.getElementById('hb-dev-tried').value.trim(),
+    devCode:    document.getElementById('hb-dev-code').value,    // preserve whitespace
+    devErrors:  document.getElementById('hb-dev-errors').value,  // preserve whitespace
+    devArea:    document.getElementById('hb-dev-area').value || '',
+  } : {};
+
   // Save post
   try {
     const resp = await authFetch(ARK_SERVER + '/help/posts', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id: id||undefined, title, body, category, priority, mentionIds, attachments }),
+      body: JSON.stringify({ id: id||undefined, title, body, category, priority, mentionIds, attachments, ...devPayload }),
     });
     if(!resp.ok){ const err=await resp.json(); throw new Error(err.error||'Failed'); }
     closeModal('modal-hb-compose');
@@ -44078,6 +44202,7 @@ function hbRenderDetail(p){
     </div>
     ${priHistoryHtml}
     <div style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-wrap;margin-bottom:12px;">${_hbEscape(p.body || '(no details)')}</div>
+    ${hbRenderDevDetails(p)}
     ${renderAttachments(p.attachments)}
 
     <div style="display:flex;gap:6px;margin:14px 0;flex-wrap:wrap;">
