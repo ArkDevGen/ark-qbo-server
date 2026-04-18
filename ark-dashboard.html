@@ -1224,6 +1224,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="nav-item" id="nav-integrations" onclick="nav('integrations')"><span class="ni">🔗</span>Integrations</div>
     </div>
 
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Tools <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group">
+      <div class="nav-item" id="nav-tools" onclick="nav('tools')"><span class="ni">🧰</span>Tools Center</div>
+    </div>
+
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
       <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
@@ -5802,6 +5807,34 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="integrations-root"></div>
   </div>
 
+  <!-- ════ TOOLS CENTER ════ -->
+  <div class="view content" id="view-tools" style="padding:28px 32px;">
+    <div style="max-width:1100px;margin:0 auto;">
+      <div style="margin-bottom:24px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--navy);margin-bottom:4px;">Tools</div>
+        <div style="font-size:13px;color:var(--text-m);">Small utilities used across the firm. Click a tool to launch it.</div>
+      </div>
+      <div id="tools-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
+    </div>
+  </div>
+
+  <!-- Tools: Client picker modal (reused by tools that need a client) -->
+  <div class="overlay" id="modal-tools-clientpicker" style="display:none" onclick="overlayClose(event,'modal-tools-clientpicker')">
+    <div class="modal" style="max-width:520px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title" id="tp-title">Select Client</div>
+          <div id="tp-subtitle" style="font-size:12px;color:var(--text-m);margin-top:2px;"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-tools-clientpicker')">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <input id="tp-search" class="field-input" placeholder="Search by business name…" oninput="toolsPickerFilter()" style="width:100%;margin-bottom:12px;">
+        <div id="tp-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ P&L REVIEWS CENTER ══ -->
   <div class="view content" id="view-plreviews" style="padding:24px 28px;">
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
@@ -6187,6 +6220,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="mc-tab" data-tab="7" onclick="mcTab(7)" id="mc-tab-onboarding">✅ Onboarding</div>
       <div class="mc-tab" data-tab="8" onclick="mcTab(8)" id="mc-tab-eftps">🏛 EFTPS</div>
       <div class="mc-tab" data-tab="9" onclick="mcTab(9)" id="mc-tab-files">📁 Files</div>
+      <div class="mc-tab" data-tab="10" onclick="mcTab(10)" id="mc-tab-checks">🖨 Checks</div>
     </div>
 
     <div class="modal-body" style="flex:1;overflow-y:auto;">
@@ -6875,6 +6909,83 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
           <!-- Hidden file input -->
           <input type="file" id="mcf-file-input" multiple style="display:none;" onchange="mcfHandleFiles(this.files)">
+
+        </div>
+      </div>
+
+      <!-- ─────────────────────────────────────────────────────
+           mc-panel-10  CHECKS  (blank voucher check printing)
+           ───────────────────────────────────────────────────── -->
+      <div class="mc-panel" id="mc-panel-10">
+        <div class="form-grid">
+
+          <div class="section-label">Check Stock Setup</div>
+          <div style="grid-column:1/-1;font-size:12px;color:var(--text-d);margin-bottom:4px;">
+            Prints blank voucher checks (standard QuickBooks 3-part stock) onto pre-printed stock for use with your MICR printer.
+            The check face, bank info, and MICR line are overlaid — the check number is the only thing that increments per page.
+          </div>
+
+          <div class="fg"><label>Bank Name</label>
+            <input id="mc-chk-bankname" class="field-input" placeholder="First National Bank"></div>
+          <div class="fg"><label>Fractional Routing</label>
+            <input id="mc-chk-fraction" class="field-input" placeholder="11-35/1210" style="font-family:monospace;"></div>
+          <div class="fg full"><label>Bank Address Line 1</label>
+            <input id="mc-chk-bankaddr1" class="field-input" placeholder="123 Main St"></div>
+          <div class="fg full"><label>Bank Address Line 2</label>
+            <input id="mc-chk-bankaddr2" class="field-input" placeholder="City, State ZIP"></div>
+
+          <div class="fg"><label>Routing Number <span style="font-size:10px;color:var(--text-d);">— defaults to ACH routing</span></label>
+            <input id="mc-chk-routing" class="field-input" placeholder="9-digit routing" maxlength="9" style="font-family:monospace;"></div>
+          <div class="fg"><label>Account Number <span style="font-size:10px;color:var(--text-d);">— defaults to ACH account</span></label>
+            <input id="mc-chk-account" class="field-input" placeholder="Account number" style="font-family:monospace;"></div>
+
+          <div class="fg"><label>Last Check # Printed</label>
+            <input id="mc-chk-lastnum" class="field-input" placeholder="0" style="font-family:monospace;"></div>
+          <div class="fg"><label>&nbsp;</label>
+            <button type="button" onclick="chkFillFromAch()" class="btn btn-sm"
+              style="background:var(--surface2);color:var(--text);border:1px solid var(--border);height:40px;">
+              ↩ Copy Routing/Account from ACH
+            </button>
+          </div>
+
+          <hr class="section-divider" style="grid-column:1/-1;">
+          <div class="section-label">Print Blank Checks</div>
+
+          <div class="fg"><label>Starting Check #</label>
+            <input id="mc-chk-startnum" class="field-input" placeholder="1001" style="font-family:monospace;"></div>
+          <div class="fg"><label>Quantity</label>
+            <input id="mc-chk-qty" class="field-input" type="number" min="1" max="500" value="10" style="font-family:monospace;"></div>
+
+          <div class="fg full" style="margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="mc-chk-override-toggle" onchange="document.getElementById('mc-chk-override-box').style.display=this.checked?'grid':'none';">
+              <span>Override account for this print batch only</span>
+            </label>
+          </div>
+
+          <div id="mc-chk-override-box" style="grid-column:1/-1;display:none;grid-template-columns:1fr 1fr;gap:12px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+            <div class="fg"><label>Override Routing</label>
+              <input id="mc-chk-override-routing" class="field-input" placeholder="9-digit routing" maxlength="9" style="font-family:monospace;"></div>
+            <div class="fg"><label>Override Account</label>
+              <input id="mc-chk-override-account" class="field-input" placeholder="Account number" style="font-family:monospace;"></div>
+            <div class="fg"><label>Override Bank Name (optional)</label>
+              <input id="mc-chk-override-bankname" class="field-input" placeholder="Leave blank to keep default"></div>
+            <div class="fg"><label>Override Fraction (optional)</label>
+              <input id="mc-chk-override-fraction" class="field-input" placeholder="Leave blank to keep default" style="font-family:monospace;"></div>
+          </div>
+
+          <div class="fg full" style="margin-top:12px;">
+            <button type="button" onclick="chkGeneratePdf()" class="btn btn-primary"
+              style="width:100%;height:48px;font-size:14px;font-weight:600;">
+              🖨 Generate Check PDF
+            </button>
+            <div id="mc-chk-status" style="font-size:12px;color:var(--text-d);margin-top:8px;text-align:center;"></div>
+          </div>
+
+          <div class="fg full" style="margin-top:4px;padding:10px 14px;background:#fff8e6;border:1px solid #f0d27a;border-radius:var(--radius);font-size:12px;color:#5a4416;">
+            <strong>⚠ First print:</strong> Run ONE test check through your bank's deposit workflow before batch-printing.
+            MICR alignment must be verified once on your hardware + toner. Once it scans cleanly, you're good.
+          </div>
 
         </div>
       </div>
@@ -9166,7 +9277,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews',tools:'tools center'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   if(taxChildren.includes(page)){
@@ -9179,12 +9290,13 @@ function nav(page){
   } else {
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Integration Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews',tools:'Tools Center'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
   if(page==='dashboard') renderDashboard();
   if(page==='clients') renderClients();
+  if(page==='tools') renderToolsCenter();
   if(page==='acctmgrs') renderAMs();
   if(page==='employees'){ const f=document.getElementById('emp-client-filter'); if(f) f.value=''; empTab('search'); renderEmps(); }
   if(page==='reports'){
@@ -12994,12 +13106,12 @@ function mcTab(n){
   document.querySelectorAll('.mc-tab').forEach((t,i)=>t.classList.toggle('active',i===n));
   document.querySelectorAll('.mc-panel').forEach((p,i)=>p.classList.toggle('active',i===n));
   document.getElementById('mc-prev-btn').style.display = n===0?'none':'inline-flex';
-  document.getElementById('mc-next-btn').style.display = n===9?'none':'inline-flex';
+  document.getElementById('mc-next-btn').style.display = n===10?'none':'inline-flex';
   if(n===7) obRenderChecklist();
   if(n===4) document.getElementById('mc-tax-ein-display').value = document.getElementById('mc-ein').value||'';
   if(n===5) renderWLList();
 }
-function mcTabStep(dir){ mcTab(Math.max(0,Math.min(9,mcCurrentTab+dir))); }
+function mcTabStep(dir){ mcTab(Math.max(0,Math.min(10,mcCurrentTab+dir))); }
 
 // ══════════════════════════════════════════════
 //  WORK LOCATIONS
@@ -13325,6 +13437,23 @@ function openEditClient(id){
   document.getElementById('mc-ach-routing').value=c.achRouting||'';
   document.getElementById('mc-ach-account').value=c.achAccount||'';
   document.getElementById('mc-ach-checklink').value=c.achChecklink||'';
+  // Check-printing fields (Checks tab)
+  if(document.getElementById('mc-chk-bankname')){
+    document.getElementById('mc-chk-bankname').value  = c.chkBankName  || c.achBank || '';
+    document.getElementById('mc-chk-bankaddr1').value = c.chkBankAddr1 || '';
+    document.getElementById('mc-chk-bankaddr2').value = c.chkBankAddr2 || '';
+    document.getElementById('mc-chk-fraction').value  = c.chkFraction  || '';
+    document.getElementById('mc-chk-routing').value   = c.chkRouting   || c.achRouting || '';
+    document.getElementById('mc-chk-account').value   = c.chkAccount   || c.achAccount || '';
+    document.getElementById('mc-chk-lastnum').value   = c.chkLastNum   || '';
+    document.getElementById('mc-chk-startnum').value  = c.chkLastNum   ? String(parseInt(c.chkLastNum,10)+1) : '1001';
+    document.getElementById('mc-chk-qty').value       = '10';
+    document.getElementById('mc-chk-override-toggle').checked = false;
+    document.getElementById('mc-chk-override-box').style.display = 'none';
+    ['mc-chk-override-routing','mc-chk-override-account','mc-chk-override-bankname','mc-chk-override-fraction']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('mc-chk-status').textContent = '';
+  }
   document.getElementById('mc-bank-url').value=c.bankUrl||'';
   document.getElementById('mc-bank-user').value=c.bankUser||'';
   document.getElementById('mc-bank-pass').value=c.bankPass||'';
@@ -13438,6 +13567,14 @@ function saveClient(){
     achRouting:  document.getElementById('mc-ach-routing')?.value.trim()||'',
     achAccount:  document.getElementById('mc-ach-account')?.value.trim()||'',
     achChecklink:document.getElementById('mc-ach-checklink')?.value.trim()||'',
+    // Check-printing fields
+    chkBankName:  document.getElementById('mc-chk-bankname')?.value.trim()||'',
+    chkBankAddr1: document.getElementById('mc-chk-bankaddr1')?.value.trim()||'',
+    chkBankAddr2: document.getElementById('mc-chk-bankaddr2')?.value.trim()||'',
+    chkFraction:  document.getElementById('mc-chk-fraction')?.value.trim()||'',
+    chkRouting:   document.getElementById('mc-chk-routing')?.value.trim()||'',
+    chkAccount:   document.getElementById('mc-chk-account')?.value.trim()||'',
+    chkLastNum:   document.getElementById('mc-chk-lastnum')?.value.trim()||'',
     bankUrl:     document.getElementById('mc-bank-url')?.value.trim()||'',
     bankUser:    document.getElementById('mc-bank-user')?.value.trim()||'',
     bankPass:    document.getElementById('mc-bank-pass')?.value.trim()||'',
@@ -22988,6 +23125,279 @@ function propSelectClient(id, name){
     const amSel = document.getElementById('prop-am');
     if(amSel) amSel.value = client.am;
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  TOOLS CENTER
+//  Grab-bag of small utilities. Each tool is a card in the grid.
+//  Tools that need a client use openToolsClientPicker(onPick).
+// ════════════════════════════════════════════════════════════════
+const TOOLS_REGISTRY = [
+  {
+    id: 'print-checks',
+    icon: '🖨',
+    title: 'Print Blank Checks',
+    desc: 'Generate blank voucher checks with MICR line for a client. Opens their Client Center on the Checks tab.',
+    tags: ['payroll','banking'],
+    launch: () => openToolsClientPicker({
+      title: 'Print Blank Checks',
+      subtitle: 'Pick a client to load their bank details and print blank checks.',
+      requireBank: false,
+      onPick: (c) => { closeModal('modal-tools-clientpicker'); openEditClient(c.id); setTimeout(()=>mcTab(10), 50); }
+    })
+  }
+];
+
+function renderToolsCenter(){
+  const grid = document.getElementById('tools-grid');
+  if(!grid) return;
+  grid.innerHTML = TOOLS_REGISTRY.map(t => `
+    <div class="card" style="padding:18px;border:1px solid var(--border);border-radius:var(--radius);background:#fff;display:flex;flex-direction:column;gap:10px;min-height:160px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:26px;line-height:1;">${t.icon}</div>
+        <div style="flex:1;font-weight:700;font-size:15px;color:var(--navy);">${t.title}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-m);line-height:1.5;flex:1;">${t.desc}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">
+        ${(t.tags||[]).map(tag=>`<span style="font-size:10px;background:var(--surface2);color:var(--text-d);padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px;">${tag}</span>`).join('')}
+      </div>
+      <button onclick="(TOOLS_REGISTRY.find(x=>x.id==='${t.id}')).launch()" class="btn btn-primary btn-sm" style="margin-top:4px;">Open →</button>
+    </div>
+  `).join('');
+}
+
+let _tpOnPick = null;
+let _tpFiltered = [];
+function openToolsClientPicker(opts){
+  _tpOnPick = opts.onPick;
+  document.getElementById('tp-title').textContent = opts.title || 'Select Client';
+  document.getElementById('tp-subtitle').textContent = opts.subtitle || '';
+  document.getElementById('tp-search').value = '';
+  _tpFiltered = (DB.clients||[]).slice().sort((a,b)=>(a.biz||'').localeCompare(b.biz||''));
+  toolsPickerRender();
+  document.getElementById('modal-tools-clientpicker').style.display = 'flex';
+  setTimeout(()=>document.getElementById('tp-search').focus(), 80);
+}
+function toolsPickerFilter(){
+  const q = document.getElementById('tp-search').value.trim().toLowerCase();
+  const all = (DB.clients||[]).slice().sort((a,b)=>(a.biz||'').localeCompare(b.biz||''));
+  _tpFiltered = q ? all.filter(c => (c.biz||'').toLowerCase().includes(q)) : all;
+  toolsPickerRender();
+}
+function toolsPickerRender(){
+  const list = document.getElementById('tp-list');
+  if(!list) return;
+  if(_tpFiltered.length === 0){
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-d);font-size:13px;">No clients found.</div>';
+    return;
+  }
+  list.innerHTML = _tpFiltered.map(c => `
+    <div onclick="toolsPickerChoose('${c.id}')" style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--text);">${c.biz||'(no name)'}</div>
+        <div style="font-size:11px;color:var(--text-d);">${c.entity||''}${c.chkLastNum?` • last check #${c.chkLastNum}`:''}</div>
+      </div>
+      <span style="font-size:16px;color:var(--text-d);">→</span>
+    </div>
+  `).join('');
+}
+function toolsPickerChoose(id){
+  const c = (DB.clients||[]).find(x=>x.id===id);
+  if(!c || !_tpOnPick) return;
+  _tpOnPick(c);
+  _tpOnPick = null;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BLANK VOUCHER CHECK PRINTING  (Client Center → 🖨 Checks tab)
+//  Overlays check-face + stub info onto standard QuickBooks 3-part
+//  voucher check stock. MICR line uses embedded E-13B font.
+//  GnuMICR mapping: A = Transit (⑆), C = On-Us (⑈)
+// ════════════════════════════════════════════════════════════════
+const CHK_MICR_CHAR = { TRANSIT: 'A', ONUS: 'C' }; // GnuMICR font mapping
+let _chkMicrFontB64 = null;
+
+function chkFillFromAch(){
+  const r = document.getElementById('mc-ach-routing')?.value.trim()||'';
+  const a = document.getElementById('mc-ach-account')?.value.trim()||'';
+  const b = document.getElementById('mc-ach-bank')?.value.trim()||'';
+  if(!r && !a){ alert('No ACH routing/account on file. Fill those in on the Payroll/ACH tab first.'); return; }
+  document.getElementById('mc-chk-routing').value = r;
+  document.getElementById('mc-chk-account').value = a;
+  if(b && !document.getElementById('mc-chk-bankname').value.trim()){
+    document.getElementById('mc-chk-bankname').value = b;
+  }
+}
+
+async function chkLoadMicrFont(){
+  if(_chkMicrFontB64) return _chkMicrFontB64;
+  try {
+    const res = await fetch((typeof ARK_SERVER!=='undefined'?ARK_SERVER:'') + '/fonts/micr.ttf');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const buf = await res.arrayBuffer();
+    // Convert ArrayBuffer to base64
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for(let i=0;i<bytes.byteLength;i++) bin += String.fromCharCode(bytes[i]);
+    _chkMicrFontB64 = btoa(bin);
+    return _chkMicrFontB64;
+  } catch(e){
+    console.warn('[chk] MICR font not available:', e.message);
+    return null;
+  }
+}
+
+async function chkGeneratePdf(){
+  const statusEl = document.getElementById('mc-chk-status');
+  const setStatus = (msg,color)=>{ statusEl.textContent=msg; statusEl.style.color=color||'var(--text-d)'; };
+
+  // ── Gather inputs ──
+  const startNum = parseInt(document.getElementById('mc-chk-startnum').value,10);
+  const qty = parseInt(document.getElementById('mc-chk-qty').value,10);
+  if(!startNum || startNum < 1){ alert('Enter a valid starting check number.'); return; }
+  if(!qty || qty < 1 || qty > 500){ alert('Enter a quantity between 1 and 500.'); return; }
+
+  const useOverride = document.getElementById('mc-chk-override-toggle').checked;
+  let routing  = (document.getElementById('mc-chk-routing').value||'').replace(/\D/g,'');
+  let account  = (document.getElementById('mc-chk-account').value||'').replace(/\D/g,'');
+  let bankName = document.getElementById('mc-chk-bankname').value.trim();
+  let fraction = document.getElementById('mc-chk-fraction').value.trim();
+  const bankA1 = document.getElementById('mc-chk-bankaddr1').value.trim();
+  const bankA2 = document.getElementById('mc-chk-bankaddr2').value.trim();
+
+  if(useOverride){
+    const oR = (document.getElementById('mc-chk-override-routing').value||'').replace(/\D/g,'');
+    const oA = (document.getElementById('mc-chk-override-account').value||'').replace(/\D/g,'');
+    const oB = document.getElementById('mc-chk-override-bankname').value.trim();
+    const oF = document.getElementById('mc-chk-override-fraction').value.trim();
+    if(oR) routing = oR;
+    if(oA) account = oA;
+    if(oB) bankName = oB;
+    if(oF) fraction = oF;
+  }
+
+  if(routing.length !== 9){ alert('Routing number must be 9 digits. Currently: '+routing.length+' digits.'); return; }
+  if(!account){ alert('Account number is required.'); return; }
+  if(!bankName){ alert('Bank name is required.'); return; }
+
+  // Business info (from Business tab)
+  const biz      = document.getElementById('mc-biz')?.value.trim()||'';
+  const addrSt   = document.getElementById('mc-addr-street')?.value.trim()||'';
+  const addrCity = document.getElementById('mc-addr-city')?.value.trim()||'';
+  const addrSt2  = document.getElementById('mc-addr-state')?.value||'';
+  const addrZip  = document.getElementById('mc-addr-zip')?.value.trim()||'';
+  const phone    = document.getElementById('mc-phone')?.value.trim()||'';
+  if(!biz){ alert('Business name is required (Business tab).'); return; }
+
+  setStatus('Loading jsPDF…');
+
+  // ── Load jsPDF ──
+  if(typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined'){
+    await new Promise((res, rej)=>{
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const jsPDF = window.jsPDF?.jsPDF || window.jspdf?.jsPDF || window.jsPDF;
+
+  setStatus('Loading MICR font…');
+  const fontB64 = await chkLoadMicrFont();
+  const hasFont = !!fontB64;
+  if(!hasFont){
+    const proceed = confirm('MICR E-13B font not found at /fonts/micr.ttf.\n\nThe PDF will still generate but the MICR line will use a monospace placeholder — the checks will NOT scan at the bank.\n\nProceed anyway for layout preview?');
+    if(!proceed){ setStatus('Cancelled — drop micr.ttf into the fonts/ folder.', 'var(--red)'); return; }
+  }
+
+  setStatus('Generating PDF…');
+
+  const doc = new jsPDF({ unit:'pt', format:'letter' });
+  const PW = 612, PH = 792;
+
+  if(hasFont){
+    doc.addFileToVFS('micr.ttf', fontB64);
+    doc.addFont('micr.ttf', 'MICR', 'normal');
+  }
+
+  // Layout constants (all in points; 72pt = 1")
+  const CHECK_H  = 252;           // check face = top 3.5"
+  const STUB1_Y  = 252;
+  const STUB2_Y  = 522;
+  const MICR_Y   = CHECK_H - 32;  // ~0.44" from bottom of check face
+  const LEFT_M   = 36;            // 0.5" left margin
+
+  const drawCheckFace = (checkNum) => {
+    // Business block (top-left)
+    doc.setTextColor(20,20,20);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(biz, LEFT_M, 32);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    if(addrSt) doc.text(addrSt, LEFT_M, 46);
+    const cityLine = [addrCity, addrSt2, addrZip].filter(Boolean).join(', ').replace(', '+(addrZip||''), ' '+(addrZip||'')).trim();
+    if(cityLine) doc.text(cityLine, LEFT_M, 58);
+    if(phone) doc.text(phone, LEFT_M, 70);
+
+    // Bank block (middle-ish, about 3" from left edge)
+    const bankX = 250;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text(bankName, bankX, 32);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    if(bankA1) doc.text(bankA1, bankX, 46);
+    if(bankA2) doc.text(bankA2, bankX, 58);
+    if(fraction){
+      doc.setFontSize(9);
+      doc.text(fraction, bankX, 82);
+    }
+
+    // Check number (top-right, large)
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.setTextColor(20,20,20);
+    doc.text(String(checkNum), PW - 50, 32, { align:'right' });
+
+    // MICR line at bottom of check face
+    // Format: ⑈ check# ⑈   ⑆ routing ⑆   account ⑈
+    const T = CHK_MICR_CHAR.TRANSIT;
+    const O = CHK_MICR_CHAR.ONUS;
+    const micrText = `${O}${checkNum}${O}  ${T}${routing}${T}  ${account}${O}`;
+    if(hasFont){
+      doc.setFont('MICR','normal');
+      doc.setFontSize(14);
+      // MICR must sit in the clear band 5/8" from bottom = ~45pt
+      doc.text(micrText, LEFT_M + 100, MICR_Y);
+    } else {
+      doc.setFont('courier','bold');
+      doc.setFontSize(12);
+      doc.setTextColor(200,0,0);
+      doc.text('[MICR PLACEHOLDER — NOT SCANNABLE] '+micrText, LEFT_M, MICR_Y);
+      doc.setTextColor(20,20,20);
+    }
+  };
+
+  const drawStub = (yOffset, checkNum) => {
+    doc.setTextColor(20,20,20);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text(biz, LEFT_M, yOffset + 20);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text('Check # '+checkNum, PW - 50, yOffset + 20, { align:'right' });
+  };
+
+  for(let i=0; i<qty; i++){
+    if(i > 0) doc.addPage();
+    const n = startNum + i;
+    drawCheckFace(n);
+    drawStub(STUB1_Y, n);
+    drawStub(STUB2_Y, n);
+  }
+
+  const lastNum = startNum + qty - 1;
+  const fileName = `blank-checks-${(biz||'client').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${startNum}-${lastNum}.pdf`;
+  doc.save(fileName);
+
+  // Update last-printed ref on the form (user still has to Save client to persist)
+  document.getElementById('mc-chk-lastnum').value = String(lastNum);
+  document.getElementById('mc-chk-startnum').value = String(lastNum + 1);
+  setStatus(`✓ Generated ${qty} check${qty>1?'s':''} (${startNum}–${lastNum}). Save the client to record the last printed #.`, 'var(--green)');
 }
 
 function propCollect(){

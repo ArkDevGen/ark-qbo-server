@@ -1644,6 +1644,9 @@ const TEMP_DIR = path.join(require('os').tmpdir(), 'ark-fax-temp');
 fs.mkdirSync(TEMP_DIR, { recursive: true });
 app.use('/temp', express.static(TEMP_DIR));
 
+// Static fonts (MICR E-13B for check printing, etc.)
+app.use('/fonts', express.static(path.join(__dirname, 'fonts')));
+
 // ─────────────────────────────────────────────────────────────────
 // FAX: Send via Sinch Fax API v3
 // Dashboard sends: { toNumber, fileName, fileData (base64) }
