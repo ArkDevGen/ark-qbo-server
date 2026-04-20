@@ -2420,8 +2420,9 @@ function applyPrefillData(storePrefill) {
               ${unmatchedPrefill.length} employee${unmatchedPrefill.length !== 1 ? 's have' : ' has'} pre-populated hours for this store but ${unmatchedPrefill.length !== 1 ? 'are' : 'is'} NOT on the roster — their hours were skipped:
             </div>
             <ul style="margin:4px 0 6px 18px;padding:0;font-size:12px;line-height:1.5;">${rows}</ul>
-            <div style="font-size:12px;">
-              Add them to this store's roster (use <strong>+ Add Employee</strong> below), then switch stores and back to re-apply, or match them in Homebase to an employee already on this roster.
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
+              <button type="button" onclick="prefillReconcileStart()" style="background:#d98e00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Match missing employees →</button>
+              <span style="font-size:12px;color:#7a5100;">or use <strong>+ Add Employee</strong> below to add someone brand new.</span>
             </div>
           </div>
         </div>
@@ -2432,6 +2433,115 @@ function applyPrefillData(storePrefill) {
       importStatus.style.color = 'var(--accent)';
       importStatus.textContent = '✓ Hours pre-populated by Ark Financial — please review each employee, make any corrections, then confirm this store.';
     }
+  }
+}
+
+// ─── Prefill reconciliation ──────────────────────────────────────
+// Launched from the amber "unmatched" banner shown by applyPrefillData.
+// Re-uses the existing bulk-import reconciliation modal so the user can
+// LINK an existing employee from another store to the current store
+// (preferred — avoids duplicates) or add a brand-new employee. After the
+// user resolves the unmatched list, onStoreChange re-fetches the roster
+// and re-applies the prefill, which will now populate the newly-linked
+// employees.
+async function prefillReconcileStart() {
+  const storeSel = document.getElementById('entry-store');
+  const storeId = storeSel?.value;
+  if (!storeId) return;
+  const storeName = storeSel.selectedOptions[0]?.text || '';
+  const storeNum = storeName.replace(/[^0-9]/g, '');
+
+  const statusEl = document.getElementById('homebase-import-status');
+  const prevHTML = statusEl ? statusEl.innerHTML : '';
+  if (statusEl) statusEl.innerHTML = '<div style="padding:6px 0;color:#7a5100;font-size:12px;">Loading roster…</div>';
+
+  try {
+    // Fetch a fresh roster + prefill for this store (prefill might have
+    // been updated since the page loaded)
+    const resp = await fetch(`${API}/payroll/employees/${_clientSlug}/${storeId}`, {
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    const data = await resp.json();
+    const storeEmps = data.employees || [];
+    const prefill = data.prefillData;
+    if (!prefill || !prefill.employees) {
+      if (statusEl) statusEl.innerHTML = prevHTML;
+      alert('No pre-populated data found for this store.');
+      return;
+    }
+
+    // Preload all-employees so the reconcile modal can offer picks from
+    // other stores without an extra round-trip per row
+    if (!_reconcileAllEmployees) {
+      try {
+        const allResp = await fetch(`${API}/payroll/employees-all/${_clientSlug}`, {
+          headers: { 'Authorization': `Bearer ${_token}` },
+        });
+        const allData = await allResp.json();
+        _reconcileAllEmployees = allData.employees || [];
+      } catch(e) {
+        _reconcileAllEmployees = [];
+      }
+    }
+
+    // Recompute unmatched against the FRESH roster (may already have
+    // changed if the user added someone since the banner was shown)
+    const unmatched = [];
+    prefill.employees.forEach(pe => {
+      let found = storeEmps.some(emp =>
+        namesMatch(emp.firstName, pe.firstName) && namesMatch(emp.lastName, pe.lastName)
+      );
+      if (!found) {
+        found = storeEmps.some(emp =>
+          emp.goByName && namesMatch(emp.goByName, pe.firstName) && namesMatch(emp.lastName, pe.lastName)
+        );
+      }
+      if (!found) {
+        const nickKey = getNicknameKey(pe.firstName, pe.lastName);
+        const knownId = _nicknameMap[nickKey];
+        if (knownId && storeEmps.some(e => e.id === knownId)) found = true;
+      }
+      if (found) return;
+      const reg = parseFloat(pe.regHours) || 0;
+      const ot  = parseFloat(pe.otHours)  || 0;
+      const pto = parseFloat(pe.ptoHours) || 0;
+      const hol = parseFloat(pe.holidayHours) || 0;
+      if (reg + ot + pto + hol > 0) {
+        unmatched.push({ firstName: pe.firstName, lastName: pe.lastName });
+      }
+    });
+
+    if (unmatched.length === 0) {
+      // Something already got added since the banner rendered — just
+      // re-apply the prefill and let the happy-path banner show.
+      await onStoreChange();
+      return;
+    }
+
+    // Single-store queue — reuses the same modal as bulk-import
+    _reconcileQueue = [{
+      storeId,
+      storeNum,
+      storeName,
+      unmatched,
+      storeEmps,
+    }];
+    _reconcileIdx = 0;
+    _reconcileExpandedRow = null;
+    _reconcilePendingMatch = null;
+    _reconcileCallback = async () => {
+      _reconcileCallback = null;
+      // Re-run the store load: refreshes _employees (now includes anyone
+      // the user linked or added) and re-applies prefill, which will now
+      // populate those employees' rows. If the user skipped some, the
+      // banner re-renders with just the ones still unresolved.
+      await onStoreChange();
+    };
+    reconcileShowStore(0);
+  } catch(e) {
+    console.error('prefillReconcileStart failed:', e);
+    if (statusEl) statusEl.innerHTML = prevHTML;
+    alert('Could not load the roster — please refresh the page and try again.');
   }
 }
 
