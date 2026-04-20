@@ -309,6 +309,64 @@ app.post('/auth/login', async (req, res) => {
   return res.status(400).json({ error: 'Username/password or API key required' });
 });
 
+// ─── Staging auto-login (no password) ────────────────────────────
+// Only responds on the staging deployment — gated by hostname. Mints a
+// session for the shared staging admin so the sandbox skips the login
+// screen. Auto-seeds the default arkdev user if the staging DB is empty
+// (staging has a disposable disk, so fresh deploys start with no users).
+app.post('/auth/staging-login', async (req, res) => {
+  const host = (req.headers.host || '').toLowerCase();
+  const hostname = (req.hostname || '').toLowerCase();
+  const isStaging = host.includes('staging') || hostname.includes('staging');
+  if (!isStaging) {
+    return res.status(403).json({ error: 'Staging-only endpoint' });
+  }
+
+  // Seed the default admin if the DB is empty
+  if (_users.length === 0) {
+    const apiKey = process.env.ARK_API_KEY;
+    if (!apiKey) return res.status(503).json({ error: 'ARK_API_KEY not set — cannot seed staging user' });
+    const hash = await bcrypt.hash(apiKey, 10);
+    _users.push({
+      id: 'usr_' + crypto.randomUUID().slice(0, 8),
+      username: 'arkdev',
+      passwordHash: hash,
+      fname: 'ARK',
+      lname: 'Dev',
+      email: 'dev@arkfinancialservices.com',
+      role: 'admin',
+      title: 'Owner / Admin',
+      phone: '',
+      color: '#1a2440',
+      status: 'Active',
+      assignedClients: [],
+      permissions: { ...DEFAULT_PERMISSIONS.admin },
+      createdAt: new Date().toISOString(),
+      lastLogin: null,
+    });
+    saveUsers();
+    console.log('Auth (staging): auto-seeded arkdev user');
+  }
+
+  let user = _users.find(u => u.username === 'arkdev' && u.status !== 'Inactive');
+  if (!user) user = _users.find(u => u.role === 'admin' && u.status !== 'Inactive');
+  if (!user) return res.status(503).json({ error: 'No active staging user available' });
+
+  user.lastLogin = new Date().toISOString();
+  saveUsers();
+
+  const token = crypto.randomUUID();
+  _sessions.set(token, {
+    userId: user.id,
+    userName: `${user.fname} ${user.lname}`,
+    role: user.role,
+    user: safeUser(user),
+    createdAt: Date.now(),
+  });
+  console.log(`Auth (staging): auto-login as ${user.username}`);
+  return res.json({ success: true, token, user: safeUser(user) });
+});
+
 // ─── Logout ──────────────────────────────────────────────────────
 app.post('/auth/logout', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');

@@ -7639,18 +7639,28 @@ const ARK_IS_STAGING = /staging/i.test(ARK_SERVER);
 
 // Show the STAGING banner(s) if we're on the staging environment.
 // Also updates the browser tab title so it's obvious in tab strips.
+// Also pre-hide the login screen to avoid a flash while staging auto-login
+// (gated server-side by hostname) mints a session on first visit.
 if (ARK_IS_STAGING) {
-  const showBanners = () => {
+  const stagingBoot = () => {
     const b1 = document.getElementById('staging-banner');
     const b2 = document.getElementById('staging-banner-login');
     if (b1) b1.style.display = 'block';
     if (b2) b2.style.display = 'block';
     try { document.title = '🟠 STAGING — ' + (document.title || 'ARK Dashboard'); } catch(e){}
+    // Only hide the login screen on first visit (no saved session yet).
+    // If auto-login fails, the restore-session IIFE will re-show it.
+    try {
+      if (!sessionStorage.getItem('ark_session')) {
+        const ls = document.getElementById('login-screen');
+        if (ls) ls.style.display = 'none';
+      }
+    } catch(_){}
   };
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', showBanners);
+    document.addEventListener('DOMContentLoaded', stagingBoot);
   } else {
-    showBanners();
+    stagingBoot();
   }
 }
 
@@ -15345,11 +15355,56 @@ renderLoginScreen();
       // Legacy fallback: old session with userId — re-login via loginAs
       await loginAs(saved.userId);
       if (saved.view && saved.view !== 'dashboard') nav(saved.view);
+    } else if (ARK_IS_STAGING) {
+      // Sandbox staging: skip the login screen and auto-login as the
+      // shared arkdev user so the team can jump straight into the CRM.
+      // Gated server-side by hostname; this never fires on production.
+      await _stagingAutoLogin();
     }
   } catch (e) {
     console.warn('Session restore failed:', e.message);
   }
 })();
+
+async function _stagingAutoLogin(){
+  const showLogin = () => { const ls = document.getElementById('login-screen'); if(ls) ls.style.display = 'flex'; };
+  try {
+    const resp = await fetch(ARK_SERVER + '/auth/staging-login', { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if(!data.success || !data.user){
+      console.warn('Staging auto-login refused:', data.error);
+      showLogin();
+      return;
+    }
+    currentUser = data.user;
+    _serverToken = data.token;
+    const fullName = currentUser.lname ? `${currentUser.fname} ${currentUser.lname}` : currentUser.fname;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('pill-name').textContent = fullName;
+    document.getElementById('pill-av').textContent = initials(fullName);
+    document.getElementById('pill-av').style.background = currentUser.color || '#1a2440';
+    applyNavPermissions(currentUser);
+    applyRoleRestrictions(currentUser);
+    document.getElementById('sidebar-footer').textContent = `Logged in: ${currentUser.fname}`;
+    if(typeof notifInit === 'function') notifInit();
+    if(typeof chatInitBadge === 'function') chatInitBadge();
+    if(typeof versionInit === 'function') versionInit();
+    if(typeof scheduleClockReminders === 'function') scheduleClockReminders();
+    sessionStorage.setItem('ark_session', JSON.stringify({
+      userId: currentUser.id,
+      token: _serverToken,
+      user: currentUser,
+      view: 'dashboard',
+    }));
+    await refreshServerUsersCache();
+    await loadDB();
+    plAutoGenerateMonthlyReviewTasks();
+    if(typeof renderDashboard === 'function') renderDashboard();
+  } catch(e){
+    console.warn('Staging auto-login failed:', e.message);
+    showLogin();
+  }
+}
 
 // Default: auto-generate on nav to this page is handled in nav()
 
