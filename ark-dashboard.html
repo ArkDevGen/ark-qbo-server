@@ -30348,9 +30348,8 @@ function chatTogglePanel() {
   if (_chatOpen) {
     panel.style.display = '';
     chatLoadChannels();
-    // Reset badge when opening
-    const badge = document.getElementById('chat-badge');
-    if (badge) badge.style.display = 'none';
+    // Refresh badge from server so unread state stays accurate across channels
+    chatInitBadge();
   } else {
     panel.style.display = 'none';
     chatStopPoll();
@@ -30478,8 +30477,10 @@ async function chatOpenChannel(channelId, name) {
   // Load messages
   await chatRefreshMessages();
 
-  // Mark as read
-  authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId }) }).catch(() => {});
+  // Mark as read, then refresh total unread badge from server
+  authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId }) })
+    .then(() => chatInitBadge())
+    .catch(() => {});
 
   // Start polling for new messages every 3 seconds while thread is open
   chatStartPoll();
@@ -30780,17 +30781,35 @@ function chatHandleDeleteSSE(data) {
 }
 
 function chatHandleSSE(msg) {
-  // Update badge
-  if (msg.senderId !== currentUser?.id) {
+  // Ignore own messages
+  if (msg.senderId === currentUser?.id) return;
+
+  // Is the user actively viewing this exact conversation right now?
+  const inFloatingPanel = _chatOpen && _chatChannel === msg.channelId;
+  const inCommCenter = _ccChatChannel === msg.channelId
+    && document.getElementById('view-commcenter')?.classList.contains('active');
+  const viewing = (inFloatingPanel || inCommCenter) && !document.hidden;
+
+  if (!viewing) {
+    // Bump unread badge and fire desktop notification
     chatUpdateBadge(1);
+    const senderName = _chatSenderName(msg) || 'New message';
+    const isSms = (msg.channelId || '').startsWith('sms~');
+    notifFireDesktop({
+      id: 'chat-' + msg.id,
+      title: (isSms ? '📱 ' : '💬 ') + senderName,
+      body: (msg.text || '').slice(0, 200),
+      chatChannelId: msg.channelId,
+      chatChannelName: senderName,
+    });
   }
-  // If chat panel is open and viewing this channel, add message
-  if (_chatOpen && _chatChannel === msg.channelId) {
+
+  // If floating panel is open on this channel, render + mark read
+  if (inFloatingPanel) {
     if (!_chatMessages.find(m => m.id === msg.id)) {
       _chatMessages.push(msg);
       chatRenderMessages();
     }
-    // Mark as read
     authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: msg.channelId }) }).catch(() => {});
   }
 }
@@ -31649,11 +31668,19 @@ function notifFireDesktop(notif){
       tag:  notif.id || 'ark-' + Date.now(),
       requireInteraction: true, // keep on screen until user dismisses
     });
-    // Click on desktop notification jumps to task
+    // Click on desktop notification jumps to the right place
     n.onclick = () => {
       window.focus();
       n.close();
       if(notif.taskId){ nav('tasks'); setTimeout(()=>twfOpen(notif.taskId),200); }
+      else if(notif.chatChannelId){
+        try {
+          if(typeof chatTogglePanel === 'function' && !_chatOpen) chatTogglePanel();
+          if(typeof chatOpenChannel === 'function'){
+            setTimeout(()=>chatOpenChannel(notif.chatChannelId, notif.chatChannelName || ''), 200);
+          }
+        } catch(_){}
+      }
     };
     // Auto-close after 15 seconds
     setTimeout(() => n.close(), 15000);
@@ -31872,9 +31899,13 @@ function notifConnectSSE(){
       try {
         const data = JSON.parse(e.data);
         if(data.type === 'connected'){
-          // Successfully connected — reset backoff
+          // Successfully connected — reset backoff and re-sync badge state
+          // (covers reconnect after tab-sleep, network drop, or Render idle)
           _sseBackoff = 2000;
           console.log('SSE: connected');
+          try { notifUpdateBadge(); } catch(_){}
+          try { if(typeof chatInitBadge === 'function') chatInitBadge(); } catch(_){}
+          try { _notifRefreshDB(); } catch(_){}
           return;
         }
 
@@ -31945,6 +31976,8 @@ function _notifRefreshDB(){
           if(document.getElementById('view-tasks')?.style.display !== 'none'){
             tcRender();
           }
+          // Refresh P&L review badge now that local DB has fresh data
+          try { if(typeof plrUpdateNavBadge === 'function') plrUpdateNavBadge(); } catch(_){}
         }
       }
     } catch(_){}
@@ -31969,10 +32002,54 @@ function notifInit(){
       }
     });
   }
-  // Show permission prompt if never asked
-  if('Notification' in window && Notification.permission === 'default'){
-    // Non-intrusive — they'll see the button in the dropdown
-  }
+  // Re-sync all notification state when the tab wakes up or regains focus
+  _notifAttachVisibilityListeners();
+  // Ask for browser notification permission (once per 7 days, on first user gesture)
+  _notifMaybeAutoRequest();
+}
+
+// Re-sync notification/chat/P&L badges on tab visibility + focus, and
+// reconnect SSE if it dropped while hidden. This is what fixes the
+// "badge only shows after refresh" problem.
+let _notifListenersAttached = false;
+function _notifAttachVisibilityListeners(){
+  if(_notifListenersAttached) return;
+  _notifListenersAttached = true;
+  const resync = () => {
+    if(document.hidden) return;
+    // Reconnect SSE if it dropped
+    if(!_notifSSE && currentUser){
+      try { notifConnectSSE(); } catch(_){}
+    }
+    try { notifUpdateBadge(); } catch(_){}
+    try { if(typeof chatInitBadge === 'function') chatInitBadge(); } catch(_){}
+    try { _notifRefreshDB(); } catch(_){}
+    try { if(typeof plrUpdateNavBadge === 'function') plrUpdateNavBadge(); } catch(_){}
+  };
+  document.addEventListener('visibilitychange', resync);
+  window.addEventListener('focus', resync);
+  window.addEventListener('online', resync);
+}
+
+// Auto-prompt for Notification permission on first user interaction after login.
+// Browsers require a user gesture for requestPermission, so we attach a one-shot
+// click/keydown handler. We gate on localStorage so dismissers aren't re-nagged.
+function _notifMaybeAutoRequest(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'default') return;
+  const key = 'ark-notif-last-asked';
+  const lastAsked = parseInt(localStorage.getItem(key) || '0', 10);
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  if(Date.now() - lastAsked < weekMs) return;
+  const handler = () => {
+    document.removeEventListener('click', handler, true);
+    document.removeEventListener('keydown', handler, true);
+    if(!('Notification' in window) || Notification.permission !== 'default') return;
+    localStorage.setItem(key, String(Date.now()));
+    try { notifRequestPermission(); } catch(_){}
+  };
+  document.addEventListener('click', handler, true);
+  document.addEventListener('keydown', handler, true);
 }
 
 
