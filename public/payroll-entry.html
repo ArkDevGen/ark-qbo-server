@@ -535,6 +535,23 @@
   </div>
 </div>
 
+<!-- ═══ MANAGE NAME ALIASES MODAL ═══ -->
+<!-- Lets the user reset a saved CSV-name → roster-employee match when
+     it was saved in error (e.g. the wrong Akasha). -->
+<div id="modal-aliases" class="modal-overlay hidden" onclick="if(event.target===this)closeAliasesModal()">
+  <div class="modal" style="width:540px;max-height:80vh;overflow-y:auto;">
+    <h3 style="margin-top:0;">Saved Name Aliases</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">
+      When a Homebase name doesn't match a roster name, we save the match so future imports auto-resolve it.
+      Remove an alias here if it was saved in error and you'd like to re-match on the next import.
+    </p>
+    <div id="aliases-list" style="max-height:50vh;overflow-y:auto;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+      <button class="btn btn-outline" onclick="closeAliasesModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── State ───────────────────────────────────────────────────────
 let _token = '';
@@ -2405,6 +2422,10 @@ function applyPrefillData(storePrefill) {
   const importStatus = document.getElementById('homebase-import-status');
   if (importStatus) {
     importStatus.style.display = 'block';
+    const aliasCount = Object.keys(_nicknameMap || {}).length;
+    const aliasLink = aliasCount > 0
+      ? `<a href="javascript:void(0)" onclick="showAliasesModal()" style="font-size:11px;color:inherit;opacity:.75;text-decoration:underline;">Manage name aliases (${aliasCount})</a>`
+      : '';
     if (unmatchedPrefill.length > 0) {
       const rows = unmatchedPrefill.map(u => {
         const work = (u.regHours + u.otHours).toFixed(2);
@@ -2429,6 +2450,7 @@ function applyPrefillData(storePrefill) {
               <button type="button" onclick="prefillReconcileStart()" style="background:#d98e00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Match missing employees →</button>
               <span style="font-size:12px;color:#7a5100;">or use <strong>+ Add Employee</strong> below to add someone brand new.</span>
             </div>
+            ${aliasLink ? `<div style="margin-top:6px;">${aliasLink}</div>` : ''}
           </div>
         </div>
       `;
@@ -2436,7 +2458,12 @@ function applyPrefillData(storePrefill) {
       importStatus.style.background = 'rgba(77,166,255,.1)';
       importStatus.style.border = '1px solid var(--accent)';
       importStatus.style.color = 'var(--accent)';
-      importStatus.textContent = '✓ Hours pre-populated by Ark Financial — please review each employee, make any corrections, then confirm this store.';
+      importStatus.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="flex:1;">✓ Hours pre-populated by Ark Financial — please review each employee, make any corrections, then confirm this store.</span>
+          ${aliasLink}
+        </div>
+      `;
     }
   }
 }
@@ -2547,6 +2574,75 @@ async function prefillReconcileStart() {
     console.error('prefillReconcileStart failed:', e);
     if (statusEl) statusEl.innerHTML = prevHTML;
     alert('Could not load the roster — please refresh the page and try again.');
+  }
+}
+
+// ─── Saved name aliases (nickname map) management ────────────────
+// Tracks whether the user removed anything so we can re-run store load
+// on close and refresh the banner/prefilled cells.
+let _aliasesModalDirty = false;
+
+function showAliasesModal() {
+  _aliasesModalDirty = false;
+  aliasesRenderList();
+  document.getElementById('modal-aliases').classList.remove('hidden');
+}
+
+function aliasesRenderList() {
+  const listEl = document.getElementById('aliases-list');
+  if (!listEl) return;
+  // Build a quick lookup of employee names across all stores so we can
+  // show the roster-side name the alias resolves to (otherwise the user
+  // just sees an opaque employee id).
+  const empById = {};
+  (_reconcileAllEmployees || []).forEach(e => { empById[e.id] = e; });
+  // Fall back to the current store's roster if the all-employees cache
+  // hasn't been populated yet.
+  (_employees || []).forEach(e => { if (!empById[e.id]) empById[e.id] = e; });
+
+  const entries = Object.entries(_nicknameMap || {});
+  if (entries.length === 0) {
+    listEl.innerHTML = `
+      <div style="padding:24px 12px;text-align:center;color:var(--muted);font-size:13px;">
+        No saved aliases yet. Aliases are saved automatically each time you confirm a match in the reconcile modal.
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = entries.map(([key, empId]) => {
+    const emp = empById[empId];
+    const rosterName = emp ? `${emp.firstName} ${emp.lastName}` : '<em style="color:var(--muted);">(unknown — employee may have been removed)</em>';
+    const escKey = key.replace(/'/g, "\\'");
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--surface);">
+        <div style="flex:1;font-size:13px;">
+          <div style="font-weight:600;">${key}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">→ ${rosterName}</div>
+        </div>
+        <button type="button" onclick="removeAlias('${escKey}')"
+          style="background:transparent;border:1px solid var(--red);color:var(--red);border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;">
+          Remove
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function removeAlias(key) {
+  if (!_nicknameMap || !(key in _nicknameMap)) return;
+  delete _nicknameMap[key];
+  saveNicknameMap();
+  _aliasesModalDirty = true;
+  aliasesRenderList();
+}
+
+async function closeAliasesModal() {
+  document.getElementById('modal-aliases').classList.add('hidden');
+  if (_aliasesModalDirty) {
+    _aliasesModalDirty = false;
+    // Re-run store load so any employee that was auto-matched via the
+    // removed alias drops back into the unmatched banner (user can then
+    // re-match correctly).
+    await onStoreChange();
   }
 }
 
