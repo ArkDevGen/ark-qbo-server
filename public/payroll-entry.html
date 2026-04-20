@@ -1562,8 +1562,13 @@ async function reconcileConfirmMatch(unmatchedIdx) {
     }
   }
 
-  // Save nickname if checkbox is checked
-  if (remember && remember.checked) {
+  // Always persist the match as a nickname so future imports (and the
+  // prefill re-apply after this modal closes) auto-resolve the CSV name
+  // to the roster employee. The "Remember" checkbox is kept as a visual
+  // affordance but is no longer required for persistence — before this,
+  // an unchecked box meant the match was ephemeral and the warning
+  // banner re-appeared every time the store was re-opened.
+  {
     const key = getNicknameKey(emp.firstName, emp.lastName);
     _nicknameMap[key] = empId;
     saveNicknameMap();
