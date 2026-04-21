@@ -5959,13 +5959,18 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <!-- Push File to Staging (staging-only; hidden on production) -->
       <div class="card" id="stg-push-card" style="padding:16px;margin-bottom:16px;display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Push a File to Staging</div>
-          <div style="font-size:10px;color:var(--gold);font-weight:700;">STAGING BRANCH ONLY</div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Push Files to Staging</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm btn-ghost" onclick="stgOpenClaudeGuide()" title="How to work with Claude">💡 Working with Claude</button>
+            <div style="font-size:10px;color:var(--gold);font-weight:700;">STAGING BRANCH ONLY</div>
+          </div>
         </div>
         <div style="font-size:12px;color:var(--text-d);margin-bottom:12px;line-height:1.5;">
-          Upload or paste a modified file to see it run on the staging CRM in ~3 minutes.
-          Commits go to the <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;">staging</code> branch
-          only — production is untouched. A developer will review and promote the change to production if it works.
+          Queue up one or more modified files and deploy them as a single commit. Most features
+          touch both <code>ark-dashboard.html</code> and <code>server.js</code> — add each one
+          below, then click Deploy once. Commits go to the
+          <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;">staging</code> branch
+          only — production is untouched.
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div>
@@ -5978,7 +5983,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
           </div>
           <div>
-            <label class="field-label">Commit Message</label>
+            <label class="field-label">Commit Message <span style="font-weight:400;color:var(--text-d);">(one per deploy)</span></label>
             <input id="stg-push-msg" class="field-input" placeholder="What did you change?">
           </div>
         </div>
@@ -5992,9 +5997,73 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <label class="field-label">File Content</label>
         <textarea id="stg-push-content" class="field-input" style="font-family:monospace;font-size:11px;white-space:pre;tab-size:2;min-height:260px;" placeholder="Paste file content here, or use Load current / Upload above."></textarea>
-        <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:12px;align-items:center;">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+          <button class="btn btn-sm" onclick="stgAddToQueue()">➕ Add to Deploy Queue</button>
+        </div>
+
+        <!-- Queue list -->
+        <div id="stg-queue-wrap" style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);display:none;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);margin-bottom:8px;">Files Ready to Deploy</div>
+          <div id="stg-queue-list"></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:14px;align-items:center;">
           <div id="stg-push-result" style="font-size:12px;color:var(--text-d);flex:1;"></div>
           <button class="btn btn-primary" onclick="stgDoPush()">🚀 Deploy to Staging</button>
+        </div>
+      </div>
+
+      <!-- Claude prompt guide modal -->
+      <div class="overlay" id="modal-stg-claude" style="display:none;" onclick="overlayClose(event,'modal-stg-claude')">
+        <div class="modal" style="width:640px;max-height:85vh;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <div class="modal-title">💡 Working with Claude on ARK CRM</div>
+            <span class="modal-x" onclick="closeModal('modal-stg-claude')">&times;</span>
+          </div>
+          <div class="modal-body" style="overflow-y:auto;padding:20px;font-size:13px;line-height:1.6;color:var(--text);">
+            <p style="margin-top:0;">When asking Claude (or any AI) to modify the CRM, tell it these ground rules up front. Copy the block below into your first message:</p>
+            <pre id="stg-claude-prompt" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:11px;white-space:pre-wrap;word-wrap:break-word;max-height:260px;overflow-y:auto;">I am modifying the ARK Financial CRM. Ground rules for your output:
+
+1. OUTPUT COMPLETE FILES, NOT DIFFS. The staging push replaces whole files. When you give me a change, give me the full file content, not just the changed lines.
+
+2. LIST CHANGED FILES AT THE TOP OF YOUR RESPONSE so I know exactly what to upload.
+
+3. KEEP CHANGES TO THESE FILES ONLY unless you warn me otherwise:
+   - ark-dashboard.html (UI and client-side logic)
+   - server.js (API endpoints)
+
+4. THE DASHBOARD IS ONE FILE. Don't split it up. No frameworks, no bundler, vanilla JS only.
+
+5. ADDING A NEW SIDEBAR NAV PAGE requires updates in 4 places inside ark-dashboard.html:
+   - Sidebar nav HTML (around line 1229)
+   - The navMap object inside nav()
+   - The titles object inside nav()
+   - The if-chain in nav() that triggers the render function
+
+6. ADDING A NEW SERVER ENDPOINT in server.js:
+   - Use app.get/post/etc.
+   - Add requireAuth middleware for authenticated routes
+   - Credentials belong in .env / Render env vars, never in code
+
+7. WARN ABOUT BREAKING CHANGES. If your change could break an existing feature, say so and list what to test.
+
+8. NEVER COMMIT SECRETS — no API keys, tokens, or passwords in code.
+
+Now here is what I want to build: [describe your feature]</pre>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <button class="btn btn-sm btn-primary" onclick="stgCopyClaudePrompt()">📋 Copy prompt</button>
+              <button class="btn btn-sm btn-ghost" onclick="closeModal('modal-stg-claude')">Close</button>
+            </div>
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+              <div style="font-weight:700;font-size:13px;margin-bottom:6px;">After Claude gives you the code:</div>
+              <ol style="margin:0;padding-left:20px;">
+                <li style="margin-bottom:6px;">For each file Claude modified, paste the full content into the editor above, set the file path, and click <b>➕ Add to Deploy Queue</b>.</li>
+                <li style="margin-bottom:6px;">Once all files are queued, type a commit message and click <b>🚀 Deploy to Staging</b>.</li>
+                <li style="margin-bottom:6px;">Wait ~3 minutes, then refresh the staging CRM to test your change.</li>
+                <li style="margin-bottom:6px;">If it works, tell a developer (Mackenzie, Jacob, or Shira) and they'll promote it to production.</li>
+              </ol>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -44540,7 +44609,12 @@ async function stgRefresh(){
   }
 }
 
-// ── Push a file to the staging branch (staging deployment only) ──
+// ── Push files to the staging branch (staging deployment only) ──
+// Users queue up one or more modified files then deploy the batch as a
+// single atomic commit via /staging/push-files. Single-file deploys work
+// too — they're just a queue of one.
+let _stgQueue = [];
+
 function stgPushSetPath(p){
   const el = document.getElementById('stg-push-path');
   if(el) el.value = p;
@@ -44581,20 +44655,78 @@ function stgHandleUpload(e){
   e.target.value = '';
 }
 
+function stgAddToQueue(){
+  const path = (document.getElementById('stg-push-path')?.value || '').trim();
+  const content = document.getElementById('stg-push-content')?.value || '';
+  const result = document.getElementById('stg-push-result');
+  if(!path){ result.innerHTML = '<span style="color:var(--red);">Enter a file path first.</span>'; return; }
+  if(!content){ result.innerHTML = '<span style="color:var(--red);">File content is empty.</span>'; return; }
+  // Replace any existing queue entry for the same path so a re-edit wins
+  _stgQueue = _stgQueue.filter(f => f.path !== path);
+  _stgQueue.push({ path, content });
+  stgRenderQueue();
+  // Clear editor so they can add another file
+  document.getElementById('stg-push-content').value = '';
+  document.getElementById('stg-push-loadstatus').textContent = '';
+  result.innerHTML = `<span style="color:#10b981;">Added ${_escapeHtml(path)} to queue (${_stgQueue.length} file${_stgQueue.length===1?'':'s'} ready).</span>`;
+}
+
+function stgRemoveFromQueue(idx){
+  _stgQueue.splice(idx, 1);
+  stgRenderQueue();
+}
+
+function stgRenderQueue(){
+  const wrap = document.getElementById('stg-queue-wrap');
+  const list = document.getElementById('stg-queue-list');
+  if(!wrap || !list) return;
+  if(!_stgQueue.length){
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  wrap.style.display = '';
+  list.innerHTML = _stgQueue.map((f, i) => {
+    const kb = (new Blob([f.content]).size / 1024).toFixed(1);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;">
+      <div style="display:flex;gap:10px;align-items:center;min-width:0;">
+        <span style="font-family:monospace;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_escapeHtml(f.path)}</span>
+        <span style="font-size:10px;color:var(--text-d);flex-shrink:0;">${kb} KB</span>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="stgRemoveFromQueue(${i})" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
 async function stgDoPush(){
   const path = (document.getElementById('stg-push-path')?.value || '').trim();
   const content = document.getElementById('stg-push-content')?.value || '';
   const message = (document.getElementById('stg-push-msg')?.value || '').trim();
   const result = document.getElementById('stg-push-result');
-  if(!path){ result.innerHTML = '<span style="color:var(--red);">Enter a file path.</span>'; return; }
-  if(!content){ result.innerHTML = '<span style="color:var(--red);">File content is empty.</span>'; return; }
-  if(!confirm(`Deploy ${path} to the STAGING branch?\n\nThis commits your change to GitHub and triggers a Render redeploy (~3 min to go live).`)) return;
-  result.innerHTML = '<span style="color:var(--text-d);">Pushing to GitHub…</span>';
+
+  // If there's unqueued content in the editor, fold it into the push
+  const toDeploy = [..._stgQueue];
+  if(content && path){
+    // Replace any queued entry for this path with the editor's current content
+    const filtered = toDeploy.filter(f => f.path !== path);
+    filtered.push({ path, content });
+    toDeploy.length = 0; toDeploy.push(...filtered);
+  }
+
+  if(!toDeploy.length){
+    result.innerHTML = '<span style="color:var(--red);">Nothing to deploy. Add a file to the queue or fill the editor.</span>';
+    return;
+  }
+
+  const summary = toDeploy.map(f => '• ' + f.path).join('\n');
+  if(!confirm(`Deploy ${toDeploy.length} file(s) to the STAGING branch as ONE commit?\n\n${summary}\n\nRender will redeploy staging — live in ~3 min.`)) return;
+
+  result.innerHTML = `<span style="color:var(--text-d);">Pushing ${toDeploy.length} file(s) to GitHub…</span>`;
   try {
-    const r = await authFetch(ARK_SERVER + '/staging/push-file', {
+    const r = await authFetch(ARK_SERVER + '/staging/push-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content, message }),
+      body: JSON.stringify({ files: toDeploy, message }),
     });
     const data = await r.json().catch(() => ({}));
     if(!r.ok){
@@ -44603,12 +44735,33 @@ async function stgDoPush(){
     }
     const sha = (data.commitSha || '').slice(0, 7);
     const link = data.commitUrl ? `<a href="${data.commitUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">${sha}</a>` : sha;
-    result.innerHTML = `<span style="color:#10b981;">✓ Pushed ${link} — staging redeploy starts in ~30s, live in ~3 min</span>`;
+    result.innerHTML = `<span style="color:#10b981;">✓ Pushed ${data.fileCount} file(s) in commit ${link} — staging redeploy starts in ~30s, live in ~3 min</span>`;
+    // Clear the queue + editor on success
+    _stgQueue = [];
+    stgRenderQueue();
+    document.getElementById('stg-push-content').value = '';
+    document.getElementById('stg-push-msg').value = '';
     // Pull the updated commits list so the team sees it immediately
     setTimeout(stgRefresh, 3000);
   } catch(e){
     result.innerHTML = `<span style="color:var(--red);">${_escapeHtml(e.message)}</span>`;
   }
+}
+
+// Claude-prompt guide modal
+function stgOpenClaudeGuide(){
+  const m = document.getElementById('modal-stg-claude');
+  if(m) m.style.display = '';
+}
+
+function stgCopyClaudePrompt(){
+  const el = document.getElementById('stg-claude-prompt');
+  if(!el) return;
+  const text = el.textContent || '';
+  navigator.clipboard.writeText(text).then(() => {
+    if(typeof showToast === 'function') showToast('✓ Prompt copied — paste it as your first message to Claude');
+    else alert('Copied!');
+  }).catch(() => alert('Could not copy — select the text manually and Ctrl+C.'));
 }
 
 function _escapeHtml(s){

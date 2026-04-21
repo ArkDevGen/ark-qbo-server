@@ -5693,6 +5693,96 @@ app.get('/staging/file', requireAuth, async (req, res) => {
   }
 });
 
+// Push multiple files to the staging branch as a SINGLE atomic commit.
+// This is the right endpoint for features that touch both server.js and
+// ark-dashboard.html — one commit, one Render deploy, no half-broken state.
+// Uses the Git Data API (blobs → tree → commit → ref) since the Contents
+// API only supports one file per call.
+app.post('/staging/push-files', requireAuth, async (req, res) => {
+  if (!_isStagingHost(req)) return res.status(403).json({ error: 'Staging-only endpoint' });
+  const pat = process.env.GITHUB_PAT;
+  if (!pat) return res.status(500).json({ error: 'GITHUB_PAT not set on staging server — ask an admin to add it in Render.' });
+
+  const { files, message } = req.body || {};
+  if (!Array.isArray(files) || files.length === 0) return res.status(400).json({ error: 'files[] required' });
+  for (const f of files) {
+    if (!f || !f.path || typeof f.content !== 'string') return res.status(400).json({ error: 'Each file needs { path, content }' });
+    if (f.path.includes('..') || f.path.startsWith('/')) return res.status(400).json({ error: 'Bad path: ' + f.path });
+  }
+
+  const who = req.arkUser?.userName || 'staging user';
+  const trimmedMsg = (message || `update ${files.length} file(s)`).slice(0, 120);
+  const commitMsg = `[staging] ${trimmedMsg}\n\nPushed via staging CRM by ${who}\n\nFiles:\n` + files.map(f => '- ' + f.path).join('\n');
+
+  const headers = { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json', 'User-Agent': 'ark-crm-staging' };
+  const owner = GITHUB_OWNER, repo = GITHUB_REPO, branch = STAGING_BRANCH;
+
+  try {
+    // 1. Latest commit SHA on staging
+    const refResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, { headers });
+    if (!refResp.ok) { const t = await refResp.text(); return res.status(502).json({ error: `Ref fetch (${refResp.status}): ${t.slice(0,200)}` }); }
+    const latestCommitSha = (await refResp.json()).object.sha;
+
+    // 2. Base tree SHA
+    const commitResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits/${latestCommitSha}`, { headers });
+    if (!commitResp.ok) { const t = await commitResp.text(); return res.status(502).json({ error: `Commit fetch (${commitResp.status}): ${t.slice(0,200)}` }); }
+    const baseTreeSha = (await commitResp.json()).tree.sha;
+
+    // 3. Create a blob per file
+    const blobs = [];
+    for (const f of files) {
+      const blobResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: Buffer.from(f.content, 'utf8').toString('base64'), encoding: 'base64' }),
+      });
+      if (!blobResp.ok) { const t = await blobResp.text(); return res.status(502).json({ error: `Blob create for ${f.path} (${blobResp.status}): ${t.slice(0,200)}` }); }
+      blobs.push({ path: f.path, sha: (await blobResp.json()).sha });
+    }
+
+    // 4. Create a tree on top of the base tree with all new blobs
+    const treeResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: blobs.map(b => ({ path: b.path, mode: '100644', type: 'blob', sha: b.sha })),
+      }),
+    });
+    if (!treeResp.ok) { const t = await treeResp.text(); return res.status(502).json({ error: `Tree create (${treeResp.status}): ${t.slice(0,200)}` }); }
+    const newTreeSha = (await treeResp.json()).sha;
+
+    // 5. Create the commit
+    const newCommitResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: commitMsg, tree: newTreeSha, parents: [latestCommitSha] }),
+    });
+    if (!newCommitResp.ok) { const t = await newCommitResp.text(); return res.status(502).json({ error: `Commit create (${newCommitResp.status}): ${t.slice(0,200)}` }); }
+    const newCommit = await newCommitResp.json();
+
+    // 6. Fast-forward the staging ref to the new commit
+    const updateRefResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha: newCommit.sha, force: false }),
+    });
+    if (!updateRefResp.ok) { const t = await updateRefResp.text(); return res.status(502).json({ error: `Ref update (${updateRefResp.status}): ${t.slice(0,200)}` }); }
+
+    console.log(`Staging batch push by ${who}: ${files.length} file(s) → ${newCommit.sha.slice(0, 7)}`);
+    res.json({
+      ok: true,
+      commitSha: newCommit.sha,
+      commitUrl: newCommit.html_url || `https://github.com/${owner}/${repo}/commit/${newCommit.sha}`,
+      fileCount: files.length,
+      paths: files.map(f => f.path),
+    });
+  } catch (e) {
+    console.error('Staging batch push error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Push an updated file to the staging branch on GitHub. Requires GITHUB_PAT
 // (fine-grained, Contents: write). Render auto-redeploys staging on push.
 app.post('/staging/push-file', requireAuth, async (req, res) => {
