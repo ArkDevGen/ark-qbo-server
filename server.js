@@ -6661,12 +6661,21 @@ app.get('/chat/channels', requireAuth, (req, res) => {
     const allMessages = _loadChatMessages();
     const readStatus = _loadChatReadStatus();
     const userRead = readStatus[userId] || {};
-    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [] };
+    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [], channelsHiddenAt: {} };
 
-    // Filter out hidden messages and channels for this user
-    const messages = allMessages.filter(m =>
-      !hidden.messages.includes(m.id) && !hidden.channels.includes(m.channelId)
-    );
+    // Filter out hidden messages, hidden channels, AND messages that are older
+    // than the point at which this user deleted the channel. channelsHiddenAt
+    // is a per-user { channelId: isoTimestamp } map that survives auto-unhide:
+    // when the other participant sends a new message we unhide the channel,
+    // but pre-delete messages stay filtered out so they don't resurrect.
+    const hiddenAt = hidden.channelsHiddenAt || {};
+    const messages = allMessages.filter(m => {
+      if (hidden.messages.includes(m.id)) return false;
+      if (hidden.channels.includes(m.channelId)) return false;
+      const t = hiddenAt[m.channelId];
+      if (t && m.createdAt < t) return false;
+      return true;
+    });
 
     // Build channel map
     const channelMap = {};
@@ -6739,8 +6748,17 @@ app.get('/chat/messages', requireAuth, (req, res) => {
     }
 
     const allMessages = _loadChatMessages();
-    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [] };
-    let filtered = allMessages.filter(m => m.channelId === channelId && !hidden.messages.includes(m.id));
+    const hidden = _loadChatHidden()[userId] || { messages: [], channels: [], channelsHiddenAt: {} };
+    const hiddenAt = (hidden.channelsHiddenAt || {})[channelId];
+    let filtered = allMessages.filter(m => {
+      if (m.channelId !== channelId) return false;
+      if (hidden.messages.includes(m.id)) return false;
+      // If the user deleted this channel at some point, hide everything before
+      // that moment — so "deleted" messages don't reappear when the conversation
+      // resurfaces from a new incoming message.
+      if (hiddenAt && m.createdAt < hiddenAt) return false;
+      return true;
+    });
     if (before) filtered = filtered.filter(m => m.createdAt < before);
     filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
     const pageSize = Math.min(parseInt(lim) || 50, 100);
@@ -6836,6 +6854,11 @@ app.post('/chat/messages', requireAuth, async (req, res) => {
     readStatus[userId][channelId] = msg.createdAt;
     _saveChatReadStatus(readStatus);
 
+    // If either DM participant had this channel hidden (deleted), resurrect it
+    // so the conversation shows up in both sides' lists again. Old messages
+    // stay hidden via the channelsHiddenAt timestamp.
+    _chatUnhideDmForParticipants(channelId);
+
     _sseBroadcastChat(msg);
 
     console.log(`Chat: ${req.arkUser.userName} → ${channelId}: "${text.trim().slice(0, 50)}"`);
@@ -6905,10 +6928,14 @@ app.delete('/chat/channels/:channelId', requireAuth, (req, res) => {
     if (!channelId.includes(userId)) return res.status(403).json({ error: 'Not a participant' });
 
     const hidden = _loadChatHidden();
-    if (!hidden[userId]) hidden[userId] = { messages: [], channels: [] };
+    if (!hidden[userId]) hidden[userId] = { messages: [], channels: [], channelsHiddenAt: {} };
     if (!hidden[userId].channels.includes(channelId)) {
       hidden[userId].channels.push(channelId);
     }
+    // Record the delete time so pre-delete messages stay hidden if the
+    // channel resurfaces later (auto-unhide on new inbound/outbound message).
+    if (!hidden[userId].channelsHiddenAt) hidden[userId].channelsHiddenAt = {};
+    hidden[userId].channelsHiddenAt[channelId] = new Date().toISOString();
     _saveChatHidden(hidden);
 
     console.log(`Chat: ${req.arkUser.userName} hid channel ${channelId}`);
@@ -6917,6 +6944,25 @@ app.delete('/chat/channels/:channelId', requireAuth, (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Helper — unhide a DM channel for any participant who had it hidden.
+// Leaves channelsHiddenAt[channelId] in place so pre-delete messages stay
+// filtered out when the channel reappears in their list.
+function _chatUnhideDmForParticipants(channelId) {
+  if (!(channelId.startsWith('dm_') || channelId.startsWith('dm~'))) return;
+  const parts = channelId.includes('~')
+    ? channelId.replace(/^dm~/, '').split('~')
+    : (channelId.match(/usr_[a-f0-9]+/g) || channelId.replace(/^dm_/, '').split('_'));
+  const hiddenAll = _loadChatHidden();
+  let changed = false;
+  for (const pid of parts) {
+    if (hiddenAll[pid]?.channels?.includes(channelId)) {
+      hiddenAll[pid].channels = hiddenAll[pid].channels.filter(c => c !== channelId);
+      changed = true;
+    }
+  }
+  if (changed) _saveChatHidden(hiddenAll);
+}
 
 // ─────────────────────────────────────────────────────────────────
 // WEB PUSH — VAPID setup, subscription management
