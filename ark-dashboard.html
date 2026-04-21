@@ -24622,8 +24622,37 @@ function tcSaveTask(){
     if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
     logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${clientName}`);
 
+    // ── Notify-only: fire IMMEDIATELY on creation (it's a one-shot FYI) ──
+    // Previously the notification was only sent when the creator later
+    // clicked "Mark Complete" on the task, which most users didn't realize
+    // they had to do. Now creating a notify-only task instantly marks it
+    // completed and pings the reviewer — matching the "send a notification"
+    // mental model people actually have.
+    if(idx < 0 && task.reviewType === 'notify' && task.reviewerId && task.reviewerId !== currentUser?.id){
+      const notifyWhen = new Date().toISOString();
+      task.status      = 'completed';
+      task.completedAt = notifyWhen;
+      task.completedBy = who;
+      if(!task.noteLog) task.noteLog = [];
+      task.noteLog.unshift({ id: uid(), text:'✅ Sent as notification', author: who, at: notifyWhen, type:'completion' });
+      task._updatedAt  = notifyWhen;
+      const reviewer = (_cachedServerUsers||[]).find(u => u.id === task.reviewerId)
+                    || (DB.accountManagers||[]).find(a => a.id === task.reviewerId);
+      logAct(`Notification sent to ${reviewer?.fname||'reviewer'} — "${name}" (${clientName})`);
+      notifCreate({
+        type:     'task-completed',
+        targetAm: task.reviewerId,
+        title:    'Task completed',
+        body:     `"${name}"${clientName!=='No Client'?' ('+clientName+')':''} completed by ${who}`,
+        taskId:   task.id,
+        from:     who,
+      });
+    }
+
     // ── Notify the assigned AM if this is a NEW task ──────────────────────
-    if(idx < 0 && task.amId) {
+    // Skip this for notify-only tasks — they're not "assignments," they're
+    // FYI pings, and we already fired the notification above.
+    if(idx < 0 && task.amId && task.reviewType !== 'notify') {
       const assignedAM = (DB.accountManagers||[]).find(a => a.id === task.amId);
       const amName = assignedAM ? `${assignedAM.fname} ${assignedAM.lname||''}`.trim() : '';
       // Only notify if assigned to a DIFFERENT person than creator
@@ -32383,8 +32412,43 @@ function notifInit(){
       }
       // Ask for browser notification permission (once per 7 days, on first user gesture)
       _notifMaybeAutoRequest();
+      // One-time cleanup: delete stuck notify-only tasks from before the
+      // "fire on create" fix (they have reviewType=notify but never got
+      // completed, so no notification ever went out). Gated by a localStorage
+      // flag so it only runs once per browser; because the DB is shared,
+      // whichever user loads first cleans them up for everyone.
+      _cleanupStuckNotifyTasks();
     } catch(e){ console.warn('notifInit deferred failed:', e.message); }
   }, 0);
+}
+
+function _cleanupStuckNotifyTasks(){
+  try {
+    const KEY = 'ark-stuck-notify-cleaned-v1';
+    if(localStorage.getItem(KEY)) return;
+    if(!DB.tasks) { localStorage.setItem(KEY, '1'); return; }
+    const stuck = DB.tasks.filter(t =>
+      !t._deleted &&
+      t.reviewType === 'notify' &&
+      t.reviewerId &&
+      (t.status === 'open' || !t.status) &&
+      !t.completedAt
+    );
+    localStorage.setItem(KEY, '1');
+    if(!stuck.length) return;
+    const when = new Date().toISOString();
+    stuck.forEach(t => { t._deleted = true; t._updatedAt = when; });
+    // Also soft-delete any notifications attached to these stuck tasks
+    (DB.notifications||[]).forEach(n => {
+      if(n.taskId && stuck.some(t => t.id === n.taskId) && !n._deleted){
+        n._deleted = true; n._updatedAt = when;
+      }
+    });
+    saveDB();
+    if(typeof tcRender === 'function') tcRender();
+    if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
+    console.log(`Migration: soft-deleted ${stuck.length} stuck notify-only task(s) that never fired their notification.`);
+  } catch(e){ console.warn('Stuck notify cleanup failed:', e.message); }
 }
 
 // Safety net: if the session-restore IIFE or login flow didn't successfully
