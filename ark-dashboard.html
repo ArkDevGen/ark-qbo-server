@@ -24355,7 +24355,7 @@ async function tcPopulateFilters(){
   const clientSel = document.getElementById('tc-filter-client');
   const amSel     = document.getElementById('tc-filter-am');
   if(!clientSel || !amSel) return;
-  const usedClients = [...new Set((DB.tasks||[]).filter(t=>!t._deleted).map(t=>t.clientId).filter(Boolean))];
+  const usedClients = [...new Set((DB.tasks||[]).filter(t=>!_taskHiddenForMe(t)).map(t=>t.clientId).filter(Boolean))];
   const cVal = clientSel.value;
   clientSel.innerHTML = '<option value="">All Clients</option>' +
     (DB.clients||[]).filter(c=>usedClients.includes(c.id))
@@ -25019,10 +25019,13 @@ function tcDismissNotify(taskId){
   } else {
     _nt._deleted = true; _nt._updatedAt = when;
   }
-  // Also hide any related notifications from THIS user's view
+  // Per-user hide related notifications from MY view only (the other
+  // party's bell entry is untouched).
   (DB.notifications||[]).forEach(n => {
     if(n.taskId === taskId && (n.targetAm === uid || n.sentBy === uid) && !n._deleted){
-      n._deleted = true; n._updatedAt = when;
+      if(!Array.isArray(n._hiddenFor)) n._hiddenFor = [];
+      if(!n._hiddenFor.includes(uid)) n._hiddenFor.push(uid);
+      n._updatedAt = when;
     }
   });
   saveDB(); tcRender();
@@ -25095,11 +25098,13 @@ function tcDeleteTask(id){
     if(!Array.isArray(t._hiddenFor)) t._hiddenFor = [];
     if(!t._hiddenFor.includes(uid)) t._hiddenFor.push(uid);
     t._updatedAt = when;
-    // Also per-user hide any notifications about this task so deleting
-    // from one side doesn't leave a lingering bell entry.
+    // Per-user hide related notifications — push my uid onto n._hiddenFor
+    // instead of setting n._deleted=true. Previously that global flag meant
+    // the sender deleting their copy also wiped the recipient's bell entry.
     (DB.notifications||[]).forEach(n => {
       if(n.taskId === id && (n.targetAm === uid || n.sentBy === uid) && !n._deleted){
-        n._deleted = true;
+        if(!Array.isArray(n._hiddenFor)) n._hiddenFor = [];
+        if(!n._hiddenFor.includes(uid)) n._hiddenFor.push(uid);
         n._updatedAt = when;
       }
     });
@@ -25988,7 +25993,7 @@ function notesRender() {
   }
 
   // Get no-date tasks only
-  let notes = (DB.tasks || []).filter(t => !t._deleted &&!t.dueDate && t.status !== 'completed');
+  let notes = (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&!t.dueDate && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
   if (fClient) notes = notes.filter(t => t.clientId === fClient);
   if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''} ${t.clientName || ''}`.toLowerCase().includes(search));
@@ -26215,7 +26220,7 @@ function tcRenderProjectNotes() {
   const fClient = document.getElementById('tc-filter-client')?.value || '';
   const fAM = document.getElementById('tc-filter-am')?.value || '';
 
-  let notes = (DB.tasks || []).filter(t => !t._deleted &&t.type === 'note' && t.status !== 'completed');
+  let notes = (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&t.type === 'note' && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
   if (fClient && fClient !== '_noClient') notes = notes.filter(t => t.clientId === fClient);
   else if (fClient === '_noClient') notes = notes.filter(t => !t.clientId);
@@ -26435,7 +26440,7 @@ function tcCancelProjectNote() {
 
 // ── Subtask Support ─────────────────────────────────────────────
 function tcGetSubtasks(parentId) {
-  return (DB.tasks || []).filter(t => !t._deleted &&t.parentId === parentId);
+  return (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&t.parentId === parentId);
 }
 
 function tcAddSubtask(parentId) {
@@ -26610,7 +26615,7 @@ function tcRenderCalendar(container, list, today, todayStr) {
 
 function tcCalShowDay(dateStr) {
   // Show overlay with all tasks for a specific day
-  const tasks = (DB.tasks||[]).filter(t => !t._deleted && t.dueDate === dateStr && t.status !== 'completed');
+  const tasks = (DB.tasks||[]).filter(t => !_taskHiddenForMe(t) && t.dueDate === dateStr && t.status !== 'completed');
   if (!tasks.length) return;
   const d = new Date(dateStr + 'T12:00:00');
   const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -28032,11 +28037,15 @@ function twfDelete(){
   // showing TWO dialogs in a row, and users naturally only acted on the
   // first, causing the actual delete to silently abort.
   if(!_twfTaskId) return;
-  const existed = (DB.tasks||[]).some(t => t.id === _twfTaskId);
+  const task = (DB.tasks||[]).find(t => t.id === _twfTaskId);
+  const existed = !!task;
   tcDeleteTask(_twfTaskId);
-  // Close the workflow modal only if the delete actually went through
-  const stillExists = (DB.tasks||[]).some(t => t.id === _twfTaskId && !t._deleted);
-  if(existed && !stillExists) closeModal('modal-task-workflow');
+  // Close the workflow modal if the task was hidden from view, whether
+  // via global _deleted or per-user _hiddenFor. Without checking
+  // _hiddenFor the modal stayed open on notify-only per-user deletes
+  // and users had to click Delete a second time.
+  const stillVisible = (DB.tasks||[]).some(t => t.id === _twfTaskId && !_taskHiddenForMe(t));
+  if(existed && !stillVisible) closeModal('modal-task-workflow');
 }
 
 
@@ -28082,13 +28091,13 @@ function renderInsightsTiles(){
   const in7Str   = in7.toISOString().slice(0,10);
 
   // ── Data ──────────────────────────────────────────────────────────
-  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.status!=='review'&&t.dueDate<todayStr&&!t.isReviewTask&&!t.isNotifyTask);
+  const overdueTasks = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.status!=='review'&&t.dueDate<todayStr&&!t.isReviewTask&&!t.isNotifyTask);
   const overdueLeads = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   const stCritical   = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue<=in3Str&&c.status==='Active');
   const unfiledOld   = (DB.employees||[]).filter(e=>!e._deleted&&!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
   const urgentCount  = overdueTasks.length+overdueLeads.length+stCritical.length+unfiledOld.length;
 
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.status!=='review'&&t.dueDate>=todayStr&&t.dueDate<=in7Str&&!t.isReviewTask&&!t.isNotifyTask);
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.status!=='review'&&t.dueDate>=todayStr&&t.dueDate<=in7Str&&!t.isReviewTask&&!t.isNotifyTask);
   const followsWeek  = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
   const stWeek       = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue>in3Str&&c.stNextdue<=in7Str&&c.status==='Active');
 
@@ -28105,7 +28114,7 @@ function renderInsightsTiles(){
   const ams = DB.accountManagers||[];
   const amWorkload = ams.filter(a=>a.status==='Active').map(a=>({
     name: a.fname+' '+(a.lname||''),
-    tasks: (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===a.id&&t.status!=='completed').length,
+    tasks: (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.amId===a.id&&t.status!=='completed').length,
     clients: (DB.clients||[]).filter(c=>c.am===a.id&&c.status==='Active').length,
   })).sort((a,b)=>b.tasks-a.tasks);
 
@@ -28475,7 +28484,7 @@ function renderDashboardIntel(){
   const in7Str = in7.toISOString().slice(0,10);
 
   // Panel A: Urgent Actions
-  const overdueTasks  = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueTasks  = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate<todayStr);
   const overdueLeads  = (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate<todayStr&&!['Won','Lost'].includes(l.stage));
   const stCritical    = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue<=in3Str&&c.status==='Active');
   const unfiledOld    = (DB.employees||[]).filter(e=>!e._deleted&&!e.reportPrinted&&e.hiredate&&betaDaysFrom(e.hiredate)<=-15);
@@ -28492,7 +28501,7 @@ function renderDashboardIntel(){
   ];
 
   // Panel B: Coming This Week
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7Str);
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7Str);
   const followupsWeek= (DB.leads||[]).filter(l=>!l._deleted &&l.followupDate>=todayStr&&l.followupDate<=in7Str&&!['Won','Lost'].includes(l.stage));
   const stWeek       = (DB.clients||[]).filter(c=>c.stNextdue&&c.stNextdue>in3Str&&c.stNextdue<=in7Str&&c.status==='Active');
 
@@ -28597,7 +28606,7 @@ function amWorkloadCells(am){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
   const clients   = (DB.clients||[]).filter(c=>c.am===am.id&&c.status==='Active').length;
-  const tasks     = (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===am.id&&t.status!=='completed');
+  const tasks     = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.amId===am.id&&t.status!=='completed');
   const overdue   = tasks.filter(t=>t.dueDate<todayStr).length;
   const leads     = (DB.leads||[]).filter(l=>!l._deleted &&l.amId===am.id&&!['Won','Lost'].includes(l.stage)).length;
   const mrr       = (DB.proposals||[]).filter(p=>!p._deleted && p.amId===am.id&&p.status==='Active').reduce((s,p)=>s+(p.totalFee||0),0);
@@ -28617,7 +28626,7 @@ function tcRenderSmartBanner(){
   const todayStr = today.toISOString().slice(0,10);
   // Filter by current AM selection
   const fAM = document.getElementById('tc-filter-am')?.value || '';
-  const myTasks = (DB.tasks||[]).filter(t => !t._deleted && (!fAM || t.amId === fAM));
+  const myTasks = (DB.tasks||[]).filter(t => !_taskHiddenForMe(t) && (!fAM || t.amId === fAM));
   const overdue = myTasks.filter(t=>t.status!=='completed' && t.dueDate && t.dueDate<todayStr);
   const dueToday= myTasks.filter(t=>t.status!=='completed' && t.dueDate===todayStr);
   if(!overdue.length && !dueToday.length){ banner.innerHTML=''; return; }
@@ -28767,7 +28776,7 @@ function betaRenderAlerts(){
 
   // ── CRITICAL ──────────────────────────────────────────────────
   // Overdue tasks
-  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueTasks = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate<todayStr);
   if(overdueTasks.length) cats.critical.push({
     icon:'⏰', text:`${overdueTasks.length} overdue task${overdueTasks.length>1?'s':''} in Production`,
     detail: overdueTasks.slice(0,3).map(t=>`${t.name} (${t.clientName})`).join(' · ')
@@ -28814,7 +28823,7 @@ function betaRenderAlerts(){
   });
 
   // Tasks due this week
-  const tasksDueWeek = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7s);
+  const tasksDueWeek = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate>=todayStr&&t.dueDate<=in7s);
   if(tasksDueWeek.length) cats.warning.push({
     icon:'✅', text:`${tasksDueWeek.length} task${tasksDueWeek.length>1?'s':''} due this week`,
     detail: tasksDueWeek.slice(0,3).map(t=>t.name).join(' · ')
@@ -28948,7 +28957,7 @@ function betaClientHealth(c){
   else signals.push({label:'AM Assigned',val:betaAmName(c.am),ok:true});
 
   // Signal 4: Overdue tasks
-  const overdueT = (DB.tasks||[]).filter(t=>!t._deleted &&t.clientId===c.id&&t.status!=='completed'&&t.dueDate<todayStr);
+  const overdueT = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.clientId===c.id&&t.status!=='completed'&&t.dueDate<todayStr);
   if(overdueT.length){ score-=overdueT.length*8; signals.push({label:'Overdue Tasks',val:overdueT.length,ok:false}); }
   else signals.push({label:'Tasks',val:'None overdue',ok:true});
 
@@ -29030,8 +29039,8 @@ function betaRenderBriefing(){
   // (reference existing clocked-in logic if possible)
 
   // Tasks due today
-  const dueToday = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate===todayStr);
-  const overdueTasks = (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<todayStr);
+  const dueToday = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate===todayStr);
+  const overdueTasks = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate<todayStr);
 
   sections.push({ icon:'✅', title:'Production Tasks', items:[
     ...overdueTasks.map(t=>`<span style="color:#ff6b6b;">⚠ OVERDUE:</span> <strong>${t.name}</strong> — ${t.clientName} <span style="color:var(--text-d);">(${betaAmName(t.amId)})</span>`),
@@ -29111,7 +29120,7 @@ function betaRenderDeadlines(){
   const items = [];
 
   if(!typeFilter||typeFilter==='task'){
-    (DB.tasks||[]).filter(t=>!t._deleted &&t.status!=='completed'&&t.dueDate<=futureStr).forEach(t=>{
+    (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.status!=='completed'&&t.dueDate<=futureStr).forEach(t=>{
       items.push({date:t.dueDate,type:'task',label:t.name,sub:t.clientName+' · '+betaAmName(t.amId),tag:'Task',tagColor:'#2e75b6',priority:t.priority});
     });
   }
@@ -29247,7 +29256,7 @@ function betaRenderWorkload(){
 
   body.innerHTML = ams.map(am=>{
     const clients   = (DB.clients||[]).filter(c=>c.am===am.id&&c.status==='Active');
-    const tasks     = (DB.tasks||[]).filter(t=>!t._deleted &&t.amId===am.id&&t.status!=='completed');
+    const tasks     = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.amId===am.id&&t.status!=='completed');
     const overdue   = tasks.filter(t=>t.dueDate<todayStr);
     const leads     = (DB.leads||[]).filter(l=>!l._deleted &&l.amId===am.id&&!['Won','Lost'].includes(l.stage));
     const pipeVal   = leads.reduce((s,l)=>s+(parseFloat(l.estValue)||0),0);
@@ -29396,7 +29405,7 @@ function betaC360Load(clientId){
   const todayStr = today.toISOString().slice(0,10);
 
   // Gather all cross-linked data
-  const tasks   = (DB.tasks||[]).filter(t=>!t._deleted &&t.clientId===clientId);
+  const tasks   = (DB.tasks||[]).filter(t=>!_taskHiddenForMe(t) &&t.clientId===clientId);
   const openT   = tasks.filter(t=>t.status!=='completed');
   const overdueT= openT.filter(t=>t.dueDate<todayStr);
   const proposals= (DB.proposals||[]).filter(p=>!p._deleted && p.clientId===clientId);
@@ -31897,23 +31906,44 @@ function notifCreate(opts){
 function notifUnreadCount(){
   const all = notifGetAll();
   const uid  = currentUser?.id;
-  return all.filter(n => !n._deleted && !n.read && (!n.targetAm || n.targetAm === uid)).length;
+  return all.filter(n => !_notifHiddenForMe(n) && !n.read && (!n.targetAm || n.targetAm === uid)).length;
 }
 
 // ── Delete a single notification (per-user soft delete) ──────────
-// Used by the × button on each notification row in the bell dropdown.
-// Works for both received and sent notifications (the Sent tab renders
-// from the same underlying array).
+// Uses a per-user _hiddenFor[] array so one side's delete never affects
+// the other side's copy. (Previously set _deleted=true globally, which
+// meant a sender deleting their sent-tab copy also wiped the recipient's
+// inbox copy — same notification record, same visibility flag.)
 function notifDeleteOne(id){
   const n = (DB.notifications||[]).find(x => x.id === id);
   if(!n) return;
   if(!confirm('Delete this notification? (It only disappears from your view — the other person\'s copy is not affected.)')) return;
-  n._deleted = true;
-  n._updatedAt = new Date().toISOString();
+  const uid = currentUser?.id;
+  const when = new Date().toISOString();
+  if(uid){
+    if(!Array.isArray(n._hiddenFor)) n._hiddenFor = [];
+    if(!n._hiddenFor.includes(uid)) n._hiddenFor.push(uid);
+    n._updatedAt = when;
+  } else {
+    // Logged-out fallback: global delete
+    n._deleted = true;
+    n._updatedAt = when;
+  }
   saveDB();
   notifUpdateBadge();
   notifRenderList();
   if(typeof notifRenderSentList === 'function') notifRenderSentList();
+}
+
+// Helper: is this notification hidden from the current viewer?
+// Matches the _taskHiddenForMe pattern — covers global _deleted + the
+// per-user _hiddenFor array.
+function _notifHiddenForMe(n){
+  if(!n) return true;
+  if(n._deleted) return true;
+  const uid = currentUser?.id;
+  if(uid && Array.isArray(n._hiddenFor) && n._hiddenFor.includes(uid)) return true;
+  return false;
 }
 
 function notifUpdateBadge(){
@@ -31966,7 +31996,9 @@ function notifRenderList(){
   if(!list) return;
 
   const uid   = currentUser?.id;
-  const items = notifGetAll().filter(n => !n._deleted && (!n.targetAm || n.targetAm === uid));
+  const items = notifGetAll()
+    .filter(n => !_notifHiddenForMe(n) && (!n.targetAm || n.targetAm === uid))
+    .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
 
   // Show enable desktop notifications row if not yet granted
   const enableRow = document.getElementById('notif-enable-row');
@@ -32089,7 +32121,9 @@ function notifRenderSentList(){
   if(!list) return;
   const uid = currentUser?.id;
   // Sent = notifications created by current user (targetAm is someone else)
-  const items = notifGetAll().filter(n => !n._deleted && n.sentBy === uid && n.targetAm && n.targetAm !== uid);
+  const items = notifGetAll()
+    .filter(n => !_notifHiddenForMe(n) && n.sentBy === uid && n.targetAm && n.targetAm !== uid)
+    .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
 
   const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'task-note':'📝', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
@@ -40929,7 +40963,7 @@ function mtgShowPrep(meetingId) {
   if (!panel || !content) return;
 
   // Open tasks for this client
-  const openTasks = (DB.tasks || []).filter(t => !t._deleted &&t.clientId === m.clientId && t.status === 'open');
+  const openTasks = (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&t.clientId === m.clientId && t.status === 'open');
   // Latest P&L report
   const latestPL = client?.plReports?.length ? client.plReports[client.plReports.length - 1] : null;
   // Last meeting with this client
