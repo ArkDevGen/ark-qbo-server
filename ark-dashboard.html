@@ -25022,7 +25022,21 @@ function tcDeleteTask(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
   if(!confirm(`Delete task "${t.name}"? This cannot be undone.`)) return;
   t._deleted = true; t._updatedAt = new Date().toISOString();
-  saveDB(); logAct(`Task "${t.name}" deleted`); tcRender();
+  // Also soft-delete any notifications that point at this task so the
+  // recipient doesn't have to delete the notification separately (which
+  // would otherwise silently reopen the deleted task on their second click).
+  (DB.notifications||[]).forEach(n => {
+    if(n.taskId === id && !n._deleted){
+      n._deleted = true;
+      n._updatedAt = new Date().toISOString();
+    }
+  });
+  saveDB();
+  logAct(`Task "${t.name}" deleted`);
+  if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
+  if(typeof notifRenderList === 'function') notifRenderList();
+  if(typeof notifRenderSentList === 'function') notifRenderSentList();
+  tcRender();
 }
 
 function tcOpenDetail(id){
@@ -27410,6 +27424,10 @@ function tcOpenDetail(id){
 
 function twfOpen(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
+  // Refuse to open a task that's been deleted. Previously a stale bell
+  // notification pointing at a deleted task would reopen it, making users
+  // feel they had to click Delete a second time to make it "really" go away.
+  if(t._deleted){ showToast('This task was already deleted'); return; }
   _twfTaskId = id;
   const client  = (DB.clients||[]).find(c=>c.id===t.clientId);
   const am      = (DB.accountManagers||[]).find(a=>a.id===t.amId);
