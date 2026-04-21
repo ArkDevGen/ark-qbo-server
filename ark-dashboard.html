@@ -25027,14 +25027,14 @@ function tcAcknowledgeNotify(taskId){
   t._updatedAt = when;
   if(!t.noteLog) t.noteLog = [];
   t.noteLog.unshift({ id: uid(), text:`✓ Acknowledged by ${who}`, author: who, at: when, type:'acknowledgement' });
-  // For notify-only tasks, acknowledgment also closes the task — nothing
-  // else for the recipient to do. Adds a second history entry so the
-  // sender can see the full timeline (sent → viewed → acked → completed).
+  // For notify-only tasks, acknowledgment IS the closing action — there's
+  // nothing else to do. Flip the status so the task moves out of active
+  // lists, but don't add a separate "completed" history entry (the
+  // "Acknowledged" entry above is the single authoritative event).
   if(t.reviewType === 'notify' && t.status !== 'completed'){
     t.status      = 'completed';
     t.completedAt = when;
     t.completedBy = who;
-    t.noteLog.unshift({ id: uid(), text:`✅ Marked complete by ${who}`, author: who, at: when, type:'completion' });
   }
 
   // Send the read receipt back to whoever originally sent this notify.
@@ -27504,8 +27504,13 @@ function twfOpen(id){
   let dueBg, dueBorder, dueText;
   if(isCompleted){
     dueBg='#0a140a'; dueBorder='#1a3a1a';
-    dueText=`<span style="color:var(--green);font-weight:700;">✓ Completed</span>`
-      + (t.completedAt ? ` <span style="color:var(--text-d);font-size:12px;">by ${t.completedBy||'—'} on ${new Date(t.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>` : '');
+    // Notify-only tasks close via Acknowledge — call it that, not "Completed".
+    const isNotifyClose = t.reviewType === 'notify' && t.acknowledgedAt;
+    const verb = isNotifyClose ? 'Acknowledged' : 'Completed';
+    const when = t.acknowledgedAt || t.completedAt;
+    const actor = isNotifyClose ? (t.acknowledgedBy || t.completedBy || '—') : (t.completedBy || '—');
+    dueText=`<span style="color:var(--green);font-weight:700;">✓ ${verb}</span>`
+      + (when ? ` <span style="color:var(--text-d);font-size:12px;">by ${actor} on ${new Date(when).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>` : '');
   } else if(isReview){
     dueBg='#0a1428'; dueBorder='#2e5fa1';
     dueText=`<span style="color:#6ea8fe;font-weight:700;">⏳ In Review</span> <span style="color:var(--text-d);font-size:12px;">submitted — awaiting approval</span>`;
