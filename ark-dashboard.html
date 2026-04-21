@@ -32170,44 +32170,49 @@ function _notifRefreshDB(){
 // ── Init: run on login and page changes ──────────────────────────
 let _notifHealthTimer = null;
 function notifInit(){
-  notifUpdateBadge();
-  // Defer the SSE connect to the next tick so all module-level `let`s
-  // (including _notifSSE itself) have finished initializing by the time
-  // notifConnectSSE runs. Fixes a load-order bug where session-restore
-  // called notifInit synchronously before the EventSource variable was
-  // in scope, silently leaving the client disconnected from push events.
-  setTimeout(() => { try { notifConnectSSE(); } catch(e){ console.warn('SSE initial connect failed:', e.message); } }, 0);
-  // Listen for service worker messages (push notification clicks)
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.addEventListener('message', (e) => {
-      if(e.data?.type === 'notif-click'){
-        if(e.data.helpPostId){
-          nav('devhub');
-          setTimeout(() => { dhSwitchTab('helpboard'); setTimeout(() => hbOpenDetail(e.data.helpPostId), 300); }, 200);
-        } else if(e.data.taskId){
-          nav('tasks');
-          setTimeout(() => twfOpen(e.data.taskId), 200);
-        }
+  // Defer ALL initialization to the next tick. The session-restore IIFE
+  // calls notifInit synchronously at line ~15470, but several module-level
+  // `let`s we need (_notifSSE, _notifListenersAttached, _notifHealthTimer)
+  // are declared further down in the script and are still in the temporal
+  // dead zone at that point. Deferring means every statement below runs
+  // after the script has finished parsing and all `let`s have initialized.
+  setTimeout(() => {
+    try {
+      notifUpdateBadge();
+      notifConnectSSE();
+      // Listen for service worker messages (push notification clicks)
+      if('serviceWorker' in navigator){
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if(e.data?.type === 'notif-click'){
+            if(e.data.helpPostId){
+              nav('devhub');
+              setTimeout(() => { dhSwitchTab('helpboard'); setTimeout(() => hbOpenDetail(e.data.helpPostId), 300); }, 200);
+            } else if(e.data.taskId){
+              nav('tasks');
+              setTimeout(() => twfOpen(e.data.taskId), 200);
+            }
+          }
+        });
       }
-    });
-  }
-  // Re-sync all notification state when the tab wakes up or regains focus
-  _notifAttachVisibilityListeners();
-  // Self-healing SSE — if the stream ever silently dies (Render idle,
-  // network blip, load-order race, whatever), reconnect within a minute.
-  // EventSource.readyState: 0=connecting, 1=open, 2=closed.
-  if(!_notifHealthTimer){
-    _notifHealthTimer = setInterval(() => {
-      if(!currentUser) return;
-      const rs = _notifSSE?.readyState;
-      if(rs !== 0 && rs !== 1){
-        console.log('SSE: health check — reconnecting (readyState =', rs, ')');
-        try { notifConnectSSE(); } catch(_){}
+      // Re-sync all notification state when the tab wakes up or regains focus
+      _notifAttachVisibilityListeners();
+      // Self-healing SSE — if the stream ever silently dies (Render idle,
+      // network blip, load-order race, whatever), reconnect within a minute.
+      // EventSource.readyState: 0=connecting, 1=open, 2=closed.
+      if(!_notifHealthTimer){
+        _notifHealthTimer = setInterval(() => {
+          if(!currentUser) return;
+          const rs = _notifSSE?.readyState;
+          if(rs !== 0 && rs !== 1){
+            console.log('SSE: health check — reconnecting (readyState =', rs, ')');
+            try { notifConnectSSE(); } catch(_){}
+          }
+        }, 60000);
       }
-    }, 60000);
-  }
-  // Ask for browser notification permission (once per 7 days, on first user gesture)
-  _notifMaybeAutoRequest();
+      // Ask for browser notification permission (once per 7 days, on first user gesture)
+      _notifMaybeAutoRequest();
+    } catch(e){ console.warn('notifInit deferred failed:', e.message); }
+  }, 0);
 }
 
 // Re-sync notification/chat/P&L badges on tab visibility + focus, and
