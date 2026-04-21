@@ -5649,6 +5649,9 @@ const STAGING_BRANCH = 'staging';
 
 // Fetch a file's current content from the staging branch (so the editor
 // can pre-fill with the real file before the user modifies it).
+// NOTE: GitHub's Contents API omits inline content for files > 1 MB, so
+// for big files (ark-dashboard.html is ~2.8 MB) we fall back to the
+// Blobs API which has a ~100 MB limit.
 app.get('/staging/file', requireAuth, async (req, res) => {
   if (!_isStagingHost(req)) return res.status(403).json({ error: 'Staging-only endpoint' });
   const filePath = (req.query.path || '').toString();
@@ -5665,7 +5668,25 @@ app.get('/staging/file', requireAuth, async (req, res) => {
     }
     const data = await r.json();
     if (data.type !== 'file') return res.status(400).json({ error: 'Path is not a file' });
-    const content = Buffer.from(data.content || '', 'base64').toString('utf8');
+
+    let content;
+    if (data.content) {
+      // Small file — content is inline, base64-encoded
+      content = Buffer.from(data.content, 'base64').toString('utf8');
+    } else if (data.sha) {
+      // Big file (> 1 MB) — fetch via the Blobs API using the SHA
+      const blobUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/blobs/${data.sha}`;
+      const blobResp = await fetch(blobUrl, { headers });
+      if (!blobResp.ok) {
+        const txt = await blobResp.text();
+        return res.status(blobResp.status).json({ error: `GitHub blob fetch: ${blobResp.status} ${txt.slice(0, 200)}` });
+      }
+      const blob = await blobResp.json();
+      content = Buffer.from(blob.content || '', 'base64').toString('utf8');
+    } else {
+      return res.status(502).json({ error: 'GitHub response missing both content and sha' });
+    }
+
     res.json({ path: filePath, content, sha: data.sha, size: data.size });
   } catch (e) {
     res.status(500).json({ error: e.message });
