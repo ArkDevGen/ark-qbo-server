@@ -32169,7 +32169,10 @@ function _notifRefreshDB(){
 
 // ── Init: run on login and page changes ──────────────────────────
 let _notifHealthTimer = null;
+let _notifInitCalled = false;
 function notifInit(){
+  _notifInitCalled = true;
+  console.log('notifInit: scheduling deferred init');
   // Defer ALL initialization to the next tick. The session-restore IIFE
   // calls notifInit synchronously at line ~15470, but several module-level
   // `let`s we need (_notifSSE, _notifListenersAttached, _notifHealthTimer)
@@ -32178,6 +32181,7 @@ function notifInit(){
   // after the script has finished parsing and all `let`s have initialized.
   setTimeout(() => {
     try {
+      console.log('notifInit: running deferred body');
       notifUpdateBadge();
       notifConnectSSE();
       // Listen for service worker messages (push notification clicks)
@@ -32213,6 +32217,23 @@ function notifInit(){
       _notifMaybeAutoRequest();
     } catch(e){ console.warn('notifInit deferred failed:', e.message); }
   }, 0);
+}
+
+// Safety net: if the session-restore IIFE or login flow didn't successfully
+// call notifInit (prod diagnostic on 2026-04-21 showed notifInit was
+// never invoked even though the user was logged in), run it after
+// window.load fires. By then the entire script has parsed, all `let`s
+// are initialized, currentUser/_serverToken are set from session restore,
+// and the DOM is fully ready. This guarantees SSE + health timer start.
+if(typeof window !== 'undefined'){
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      if(currentUser && !_notifInitCalled){
+        console.log('notifInit fallback: window.load firing notifInit (session restore never did)');
+        try { notifInit(); } catch(e){ console.warn('notifInit fallback failed:', e.message); }
+      }
+    }, 500);
+  });
 }
 
 // Re-sync notification/chat/P&L badges on tab visibility + focus, and
