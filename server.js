@@ -5632,6 +5632,115 @@ app.get('/staging/deploy-status', requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// STAGING FILE PUSH — lets non-developer team members edit the CRM
+// on staging without needing GitHub access. All three endpoints are
+// gated to the staging hostname, and the branch is hardcoded to
+// 'staging' so production is physically unreachable from here.
+// ─────────────────────────────────────────────────────────────────
+function _isStagingHost(req){
+  const host = (req.headers.host || '').toLowerCase();
+  const hostname = (req.hostname || '').toLowerCase();
+  return host.includes('staging') || hostname.includes('staging');
+}
+
+const GITHUB_OWNER = 'ArkDevGen';
+const GITHUB_REPO  = 'ark-qbo-server';
+const STAGING_BRANCH = 'staging';
+
+// Fetch a file's current content from the staging branch (so the editor
+// can pre-fill with the real file before the user modifies it).
+app.get('/staging/file', requireAuth, async (req, res) => {
+  if (!_isStagingHost(req)) return res.status(403).json({ error: 'Staging-only endpoint' });
+  const filePath = (req.query.path || '').toString();
+  if (!filePath || filePath.includes('..')) return res.status(400).json({ error: 'Bad path' });
+  const pat = process.env.GITHUB_PAT;
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'ark-crm-staging' };
+  if (pat) headers.Authorization = `Bearer ${pat}`;
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}?ref=${STAGING_BRANCH}`;
+    const r = await fetch(url, { headers });
+    if (!r.ok) {
+      const txt = await r.text();
+      return res.status(r.status).json({ error: `GitHub: ${r.status} ${txt.slice(0, 200)}` });
+    }
+    const data = await r.json();
+    if (data.type !== 'file') return res.status(400).json({ error: 'Path is not a file' });
+    const content = Buffer.from(data.content || '', 'base64').toString('utf8');
+    res.json({ path: filePath, content, sha: data.sha, size: data.size });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Push an updated file to the staging branch on GitHub. Requires GITHUB_PAT
+// (fine-grained, Contents: write). Render auto-redeploys staging on push.
+app.post('/staging/push-file', requireAuth, async (req, res) => {
+  if (!_isStagingHost(req)) return res.status(403).json({ error: 'Staging-only endpoint' });
+  const pat = process.env.GITHUB_PAT;
+  if (!pat) return res.status(500).json({ error: 'GITHUB_PAT not set on staging server — ask an admin to add it in Render.' });
+
+  const { path: filePath, content, message } = req.body || {};
+  if (!filePath || typeof content !== 'string') return res.status(400).json({ error: 'path and content required' });
+  if (filePath.includes('..') || filePath.startsWith('/')) return res.status(400).json({ error: 'Bad path' });
+
+  const who = req.arkUser?.userName || 'staging user';
+  const trimmedMsg = (message || `update ${filePath}`).slice(0, 120);
+  const commitMsg = `[staging] ${trimmedMsg}\n\nPushed via staging CRM by ${who}`;
+
+  try {
+    // Look up the current file SHA (required for updates; absent means "new file")
+    let currentSha = null;
+    const getUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}?ref=${STAGING_BRANCH}`;
+    const getResp = await fetch(getUrl, {
+      headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json', 'User-Agent': 'ark-crm-staging' },
+    });
+    if (getResp.ok) {
+      const data = await getResp.json();
+      currentSha = data.sha;
+    } else if (getResp.status !== 404) {
+      const txt = await getResp.text();
+      return res.status(502).json({ error: `GitHub read failed (${getResp.status}): ${txt.slice(0, 300)}` });
+    }
+
+    const putUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}`;
+    const body = {
+      message: commitMsg,
+      content: Buffer.from(content, 'utf8').toString('base64'),
+      branch: STAGING_BRANCH,
+    };
+    if (currentSha) body.sha = currentSha;
+
+    const putResp = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'ark-crm-staging',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!putResp.ok) {
+      const txt = await putResp.text();
+      return res.status(502).json({ error: `GitHub push failed (${putResp.status}): ${txt.slice(0, 500)}` });
+    }
+
+    const data = await putResp.json();
+    console.log(`Staging push by ${who}: ${filePath} → ${data.commit?.sha?.slice(0, 7)}`);
+    res.json({
+      ok: true,
+      commitSha: data.commit?.sha || '',
+      commitUrl: data.commit?.html_url || '',
+      path: filePath,
+    });
+  } catch (e) {
+    console.error('Staging push error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // DATABASE: Server-side persistent storage for dashboard data
 // Both users share the same ark-db.json on disk
 // ─────────────────────────────────────────────────────────────────
