@@ -27861,9 +27861,15 @@ function twfEdit(){
 }
 
 function twfDelete(){
-  if(!confirm('Delete this task permanently?')) return;
+  // tcDeleteTask has its own confirmation — calling confirm() here was
+  // showing TWO dialogs in a row, and users naturally only acted on the
+  // first, causing the actual delete to silently abort.
+  if(!_twfTaskId) return;
+  const existed = (DB.tasks||[]).some(t => t.id === _twfTaskId);
   tcDeleteTask(_twfTaskId);
-  closeModal('modal-task-workflow');
+  // Close the workflow modal only if the delete actually went through
+  const stillExists = (DB.tasks||[]).some(t => t.id === _twfTaskId && !t._deleted);
+  if(existed && !stillExists) closeModal('modal-task-workflow');
 }
 
 
@@ -31721,7 +31727,22 @@ function notifCreate(opts){
 function notifUnreadCount(){
   const all = notifGetAll();
   const uid  = currentUser?.id;
-  return all.filter(n => !n.read && (!n.targetAm || n.targetAm === uid)).length;
+  return all.filter(n => !n._deleted && !n.read && (!n.targetAm || n.targetAm === uid)).length;
+}
+
+// ── Delete a single notification (per-user soft delete) ──────────
+// Used by the × button on each notification row in the bell dropdown.
+// Works for both received and sent notifications (the Sent tab renders
+// from the same underlying array).
+function notifDeleteOne(id){
+  const n = (DB.notifications||[]).find(x => x.id === id);
+  if(!n) return;
+  n._deleted = true;
+  n._updatedAt = new Date().toISOString();
+  saveDB();
+  notifUpdateBadge();
+  notifRenderList();
+  if(typeof notifRenderSentList === 'function') notifRenderSentList();
 }
 
 function notifUpdateBadge(){
@@ -31774,7 +31795,7 @@ function notifRenderList(){
   if(!list) return;
 
   const uid   = currentUser?.id;
-  const items = notifGetAll().filter(n => !n.targetAm || n.targetAm === uid);
+  const items = notifGetAll().filter(n => !n._deleted && (!n.targetAm || n.targetAm === uid));
 
   // Show enable desktop notifications row if not yet granted
   const enableRow = document.getElementById('notif-enable-row');
@@ -31803,8 +31824,8 @@ function notifRenderList(){
   list.innerHTML = items.map(n => `
     <div onclick="notifClickItem('${n.id}')"
       style="padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${n.read?'transparent':'rgba(59,130,246,0.05)'};transition:background .15s;"
-      onmouseover="this.style.background='var(--surface2)'"
-      onmouseout="this.style.background='${n.read?'transparent':'rgba(59,130,246,0.05)'}'">
+      onmouseover="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
+      onmouseout="this.style.background='${n.read?'transparent':'rgba(59,130,246,0.05)'}';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
       <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'🔔'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:${n.read?'500':'700'};color:var(--text);margin-bottom:2px;">${n.title}</div>
@@ -31815,6 +31836,10 @@ function notifRenderList(){
           ${!n.read ? `<span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;display:inline-block;"></span>` : ''}
         </div>
       </div>
+      <button onclick="event.stopPropagation();notifDeleteOne('${n.id}')" class="notif-del-btn" title="Delete notification"
+        style="flex-shrink:0;background:none;border:none;color:var(--text-d);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:4px;opacity:0;transition:opacity .15s,background .15s;"
+        onmouseover="event.stopPropagation();this.style.background='var(--surface2)';this.style.color='var(--red)'"
+        onmouseout="event.stopPropagation();this.style.background='none';this.style.color='var(--text-d)'">×</button>
     </div>`).join('');
 }
 
@@ -31893,7 +31918,7 @@ function notifRenderSentList(){
   if(!list) return;
   const uid = currentUser?.id;
   // Sent = notifications created by current user (targetAm is someone else)
-  const items = notifGetAll().filter(n => n.sentBy === uid && n.targetAm && n.targetAm !== uid);
+  const items = notifGetAll().filter(n => !n._deleted && n.sentBy === uid && n.targetAm && n.targetAm !== uid);
 
   const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
@@ -31934,7 +31959,8 @@ function notifRenderSentList(){
 
   list.innerHTML = items.map(n => `
     <div onclick="${(n.taskId||n.helpPostId)?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${(n.taskId||n.helpPostId)?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
-      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      onmouseover="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
+      onmouseout="this.style.background='';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
       <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'📤'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;">${n.title}</div>
@@ -31945,6 +31971,10 @@ function notifRenderSentList(){
           ${getReceiptPill(n)}
         </div>
       </div>
+      <button onclick="event.stopPropagation();notifDeleteOne('${n.id}')" class="notif-del-btn" title="Delete from your list"
+        style="flex-shrink:0;background:none;border:none;color:var(--text-d);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:4px;opacity:0;transition:opacity .15s,background .15s;"
+        onmouseover="event.stopPropagation();this.style.background='var(--surface2)';this.style.color='var(--red)'"
+        onmouseout="event.stopPropagation();this.style.background='none';this.style.color='var(--text-d)'">×</button>
     </div>`).join('');
 }
 
