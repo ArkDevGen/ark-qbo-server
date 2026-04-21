@@ -32168,9 +32168,15 @@ function _notifRefreshDB(){
 }
 
 // ── Init: run on login and page changes ──────────────────────────
+let _notifHealthTimer = null;
 function notifInit(){
   notifUpdateBadge();
-  notifConnectSSE();
+  // Defer the SSE connect to the next tick so all module-level `let`s
+  // (including _notifSSE itself) have finished initializing by the time
+  // notifConnectSSE runs. Fixes a load-order bug where session-restore
+  // called notifInit synchronously before the EventSource variable was
+  // in scope, silently leaving the client disconnected from push events.
+  setTimeout(() => { try { notifConnectSSE(); } catch(e){ console.warn('SSE initial connect failed:', e.message); } }, 0);
   // Listen for service worker messages (push notification clicks)
   if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('message', (e) => {
@@ -32187,6 +32193,19 @@ function notifInit(){
   }
   // Re-sync all notification state when the tab wakes up or regains focus
   _notifAttachVisibilityListeners();
+  // Self-healing SSE — if the stream ever silently dies (Render idle,
+  // network blip, load-order race, whatever), reconnect within a minute.
+  // EventSource.readyState: 0=connecting, 1=open, 2=closed.
+  if(!_notifHealthTimer){
+    _notifHealthTimer = setInterval(() => {
+      if(!currentUser) return;
+      const rs = _notifSSE?.readyState;
+      if(rs !== 0 && rs !== 1){
+        console.log('SSE: health check — reconnecting (readyState =', rs, ')');
+        try { notifConnectSSE(); } catch(_){}
+      }
+    }, 60000);
+  }
   // Ask for browser notification permission (once per 7 days, on first user gesture)
   _notifMaybeAutoRequest();
 }
