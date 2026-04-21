@@ -24599,6 +24599,7 @@ function tcSaveTask(){
       createdAt:    existing?.createdAt || new Date().toISOString(),
       updatedAt:    new Date().toISOString(),
       createdBy:    who,
+      createdById:  existing?.createdById || currentUser?.id || null,
       completedAt:  existing?.completedAt || null,
       completedBy:  existing?.completedBy || null,
       reviewType:   reviewType || null,
@@ -24608,6 +24609,10 @@ function tcSaveTask(){
       parentTaskId: existing?.parentTaskId || null,
       type:         existing?.type || 'task',
       parentId:     existing?.parentId || null,
+      viewedAt:     existing?.viewedAt || null,
+      viewedBy:     existing?.viewedBy || null,
+      acknowledgedAt: existing?.acknowledgedAt || null,
+      acknowledgedBy: existing?.acknowledgedBy || null,
     };
 
     // Stamp _updatedAt for merge conflict resolution
@@ -24970,6 +24975,47 @@ function tcDismissNotify(taskId){
   saveDB(); tcRender();
   closeModal('modal-task-workflow');
   showToast('✓ Notification dismissed');
+}
+
+// ── Acknowledge a notify task (recipient → sender read receipt) ──────
+// Stamps the task with acknowledgedAt/acknowledgedBy, adds a history
+// entry, and fires a task-acknowledged notification back to the sender
+// (desktop pop + bell badge). The task stays visible to both sides.
+function tcAcknowledgeNotify(taskId){
+  const t = (DB.tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  if(t.acknowledgedAt){ closeModal('modal-task-workflow'); return; }
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : '';
+  const when = new Date().toISOString();
+  t.acknowledgedAt = when;
+  t.acknowledgedBy = who;
+  t._updatedAt = when;
+  if(!t.noteLog) t.noteLog = [];
+  t.noteLog.unshift({ id: uid(), text:`✓ Acknowledged by ${who}`, author: who, at: when, type:'acknowledgement' });
+
+  // Send the read receipt back to whoever originally sent this notify.
+  // Prefer the task's createdById; fall back to the original sent
+  // notification's sentBy (covers legacy tasks created before the field
+  // was added).
+  let senderId = t.createdById || null;
+  if(!senderId){
+    const origNotif = (DB.notifications||[]).find(n => n.taskId === t.id && n.type === 'task-completed');
+    if(origNotif) senderId = origNotif.sentBy;
+  }
+  if(senderId && senderId !== currentUser?.id){
+    notifCreate({
+      type:     'task-acknowledged',
+      targetAm: senderId,
+      title:    'Task acknowledged',
+      body:     `${who} acknowledged "${t.name}"${t.clientName?' ('+t.clientName+')':''}`,
+      taskId:   t.id,
+      from:     who,
+    });
+  }
+
+  saveDB();
+  logAct(`Task "${t.name}" acknowledged by ${who}`);
+  closeModal('modal-task-workflow');
+  showToast('✓ Acknowledgment sent');
 }
 
 function tcDeleteTask(id){
@@ -27419,8 +27465,37 @@ function twfOpen(id){
   // ── WORKFLOW SECTION — category-specific ──
   document.getElementById('twf-workflow').innerHTML = twfWorkflowHtml(t, client);
 
+  // ── Detect whether the current user is the NOTIFY RECIPIENT ──
+  // Notify-only tasks stay on the creator's board (marked completed) — the
+  // recipient only sees the task when they click the bell notification.
+  // reviewerId === currentUser.id means "I am the person being notified."
+  const isNotifyRecipient = t.reviewType === 'notify' && t.reviewerId
+    && currentUser?.id && t.reviewerId === currentUser.id
+    && t.createdById !== currentUser.id;
+
+  // Passive read receipt — stamp viewedAt the first time the recipient opens
+  // the task. Saves silently (no notification to sender); the sender sees it
+  // in their Sent tab and in the task's review info panel.
+  if(isNotifyRecipient && !t.viewedAt){
+    const whoName = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : '';
+    t.viewedAt = new Date().toISOString();
+    t.viewedBy = whoName;
+    t._updatedAt = t.viewedAt;
+    try { saveDB(); } catch(_){}
+  }
+
   // ── Review info panel — shown when task has a reviewer configured ──
   const reviewerAM = t.reviewerId ? (DB.accountManagers||[]).find(a=>a.id===t.reviewerId) : null;
+  const _twfFmtRel = iso => {
+    if(!iso) return '';
+    const d = new Date(iso), now = new Date();
+    const diffM = Math.round((now - d) / 60000);
+    if(diffM < 1) return 'just now';
+    if(diffM < 60) return diffM + 'm ago';
+    const diffH = Math.floor(diffM / 60);
+    if(diffH < 24) return diffH + 'h ago';
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  };
   let reviewInfoHtml = '';
   if(t.reviewType === 'approve' && reviewerAM && !t.isReviewTask && !t.isNotifyTask){
     const stateMap = {
@@ -27434,9 +27509,26 @@ function twfOpen(id){
       <span style="font-size:11px;color:var(--text-d);">Review &amp; Approve</span>
     </div>`;
   } else if(t.reviewType === 'notify' && reviewerAM && !t.isReviewTask && !t.isNotifyTask){
-    reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #3a2a6b44;border-radius:var(--radius);background:#0a0a18;font-size:12px;color:var(--text-d);">
-      📣 <strong style="color:var(--text);">${reviewerAM.fname} ${reviewerAM.lname||''}</strong> will be notified when this task is completed.
-    </div>`;
+    if(isNotifyRecipient){
+      // Recipient view — either show "needs acknowledgment" or confirmation
+      reviewInfoHtml = t.acknowledgedAt
+        ? `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid rgba(16,185,129,.35);border-radius:var(--radius);background:rgba(16,185,129,.08);font-size:12px;color:var(--text);">
+            ✅ You acknowledged this on <strong>${new Date(t.acknowledgedAt).toLocaleString()}</strong>.
+          </div>`
+        : `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #3a2a6b66;border-radius:var(--radius);background:#0a0a18;font-size:12px;color:var(--text);">
+            📣 Notification from <strong>${t.createdBy||t.completedBy||'sender'}</strong>. Click <strong>Acknowledge</strong> below to let them know you saw it.
+          </div>`;
+    } else {
+      // Creator/sender view — show the recipient's status (pending → viewed → acknowledged)
+      const status = t.acknowledgedAt
+        ? `<span style="color:var(--green);font-weight:700;">✅ Acknowledged by ${reviewerAM.fname}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.acknowledgedAt)}</span>`
+        : t.viewedAt
+          ? `<span style="color:#6ea8fe;font-weight:700;">👀 Viewed by ${reviewerAM.fname}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.viewedAt)} — not yet acknowledged</span>`
+          : `<span style="color:var(--text-d);">⏳ Sent to <strong style="color:var(--text);">${reviewerAM.fname} ${reviewerAM.lname||''}</strong> — not yet viewed</span>`;
+      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #3a2a6b44;border-radius:var(--radius);background:#0a0a18;font-size:12px;">
+        ${status}
+      </div>`;
+    }
   }
   const reviewInfoEl = document.getElementById('twf-review-info');
   if(reviewInfoEl) reviewInfoEl.innerHTML = reviewInfoHtml;
@@ -27446,15 +27538,25 @@ function twfOpen(id){
   const editBtn = document.getElementById('twf-edit-btn');
   const reviewActionsEl = document.getElementById('twf-review-actions');
 
-  // Hide/show edit for system tasks
-  if(editBtn) editBtn.style.display = (t.isReviewTask || t.isNotifyTask) ? 'none' : '';
+  // Hide/show edit for system tasks and notify recipients (they can't edit
+  // a task owned by someone else that they were just notified about)
+  if(editBtn) editBtn.style.display = (t.isReviewTask || t.isNotifyTask || isNotifyRecipient) ? 'none' : '';
 
-  // Review actions area (approve/reject or dismiss)
+  // Review actions area (approve/reject, acknowledge/dismiss, or nothing)
   if(reviewActionsEl){
     if(t.isReviewTask){
       reviewActionsEl.innerHTML = `
         <button onclick="tcApproveReview('${t.id}')" class="btn btn-sm" style="background:#1a3a1a;border:1px solid #2e7d5e;color:#4dffa0;font-size:12px;padding:6px 14px;">✓ Approve</button>
         <button onclick="tcRejectReview('${t.id}')" class="btn btn-danger btn-sm" style="font-size:12px;padding:6px 14px;">✗ Reject</button>`;
+      reviewActionsEl.style.display = 'flex';
+    } else if(isNotifyRecipient){
+      // Recipient of a notify-only task — primary action is Acknowledge
+      // (sends a notif back to the sender). Dismiss is the quiet escape hatch.
+      reviewActionsEl.innerHTML = t.acknowledgedAt
+        ? `<span style="font-size:12px;color:var(--green);font-weight:700;padding:6px 12px;">✅ Acknowledged</span>
+           <button onclick="tcDismissNotify('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:12px;">Dismiss</button>`
+        : `<button onclick="tcAcknowledgeNotify('${t.id}')" class="btn btn-primary btn-sm" style="font-size:12px;padding:6px 14px;">✓ Acknowledge</button>
+           <button onclick="tcDismissNotify('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:12px;">Dismiss</button>`;
       reviewActionsEl.style.display = 'flex';
     } else if(t.isNotifyTask){
       reviewActionsEl.innerHTML = `<button onclick="tcDismissNotify('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:12px;">Dismiss</button>`;
@@ -27466,7 +27568,7 @@ function twfOpen(id){
   }
 
   // Complete button
-  if(t.isReviewTask || t.isNotifyTask){
+  if(t.isReviewTask || t.isNotifyTask || isNotifyRecipient){
     btn.style.display = 'none';
   } else if(isReview){
     btn.style.display = '';
@@ -31686,7 +31788,7 @@ function notifRenderList(){
     return;
   }
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -31793,7 +31895,7 @@ function notifRenderSentList(){
   // Sent = notifications created by current user (targetAm is someone else)
   const items = notifGetAll().filter(n => n.sentBy === uid && n.targetAm && n.targetAm !== uid);
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -31814,6 +31916,22 @@ function notifRenderSentList(){
     return;
   }
 
+  // Read-receipt pill for notify-only tasks (type:'task-completed' with a
+  // taskId that points at an actual task we can inspect). Shows whether the
+  // recipient has opened the task and whether they've clicked Acknowledge.
+  const getReceiptPill = n => {
+    if(n.type !== 'task-completed' || !n.taskId) return '';
+    const task = (DB.tasks||[]).find(t => t.id === n.taskId);
+    if(!task) return '';
+    if(task.acknowledgedAt){
+      return `<span style="font-size:10px;background:rgba(16,185,129,.15);color:#10b981;padding:2px 8px;border-radius:10px;font-weight:700;" title="Acknowledged ${new Date(task.acknowledgedAt).toLocaleString()}">✅ Acknowledged</span>`;
+    }
+    if(task.viewedAt){
+      return `<span style="font-size:10px;background:rgba(110,168,254,.15);color:#6ea8fe;padding:2px 8px;border-radius:10px;font-weight:700;" title="Viewed ${new Date(task.viewedAt).toLocaleString()}">👀 Viewed</span>`;
+    }
+    return `<span style="font-size:10px;background:var(--surface2);color:var(--text-d);padding:2px 8px;border-radius:10px;font-weight:700;">⏳ Pending</span>`;
+  };
+
   list.innerHTML = items.map(n => `
     <div onclick="${(n.taskId||n.helpPostId)?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${(n.taskId||n.helpPostId)?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
@@ -31821,9 +31939,10 @@ function notifRenderSentList(){
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;">${n.title}</div>
         <div style="font-size:11px;color:var(--text-d);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.body}</div>
-        <div style="font-size:10px;color:var(--text-d);margin-top:3px;display:flex;align-items:center;gap:8px;">
+        <div style="font-size:10px;color:var(--text-d);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span>${fmtDate(n.createdAt)}</span>
           <span style="color:var(--blue);">→ ${getTargetName(n.targetAm)}</span>
+          ${getReceiptPill(n)}
         </div>
       </div>
     </div>`).join('');
