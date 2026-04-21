@@ -24632,18 +24632,15 @@ function tcSaveTask(){
     if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
     logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${clientName}`);
 
-    // ── Notify-only: fire-and-forget FYI. Mark the task completed on the
-    // sender's side immediately (no mark-as-done button, no follow-up work)
-    // and ping the recipient. The assignee field IS the recipient for
-    // notify-only — reviewerId is force-aligned for downstream uniformity.
+    // ── Notify-only: fire a bell notification to the recipient AND keep the
+    // task visible on their task list (status stays 'open') so they can see
+    // it in their regular queue, not only in the bell. The task closes for
+    // both sides when the recipient clicks Acknowledge.
     if(idx < 0 && task.reviewType === 'notify' && task.amId && task.amId !== currentUser?.id){
       const notifyWhen = new Date().toISOString();
       task.reviewerId  = task.amId; // normalize: recipient is always reviewerId
-      task.status      = 'completed';
-      task.completedAt = notifyWhen;
-      task.completedBy = who;
       if(!task.noteLog) task.noteLog = [];
-      task.noteLog.unshift({ id: uid(), text:'✅ Sent as notification', author: who, at: notifyWhen, type:'completion' });
+      task.noteLog.unshift({ id: uid(), text:'📨 Sent as notification', author: who, at: notifyWhen, type:'note' });
       task._updatedAt  = notifyWhen;
       const recipient = (_cachedServerUsers||[]).find(u => u.id === task.amId)
                      || (DB.accountManagers||[]).find(a => a.id === task.amId);
@@ -25030,6 +25027,15 @@ function tcAcknowledgeNotify(taskId){
   t._updatedAt = when;
   if(!t.noteLog) t.noteLog = [];
   t.noteLog.unshift({ id: uid(), text:`✓ Acknowledged by ${who}`, author: who, at: when, type:'acknowledgement' });
+  // For notify-only tasks, acknowledgment also closes the task — nothing
+  // else for the recipient to do. Adds a second history entry so the
+  // sender can see the full timeline (sent → viewed → acked → completed).
+  if(t.reviewType === 'notify' && t.status !== 'completed'){
+    t.status      = 'completed';
+    t.completedAt = when;
+    t.completedBy = who;
+    t.noteLog.unshift({ id: uid(), text:`✅ Marked complete by ${who}`, author: who, at: when, type:'completion' });
+  }
 
   // Send the read receipt back to whoever originally sent this notify.
   // Prefer the task's createdById; fall back to the original sent
@@ -27540,11 +27546,14 @@ function twfOpen(id){
   // Passive read receipt — stamp viewedAt the first time anyone who can
   // acknowledge opens the task. Saves silently (no notification to sender);
   // the sender sees it in their Sent tab and in the task info panel.
+  // Also add a history entry so both sides can see the full timeline.
   if(canAcknowledge && !t.viewedAt){
     const whoName = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : '';
     t.viewedAt = new Date().toISOString();
     t.viewedBy = whoName;
     t._updatedAt = t.viewedAt;
+    if(!t.noteLog) t.noteLog = [];
+    t.noteLog.unshift({ id: uid(), text:`👀 Viewed by ${whoName}`, author: whoName, at: t.viewedAt, type:'note' });
     try { saveDB(); } catch(_){}
   }
 
