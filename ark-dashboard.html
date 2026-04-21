@@ -24561,9 +24561,19 @@ function tcSaveTask(){
 
   const reviewType   = document.getElementById('tc-review-type')?.value || '';
   const reviewerId   = reviewType ? (document.getElementById('tc-reviewer-id')?.value||'') : '';
-  if(reviewType && !reviewerId){
+  // Review & Approve needs a reviewer; Notify Only uses the Assigned-to
+  // person as the recipient (reviewer field is hidden for that mode).
+  if(reviewType === 'approve' && !reviewerId){
     alert('Please select a reviewer, or set Review Type to None.');
     return;
+  }
+  if(reviewType === 'notify'){
+    const hasAssignee = (typeof _tcSelectedAMs !== 'undefined' && _tcSelectedAMs && _tcSelectedAMs.length > 0)
+      || !!(document.getElementById('tc-am')?.value || '');
+    if(!hasAssignee){
+      alert('Pick who to notify in the Assigned To field.');
+      return;
+    }
   }
 
   const bankUrl = (category==='Banking' && clientId)
