@@ -31737,6 +31737,7 @@ function notifUnreadCount(){
 function notifDeleteOne(id){
   const n = (DB.notifications||[]).find(x => x.id === id);
   if(!n) return;
+  if(!confirm('Delete this notification? (It only disappears from your view — the other person\'s copy is not affected.)')) return;
   n._deleted = true;
   n._updatedAt = new Date().toISOString();
   saveDB();
@@ -31824,8 +31825,8 @@ function notifRenderList(){
   list.innerHTML = items.map(n => `
     <div onclick="notifClickItem('${n.id}')"
       style="padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:${n.read?'transparent':'rgba(59,130,246,0.05)'};transition:background .15s;"
-      onmouseover="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
-      onmouseout="this.style.background='${n.read?'transparent':'rgba(59,130,246,0.05)'}';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
+      onmouseenter="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
+      onmouseleave="this.style.background='${n.read?'transparent':'rgba(59,130,246,0.05)'}';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
       <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'🔔'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:${n.read?'500':'700'};color:var(--text);margin-bottom:2px;">${n.title}</div>
@@ -31959,8 +31960,8 @@ function notifRenderSentList(){
 
   list.innerHTML = items.map(n => `
     <div onclick="${(n.taskId||n.helpPostId)?`notifClickItem('${n.id}')`:''}" style="padding:11px 16px;border-bottom:1px solid var(--border);${(n.taskId||n.helpPostId)?'cursor:pointer;':''}display:flex;gap:10px;align-items:flex-start;transition:background .15s;"
-      onmouseover="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
-      onmouseout="this.style.background='';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
+      onmouseenter="this.style.background='var(--surface2)';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='1'"
+      onmouseleave="this.style.background='';var d=this.querySelector('.notif-del-btn');if(d)d.style.opacity='0'">
       <div style="font-size:18px;flex-shrink:0;margin-top:1px;">${typeIcon[n.type]||'📤'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;">${n.title}</div>
