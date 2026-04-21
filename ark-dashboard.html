@@ -24622,11 +24622,37 @@ function tcSaveTask(){
     if(idx>=0) DB.tasks[idx]=task; else DB.tasks.push(task);
     logAct(`Task "${name}" ${idx>=0?'updated':'created'} for ${clientName}`);
 
+    // ── Notify-only: fire-and-forget FYI. Mark the task completed on the
+    // sender's side immediately (no mark-as-done button, no follow-up work)
+    // and ping the recipient. The assignee field IS the recipient for
+    // notify-only — reviewerId is force-aligned for downstream uniformity.
+    if(idx < 0 && task.reviewType === 'notify' && task.amId && task.amId !== currentUser?.id){
+      const notifyWhen = new Date().toISOString();
+      task.reviewerId  = task.amId; // normalize: recipient is always reviewerId
+      task.status      = 'completed';
+      task.completedAt = notifyWhen;
+      task.completedBy = who;
+      if(!task.noteLog) task.noteLog = [];
+      task.noteLog.unshift({ id: uid(), text:'✅ Sent as notification', author: who, at: notifyWhen, type:'completion' });
+      task._updatedAt  = notifyWhen;
+      const recipient = (_cachedServerUsers||[]).find(u => u.id === task.amId)
+                     || (DB.accountManagers||[]).find(a => a.id === task.amId);
+      const recipientName = recipient ? `${recipient.fname||''} ${recipient.lname||''}`.trim() : 'recipient';
+      logAct(`Notification sent to ${recipientName} — "${name}" (${clientName})`);
+      notifCreate({
+        type:     'task-completed',
+        targetAm: task.amId,
+        title:    'New notification',
+        body:     `"${name}"${clientName!=='No Client'?' ('+clientName+')':''} from ${who}`,
+        taskId:   task.id,
+        from:     who,
+      });
+    }
     // ── Notify the assigned AM if this is a NEW task ──────────────────────
-    // (Original behavior: notify-only tasks still fire a new-task notification
-    // to the assignee. The notify-on-complete flow in tcToggleComplete handles
-    // the reviewer ping later when someone marks the task completed.)
-    if(idx < 0 && task.amId) {
+    // Skip for notify-only (we already fired the task-completed ping above
+    // and the task is already closed — a "new task assigned to you" notif
+    // would just be a duplicate).
+    else if(idx < 0 && task.amId) {
       const assignedAM = (DB.accountManagers||[]).find(a => a.id === task.amId);
       const amName = assignedAM ? `${assignedAM.fname} ${assignedAM.lname||''}`.trim() : '';
       // Only notify if assigned to a DIFFERENT person than creator
@@ -27595,11 +27621,10 @@ function twfOpen(id){
   const editBtn = document.getElementById('twf-edit-btn');
   const reviewActionsEl = document.getElementById('twf-review-actions');
 
-  // Hide/show edit for system tasks and notify recipients (they can't edit
-  // a task owned by someone else that they were just notified about).
-  // Note: we intentionally DO NOT hide Edit for regular assignees — they're
-  // doing the work, they need to edit/update it.
-  if(editBtn) editBtn.style.display = (t.isReviewTask || t.isNotifyTask || isNotifyReviewer) ? 'none' : '';
+  // Hide/show edit. Notify-only tasks are pure FYIs — nothing to edit on
+  // either side. System review/notify-legacy tasks also hide. Regular
+  // assignees KEEP Edit since they're doing the work.
+  if(editBtn) editBtn.style.display = (t.isReviewTask || t.isNotifyTask || isNotifyReviewer || t.reviewType === 'notify') ? 'none' : '';
 
   // Review actions area (approve/reject, acknowledge/dismiss, or nothing)
   if(reviewActionsEl){
@@ -27630,10 +27655,10 @@ function twfOpen(id){
     }
   }
 
-  // Complete button — hidden for system tasks and notify-only recipients
-  // (they don't own the work). Regular assignees KEEP the Complete button
-  // since they're doing the work; Acknowledge is additive for them.
-  if(t.isReviewTask || t.isNotifyTask || isNotifyReviewer){
+  // Complete button — hidden for any notify-only task (pure FYI, no work to
+  // mark done), for system review/notify-legacy tasks, and for the narrow
+  // notify-reviewer case. Regular assignees on non-notify tasks KEEP it.
+  if(t.isReviewTask || t.isNotifyTask || isNotifyReviewer || t.reviewType === 'notify'){
     btn.style.display = 'none';
   } else if(isReview){
     btn.style.display = '';
@@ -28167,11 +28192,14 @@ function tcToggleReviewer(){
   const type = document.getElementById('tc-review-type')?.value || '';
   const wrap  = document.getElementById('tc-reviewer-wrap');
   const hint  = document.getElementById('tc-review-hint');
-  if(wrap) wrap.style.display = type ? '' : 'none';
+  // Only show the separate "Reviewer" field for Review & Approve.
+  // For Notify Only, the Assigned-to person IS the recipient — no extra
+  // field needed, and showing it just confuses the workflow.
+  if(wrap) wrap.style.display = (type === 'approve') ? '' : 'none';
   if(hint){
     const msgs = {
       approve: 'When you complete this task it will enter In Review. The reviewer must approve before it fully closes.',
-      notify:  'When you complete this task it closes immediately. The reviewer gets an informational notification.',
+      notify:  'Sends a one-time FYI notification to the assigned person. The task closes immediately on your side — no mark-as-done needed. They can click Acknowledge to confirm they saw it.',
     };
     hint.textContent = msgs[type] || '';
     hint.style.display = type ? '' : 'none';
