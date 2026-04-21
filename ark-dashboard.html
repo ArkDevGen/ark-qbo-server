@@ -25005,12 +25005,31 @@ function tcRejectReview(reviewTaskId){
 }
 
 // ── Dismiss a notify task ────────────────────────────────────────────
+// Per-user: removes the task from the current user's view only. The other
+// party (sender or recipient) keeps their copy.
 function tcDismissNotify(taskId){
   const _nt = (DB.tasks||[]).find(x=>x.id===taskId);
-  if(_nt){ _nt._deleted = true; _nt._updatedAt = new Date().toISOString(); }
+  if(!_nt) return;
+  const uid = currentUser?.id;
+  const when = new Date().toISOString();
+  if(uid){
+    if(!Array.isArray(_nt._hiddenFor)) _nt._hiddenFor = [];
+    if(!_nt._hiddenFor.includes(uid)) _nt._hiddenFor.push(uid);
+    _nt._updatedAt = when;
+  } else {
+    _nt._deleted = true; _nt._updatedAt = when;
+  }
+  // Also hide any related notifications from THIS user's view
+  (DB.notifications||[]).forEach(n => {
+    if(n.taskId === taskId && (n.targetAm === uid || n.sentBy === uid) && !n._deleted){
+      n._deleted = true; n._updatedAt = when;
+    }
+  });
   saveDB(); tcRender();
+  if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
+  if(typeof notifRenderList === 'function') notifRenderList();
   closeModal('modal-task-workflow');
-  showToast('✓ Notification dismissed');
+  showToast('✓ Removed from your view');
 }
 
 // ── Acknowledge a notify task (recipient → sender read receipt) ──────
@@ -25027,15 +25046,11 @@ function tcAcknowledgeNotify(taskId){
   t._updatedAt = when;
   if(!t.noteLog) t.noteLog = [];
   t.noteLog.unshift({ id: uid(), text:`✓ Acknowledged by ${who}`, author: who, at: when, type:'acknowledgement' });
-  // For notify-only tasks, acknowledgment IS the closing action — there's
-  // nothing else to do. Flip the status so the task moves out of active
-  // lists, but don't add a separate "completed" history entry (the
-  // "Acknowledged" entry above is the single authoritative event).
-  if(t.reviewType === 'notify' && t.status !== 'completed'){
-    t.status      = 'completed';
-    t.completedAt = when;
-    t.completedBy = who;
-  }
+  // Acknowledge stamps the timestamp and nothing else. It does NOT mark
+  // the task completed — that was causing the task to silently vanish from
+  // the recipient's list (filtered as completed) and felt wrong since the
+  // user only clicked Acknowledge, not Complete. The task stays open on
+  // both sides; either party can Delete/Dismiss when they're done with it.
 
   // Send the read receipt back to whoever originally sent this notify.
   // Prefer the task's createdById; fall back to the original sent
@@ -25065,23 +25080,55 @@ function tcAcknowledgeNotify(taskId){
 
 function tcDeleteTask(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
-  if(!confirm(`Delete task "${t.name}"? This cannot be undone.`)) return;
-  t._deleted = true; t._updatedAt = new Date().toISOString();
-  // Also soft-delete any notifications that point at this task so the
-  // recipient doesn't have to delete the notification separately (which
-  // would otherwise silently reopen the deleted task on their second click).
-  (DB.notifications||[]).forEach(n => {
-    if(n.taskId === id && !n._deleted){
-      n._deleted = true;
-      n._updatedAt = new Date().toISOString();
-    }
-  });
+  const uid = currentUser?.id;
+  // Notify-only tasks use per-user soft delete: clicking Delete on one
+  // side only hides the task from THAT user. The other participant keeps
+  // their copy (their own Sent tab or inbox) until they delete it too.
+  // Regular tasks remain a global delete.
+  const perUser = (t.reviewType === 'notify' && uid);
+  const confirmMsg = perUser
+    ? `Remove "${t.name}" from your view? (The other person's copy is not affected.)`
+    : `Delete task "${t.name}"? This cannot be undone.`;
+  if(!confirm(confirmMsg)) return;
+  const when = new Date().toISOString();
+  if(perUser){
+    if(!Array.isArray(t._hiddenFor)) t._hiddenFor = [];
+    if(!t._hiddenFor.includes(uid)) t._hiddenFor.push(uid);
+    t._updatedAt = when;
+    // Also per-user hide any notifications about this task so deleting
+    // from one side doesn't leave a lingering bell entry.
+    (DB.notifications||[]).forEach(n => {
+      if(n.taskId === id && (n.targetAm === uid || n.sentBy === uid) && !n._deleted){
+        n._deleted = true;
+        n._updatedAt = when;
+      }
+    });
+  } else {
+    t._deleted = true; t._updatedAt = when;
+    (DB.notifications||[]).forEach(n => {
+      if(n.taskId === id && !n._deleted){
+        n._deleted = true;
+        n._updatedAt = when;
+      }
+    });
+  }
   saveDB();
-  logAct(`Task "${t.name}" deleted`);
+  logAct(`Task "${t.name}" ${perUser?'hidden from your view':'deleted'}`);
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
   if(typeof notifRenderList === 'function') notifRenderList();
   if(typeof notifRenderSentList === 'function') notifRenderSentList();
   tcRender();
+}
+
+// Helper: is a task hidden from the current viewer? Covers both the global
+// _deleted flag and the per-user _hiddenFor array (used for notify-only
+// tasks so one side's delete doesn't nuke the other side's copy).
+function _taskHiddenForMe(t){
+  if(!t) return true;
+  if(t._deleted) return true;
+  const uid = currentUser?.id;
+  if(uid && Array.isArray(t._hiddenFor) && t._hiddenFor.includes(uid)) return true;
+  return false;
 }
 
 function tcOpenDetail(id){
@@ -25238,7 +25285,7 @@ async function tcRender(){
     if (!t.type) t.type = t.dueDate ? 'task' : 'note';
   });
 
-  const tasks  = (DB.tasks || []).filter(t=>!t._deleted);
+  const tasks  = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
   const fStat  = document.getElementById('tc-filter-status')?.value || 'open';
   const fClient= document.getElementById('tc-filter-client')?.value || '';
@@ -25566,7 +25613,7 @@ function tcBuildProjectSidebar() {
   const sidebar = document.getElementById('tc-project-sidebar');
   if (!sidebar) return;
 
-  const tasks = (DB.tasks || []).filter(t=>!t._deleted);
+  const tasks = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const fAM = document.getElementById('tc-filter-am')?.value || '';
   const myTasks = fAM ? tasks.filter(t => t.amId === fAM) : tasks;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -27504,13 +27551,8 @@ function twfOpen(id){
   let dueBg, dueBorder, dueText;
   if(isCompleted){
     dueBg='#0a140a'; dueBorder='#1a3a1a';
-    // Notify-only tasks close via Acknowledge — call it that, not "Completed".
-    const isNotifyClose = t.reviewType === 'notify' && t.acknowledgedAt;
-    const verb = isNotifyClose ? 'Acknowledged' : 'Completed';
-    const when = t.acknowledgedAt || t.completedAt;
-    const actor = isNotifyClose ? (t.acknowledgedBy || t.completedBy || '—') : (t.completedBy || '—');
-    dueText=`<span style="color:var(--green);font-weight:700;">✓ ${verb}</span>`
-      + (when ? ` <span style="color:var(--text-d);font-size:12px;">by ${actor} on ${new Date(when).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>` : '');
+    dueText=`<span style="color:var(--green);font-weight:700;">✓ Completed</span>`
+      + (t.completedAt ? ` <span style="color:var(--text-d);font-size:12px;">by ${t.completedBy||'—'} on ${new Date(t.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>` : '');
   } else if(isReview){
     dueBg='#0a1428'; dueBorder='#2e5fa1';
     dueText=`<span style="color:#6ea8fe;font-weight:700;">⏳ In Review</span> <span style="color:var(--text-d);font-size:12px;">submitted — awaiting approval</span>`;
@@ -27519,8 +27561,9 @@ function twfOpen(id){
     dueBg='#1a0a0a'; dueBorder='#3a1a1a';
     dueText=`<span style="color:#ff6b6b;font-weight:700;">⚠ Overdue by ${daysLate} day${daysLate!==1?'s':''}</span> <span style="color:var(--text-d);font-size:12px;">${dueD.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>`;
   } else if(isToday){
-    dueBg='#1a1200'; dueBorder='#3a2a00';
-    dueText=`<span style="color:#f0b429;font-weight:700;">🔔 Due Today</span>`;
+    // ARK palette: soft navy bg with gold accent, matching the brand
+    dueBg='var(--surface2)'; dueBorder='var(--gold)';
+    dueText=`<span style="color:var(--gold);font-weight:700;">🔔 Due Today</span>`;
   } else {
     dueBg='var(--surface2)'; dueBorder='var(--border)';
     const daysOut = dueD ? Math.round((dueD-today)/86400000) : null;
@@ -27588,50 +27631,42 @@ function twfOpen(id){
     </div>`;
   } else if(t.reviewType === 'notify' && reviewerAM && !t.isReviewTask && !t.isNotifyTask){
     if(isNotifyReviewer){
-      // Recipient view — either show "needs acknowledgment" or confirmation
-      reviewInfoHtml = t.acknowledgedAt
-        ? `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid rgba(16,185,129,.35);border-radius:var(--radius);background:rgba(16,185,129,.08);font-size:12px;color:var(--text);">
-            ✅ You acknowledged this on <strong>${new Date(t.acknowledgedAt).toLocaleString()}</strong>.
-          </div>`
-        : `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #3a2a6b66;border-radius:var(--radius);background:#0a0a18;font-size:12px;color:var(--text);">
-            📣 Notification from <strong>${t.createdBy||t.completedBy||'sender'}</strong>. Click <strong>Acknowledge</strong> below to let them know you saw it.
+      // Recipient view: only show the "click acknowledge" prompt BEFORE they
+      // acknowledge. After, the history log is the single source of truth —
+      // no need to repeat the same info in a banner on top of the header.
+      if(!t.acknowledgedAt){
+        reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface2);font-size:12px;color:var(--text);">
+            📣 Notification from <strong style="color:var(--navy);">${t.createdBy||t.completedBy||'sender'}</strong>. Click <strong>Acknowledge</strong> below to let them know you saw it.
           </div>`;
-    } else {
-      // Creator/sender view — show the recipient's status (pending → viewed → acknowledged)
-      const status = t.acknowledgedAt
-        ? `<span style="color:var(--green);font-weight:700;">✅ Acknowledged by ${reviewerAM.fname}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.acknowledgedAt)}</span>`
-        : t.viewedAt
-          ? `<span style="color:#6ea8fe;font-weight:700;">👀 Viewed by ${reviewerAM.fname}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.viewedAt)} — not yet acknowledged</span>`
-          : `<span style="color:var(--text-d);">⏳ Sent to <strong style="color:var(--text);">${reviewerAM.fname} ${reviewerAM.lname||''}</strong> — not yet viewed</span>`;
-      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #3a2a6b44;border-radius:var(--radius);background:#0a0a18;font-size:12px;">
+      }
+    } else if(!t.acknowledgedAt){
+      // Creator/sender view BEFORE ack: show pending/viewed state. After ack,
+      // the history has it — skip the banner.
+      const status = t.viewedAt
+        ? `<span style="color:var(--navy);font-weight:700;">👀 Viewed by ${reviewerAM.fname}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.viewedAt)} — not yet acknowledged</span>`
+        : `<span style="color:var(--text-d);">⏳ Sent to <strong style="color:var(--text);">${reviewerAM.fname} ${reviewerAM.lname||''}</strong> — not yet viewed</span>`;
+      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);font-size:12px;">
         ${status}
       </div>`;
     }
   }
 
   // ── Assignee read-receipt panel (any regular task assigned to someone else) ──
-  // Shows up even without reviewType=notify. Assignee sees "Click Acknowledge";
-  // creator sees the assignee's pending/viewed/acknowledged status.
+  // Shown only BEFORE acknowledgment. After ack, the history entry is the
+  // single source of truth — no need to duplicate the status in a banner.
   if(!reviewInfoHtml && t.amId && t.createdById && t.amId !== t.createdById && !t.isReviewTask && !t.isNotifyTask){
     const assigneeList = (_cachedServerUsers||[]).concat(DB.accountManagers||[]);
     const assigneeUser = assigneeList.find(u => u.id === t.amId);
     const assigneeName = assigneeUser ? `${assigneeUser.fname||''} ${assigneeUser.lname||''}`.trim() : 'the assignee';
-    if(isAssignee){
-      reviewInfoHtml = t.acknowledgedAt
-        ? `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid rgba(16,185,129,.35);border-radius:var(--radius);background:rgba(16,185,129,.08);font-size:12px;color:var(--text);">
-            ✅ You acknowledged this on <strong>${new Date(t.acknowledgedAt).toLocaleString()}</strong>.
-          </div>`
-        : `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #2e5fa144;border-radius:var(--radius);background:#0a1428;font-size:12px;color:var(--text);">
-            📬 Assigned to you by <strong>${t.createdBy||'sender'}</strong>. Click <strong>Acknowledge</strong> to confirm you saw it (you can still complete the task normally).
-          </div>`;
-    } else if(currentUser?.id === t.createdById){
-      // Creator viewing — show receipt status from the assignee
-      const status = t.acknowledgedAt
-        ? `<span style="color:var(--green);font-weight:700;">✅ Acknowledged by ${assigneeName}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.acknowledgedAt)}</span>`
-        : t.viewedAt
-          ? `<span style="color:#6ea8fe;font-weight:700;">👀 Viewed by ${assigneeName}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.viewedAt)} — not yet acknowledged</span>`
-          : `<span style="color:var(--text-d);">⏳ Assigned to <strong style="color:var(--text);">${assigneeName}</strong> — not yet viewed</span>`;
-      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid #2e5fa144;border-radius:var(--radius);background:#0a1428;font-size:12px;">
+    if(isAssignee && !t.acknowledgedAt){
+      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--gold);border-radius:var(--radius);background:var(--surface2);font-size:12px;color:var(--text);">
+          📬 Assigned to you by <strong style="color:var(--navy);">${t.createdBy||'sender'}</strong>. Click <strong>Acknowledge</strong> to confirm you saw it (you can still complete the task normally).
+        </div>`;
+    } else if(currentUser?.id === t.createdById && !t.acknowledgedAt){
+      const status = t.viewedAt
+        ? `<span style="color:var(--navy);font-weight:700;">👀 Viewed by ${assigneeName}</span> <span style="color:var(--text-d);">· ${_twfFmtRel(t.viewedAt)} — not yet acknowledged</span>`
+        : `<span style="color:var(--text-d);">⏳ Assigned to <strong style="color:var(--text);">${assigneeName}</strong> — not yet viewed</span>`;
+      reviewInfoHtml = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);font-size:12px;">
         ${status}
       </div>`;
     }
@@ -27947,9 +27982,27 @@ function twfAddNote(){
   const text = document.getElementById('twf-note-input').value.trim();
   if(!text){ showToast('Please enter a note.'); return; }
   const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
+  const when = new Date().toISOString();
   if(!t.noteLog) t.noteLog=[];
-  t.noteLog.unshift({ id:uid(), text, author:who, at:new Date().toISOString(), type:'note' });
-  t.updatedAt = new Date().toISOString();
+  t.noteLog.unshift({ id:uid(), text, author:who, at:when, type:'note' });
+  t.updatedAt = when;
+  t._updatedAt = when;
+  // Notify the OTHER party so they see there's been an update. Routes to:
+  //  - the recipient (amId) if the creator is adding the note, OR
+  //  - the creator (createdById) if the recipient is adding the note.
+  const otherId = (currentUser?.id === t.createdById)
+    ? (t.amId && t.amId !== currentUser?.id ? t.amId : null)
+    : (t.createdById && t.createdById !== currentUser?.id ? t.createdById : null);
+  if(otherId){
+    notifCreate({
+      type:     'task-note',
+      targetAm: otherId,
+      title:    'New note on a task',
+      body:     `${who} added a note to "${t.name}": ${text.slice(0, 100)}${text.length > 100 ? '…' : ''}`,
+      taskId:   t.id,
+      from:     who,
+    });
+  }
   saveDB();
   document.getElementById('twf-note-input').value='';
   document.getElementById('twf-history-label').textContent = `History (${t.noteLog.length})`;
@@ -31927,7 +31980,7 @@ function notifRenderList(){
     return;
   }
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'task-note':'📝', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
@@ -32038,7 +32091,7 @@ function notifRenderSentList(){
   // Sent = notifications created by current user (targetAm is someone else)
   const items = notifGetAll().filter(n => !n._deleted && n.sentBy === uid && n.targetAm && n.targetAm !== uid);
 
-  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
+  const typeIcon = { 'new-task':'📋', 'task-assigned':'📋', 'task-completed':'✅', 'task-acknowledged':'🙌', 'task-note':'📝', 'sent-for-review':'🔍', 'review-approved':'✅', 'review-rejected':'↩️', 'info':'ℹ️', 'alert':'⚠️', 'help-new-post':'🆘', 'help-reply':'💬' };
   const fmtDate = iso => {
     const d = new Date(iso);
     const now = new Date();
