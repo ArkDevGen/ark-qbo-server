@@ -1806,6 +1806,54 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
     </div><!-- /rpt-section-payroll -->
 
+    <div id="rpt-section-ideas">
+    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;margin-top:8px;">💡 Ideas & Feedback</div>
+
+    <div class="card" style="border-left:4px solid #d4a94a;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Ideas & Feedback Report</div>
+          <div class="card-subtitle">All submitted ideas and feedback, grouped by category, status, or priority</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="btn-print-ideas-rpt" onclick="printIdeasReport()" style="display:none;align-items:center;gap:6px;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--navy);">
+            🖨️ Print
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="runIdeasReport()">Run Report</button>
+        </div>
+      </div>
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Group By</label>
+          <select id="rpt-ideas-group" onchange="runIdeasReport()" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);min-width:160px;">
+            <option value="category">Category</option>
+            <option value="status">Status</option>
+            <option value="priority">Priority</option>
+            <option value="submittedBy">Submitter</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Status Filter</label>
+          <select id="rpt-ideas-status" onchange="runIdeasReport()" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);min-width:140px;">
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="planned">Planned</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div style="padding-bottom:2px;">
+          <button onclick="runIdeasReport()" class="btn btn-primary btn-sm">Run</button>
+        </div>
+      </div>
+      <div id="rpt-ideas-output" style="padding:20px 24px;">
+        <div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:24px 0;">
+          Choose a grouping and click Run.
+        </div>
+      </div>
+    </div>
+    </div><!-- /rpt-section-ideas -->
+
   </div>
 
   <!-- ══ NEW HIRE REPORT ══ -->
@@ -8137,6 +8185,7 @@ const DEFAULT_AM_PERMS = {
   rptPayroll:    false,  // Payroll Time Report — wages & hours
   rptNewHire:    false,  // New Hire Report & State Fax Reference
   rptActivity:   false,  // Full Activity Log
+  rptIdeas:      false,  // Ideas & Feedback Report
   // ── File Center permissions ──
   canViewFiles:      true,   // Can see File Center and Files tab
   canUploadFiles:    true,   // Can upload new files
@@ -8270,14 +8319,16 @@ function renderIdeas(){
 
   container.innerHTML = list.map(i => {
     const date = new Date(i.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const noteEscaped = (i.adminNote||'').replace(/"/g,'&quot;');
     const adminSection = isAdmin ? `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">
         <select onchange="ideaUpdateStatus('${i.id}',this.value)" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;cursor:pointer;">
           ${['open','reviewed','planned','done'].map(s=>`<option value="${s}" ${i.status===s?'selected':''}>${statLabel[s]}</option>`).join('')}
         </select>
-        <input placeholder="Admin note (optional)…" value="${i.adminNote||''}"
-          onchange="ideaUpdateNote('${i.id}',this.value)"
+        <input id="idea-note-${i.id}" placeholder="Admin note (optional)…" value="${noteEscaped}"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();ideaSaveNote('${i.id}');}"
           style="flex:1;min-width:180px;font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;">
+        <button onclick="ideaSaveNote('${i.id}')" style="font-size:11px;padding:4px 10px;background:var(--navy);border:1px solid var(--navy);border-radius:var(--radius-sm);cursor:pointer;color:#fff;font-weight:600;font-family:'DM Sans',sans-serif;">Save Note</button>
         <button onclick="ideaDelete('${i.id}')" style="font-size:11px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;color:var(--red);font-family:'DM Sans',sans-serif;" onmouseover="this.style.background='#fff0f0'" onmouseout="this.style.background='none'">Delete</button>
       </div>` : (i.adminNote ? `<div style="margin-top:8px;padding:6px 10px;background:var(--gold-pale);border-radius:var(--radius-sm);font-size:11px;color:#8a6a00;font-style:italic;">📝 ${i.adminNote}</div>` : '');
 
@@ -8312,6 +8363,17 @@ function ideaUpdateNote(id, note){
   idea.adminNote = note;
   idea.updatedAt = new Date().toISOString();
   saveDB();
+}
+
+function ideaSaveNote(id){
+  const input = document.getElementById(`idea-note-${id}`);
+  if(!input) return;
+  const idea = (DB.ideas||[]).find(x=>x.id===id); if(!idea) return;
+  idea.adminNote = input.value;
+  idea.updatedAt = new Date().toISOString();
+  idea._updatedAt = new Date().toISOString();
+  saveDB();
+  showToast(input.value ? '✓ Note saved' : '✓ Note cleared');
 }
 
 function ideaDelete(id){
@@ -8847,6 +8909,7 @@ const REPORT_SUB_PERMS = {
   rptPayroll:    { label:'Payroll Time Report',   desc:'All employees: punches, hours, overtime, and PTO — contains wage data', icon:'⏱' },
   rptNewHire:    { label:'New Hire Report',        desc:'Unfiled new hire reports and state fax reference table', icon:'📄' },
   rptActivity:   { label:'Activity Log',          desc:'Full system activity log across all clients and users', icon:'◷' },
+  rptIdeas:      { label:'Ideas & Feedback',      desc:'All submitted ideas & feedback, grouped by category/status/priority/submitter', icon:'💡' },
 };
 
 // File Center sub-permissions — shown as a grouped section in the modal
@@ -10917,6 +10980,7 @@ function rptApplyGates(){
     { id:'rpt-section-compliance', key:'rptCompliance', label:'Compliance / Biennial',      icon:'📋' },
     { id:'rpt-section-ach',        key:'rptACH',        label:'ACH Collections',            icon:'🏦' },
     { id:'rpt-section-payroll',    key:'rptPayroll',    label:'Payroll Time Report',        icon:'⏱' },
+    { id:'rpt-section-ideas',      key:'rptIdeas',      label:'Ideas & Feedback Report',    icon:'💡' },
   ];
   sections.forEach(({ id, key, label, icon }) => {
     const el = document.getElementById(id);
@@ -11304,6 +11368,210 @@ async function printPayrollReport(){
   ${body}
   <p class="note">* Denotes manually edited punch. All times local. "by [name]" indicates entry made by a different user.</p>
   <div class="footer">ARK Financial Services · Payroll Time Report · Confidential · ${today}</div>
+  </body></html>`;
+
+  const w=window.open('','_blank','width=950,height=750');
+  w.document.write(html); w.document.close(); w.focus();
+  setTimeout(()=>w.print(),400);
+}
+
+// ══════════════════════════════════════════════
+//  IDEAS & FEEDBACK REPORT
+// ══════════════════════════════════════════════
+
+const IDEAS_RPT_META = {
+  catIcon:   { Process:'🔄', Tool:'🔧', Accuracy:'✅', Client:'🤝', Bug:'🐛', Other:'💬' },
+  priColor:  { high:'#b03a3a', medium:'#2c5fa1', low:'#2e7d5e' },
+  priLabel:  { high:'🔴 Urgent', medium:'🔵 Would help', low:'🟢 Nice to have' },
+  statColor: { open:'var(--text-d)', reviewed:'#b8922a', planned:'#2c5fa1', done:'#2e7d5e' },
+  statLabel: { open:'Open', reviewed:'👀 Reviewed', planned:'📋 Planned', done:'✅ Done' },
+};
+
+function ideasRptGroupLabel(groupKey, value){
+  const M = IDEAS_RPT_META;
+  if(groupKey==='category') return `${M.catIcon[value]||'💬'} ${value||'Uncategorized'}`;
+  if(groupKey==='priority') return M.priLabel[value] || (value||'Unset');
+  if(groupKey==='status')   return M.statLabel[value] || (value||'Open');
+  return value || '— Unknown —';
+}
+
+function runIdeasReport(){
+  const groupBy = document.getElementById('rpt-ideas-group')?.value || 'category';
+  const statusF = document.getElementById('rpt-ideas-status')?.value || '';
+  const output  = document.getElementById('rpt-ideas-output');
+  const M = IDEAS_RPT_META;
+
+  const all = (DB.ideas||[]).filter(i => !i._deleted && (!statusF || i.status===statusF));
+  if(!all.length){
+    output.innerHTML = '<div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:32px 0;">No ideas or feedback match this filter.</div>';
+    document.getElementById('btn-print-ideas-rpt').style.display = 'none';
+    return;
+  }
+
+  // Group
+  const groups = {};
+  all.forEach(i => {
+    const k = (groupBy==='submittedBy' ? (i.submittedBy||'Unknown') : (i[groupBy]||'')) || '—';
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(i);
+  });
+
+  // Sort group keys: status has natural order, priority has natural order, others alpha
+  const statusOrder = ['open','reviewed','planned','done'];
+  const priOrder    = ['high','medium','low'];
+  let keys = Object.keys(groups);
+  if(groupBy==='status')   keys.sort((a,b)=> statusOrder.indexOf(a) - statusOrder.indexOf(b));
+  else if(groupBy==='priority') keys.sort((a,b)=> priOrder.indexOf(a) - priOrder.indexOf(b));
+  else keys.sort((a,b)=> a.toLowerCase().localeCompare(b.toLowerCase()));
+
+  const totals = { open:0, reviewed:0, planned:0, done:0 };
+  all.forEach(i => { if(totals[i.status]!==undefined) totals[i.status]++; });
+
+  let html = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
+      <div style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"><div style="font-size:18px;font-weight:700;color:var(--navy);">${all.length}</div><div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.8px;">Total</div></div>
+      <div style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"><div style="font-size:18px;font-weight:700;color:var(--text-d);">${totals.open}</div><div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.8px;">Open</div></div>
+      <div style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"><div style="font-size:18px;font-weight:700;color:#b8922a;">${totals.reviewed}</div><div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.8px;">Reviewed</div></div>
+      <div style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"><div style="font-size:18px;font-weight:700;color:#2c5fa1;">${totals.planned}</div><div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.8px;">Planned</div></div>
+      <div style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"><div style="font-size:18px;font-weight:700;color:#2e7d5e;">${totals.done}</div><div style="font-size:10px;color:var(--text-d);text-transform:uppercase;letter-spacing:.8px;">Done</div></div>
+    </div>
+  `;
+
+  keys.forEach(k => {
+    const items = groups[k].slice().sort((a,b)=> new Date(b.submittedAt) - new Date(a.submittedAt));
+    html += `
+      <div style="margin-bottom:22px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+        <div style="background:var(--navy);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;">${ideasRptGroupLabel(groupBy,k)}</div>
+          <div style="font-size:11px;opacity:.75;">${items.length} item${items.length!==1?'s':''}</div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th style="width:22%;">Title</th>
+              <th>Details</th>
+              <th style="width:10%;">Category</th>
+              <th style="width:10%;">Priority</th>
+              <th style="width:9%;">Status</th>
+              <th style="width:14%;">Submitted By</th>
+              <th style="width:10%;">Date</th>
+              <th style="width:15%;">Admin Note</th>
+            </tr></thead>
+            <tbody>
+              ${items.map(i => {
+                const date = new Date(i.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+                return `<tr>
+                  <td style="font-weight:600;">${i.title||''}</td>
+                  <td style="color:var(--text-m);font-size:12px;">${(i.detail||'').replace(/</g,'&lt;')}</td>
+                  <td>${M.catIcon[i.category]||'💬'} ${i.category||''}</td>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${M.priColor[i.priority]||'#888'}22;color:${M.priColor[i.priority]||'#888'};">${M.priLabel[i.priority]||i.priority||''}</span></td>
+                  <td style="font-size:11px;font-weight:600;color:${M.statColor[i.status]||'var(--text-d)'};">${M.statLabel[i.status]||i.status||''}</td>
+                  <td style="font-size:12px;color:var(--text-m);">${i.submittedBy||'—'}</td>
+                  <td style="font-size:12px;color:var(--text-d);">${date}</td>
+                  <td style="font-size:12px;color:#8a6a00;font-style:${i.adminNote?'italic':'normal'};">${i.adminNote||'—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  });
+
+  output.innerHTML = html;
+  document.getElementById('btn-print-ideas-rpt').style.display = 'flex';
+}
+
+function printIdeasReport(){
+  const groupBy = document.getElementById('rpt-ideas-group')?.value || 'category';
+  const statusF = document.getElementById('rpt-ideas-status')?.value || '';
+  const M = IDEAS_RPT_META;
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  const all = (DB.ideas||[]).filter(i => !i._deleted && (!statusF || i.status===statusF));
+  if(!all.length){ alert('No ideas to print.'); return; }
+
+  const groups = {};
+  all.forEach(i => {
+    const k = (groupBy==='submittedBy' ? (i.submittedBy||'Unknown') : (i[groupBy]||'')) || '—';
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(i);
+  });
+
+  const statusOrder = ['open','reviewed','planned','done'];
+  const priOrder    = ['high','medium','low'];
+  let keys = Object.keys(groups);
+  if(groupBy==='status')   keys.sort((a,b)=> statusOrder.indexOf(a) - statusOrder.indexOf(b));
+  else if(groupBy==='priority') keys.sort((a,b)=> priOrder.indexOf(a) - priOrder.indexOf(b));
+  else keys.sort((a,b)=> a.toLowerCase().localeCompare(b.toLowerCase()));
+
+  const totals = { open:0, reviewed:0, planned:0, done:0 };
+  all.forEach(i => { if(totals[i.status]!==undefined) totals[i.status]++; });
+
+  const body = keys.map(k => {
+    const items = groups[k].slice().sort((a,b)=> new Date(b.submittedAt) - new Date(a.submittedAt));
+    const rows = items.map(i => {
+      const date = new Date(i.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return `<tr>
+        <td><strong>${i.title||''}</strong></td>
+        <td>${(i.detail||'').replace(/</g,'&lt;')}</td>
+        <td>${i.category||''}</td>
+        <td>${M.priLabel[i.priority]||i.priority||''}</td>
+        <td>${M.statLabel[i.status]||i.status||''}</td>
+        <td>${i.submittedBy||'—'}</td>
+        <td>${date}</td>
+        <td>${i.adminNote||''}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="grp-block">
+        <table class="grp-header"><tr>
+          <td><strong>${ideasRptGroupLabel(groupBy,k).replace(/[🔄🔧✅🤝🐛💬🔴🔵🟢👀📋]/g,'')}</strong></td>
+          <td style="text-align:right;">${items.length} item${items.length!==1?'s':''}</td>
+        </tr></table>
+        <table>
+          <thead><tr><th>Title</th><th>Details</th><th>Category</th><th>Priority</th><th>Status</th><th>Submitted By</th><th>Date</th><th>Admin Note</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  const groupLabel = { category:'Category', status:'Status', priority:'Priority', submittedBy:'Submitter' }[groupBy] || groupBy;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Ideas & Feedback Report</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:9.5pt;color:#111;margin:24px;}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a2440;padding-bottom:10px;margin-bottom:16px;}
+    .ark{font-size:14pt;font-weight:bold;color:#1a2440;}
+    .ark-sub{font-size:8.5pt;color:#555;}
+    .rpt-title{font-size:13pt;font-weight:bold;color:#1a2440;text-align:right;}
+    .rpt-meta{font-size:8.5pt;color:#555;text-align:right;margin-top:2px;}
+    .grand{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+    .gbox{border:1px solid #ccc;border-radius:5px;padding:6px 14px;}
+    .gnum{font-size:14pt;font-weight:bold;color:#1a2440;}
+    .glbl{font-size:8pt;color:#555;}
+    .grp-block{margin-bottom:18px;border:1px solid #ccc;border-radius:5px;overflow:hidden;page-break-inside:avoid;}
+    table.grp-header{width:100%;background:#1a2440;color:#fff;border-collapse:collapse;}
+    table.grp-header td{padding:7px 10px;font-size:10pt;}
+    table{width:100%;border-collapse:collapse;font-size:8.5pt;}
+    th{background:#e8e8e8;color:#111;padding:5px 7px;text-align:left;border-bottom:1px solid #bbb;}
+    td{padding:5px 7px;border-bottom:1px solid #eee;vertical-align:top;}
+    tr:nth-child(even) td{background:#f9f9f9;}
+    .footer{margin-top:20px;font-size:7.5pt;color:#888;text-align:center;border-top:1px solid #ddd;padding-top:6px;}
+    @media print{body{margin:12px;}.grp-block{page-break-inside:avoid;}}
+  </style></head><body>
+  <div class="header">
+    <div><div class="ark">ARK Financial Services</div><div class="ark-sub">Ideas & Feedback · Grouped by ${groupLabel}${statusF?` · Status: ${statusF}`:''}</div></div>
+    <div><div class="rpt-title">Ideas & Feedback Report</div><div class="rpt-meta">Generated: ${today}</div></div>
+  </div>
+  <div class="grand">
+    <div class="gbox"><div class="gnum">${all.length}</div><div class="glbl">Total</div></div>
+    <div class="gbox"><div class="gnum">${totals.open}</div><div class="glbl">Open</div></div>
+    <div class="gbox"><div class="gnum">${totals.reviewed}</div><div class="glbl">Reviewed</div></div>
+    <div class="gbox"><div class="gnum">${totals.planned}</div><div class="glbl">Planned</div></div>
+    <div class="gbox"><div class="gnum">${totals.done}</div><div class="glbl">Done</div></div>
+  </div>
+  ${body}
+  <div class="footer">ARK Financial Services · Ideas & Feedback Report · Confidential · ${today}</div>
   </body></html>`;
 
   const w=window.open('','_blank','width=950,height=750');
