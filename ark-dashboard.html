@@ -352,22 +352,71 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 /* ════════════════════════════════════════
    DATA TABLES — The daily workspace
+   Modifiers on .tbl-wrap:
+     .tbl-sticky  — sticky <thead> row (needs max-height)
+     .tbl-zebra   — alternating row backgrounds
+     .tbl-dense   — tighter rows for compact lists
+     .tbl-fixed   — layout:fixed (predictable columns)
+   Column helpers (on <th> and/or <td>):
+     .num    — right-aligned numeric
+     .mono   — monospace (IDs, EINs, codes)
+     .center — centered
+     .col-check — narrow column for checkboxes
+     .col-actions — row-action column, right-aligned
    ════════════════════════════════════════ */
-.tbl-wrap{overflow-x:auto;}
+.tbl-wrap{overflow-x:auto;position:relative;}
+.tbl-wrap.tbl-sticky{max-height:560px;overflow-y:auto;}
 table,.data-table{width:100%;border-collapse:collapse;}
+.tbl-fixed table,table.tbl-fixed{table-layout:fixed;}
 th{
-  padding:9px 16px;text-align:left;font-size:10px;
-  color:var(--text-d);text-transform:uppercase;letter-spacing:1.2px;
-  border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap;
+  padding:9px 16px;text-align:left;
+  font-size:var(--text-xs);color:var(--text-d);
+  text-transform:uppercase;letter-spacing:.12em;font-weight:700;
+  border-bottom:1px solid var(--border);white-space:nowrap;
   background:var(--surface2);
 }
-td{padding:11px 16px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.tbl-sticky thead th{
+  position:sticky;top:0;z-index:2;
+  box-shadow:inset 0 -1px 0 var(--border);
+}
+td{
+  padding:11px 16px;font-size:var(--text-base);
+  border-bottom:1px solid var(--border-soft);vertical-align:middle;
+  color:var(--text);
+}
 tr:last-child td{border-bottom:none;}
 tbody tr{transition:background .1s;}
 tbody tr:hover td{background:rgba(26,36,64,.035);}
-.row-actions{display:flex;gap:5px;opacity:0;transition:opacity .15s;}
-tr:hover .row-actions{opacity:1;}
-.empty{padding:44px;text-align:center;color:var(--text-d);font-size:13px;font-style:italic;}
+
+/* Zebra variant — opt in via .tbl-zebra on the wrap or the table */
+.tbl-zebra tbody tr:nth-child(even) td,
+.tbl-zebra table tbody tr:nth-child(even) td{background:rgba(226,223,217,.35);}
+.tbl-zebra tbody tr:nth-child(even):hover td,
+.tbl-zebra table tbody tr:nth-child(even):hover td{background:rgba(26,36,64,.05);}
+
+/* Dense variant — tighter padding */
+.tbl-dense th{padding:7px 12px;}
+.tbl-dense td{padding:7px 12px;font-size:var(--text-md);}
+
+/* Column helpers */
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;}
+th.mono,td.mono,.tbl-mono{font-family:'Menlo','Consolas','SF Mono',monospace;font-size:var(--text-md);font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+th.center,td.center{text-align:center;}
+th.col-check,td.col-check{width:32px;padding-right:0;}
+th.col-actions,td.col-actions{text-align:right;white-space:nowrap;}
+
+/* Row action buttons — fade in on hover */
+.row-actions{display:inline-flex;gap:5px;opacity:0;transition:opacity .15s;justify-content:flex-end;}
+tr:hover .row-actions,tr:focus-within .row-actions{opacity:1;}
+
+/* Clickable rows */
+tbody tr.is-clickable{cursor:pointer;}
+tbody tr.is-selected td{background:rgba(184,146,42,.09);}
+tbody tr.is-selected:hover td{background:rgba(184,146,42,.14);}
+
+/* Empty state */
+.empty{padding:44px 24px;text-align:center;color:var(--text-d);font-size:var(--text-base);font-style:italic;}
+.empty strong{display:block;font-size:var(--text-lg);font-style:normal;font-weight:600;color:var(--text-m);margin-bottom:4px;}
 
 /* ════════════════════════════════════════
    BADGES — Clean status pills
@@ -1450,8 +1499,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
       <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
-      <div class="nav-item" id="nav-activity" onclick="nav('activity')"><span class="ni">◷</span>Activity Log</div>
-      <div class="nav-item" id="nav-newhirereport" onclick="nav('newhirereport')"><span class="ni">📄</span>New Hire Report</div>
+      <!-- Activity Log moved inside Reports → Activity tab -->
+      <!-- New Hire Report moved to Tools Center -->
     </div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
@@ -1706,6 +1755,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="rpt-tab-ach"        class="rpt-tab" data-rpt-tab="ach"        onclick="rptSwitchTab('ach')"        style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">🏦 ACH</div>
       <div id="rpt-tab-payroll"    class="rpt-tab" data-rpt-tab="payroll"    onclick="rptSwitchTab('payroll')"    style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">⏱ Payroll</div>
       <div id="rpt-tab-ideas"      class="rpt-tab" data-rpt-tab="ideas"      onclick="rptSwitchTab('ideas')"      style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">💡 Ideas</div>
+      <div id="rpt-tab-activity"   class="rpt-tab" data-rpt-tab="activity"   onclick="rptSwitchTab('activity')"   style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">◷ Activity</div>
     </div>
 
     <!-- ── POSTAGE REPORTS HEADER ── -->
@@ -1793,9 +1843,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div class="search-wrap" onclick="event.stopPropagation();"><input id="rpt-summary-search" placeholder="Search clients…" oninput="filterRptSummary(this.value)"></div>
       </div>
       <div id="rpt-summary-body" style="display:none;">
-        <div class="tbl-wrap" style="max-height:460px;overflow:auto;">
+        <div class="tbl-wrap tbl-sticky" style="max-height:460px;">
           <table>
-            <thead style="position:sticky;top:0;z-index:1;"><tr><th>Business Name</th><th>Entity</th><th>Services</th><th>Status</th><th>State</th><th>Account Manager</th><th>Client Since</th></tr></thead>
+            <thead><tr><th>Business Name</th><th>Entity</th><th>Services</th><th>Status</th><th>State</th><th>Account Manager</th><th>Client Since</th></tr></thead>
             <tbody id="rpt-summary"></tbody>
           </table>
         </div>
@@ -2080,6 +2130,26 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
     </div><!-- /rpt-section-ideas -->
+
+    <div id="rpt-section-activity">
+    <div class="section-label" style="margin-top:8px;">◷ Activity Log</div>
+
+    <div class="card card-indigo">
+      <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+        <div class="card-header-left">
+          <div class="card-title">Full Activity Log</div>
+          <div class="card-subtitle" id="rpt-activity-count">—</div>
+        </div>
+        <div class="card-header-actions">
+          <div class="search-wrap"><input id="rpt-activity-search" placeholder="Search activity…" oninput="filterActivityReport(this.value)"></div>
+          <button class="btn btn-ghost btn-sm" onclick="renderActivityReport()" title="Refresh">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="rpt-activity-output" style="padding:6px 0;max-height:640px;overflow-y:auto;">
+        <div class="empty">Loading activity…</div>
+      </div>
+    </div>
+    </div><!-- /rpt-section-activity -->
 
   </div>
 
@@ -8663,9 +8733,11 @@ function applyNavPermissions(u){
   setNavVisible('nav-proposals',    isAdmin || p.canViewProposals  === true);
   setNavVisible('nav-tasks',        isAdmin || p.canViewTasks      !== false);
   setNavVisible('nav-filecenter',   isAdmin || p.canViewFiles      !== false);
-  // Report sub-perm nav items — hidden when the user has no access
-  setNavVisible('nav-newhirereport', isAdmin || p.rptNewHire      === true);
-  setNavVisible('nav-activity',      isAdmin || p.rptActivity     === true);
+  // Report sub-perm nav items — New Hire Report now lives in Tools Center,
+  // Activity Log now lives inside the Reports tab page; the helper is a
+  // no-op when the element doesn't exist so these calls are safe.
+  setNavVisible('nav-newhirereport', isAdmin || p.rptNewHire  === true);
+  setNavVisible('nav-activity',      isAdmin || p.rptActivity === true);
 }
 
 function setNavVisible(id, visible){
@@ -9697,6 +9769,11 @@ function toggleNavGroup(sectionEl) {
 
 function nav(page){
   closeAllModals();
+  // Legacy redirects — Activity Log is now a Reports tab
+  if(page === 'activity'){
+    _rptActiveTab = 'activity';
+    page = 'reports';
+  }
   // Persist current view for refresh
   try {
     const s = JSON.parse(sessionStorage.getItem('ark_session') || 'null');
@@ -11249,6 +11326,7 @@ const RPT_SECTIONS = [
   { tab:'ach',        id:'rpt-section-ach',        key:'rptACH',        label:'ACH Collections',            icon:'🏦' },
   { tab:'payroll',    id:'rpt-section-payroll',    key:'rptPayroll',    label:'Payroll Time Report',        icon:'⏱' },
   { tab:'ideas',      id:'rpt-section-ideas',      key:'rptIdeas',      label:'Ideas & Feedback Report',    icon:'💡' },
+  { tab:'activity',   id:'rpt-section-activity',   key:'rptActivity',   label:'Activity Log',                icon:'◷' },
 ];
 let _rptActiveTab = null;
 
@@ -11290,6 +11368,10 @@ function rptSwitchTab(tab){
       tabEl.style.background      = active ? 'var(--surface2)' : 'transparent';
     }
   });
+  // Lazy-render per-tab content that isn't always kept in sync
+  if(tab === 'activity' && typeof renderActivityReport === 'function'){
+    renderActivityReport();
+  }
 }
 
 function renderRptSummary(q){
@@ -13018,8 +13100,80 @@ function stEditClient(clientId){
 }
 
 function renderActivityLog(){
-  document.getElementById('full-activity').innerHTML=DB.activity.map(a=>`
-    <div class="act-item"><div class="act-dot"></div><div><div class="act-desc">${a.desc}</div><div class="act-time">${new Date(a.date).toLocaleString()}</div></div></div>`).join('')||'<div class="empty">No activity</div>';
+  // Legacy standalone view — kept for backward compat. Renders into
+  // #full-activity if that element still exists in the DOM.
+  const el = document.getElementById('full-activity');
+  if(!el) return;
+  el.innerHTML = (DB.activity||[]).map(a=>`
+    <div class="act-item"><div class="act-dot"></div><div><div class="act-desc">${a.desc}</div><div class="act-time">${new Date(a.date).toLocaleString()}</div></div></div>`).join('') || '<div class="empty">No activity</div>';
+}
+
+// ── Activity Report (inside Reports tab) ─────────────────────────
+// Renders DB.activity into #rpt-activity-output with live search
+// on the description, the logged-by user, and the timestamp string.
+function renderActivityReport(q){
+  const searchBox = document.getElementById('rpt-activity-search');
+  const query = (q!==undefined ? q : (searchBox?.value||'')).toLowerCase().trim();
+  const out = document.getElementById('rpt-activity-output');
+  const countEl = document.getElementById('rpt-activity-count');
+  if(!out) return;
+
+  const all = (DB.activity||[]).slice().sort((a,b)=>{
+    const da = new Date(a.date||0).getTime();
+    const db = new Date(b.date||0).getTime();
+    return db - da; // newest first
+  });
+
+  let list = all;
+  if(query){
+    list = all.filter(a => {
+      const desc = (a.desc||'').toLowerCase();
+      const when = a.date ? new Date(a.date).toLocaleString().toLowerCase() : '';
+      const who  = (a.loggedBy||'').toLowerCase();
+      const client = (a.client||'').toLowerCase();
+      return desc.includes(query) || when.includes(query) || who.includes(query) || client.includes(query);
+    });
+  }
+
+  if(countEl){
+    countEl.textContent = query
+      ? `${list.length} of ${all.length} entries match`
+      : `${all.length} entr${all.length===1?'y':'ies'} logged`;
+  }
+
+  if(!list.length){
+    out.innerHTML = `<div class="empty">${query?'<strong>No matches.</strong>Try a different search term.':'<strong>No activity recorded.</strong>Actions across the CRM will appear here.'}</div>`;
+    return;
+  }
+
+  // Highlight matching substring in the description
+  const highlight = (text) => {
+    if(!query) return text;
+    const idx = text.toLowerCase().indexOf(query);
+    if(idx < 0) return text;
+    return text.slice(0,idx) +
+      `<mark style="background:var(--gold-pale);color:var(--navy);padding:0 2px;border-radius:2px;">${text.slice(idx,idx+query.length)}</mark>` +
+      text.slice(idx+query.length);
+  };
+
+  out.innerHTML = list.map(a => {
+    const when = a.date ? new Date(a.date).toLocaleString('en-US',{
+      month:'short', day:'numeric', year:'numeric',
+      hour:'numeric', minute:'2-digit'
+    }) : '—';
+    const meta = [a.loggedBy, a.client].filter(Boolean).join(' · ');
+    return `<div class="act-item">
+      <div class="act-dot"></div>
+      <div>
+        <div class="act-desc">${highlight(a.desc||'')}</div>
+        <div class="act-time">${when}${meta?' · '+highlight(meta):''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterActivityReport(q){
+  renderActivityReport(q);
 }
 
 // ══════════════════════════════════════════════
@@ -23949,6 +24103,14 @@ const TOOLS_REGISTRY = [
       requireBank: false,
       onPick: (c) => { closeModal('modal-tools-clientpicker'); openEditClient(c.id); setTimeout(()=>mcTab(10), 50); }
     })
+  },
+  {
+    id: 'new-hire-report',
+    icon: '📄',
+    title: 'New Hire Report',
+    desc: 'Generate and fax new hire reports for unfiled employees. Includes the state reporting fax reference table.',
+    tags: ['hr','compliance','fax'],
+    launch: () => { nav('newhirereport'); }
   }
 ];
 
