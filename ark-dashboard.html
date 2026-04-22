@@ -49,6 +49,8 @@
   --amber-lt:   #f0b429;
   --purple:     #6b3fa0;    /* activity / PTO accent */
   --purple-bg:  #f1ebfa;
+  --indigo:     #4c4aa8;    /* task / dev hub accent */
+  --indigo-bg:  #ececf7;
   --qbo-green:  #2ca01c;    /* QBO brand green */
 
   /* ── Typography scale (canonical — 6 sizes) ── */
@@ -274,19 +276,65 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 /* ════════════════════════════════════════
    CARDS — Depth and elegance
+   .card is the base. Add an accent class for
+   the left-edge color bar:
+     .card-navy / .card-gold / .card-green /
+     .card-red / .card-purple / .card-indigo /
+     .card-blue / .card-qbo
+   Or set --card-accent inline for custom hues.
    ════════════════════════════════════════ */
 .card{
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius);overflow:hidden;margin-bottom:20px;
   box-shadow:var(--shadow-sm);
+  transition:var(--transition-fast);
 }
 .card-header{
   padding:14px 22px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;
-  background:var(--surface);
+  gap:12px;background:var(--surface);
 }
-.card-title{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.card-subtitle{font-size:12px;color:var(--text-d);margin-top:2px;}
+.card-header-left{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.card-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:var(--text-xl);font-weight:700;color:var(--navy);letter-spacing:-.01em;line-height:1.15;}
+.card-subtitle{font-size:var(--text-md);color:var(--text-d);margin-top:2px;}
+.card-body{padding:18px 22px;}
+.card-footer{padding:12px 22px;border-top:1px solid var(--border);background:var(--surface2);}
+
+/* Card accent variants — left-edge color bar */
+.card-navy   {border-left:4px solid var(--navy);}
+.card-gold   {border-left:4px solid var(--gold);}
+.card-gold-lt{border-left:4px solid var(--gold-lt);}
+.card-green  {border-left:4px solid var(--green);}
+.card-red    {border-left:4px solid var(--red);}
+.card-blue   {border-left:4px solid var(--blue);}
+.card-purple {border-left:4px solid var(--purple);}
+.card-indigo {border-left:4px solid var(--indigo);}
+.card-qbo    {border-left:4px solid var(--qbo-green);}
+
+/* ════════════════════════════════════════
+   PAGE HEADER — Top of every view.
+   Use .page-header wrapping .page-title and
+   .page-subtitle for the H1-ish area; add
+   .page-header-actions for right-side buttons.
+   ════════════════════════════════════════ */
+.page-header{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:16px;margin-bottom:22px;flex-wrap:wrap;
+}
+.page-header-left{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.page-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.page-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:var(--text-2xl);font-weight:700;color:var(--navy);
+  letter-spacing:-.01em;line-height:1.1;margin:0;
+}
+.page-subtitle{font-size:var(--text-base);color:var(--text-m);margin:0;line-height:1.4;}
+
+/* Note: .section-label is defined lower in the stylesheet (Client
+   Modal context) as gold text with a small gold underline via
+   ::after. Reusing the same class keeps report section headers
+   visually consistent with the Client Modal. */
 
 /* ════════════════════════════════════════
    SUM CARDS — Mini metrics used everywhere
@@ -1662,11 +1710,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- ── POSTAGE REPORTS HEADER ── -->
     <div id="rpt-section-postage" style="margin-bottom:18px;">
-      <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;">📬 Postage Reports</div>
+      <div class="section-label">📬 Postage Reports</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px;">
 
         <!-- REPORT 1: Date Range -->
-        <div class="card" style="border-left:4px solid #6b3fa0;">
+        <div class="card card-purple">
           <div class="card-header" style="padding-bottom:0;">
             <div>
               <div class="card-title">Postage by Client</div>
@@ -1696,7 +1744,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
 
         <!-- REPORT 2: Prior Month by AM -->
-        <div class="card" style="border-left:4px solid var(--gold);">
+        <div class="card card-gold">
           <div class="card-header" style="padding-bottom:0;">
             <div>
               <div class="card-title">Postage by Account Manager</div>
@@ -1711,7 +1759,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
 
     <div id="rpt-section-clients">
-    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;">👥 Client Reports</div>
+    <div class="section-label">👥 Client Reports</div>
 
     <div class="report-grid">
       <div class="card">
@@ -1756,9 +1804,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     </div><!-- /rpt-section-clients -->
     <div id="rpt-section-compliance">
-    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;margin-top:8px;">📋 Compliance Reports</div>
+    <div class="section-label" style="margin-top:8px;">📋 Compliance Reports</div>
 
-    <div class="card" style="border-left:4px solid var(--navy);">
+    <div class="card card-navy">
       <div class="card-header">
         <div>
           <div class="card-title">Biennial Report Filing List</div>
@@ -1781,10 +1829,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div><!-- /rpt-section-compliance -->
     <!-- ══ NACHA ACH COLLECTIONS ══ -->
     <div id="rpt-section-ach">
-    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;margin-top:8px;">🏦 ACH Collections</div>
+    <div class="section-label" style="margin-top:8px;">🏦 ACH Collections</div>
 
     <!-- ARK Bank Settings -->
-    <div class="card" style="border-left:4px solid var(--navy);margin-bottom:18px;">
+    <div class="card card-navy" style="margin-bottom:18px;">
       <div class="card-header" style="cursor:pointer;" onclick="nachaToggleSettings()">
         <div>
           <div class="card-title">ARK Bank Settings <span id="nacha-settings-badge" style="font-size:11px;font-weight:400;color:var(--text-d);margin-left:8px;">— Farmers &amp; Merchants Bank</span></div>
@@ -1854,7 +1902,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
 
     <!-- Generate NACHA File -->
-    <div class="card" style="border-left:4px solid #2e7d5e;">
+    <div class="card card-green">
       <div class="card-header">
         <div>
           <div class="card-title">Generate ACH Collection File</div>
@@ -1935,7 +1983,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
 
     <!-- NACHA File History -->
-    <div class="card" style="border-left:4px solid #1a3a5c;margin-bottom:18px;">
+    <div class="card card-navy" style="margin-bottom:18px;">
       <div class="card-header">
         <div>
           <div class="card-title">ACH File History</div>
@@ -1953,9 +2001,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     </div><!-- /rpt-section-ach -->
     <div id="rpt-section-payroll">
-    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;margin-top:8px;">⏱ Payroll Reports</div>
+    <div class="section-label" style="margin-top:8px;">⏱ Payroll Reports</div>
 
-    <div class="card" style="border-left:4px solid #6b3fa0;">
+    <div class="card card-purple">
       <div class="card-header">
         <div>
           <div class="card-title">Payroll Time Report</div>
@@ -1986,9 +2034,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div><!-- /rpt-section-payroll -->
 
     <div id="rpt-section-ideas">
-    <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;margin-top:8px;">💡 Ideas & Feedback</div>
+    <div class="section-label" style="margin-top:8px;">💡 Ideas & Feedback</div>
 
-    <div class="card" style="border-left:4px solid #d4a94a;">
+    <div class="card card-gold-lt">
       <div class="card-header">
         <div>
           <div class="card-title">Ideas & Feedback Report</div>
@@ -3432,7 +3480,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
     <!-- Submitted 1099s card -->
-    <div class="card" style="margin-bottom:22px;border-left:4px solid var(--green);">
+    <div class="card card-green" style="margin-bottom:22px;">
       <div class="card-header" style="flex-wrap:wrap;gap:10px;">
         <div>
           <div class="card-title">✅ Submitted 1099s</div>
@@ -3498,7 +3546,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
 
     <!-- eFileMyForms Export card -->
-    <div class="card" style="margin-bottom:22px;border-left:4px solid var(--green);">
+    <div class="card card-green" style="margin-bottom:22px;">
       <div class="card-header">
         <div>
           <div class="card-title">📤 eFileMyForms Export</div>
@@ -3621,7 +3669,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="w2-panel-export" style="display:none;padding:28px;display:none;">
 
       <!-- EFW2 card -->
-      <div class="card" style="margin-bottom:22px;border-left:4px solid var(--navy);">
+      <div class="card card-navy" style="margin-bottom:22px;">
         <div class="card-header">
           <div>
             <div class="card-title">EFW2 Export — W-2 Original Filing</div>
@@ -3637,7 +3685,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- EFW2C card -->
-      <div class="card" style="margin-bottom:22px;border-left:4px solid var(--gold);">
+      <div class="card card-gold" style="margin-bottom:22px;">
         <div class="card-header">
           <div>
             <div class="card-title">EFW2C Export — W-2c Correction Filing</div>
@@ -4422,7 +4470,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
             <!-- Completion Footer -->
             <div id="pl-review-footer" style="display:none;margin-top:12px;">
-              <div class="card" style="border-left:4px solid var(--green);overflow:visible;">
+              <div class="card card-green" style="overflow:visible;">
                 <div style="padding:16px 18px;">
                   <div id="pl-review-summary" style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;"></div>
 
@@ -5993,7 +6041,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
         <!-- Prep View (shown when Prep button clicked) -->
         <div id="mtg-prep-panel" style="display:none;">
-          <div class="card" style="border-left:4px solid var(--navy);">
+          <div class="card card-navy">
             <div class="card-header" style="padding:12px 16px;">
               <div class="card-title" style="font-size:12px;">Meeting Prep</div>
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('mtg-prep-panel').style.display='none'" style="font-size:10px;">Close</button>
@@ -19161,7 +19209,7 @@ function tcRenderTimecard(empId){
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="card" style="border-left:4px solid var(--navy);">
+      <div class="card card-navy">
         <div style="padding:14px 16px;">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;">Week 1 · ${tcFmtDate(start)} – ${tcFmtDate(week1end)}</div>
           <div style="display:flex;gap:16px;font-size:13px;">
@@ -19171,7 +19219,7 @@ function tcRenderTimecard(empId){
           </div>
         </div>
       </div>
-      <div class="card" style="border-left:4px solid var(--gold);">
+      <div class="card card-gold">
         <div style="padding:14px 16px;">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;">Week 2 · ${tcFmtDate(new Date(week1end.getTime()+86400000))} – ${tcFmtDate(end)}</div>
           <div style="display:flex;gap:16px;font-size:13px;">
@@ -25410,7 +25458,7 @@ function plPromptDigestAfterClose(task) {
   overlay.id = 'pl-close-prompt';
   overlay.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;animation:slideUp .3s ease;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid #2ca01c;border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow-toast);max-width:380px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--qbo-green);border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow-toast);max-width:380px;">
       <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">Books Closed: ${client.biz}</div>
       <div style="font-size:11px;color:var(--text-m);line-height:1.5;margin-bottom:14px;">Run the P&L Digester to check for missing items, variances, and generate meeting prep?</div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -46474,7 +46522,7 @@ function dhRenderHelp(){
       const priIcon = pri === 'urgent' ? '🔴' : pri === 'high' ? '🟠' : '🟢';
       const areaLabel = p.devArea ? (HB_DEV_AREA_LABELS[p.devArea] || p.devArea) : '';
       const mentionNames = (p.mentionIds||[]).map(id => _dhUserName(id)).filter(Boolean).join(', ');
-      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;" onclick="hbOpenDetail('${p.id}')">
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--indigo);" onclick="hbOpenDetail('${p.id}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <div style="font-size:15px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
           <span style="font-size:10px;font-weight:700;background:#ecebf5;color:#4c4aa8;padding:2px 8px;border-radius:10px;">🙋 Help Wanted</span>
@@ -46541,7 +46589,7 @@ function dhRenderMine(){
       const pri = p.priority || 'low';
       const priIcon = pri === 'urgent' ? '🔴' : pri === 'high' ? '🟠' : '🟢';
       const why = p.authorId === currentUser.id ? 'You posted this' : 'You were @mentioned';
-      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;" onclick="hbOpenDetail('${p.id}')">
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--indigo);" onclick="hbOpenDetail('${p.id}')">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div style="font-size:14px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
           <span style="font-size:10px;font-weight:600;color:#4c4aa8;">${priIcon} ${pri}</span>
@@ -46594,7 +46642,7 @@ function dhRenderCompleted(){
     html += closedDevPosts.map(p => {
       const when = p._updatedAt ? new Date(p._updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
       const statusIcon = p.status === 'answered' ? '✓ Answered' : '🔒 Closed';
-      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid #4c4aa8;opacity:.85;" onclick="hbOpenDetail('${p.id}')">
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;padding:16px;border-left:4px solid var(--indigo);opacity:.85;" onclick="hbOpenDetail('${p.id}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <div style="font-size:15px;font-weight:700;color:var(--navy);">${_hbEscape(p.title)}</div>
           <span style="font-size:10px;color:var(--text-d);">${when}</span>
