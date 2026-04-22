@@ -480,43 +480,82 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 
 /* ════════════════════════════════════════
    MODAL — Dramatic entrance
+   Sizes: .modal-sm / .modal (default) /
+          .modal-lg / .modal-xl
+   Parts: .modal-head / .modal-body /
+          .modal-foot / .modal-x (close)
    ════════════════════════════════════════ */
 .overlay{
-  position:fixed;inset:0;background:rgba(14,20,32,.45);
+  position:fixed;inset:0;background:rgba(14,20,32,.55);
   display:flex;align-items:center;justify-content:center;
   z-index:1000;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  animation:fadeIn .18s ease both;
+  animation:fadeIn .18s ease both;padding:24px;box-sizing:border-box;
 }
 .modal{
   background:var(--surface);border:1px solid rgba(0,0,0,.08);
-  border-radius:12px;width:580px;max-height:88vh;overflow-y:auto;
-  box-shadow:var(--shadow-lg);animation:slideUp .22s cubic-bezier(.34,1.26,.64,1) both;
+  border-radius:var(--radius-lg);width:580px;max-width:100%;
+  max-height:88vh;overflow-y:auto;
+  box-shadow:var(--shadow-xl);
+  animation:slideUp .22s cubic-bezier(.34,1.26,.64,1) both;
+  display:flex;flex-direction:column;
 }
+.modal-sm{width:420px;}
 .modal-lg{width:720px;max-height:92vh;}
-.modal-head{padding:24px 28px 0;display:flex;justify-content:space-between;align-items:flex-start;}
-.modal-title{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);line-height:1;padding:5px;border-radius:6px;transition:var(--transition);}
-.modal-close:hover{background:var(--surface2);color:var(--text);}
-.modal-x{cursor:pointer;font-size:22px;line-height:1;color:var(--text-d);padding:4px 8px;border-radius:6px;transition:var(--transition);user-select:none;}
-.modal-x:hover{background:var(--surface2);color:var(--text);}
-.modal-body{padding:20px 28px;}
-.modal-foot{padding:14px 28px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--border);}
+.modal-xl{width:880px;max-height:92vh;}
+
+.modal-head{
+  padding:22px 28px 16px;border-bottom:1px solid var(--border-soft);
+  display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+  position:sticky;top:0;background:var(--surface);z-index:2;
+}
+.modal-head-left{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+.modal-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:var(--text-2xl);font-weight:700;color:var(--navy);
+  letter-spacing:-.01em;line-height:1.15;margin:0;
+}
+.modal-subtitle{font-size:var(--text-md);color:var(--text-m);line-height:1.45;margin:0;}
+.modal-body{padding:18px 28px;flex:1;}
+.modal-foot{
+  padding:14px 28px 18px;display:flex;justify-content:flex-end;
+  gap:10px;border-top:1px solid var(--border-soft);
+  position:sticky;bottom:0;background:var(--surface);
+}
+.modal-foot-spread{justify-content:space-between;}
+.modal-close,.modal-x{
+  background:transparent;border:1px solid transparent;
+  color:var(--text-d);font-size:20px;line-height:1;
+  width:32px;height:32px;padding:0;border-radius:var(--radius-md);
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:var(--transition-fast);user-select:none;flex-shrink:0;
+}
+.modal-close:hover,.modal-x:hover{background:var(--surface2);color:var(--navy);border-color:var(--border);}
 
 /* ════════════════════════════════════════
-   FORMS
+   FORMS — .fg inherits from .field-input so
+   forms look the same whether they use the
+   .fg wrapper or raw .field-input inputs.
    ════════════════════════════════════════ */
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.form-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+.form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
 .fg{display:flex;flex-direction:column;gap:5px;}
 .fg.full{grid-column:1/-1;}
-.fg label{font-size:11px;font-weight:600;color:var(--text-m);text-transform:uppercase;letter-spacing:.9px;}
+.fg label{font-size:var(--text-sm);font-weight:600;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em;}
 .fg input,.fg select,.fg textarea{
-  background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:9px 11px;color:var(--text);
-  font-family:'DM Sans',sans-serif;font-size:13px;outline:none;
-  transition:var(--transition);width:100%;box-sizing:border-box;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:9px 12px;color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:var(--text-base);outline:none;
+  transition:var(--transition-fast);width:100%;box-sizing:border-box;
+  line-height:1.3;
 }
-.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--navy);background:#fff;box-shadow:0 0 0 3px rgba(26,36,64,.06);}
-.fg textarea{resize:vertical;min-height:72px;}
+.fg input:hover:not(:focus),.fg select:hover:not(:focus),.fg textarea:hover:not(:focus){border-color:var(--border2);}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--navy);background:#fff;box-shadow:0 0 0 3px rgba(26,36,64,.08);}
+.fg textarea{resize:vertical;min-height:72px;line-height:1.5;}
+.fg select{cursor:pointer;padding-right:28px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%239e9890' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 10px center;-webkit-appearance:none;-moz-appearance:none;appearance:none;}
+.fg-hint{font-size:var(--text-xs);color:var(--text-d);line-height:1.4;}
+.fg-required::after{content:' *';color:var(--red);}
 .section-divider{grid-column:1/-1;border:none;border-top:1px solid var(--border);margin:6px 0;}
 .section-label{grid-column:1/-1;font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1.8px;margin-top:6px;}
 
@@ -13345,19 +13384,20 @@ async function qboLinkClient() {
 
   const overlay = document.createElement('div');
   overlay.id = 'qbo-link-picker-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  overlay.className = 'overlay';
+  overlay.style.zIndex = '10000';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
-      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Link to QBO Company</h3>
-          <p style="margin:4px 0 0;font-size:12px;color:var(--text-d);">Select an existing company or connect a new one</p>
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title">Link to QBO Company</div>
+          <div class="modal-subtitle">Select an existing company or connect a new one</div>
         </div>
-        <button onclick="document.getElementById('qbo-link-picker-overlay')?.remove()" style="background:none;border:none;color:var(--text-d);font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+        <button class="modal-x" onclick="document.getElementById('qbo-link-picker-overlay')?.remove()" title="Close">✕</button>
       </div>
-      <div style="padding:16px 24px;">${listHtml}</div>
-      <div style="padding:16px 24px;border-top:1px solid var(--border);text-align:center;">
-        <button class="btn" onclick="qboLinkClientNewOAuth()" style="background:var(--green);border-color:var(--green);color:#fff;">+ Connect New QBO Company</button>
+      <div class="modal-body">${listHtml}</div>
+      <div class="modal-foot" style="justify-content:center;">
+        <button class="btn btn-primary" onclick="qboLinkClientNewOAuth()" style="background:var(--green);border-color:var(--green);">+ Connect New QBO Company</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -37063,17 +37103,18 @@ function batchBulkLinkModal() {
 
   const overlay = document.createElement('div');
   overlay.id = 'batch-bulk-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  overlay.className = 'overlay';
+  overlay.style.zIndex = '10000';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
-      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Bulk Link ${count} Client${count !== 1 ? 's' : ''}</h3>
-          <p style="margin:4px 0 0;font-size:12px;color:var(--text-d);">Select the QBO company to link all selected clients to</p>
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title">Bulk Link ${count} Client${count !== 1 ? 's' : ''}</div>
+          <div class="modal-subtitle">Select the QBO company to link all selected clients to</div>
         </div>
-        <button onclick="document.getElementById('batch-bulk-overlay')?.remove()" style="background:none;border:none;color:var(--text-d);font-size:20px;cursor:pointer;padding:4px 8px;">✕</button>
+        <button class="modal-x" onclick="document.getElementById('batch-bulk-overlay')?.remove()" title="Close">✕</button>
       </div>
-      <div style="padding:16px 24px;">${listHtml}</div>
+      <div class="modal-body">${listHtml}</div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (_bkdrop(e,overlay)) overlay.remove(); });
