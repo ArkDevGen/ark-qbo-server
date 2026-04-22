@@ -235,9 +235,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .topbar-left{display:flex;align-items:center;gap:14px;min-width:0;flex-shrink:1;}
 .topbar-title{
-  font-family:'Cormorant Garamond',serif;
-  font-size:var(--text-2xl);font-weight:700;color:var(--navy);
-  letter-spacing:-.01em;line-height:1;
+  font-family:'DM Sans',sans-serif;
+  font-size:var(--text-xl);font-weight:700;color:var(--navy);
+  letter-spacing:-.015em;line-height:1;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .topbar-right{
@@ -352,7 +352,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .card-header-left{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .card-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.card-title{font-family:'Cormorant Garamond',serif;font-size:var(--text-xl);font-weight:700;color:var(--navy);letter-spacing:-.01em;line-height:1.15;}
+.card-title{font-family:'DM Sans',sans-serif;font-size:var(--text-lg);font-weight:700;color:var(--navy);letter-spacing:-.01em;line-height:1.2;}
 .card-subtitle{font-size:var(--text-md);color:var(--text-d);margin-top:2px;}
 .card-body{padding:18px 22px;}
 .card-footer{padding:12px 22px;border-top:1px solid var(--border);background:var(--surface2);}
@@ -1573,9 +1573,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Clients <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
-      <div class="nav-item" id="nav-c360" onclick="nav('c360')"><span class="ni">🔍</span>Client 360</div>
       <div class="nav-item" onclick="nav('clients')"><span class="ni">◉</span>Client Center</div>
       <div class="nav-item" id="nav-proposals" onclick="nav('proposals')"><span class="ni">📝</span>Lead Center</div>
+      <!-- Client 360 moved to a modal launched from the Client Center -->
     </div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Operations <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
@@ -1737,7 +1737,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <option value="healthy">🟢 Healthy</option>
           </select>
           <div class="search-wrap"><input id="client-search" placeholder="Search clients…" oninput="renderClients(this.value)"></div>
-          <button onclick="nav('c360')" class="btn btn-ghost btn-sm" title="Open the Client 360 health report">🏥 Health Report</button>
+          <button onclick="openC360()" class="btn btn-ghost btn-sm" title="Search any client — tasks, health, activity, and more">🔍 Client 360</button>
           <button onclick="nav('import')" class="btn btn-ghost btn-sm" title="Import clients from CSV">⬆ Import</button>
         </div>
       </div>
@@ -3908,38 +3908,30 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   </div>
 
-<!-- ════ CLIENT 360 VIEW ════ -->
-  <div class="view content" id="view-c360" style="padding:0;">
-
-    <div style="padding:28px 32px 0;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div class="card-title">🔍 Client 360</div>
+<!-- ════ CLIENT 360 MODAL — launched from Client Center ════ -->
+  <div class="overlay" id="modal-c360" style="display:none;" onclick="overlayClose(event,'modal-c360')">
+    <div class="modal modal-xl">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title">🔍 Client 360</div>
+          <div class="modal-subtitle">Complete client view — tasks, proposals, leads, employees, notes, activity, and health score in one place.</div>
         </div>
-        <div style="font-size:12px;color:var(--text-d);margin-top:3px;">Complete client view — tasks, proposals, leads, employees, notes, activity and health score all in one place.</div>
+        <button class="modal-x" onclick="closeModal('modal-c360')" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Search bar -->
+        <div style="position:relative;max-width:420px;margin-bottom:20px;">
+          <input id="c360-search" class="field-input" placeholder="🔍  Search any client…"
+            oninput="c360Search(this.value)" autocomplete="off">
+          <div id="c360-dropdown" class="dropdown-menu" style="display:none;top:calc(100% + 4px);left:0;right:0;"></div>
+        </div>
+        <!-- 360 body -->
+        <div id="c360-body" style="color:var(--text-d);font-size:var(--text-base);font-style:italic;">
+          Search for a client above to see their complete profile.
+        </div>
       </div>
     </div>
-
-    <div style="padding:0 32px 28px;">
-
-      <!-- Search bar -->
-      <div style="position:relative;max-width:420px;margin-bottom:20px;">
-        <input id="c360-search" class="field-input" placeholder="🔍  Search any client…"
-          oninput="c360Search(this.value)" autocomplete="off"
-          style="padding-left:14px;font-size:14px;">
-        <div id="c360-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:400;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-height:220px;overflow-y:auto;box-shadow:var(--shadow);"></div>
-      </div>
-
-      <!-- 360 body -->
-      <div id="c360-body" style="color:var(--text-d);font-size:13px;font-style:italic;">
-        Search for a client above to see their complete profile.
-      </div>
-
-    </div>
-
-
-
-</div>
+  </div>
 
   <!-- ════ EFTPS VIEW ════ -->
   <div class="view content" id="view-eftps" style="padding:28px 32px;">
@@ -9880,6 +9872,11 @@ function nav(page){
     _rptActiveTab = 'activity';
     page = 'reports';
   }
+  // Legacy redirect — Client 360 is now a modal launched from Client Center
+  if(page === 'c360'){
+    if(typeof openC360 === 'function') openC360();
+    return;
+  }
   // Persist current view for refresh
   try {
     const s = JSON.parse(sessionStorage.getItem('ark_session') || 'null');
@@ -9922,12 +9919,7 @@ function nav(page){
     if(!canDo('rptActivity')){ rptNavBlocked('Activity Log'); return; }
     renderActivityLog();
   }
-  if(page==='c360'){
-    if(typeof c360Init === 'function') c360Init();
-    else if(typeof betaRenderC360Empty === 'function') betaRenderC360Empty();
-    const st = document.getElementById('page-title');
-    if(st) st.textContent = 'Client 360';
-  }
+  // (page==='c360' branch removed — redirect at top of nav() handles it)
   if(page==='eftps'){ eftpsInit(); }
   if(page==='qbo'){ qboInit(); }
   if(page==='w9gen'){ w9genInit(); }
@@ -29136,6 +29128,26 @@ function c360Init(){
 }
 window.c360Init = c360Init; // ensure reachable from block 1
 
+// Open the Client 360 modal. If clientId is provided, pre-load that client.
+// If the c360 body is already populated (e.g. from a legacy
+// c360Load('x'); nav('c360') chain), we preserve it instead of clearing.
+function openC360(clientId){
+  const modal = document.getElementById('modal-c360');
+  if(!modal) return;
+  modal.style.display = 'flex';
+  if(clientId){
+    setTimeout(() => { if(typeof c360Load === 'function') c360Load(clientId); }, 40);
+    return;
+  }
+  const body = document.getElementById('c360-body');
+  const hasContent = body && body.innerHTML && !body.innerHTML.includes('Search for a client above');
+  if(!hasContent){
+    c360Init();
+    setTimeout(() => document.getElementById('c360-search')?.focus(), 80);
+  }
+}
+window.openC360 = openC360;
+
 function c360Search(q){
   const dd = document.getElementById('c360-dropdown'); if(!dd) return;
   if(!q.trim()){ dd.style.display='none'; return; }
@@ -29482,7 +29494,7 @@ function clientHealthBadge(c){
   const bg  = tier==='green'?'#0a140a':tier==='yellow'?'#1a1200':'#1a0a0a';
   const bd  = tier==='green'?'#1a3a1a':tier==='yellow'?'#3a2a00':'#3a1a1a';
   const icon= tier==='green'?'🟢':tier==='yellow'?'🟡':'🔴';
-  return `<div style="display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="c360Load('${c.id}');nav('c360')" title="Health score: ${score}/100 — click for full 360 view">
+  return `<div style="display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="event.stopPropagation();openC360('${c.id}')" title="Health score: ${score}/100 — click for full 360 view">
     <span style="font-size:12px;">${icon}</span>
     <div>
       <div style="font-size:12px;font-weight:700;color:${col};">${score}</div>
