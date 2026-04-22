@@ -9621,16 +9621,42 @@ async function refreshServerUsersCache() {
 }
 
 function getAMName(id){
-  if(!id) return '—';
-  // Check cached server users first (by id or username)
-  const su = _cachedServerUsers.find(x => (x._id||x.id) === id || x.username === id);
-  if(su) return `${su.fname} ${su.lname||''}`.trim();
-  // Fallback to local users
-  const u=(loadUsers()||[]).find(x=>x.id===id);
-  if(u) return `${u.fname} ${u.lname||''}`.trim();
-  // Fallback to legacy account managers
-  const a=DB.accountManagers.find(x=>x.id===id);
-  return a?`${a.fname} ${a.lname}`:'—';
+  const r = resolveAM(id);
+  return r ? `${r.fname||''} ${r.lname||''}`.trim() || '—' : '—';
+}
+
+// Resolve an AM / user / team-member ID to the full record, in priority order:
+// 1. Live server users (_cachedServerUsers) — source of truth
+// 2. Local DB.users (login cache / seed)
+// 3. Legacy DB.accountManagers
+// Returns null if no match. Works for clients whose c.am was assigned from any source.
+function resolveAM(id){
+  if(!id) return null;
+  const su = (_cachedServerUsers||[]).find(x => (x._id||x.id) === id || x.username === id);
+  if(su) return su;
+  const u  = (DB.users||[]).find(x => x.id === id || x.username === id);
+  if(u) return u;
+  const a  = (DB.accountManagers||[]).find(x => x.id === id);
+  return a || null;
+}
+
+// Merged, de-duplicated team list for rendering. Prefers server users, adds
+// any legacy DB.accountManagers whose id isn't already represented.
+function getTeamList(){
+  const server = (_cachedServerUsers||[]).map(u => ({
+    id:      u.id || u._id || u.username,
+    fname:   u.fname || u.userName || '',
+    lname:   u.lname || '',
+    title:   u.title || u.role || '',
+    email:   u.email || '',
+    _source: 'server',
+    _raw:    u,
+  }));
+  const seen = new Set(server.map(u => u.id));
+  const legacy = (DB.accountManagers||[])
+    .filter(a => !a._deleted && !seen.has(a.id))
+    .map(a => ({ ...a, _source:'legacy', _raw:a }));
+  return server.concat(legacy);
 }
 
 // ══════════════════════════════════════════════
@@ -10762,33 +10788,41 @@ function renderClients(q=''){
 //  RENDER ACCOUNT MANAGERS
 // ══════════════════════════════════════════════
 function renderAMs(q=''){
-  const f=(q||'').toLowerCase();
-  const list=f?DB.accountManagers.filter(a=>`${a.fname} ${a.lname} ${a.title} ${a.email}`.toLowerCase().includes(f)):DB.accountManagers;
-  document.getElementById('am-count').textContent=`${list.length} record${list.length!==1?'s':''}`;
-  document.getElementById('am-body').innerHTML=list.map(a=>{
+  const f = (q||'').toLowerCase();
+  // Merged team list — server users first, then any legacy local AMs not already represented
+  const all = getTeamList();
+  const list = f
+    ? all.filter(a => `${a.fname||''} ${a.lname||''} ${a.title||''} ${a.email||''}`.toLowerCase().includes(f))
+    : all;
+  document.getElementById('am-count').textContent = `${list.length} record${list.length!==1?'s':''}`;
+  document.getElementById('am-body').innerHTML = list.map(a => {
     const cells = typeof amWorkloadCells==='function' ? amWorkloadCells(a) : {};
-    const cnt=DB.clients.filter(c=>c.am===a.id).length;
+    const cnt = (DB.clients||[]).filter(c => c.am === a.id).length;
     const clientsCell = cells.clientsCell || `<span style="font-weight:700;color:var(--navy)">${cnt}</span>`;
     const tasksCell   = cells.tasksCell   || '—';
     const leadsCell   = cells.leadsCell   || '—';
     const mrrCell     = cells.mrrCell     || '—';
-    return`<tr>
-      <td><div class="av-row"><div class="av" style="background:${avatarColor(a.fname+a.lname)}">${initials(a.fname+' '+a.lname)}</div><strong>${a.fname} ${a.lname}</strong></div></td>
+    const name = `${a.fname||''} ${a.lname||''}`.trim() || '—';
+    const isServer = a._source === 'server';
+    const actions = isServer
+      ? `<button class="btn btn-ghost btn-sm" onclick="openAMDetail('${a.id}')">View</button>
+         <span style="font-size:10px;color:var(--text-d);padding:4px 8px;" title="Managed in Team & Users">Team User</span>`
+      : `<button class="btn btn-ghost btn-sm" onclick="openAMDetail('${a.id}')">View</button>
+         <button class="btn btn-ghost btn-sm" onclick="openEditAM('${a.id}')">Edit</button>
+         <button class="btn btn-danger btn-sm" onclick="deleteAM('${a.id}')">Del</button>`;
+    return `<tr>
+      <td><div class="av-row"><div class="av" style="background:${avatarColor(name)}">${initials(name)}</div><strong>${name}</strong>${isServer?' <span style="font-size:9px;background:var(--gold-pale);color:#8a6a00;padding:1px 6px;border-radius:8px;font-weight:700;letter-spacing:.5px;">TEAM</span>':''}</div></td>
       <td style="color:var(--text-m)">${a.title||'—'}</td>
-      <td style="font-size:12px">${mailLink(a.email)}</td>
+      <td style="font-size:12px">${a.email?mailLink(a.email):'—'}</td>
       <td style="color:var(--text-m);font-size:12px">${a.phone?tel(a.phone):'—'}</td>
       <td>${clientsCell}</td>
       <td>${tasksCell}</td>
       <td>${leadsCell}</td>
       <td>${mrrCell}</td>
       <td>${badgeStatus(a.status)}</td>
-      <td><div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openAMDetail('${a.id}')">View</button>
-        <button class="btn btn-ghost btn-sm" onclick="openEditAM('${a.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteAM('${a.id}')">Del</button>
-      </div></td>
+      <td><div class="row-actions">${actions}</div></td>
     </tr>`;
-  }).join('')||`<tr><td colspan="10" class="empty">No account managers found</td></tr>`;
+  }).join('') || `<tr><td colspan="10" class="empty">No account managers found</td></tr>`;
 }
 
 // ══════════════════════════════════════════════
@@ -10908,15 +10942,24 @@ function unfileNHReport(id){
 function renderReports(){
   const total=DB.clients.length||1;
 
-  // By AM
-  document.getElementById('rpt-by-am').innerHTML=DB.accountManagers.map(a=>{
-    const cnt=DB.clients.filter(c=>c.am===a.id).length;
-    return`<div class="prog-row">
-      <div class="prog-top"><span class="prog-name">${a.fname} ${a.lname}</span><span class="prog-count">${cnt}</span></div>
-      <div class="prog-sub">${a.title}</div>
-      <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(cnt/total*100)}%"></div></div>
+  // By AM — merged team list so server users + legacy AMs both appear
+  const amTeam = getTeamList();
+  // Also surface any "orphaned" AM IDs that are on clients but not in any list
+  const knownIds = new Set(amTeam.map(a => a.id));
+  const orphanIds = [...new Set((DB.clients||[]).map(c => c.am).filter(id => id && !knownIds.has(id)))];
+  const orphanRows = orphanIds.map(id => ({ id, fname:'Unknown', lname:'', title:`ID: ${id}`, _orphan:true }));
+  const amRows = amTeam.concat(orphanRows)
+    .map(a => ({ ...a, _count: (DB.clients||[]).filter(c => c.am === a.id).length }))
+    .filter(a => a._count > 0 || a._source === 'server') // show all server users + anyone with clients
+    .sort((a,b) => b._count - a._count);
+  document.getElementById('rpt-by-am').innerHTML = amRows.map(a => {
+    const name = `${a.fname||''} ${a.lname||''}`.trim() || '—';
+    return `<div class="prog-row">
+      <div class="prog-top"><span class="prog-name">${name}${a._orphan?' <span style="color:var(--red);font-size:10px;">(unlinked)</span>':''}</span><span class="prog-count">${a._count}</span></div>
+      <div class="prog-sub">${a.title||''}</div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(a._count/total*100)}%"></div></div>
     </div>`;
-  }).join('')||'<div class="empty">No data</div>';
+  }).join('') || '<div class="empty">No data</div>';
 
   // By Service
   const svcs=['Bookkeeping','Payroll','Advisory'];
@@ -12270,7 +12313,7 @@ function runBiennialReport(){
   const buildSection = (clients, cycle, nextYear, accentColor) => {
     if(!clients.length) return '';
     const rows = clients.map(c => {
-      const am = DB.accountManagers.find(a => a.id === c.am);
+      const amName = getAMName(c.am);
       const addr = [c.addrStreet||c.addr, c.addrCity, c.addrState||c.state, c.addrZip].filter(Boolean).join(', ');
       return `<tr>
         <td style="font-weight:600;">${c.biz}</td>
@@ -12278,7 +12321,7 @@ function runBiennialReport(){
         <td style="font-family:monospace;font-size:12px;">${c.biennialId||'—'}</td>
         <td style="font-size:12px;color:var(--text-m);">${c.ein||'—'}</td>
         <td style="font-size:12px;color:var(--text-m);">${addr||'—'}</td>
-        <td style="font-size:12px;color:var(--text-m);">${am?am.fname+' '+am.lname:'—'}</td>
+        <td style="font-size:12px;color:var(--text-m);">${amName}</td>
         <td>${badgeStatus(c.status)}</td>
       </tr>`;
     }).join('');
@@ -12339,7 +12382,7 @@ function printBiennialReport(){
   const buildPrintSection = (clients, cycle, nextYear, color) => {
     if(!clients.length) return '';
     const rows = clients.map(c => {
-      const am = DB.accountManagers.find(a => a.id === c.am);
+      const amName = getAMName(c.am);
       const addr = [c.addrStreet||c.addr, c.addrCity, c.addrState||c.state, c.addrZip].filter(Boolean).join(', ');
       return `<tr>
         <td><strong>${c.biz}</strong></td>
@@ -12347,7 +12390,7 @@ function printBiennialReport(){
         <td style="font-family:monospace;">${c.biennialId||'—'}</td>
         <td style="font-family:monospace;">${c.ein||'—'}</td>
         <td>${addr||'—'}</td>
-        <td>${am?am.fname+' '+am.lname:'—'}</td>
+        <td>${amName}</td>
         <td>${c.status||'—'}</td>
       </tr>`;
     }).join('');
@@ -12606,8 +12649,8 @@ function runPostageAMReport(){
       <!-- AM CARDS -->
       <div style="display:flex;flex-direction:column;gap:12px;">
         ${Object.entries(byAM).map(([amId,r],idx)=>{
-          const am = DB.accountManagers.find(a=>a.id===amId);
-          const amName = am ? `${am.fname} ${am.lname}` : 'Unassigned';
+          const am = resolveAM(amId);
+          const amName = am ? `${am.fname||''} ${am.lname||''}`.trim() || 'Unassigned' : 'Unassigned';
           const amColor = am ? (amColors[idx % amColors.length]) : '#999';
           const total = r.firstclass+r.priority+r.w2;
           const pct = grandTot ? Math.round((total/grandTot)*100) : 0;
@@ -14808,7 +14851,7 @@ function openDetail(id){
   const cd = document.getElementById('call-date');
   if(cd) cd.value = new Date().toISOString().slice(0,10);
 
-  const am=DB.accountManagers.find(x=>x.id===c.am);
+  const am=resolveAM(c.am);
   const addr = [c.addrStreet, c.addrCity, c.addrState, c.addrZip].filter(Boolean).join(', ') || c.addr || '—';
   const ownersHtml = (c.owners||[]).length ? (c.owners||[]).map((o,i)=>`
     <div class="detail-box"><h4>Owner ${i+1}${o.fname||o.lname ? ' — '+[o.fname,o.lname].filter(Boolean).join(' ') : ''}</h4>
@@ -15034,7 +15077,7 @@ function renderClientAct(id){
 //  AM DETAIL
 // ══════════════════════════════════════════════
 function openAMDetail(id){
-  const a=DB.accountManagers.find(x=>x.id===id);if(!a)return;
+  const a = resolveAM(id); if(!a) return;
   const clients=DB.clients.filter(c=>c.am===id);
   document.getElementById('amd-name').textContent=`${a.fname} ${a.lname}`;
   document.getElementById('amd-body').innerHTML=`
