@@ -10998,23 +10998,46 @@ function prRptGetSelectedPeriod(){
   return null;
 }
 
-function runPayrollReport(){
+async function runPayrollReport(){
   const period = prRptGetSelectedPeriod();
   if(!period){ alert('Please select a pay period.'); return; }
   const {start, end, payday} = period;
   const startStr = start.toISOString().slice(0,10);
   const endStr   = end.toISOString().slice(0,10);
 
-  const users = (DB.users||[]).slice().sort((a,b)=>{
-    const la = (a.lname||'').toLowerCase(), lb = (b.lname||'').toLowerCase();
-    return la < lb ? -1 : la > lb ? 1 : 0;
-  });
-
   const output = document.getElementById('rpt-payroll-output');
+  output.innerHTML = '<div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:32px 0;">Loading payroll data…</div>';
+
+  // Pull real team from server (not stale local DB.users which may contain sample data)
+  await refreshServerUsersCache();
+  const rawUsers = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
+  const users = rawUsers
+    .filter(u => !u._deleted && (!u.status || String(u.status).toLowerCase() === 'active'))
+    .map(u => ({ ...u, id: u.id || u._id, fname: u.fname || u.userName || '' }))
+    .slice()
+    .sort((a,b)=>{
+      const la = (a.lname||'').toLowerCase(), lb = (b.lname||'').toLowerCase();
+      return la < lb ? -1 : la > lb ? 1 : 0;
+    });
+
   if(!users.length){
     output.innerHTML = '<div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:32px 0;">No users found in the system.</div>';
     return;
   }
+
+  // Fetch punches + PTO for every user from the server in parallel
+  try {
+    await Promise.all(users.map(async u => {
+      try {
+        const [pR, ptoR] = await Promise.all([
+          authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(u.id)),
+          authFetch(ARK_SERVER + '/time/pto?empId=' + encodeURIComponent(u.id)),
+        ]);
+        if (pR.ok)   DB.timePunches[u.id] = await pR.json();
+        if (ptoR.ok){ if(!DB.timePTO) DB.timePTO = {}; DB.timePTO[u.id] = await ptoR.json(); }
+      } catch(_){}
+    }));
+  } catch(_){}
 
   // Collect relevant activity log entries for this period
   const periodActs = (DB.activity||[]).filter(a=>{
@@ -11146,17 +11169,36 @@ function runPayrollReport(){
   document.getElementById('btn-print-payroll-rpt').style.display = 'flex';
 }
 
-function printPayrollReport(){
+async function printPayrollReport(){
   const period = prRptGetSelectedPeriod(); if(!period) return;
   const {start, end, payday} = period;
   const startStr = start.toISOString().slice(0,10);
   const endStr   = end.toISOString().slice(0,10);
   const today    = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
 
-  const users = (DB.users||[]).slice().sort((a,b)=>{
-    const la=(a.lname||'').toLowerCase(), lb=(b.lname||'').toLowerCase();
-    return la<lb?-1:la>lb?1:0;
-  });
+  await refreshServerUsersCache();
+  const rawUsers = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
+  const users = rawUsers
+    .filter(u => !u._deleted && (!u.status || String(u.status).toLowerCase() === 'active'))
+    .map(u => ({ ...u, id: u.id || u._id, fname: u.fname || u.userName || '' }))
+    .slice()
+    .sort((a,b)=>{
+      const la=(a.lname||'').toLowerCase(), lb=(b.lname||'').toLowerCase();
+      return la<lb?-1:la>lb?1:0;
+    });
+
+  try {
+    await Promise.all(users.map(async u => {
+      try {
+        const [pR, ptoR] = await Promise.all([
+          authFetch(ARK_SERVER + '/time/punches?empId=' + encodeURIComponent(u.id)),
+          authFetch(ARK_SERVER + '/time/pto?empId=' + encodeURIComponent(u.id)),
+        ]);
+        if (pR.ok)   DB.timePunches[u.id] = await pR.json();
+        if (ptoR.ok){ if(!DB.timePTO) DB.timePTO = {}; DB.timePTO[u.id] = await ptoR.json(); }
+      } catch(_){}
+    }));
+  } catch(_){}
 
   const week1end = new Date(start); week1end.setDate(start.getDate()+6);
   const week1endStr = week1end.toISOString().slice(0,10);
