@@ -92,11 +92,25 @@
 }
 
 /* ── CLIENT MODAL TABS ── */
-.mc-tab{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-d);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:var(--transition);}
-.mc-tab:hover{color:var(--navy);}
+.mc-tabs{
+  display:flex;gap:0;border-bottom:2px solid var(--border);
+  padding:0 20px;margin-top:12px;flex-shrink:0;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:thin;
+}
+.mc-tabs::-webkit-scrollbar{height:4px;}
+.mc-tabs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.mc-tab{
+  padding:10px 16px;font-size:var(--text-md);font-weight:600;
+  color:var(--text-d);cursor:pointer;
+  border-bottom:3px solid transparent;margin-bottom:-2px;
+  white-space:nowrap;transition:var(--transition-fast);
+}
+.mc-tab:hover{color:var(--navy);background:var(--surface2);}
 .mc-tab.active{color:var(--navy);border-bottom-color:var(--gold);}
 .mc-panel{display:none;padding-top:20px;}
 .mc-panel.active{display:block;}
+.mc-biz-label{font-size:var(--text-base);color:var(--text-m);margin-top:2px;min-height:18px;font-weight:500;}
 
 @keyframes flashRed{0%,100%{background:linear-gradient(135deg,#b03a3a,#8b2a2a);}50%{background:linear-gradient(135deg,#d94f4f,#b03a3a);}}
 .flash-red{animation:flashRed 1.2s ease-in-out infinite;}
@@ -1712,10 +1726,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ══ CLIENTS ══ -->
   <div class="view content" id="view-clients">
     <div class="card">
-      <div class="card-header">
-        <div><div class="card-title">All Clients</div><div class="card-subtitle" id="clients-count"></div></div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <select id="client-health-filter" class="field-input" style="width:150px;margin:0;font-size:12px;" onchange="renderClients(document.getElementById('client-search').value)">
+      <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+        <div class="card-header-left"><div class="card-title">All Clients</div><div class="card-subtitle" id="clients-count"></div></div>
+        <div class="card-header-actions" style="flex-wrap:wrap;">
+          <select id="client-health-filter" class="field-input" style="min-width:150px;" onchange="renderClients(document.getElementById('client-search').value)">
             <option value="">All Clients</option>
             <option value="active">Active Only</option>
             <option value="at-risk">🔴 At Risk</option>
@@ -1723,8 +1737,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <option value="healthy">🟢 Healthy</option>
           </select>
           <div class="search-wrap"><input id="client-search" placeholder="Search clients…" oninput="renderClients(this.value)"></div>
-          <button onclick="nav('c360')" class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap;">🏥 Full Health Report</button>
-          <button onclick="nav('import')" class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap;">⬆ Import Clients</button>
+          <button onclick="nav('c360')" class="btn btn-ghost btn-sm" title="Open the Client 360 health report">🏥 Health Report</button>
+          <button onclick="nav('import')" class="btn btn-ghost btn-sm" title="Import clients from CSV">⬆ Import</button>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -1750,10 +1764,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-acctmgrs">
     <div class="card">
       <div class="card-header">
-        <div><div class="card-title">AM Center</div><div class="card-subtitle" id="am-count"></div></div>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div class="card-header-left"><div class="card-title">AM Center</div><div class="card-subtitle" id="am-count"></div></div>
+        <div class="card-header-actions">
           <div class="search-wrap"><input id="am-search" placeholder="Search…" oninput="renderAMs(this.value)"></div>
-          <button onclick="nav('c360')" class="btn btn-ghost btn-sm" style="font-size:11px;white-space:nowrap;">⚖ Workload Report</button>
+          <button onclick="nav('c360')" class="btn btn-ghost btn-sm" title="Open the team workload report">⚖ Workload</button>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -6763,17 +6777,17 @@ Now here is what I want to build: [describe your feature]</pre>
 
 <!-- ════ CLIENT MODAL ════ -->
 <div class="overlay" id="modal-client" style="display:none" onclick="overlayClose(event,'modal-client')">
-  <div class="modal" style="width:780px;max-height:94vh;display:flex;flex-direction:column;">
-    <div class="modal-head" style="padding-bottom:0;">
-      <div>
+  <div class="modal" style="width:780px;max-height:94vh;">
+    <div class="modal-head">
+      <div class="modal-head-left">
         <div class="modal-title" id="mc-title">Add Client</div>
-        <div id="mc-biz-label" style="font-size:13px;color:var(--text-m);margin-top:2px;min-height:18px;"></div>
+        <div class="mc-biz-label" id="mc-biz-label"></div>
       </div>
-      <button class="modal-close" onclick="closeModal('modal-client')">×</button>
+      <button class="modal-x" onclick="closeModal('modal-client')" title="Close">✕</button>
     </div>
 
     <!-- TAB BAR -->
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);padding:0 20px;margin-top:12px;flex-shrink:0;overflow-x:auto;overflow-y:hidden;">
+    <div class="mc-tabs">
       <div class="mc-tab active" data-tab="0" onclick="mcTab(0)">🏢 Business</div>
       <div class="mc-tab" data-tab="1" onclick="mcTab(1)">👤 Owners</div>
       <div class="mc-tab" data-tab="2" onclick="mcTab(2)">🧾 Sales Tax</div>
@@ -6845,7 +6859,7 @@ Now here is what I want to build: [describe your feature]</pre>
           <button class="btn btn-primary btn-sm" onclick="addOwnerRow()">+ Add Owner</button>
         </div>
         <div id="mc-owners-list"></div>
-        <div id="mc-owners-empty" style="text-align:center;padding:40px 0;color:var(--text-d);font-size:13px;font-style:italic;">No owners added yet. Click "+ Add Owner" to begin.</div>
+        <div id="mc-owners-empty" class="empty" style="padding:32px 0;"><strong>No owners yet.</strong>Click "+ Add Owner" to begin.</div>
       </div>
 
       <!-- ── TAB 2: SALES TAX ── -->
@@ -7556,7 +7570,7 @@ Now here is what I want to build: [describe your feature]</pre>
 
     </div><!-- end modal-body -->
 
-    <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;">
+    <div class="modal-foot modal-foot-spread">
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" id="mc-prev-btn" onclick="mcTabStep(-1)" style="display:none;">← Back</button>
         <button class="btn btn-ghost btn-sm" id="mc-next-btn" onclick="mcTabStep(1)">Next →</button>
@@ -7573,7 +7587,7 @@ Now here is what I want to build: [describe your feature]</pre>
 <div class="overlay" id="modal-am" style="display:none" onclick="overlayClose(event,'modal-am')">
   <div class="modal">
     <div class="modal-head">
-      <div class="modal-title" id="mam-title">Add Account Manager</div>
+      <div class="modal-head-left"><div class="modal-title" id="mam-title">Add Account Manager</div></div>
       <button class="modal-close" onclick="closeModal('modal-am')">×</button>
     </div>
     <div class="modal-body">
@@ -11137,18 +11151,18 @@ function renderClients(q=''){
   if(!body) return;
   body.innerHTML=list.map(c=>`
     <tr>
-      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:#2ca01c;border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}${(()=>{const lm=typeof mtgLastMeetingDate==='function'?mtgLastMeetingDate(c.id):null;return lm?' <span style="color:var(--text-d);font-size:10px;opacity:.7;">· mtg '+new Date(lm).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</span>':'';})()}</div></div></div></td>
+      <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:var(--qbo-green);border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}${(()=>{const lm=typeof mtgLastMeetingDate==='function'?mtgLastMeetingDate(c.id):null;return lm?' <span style="color:var(--text-d);font-size:10px;opacity:.7;">· mtg '+new Date(lm).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</span>':'';})()}</div></div></div></td>
       <td>${badgeEntity(c.entity)}</td>
-      <td style="font-family:monospace;font-size:12px;color:var(--text-m)">${c.ein||'—'}</td>
+      <td class="mono" style="color:var(--text-m);">${c.ein||'—'}</td>
       <td><div class="chip-row">${svcChips(c.services)}</div></td>
       <td>${badgeStatus(c.status)}</td>
       <td style="font-size:12px;color:var(--text-m)">${getAMName(c.am)}</td>
       <td>${obProgressBadge(c)}</td>
-      <td style="text-align:center;">${typeof clientHealthBadge==='function'?clientHealthBadge(c):''}</td>
-      <td><div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openDetail('${c.id}')">View</button>
-        <button class="btn btn-ghost btn-sm" onclick="openEditClient('${c.id}')">Edit</button>
-        ${(canDo('_isAdmin')||currentUser?.id===c.am)?`<button class="btn btn-danger btn-sm" onclick="deleteClient('${c.id}')">Del</button>`:''}
+      <td class="center">${typeof clientHealthBadge==='function'?clientHealthBadge(c):''}</td>
+      <td class="col-actions"><div class="row-actions">
+        <button class="btn btn-ghost btn-xs" onclick="openDetail('${c.id}')">View</button>
+        <button class="btn btn-ghost btn-xs" onclick="openEditClient('${c.id}')">Edit</button>
+        ${(canDo('_isAdmin')||currentUser?.id===c.am)?`<button class="btn btn-danger btn-xs" onclick="deleteClient('${c.id}')">Del</button>`:''}
       </div></td>
     </tr>`).join('')||`<tr><td colspan="9" class="empty">No clients found</td></tr>`;
 }
@@ -11174,22 +11188,22 @@ function renderAMs(q=''){
     const name = `${a.fname||''} ${a.lname||''}`.trim() || '—';
     const isServer = a._source === 'server';
     const actions = isServer
-      ? `<button class="btn btn-ghost btn-sm" onclick="openAMDetail('${a.id}')">View</button>
-         <span style="font-size:10px;color:var(--text-d);padding:4px 8px;" title="Managed in Team & Users">Team User</span>`
-      : `<button class="btn btn-ghost btn-sm" onclick="openAMDetail('${a.id}')">View</button>
-         <button class="btn btn-ghost btn-sm" onclick="openEditAM('${a.id}')">Edit</button>
-         <button class="btn btn-danger btn-sm" onclick="deleteAM('${a.id}')">Del</button>`;
+      ? `<button class="btn btn-ghost btn-xs" onclick="openAMDetail('${a.id}')">View</button>
+         <span style="font-size:var(--text-xs);color:var(--text-d);padding:4px 8px;" title="Managed in Team & Users">Team User</span>`
+      : `<button class="btn btn-ghost btn-xs" onclick="openAMDetail('${a.id}')">View</button>
+         <button class="btn btn-ghost btn-xs" onclick="openEditAM('${a.id}')">Edit</button>
+         <button class="btn btn-danger btn-xs" onclick="deleteAM('${a.id}')">Del</button>`;
     return `<tr>
       <td><div class="av-row"><div class="av" style="background:${avatarColor(name)}">${initials(name)}</div><strong>${name}</strong>${isServer?' <span style="font-size:9px;background:var(--gold-pale);color:#8a6a00;padding:1px 6px;border-radius:8px;font-weight:700;letter-spacing:.5px;">TEAM</span>':''}</div></td>
       <td style="color:var(--text-m)">${a.title||'—'}</td>
-      <td style="font-size:12px">${a.email?mailLink(a.email):'—'}</td>
-      <td style="color:var(--text-m);font-size:12px">${a.phone?tel(a.phone):'—'}</td>
+      <td>${a.email?mailLink(a.email):'—'}</td>
+      <td style="color:var(--text-m);">${a.phone?tel(a.phone):'—'}</td>
       <td>${clientsCell}</td>
       <td>${tasksCell}</td>
       <td>${leadsCell}</td>
       <td>${mrrCell}</td>
       <td>${badgeStatus(a.status)}</td>
-      <td><div class="row-actions">${actions}</div></td>
+      <td class="col-actions"><div class="row-actions">${actions}</div></td>
     </tr>`;
   }).join('') || `<tr><td colspan="10" class="empty">No account managers found</td></tr>`;
 }
