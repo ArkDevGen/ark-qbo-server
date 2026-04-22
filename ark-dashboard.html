@@ -10,38 +10,83 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
 
 :root {
+  /* ── Surfaces & borders ── */
   --bg:         #f6f5f2;
   --surface:    #ffffff;
   --surface2:   #f2f0ec;
   --surface3:   #eae6e0;
   --border:     #e2dfd9;
   --border2:    #ccc7be;
+  --border-soft:#ede9e2;
+
+  /* ── Brand ── */
   --navy:       #1a2440;
   --navy2:      #243058;
   --navy3:      #0e1526;
   --gold:       #b8922a;
   --gold-lt:    #d4a93a;
   --gold-pale:  #f5ecd4;
-  --text:       #1a1916;
-  --text-m:     #6a6560;
-  --text-d:     #9e9890;
+
+  /* ── Text — canonical scale ── */
+  --text:       #1a1916;  /* primary body */
+  --text-m:     #6a6560;  /* secondary / medium gray (≈ #555, #666) */
+  --text-d:     #9e9890;  /* tertiary / dim gray (≈ #999, #aaa) */
+  --text-dd:    #b8b4ad;  /* extra-dim (placeholders, captions) */
+
+  /* ── Status ── */
   --green:      #2e7d5e;
   --green-bg:   #eaf4ef;
+  --green-lt:   #3fa07a;
   --red:        #b03a3a;
   --red-bg:     #faeaea;
+  --red-lt:     #c0392b;    /* slightly brighter red used across the app */
+  --red-brt:    #ef4444;    /* bright warning red */
   --blue:       #2c5fa1;
   --blue-bg:    #eaf0fb;
+  --blue-lt:    #4da6ff;
   --amber:      #b06a1a;
   --amber-bg:   #fdf3e3;
-  --radius:     8px;
+  --amber-lt:   #f0b429;
+  --purple:     #6b3fa0;    /* activity / PTO accent */
+  --purple-bg:  #f1ebfa;
+  --qbo-green:  #2ca01c;    /* QBO brand green */
+
+  /* ── Typography scale (canonical — 6 sizes) ── */
+  --text-xs:    10px;  /* micro labels, captions */
+  --text-sm:    11px;  /* secondary UI, badges */
+  --text-md:    12px;  /* default small UI, buttons */
+  --text-base:  13px;  /* body, table cells, inputs */
+  --text-lg:    15px;  /* emphasized body */
+  --text-xl:    18px;  /* card titles */
+  --text-2xl:   22px;  /* page titles */
+  --text-3xl:   28px;  /* hero numbers */
+
+  /* ── Radii ── */
+  --radius-xs:  4px;
   --radius-sm:  5px;
+  --radius-md:  6px;
+  --radius:     8px;   /* canonical */
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-pill:999px;
+
+  /* ── Shadows ── */
   --shadow-xs:  0 1px 2px rgba(0,0,0,.04);
   --shadow-sm:  0 1px 3px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.03);
   --shadow:     0 2px 6px rgba(0,0,0,.06), 0 6px 20px rgba(0,0,0,.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,.08);
   --shadow-lg:  0 6px 24px rgba(0,0,0,.1), 0 24px 60px rgba(0,0,0,.06);
+  --shadow-xl:  0 20px 60px rgba(0,0,0,.4);  /* modals */
+  --shadow-dd:  0 8px 24px rgba(0,0,0,.1);   /* dropdowns */
+  --shadow-toast:0 12px 40px rgba(0,0,0,.25);
+
+  /* ── Layout ── */
   --sidebar-w:  238px;
   --topbar-h:   52px;
-  --transition: all .2s cubic-bezier(.4,0,.2,1);
+
+  /* ── Motion ── */
+  --transition:     all .2s cubic-bezier(.4,0,.2,1);
+  --transition-fast:all .15s cubic-bezier(.4,0,.2,1);
 }
 
 /* ── CLIENT MODAL TABS ── */
@@ -947,6 +992,76 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .hb-reply.accepted{background:var(--green-bg);border-radius:var(--radius);padding:14px;margin:8px 0;border:1px solid #c8e6d7;}
 .hb-mention{color:var(--blue);font-weight:600;}
 
+/* ════════════════════════════════════════
+   DROPDOWN MENU — unified shell for every
+   popover, typeahead list, and gear menu.
+   Just add .dropdown-menu to the wrapper.
+   ════════════════════════════════════════ */
+.dropdown-menu{
+  position:absolute;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-dd);z-index:400;overflow:hidden;
+  min-width:180px;max-height:240px;overflow-y:auto;
+  font-family:'DM Sans',sans-serif;
+}
+.dropdown-menu[hidden],.dropdown-menu.is-hidden{display:none;}
+.dropdown-item{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 14px;font-size:var(--text-base);color:var(--text);
+  cursor:pointer;transition:var(--transition-fast);
+  border-bottom:1px solid var(--border-soft);
+}
+.dropdown-item:last-child{border-bottom:none;}
+.dropdown-item:hover,.dropdown-item.is-active{background:var(--surface2);color:var(--navy);}
+.dropdown-item.is-disabled{opacity:.45;cursor:not-allowed;}
+.dropdown-item .meta{margin-left:auto;font-size:var(--text-xs);color:var(--text-d);}
+.dropdown-header{padding:7px 14px;font-size:var(--text-xs);font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:1.2px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.dropdown-divider{height:1px;background:var(--border);margin:4px 0;}
+
+/* ════════════════════════════════════════
+   TOAST — stick to a consistent shell for
+   every success/error/info banner.
+   ════════════════════════════════════════ */
+.toast-box{
+  position:fixed;bottom:24px;right:24px;z-index:10000;
+  background:var(--surface);border:1px solid var(--border);
+  border-left:4px solid var(--navy);border-radius:var(--radius);
+  padding:14px 18px;box-shadow:var(--shadow-toast);
+  max-width:380px;font-family:'DM Sans',sans-serif;
+  animation:slideUp .2s cubic-bezier(.4,0,.2,1);
+}
+.toast-box.is-success{border-left-color:var(--qbo-green);}
+.toast-box.is-warn   {border-left-color:var(--amber);}
+.toast-box.is-error  {border-left-color:var(--red);}
+.toast-box.is-info   {border-left-color:var(--blue);}
+.toast-title{font-size:var(--text-base);font-weight:700;color:var(--navy);margin-bottom:2px;}
+.toast-body {font-size:var(--text-md);color:var(--text-m);line-height:1.45;}
+
+/* ════════════════════════════════════════
+   MODAL SHELL — helper class for custom
+   modals built in JS. Pairs with
+   .modal-panel inside for the card shell.
+   ════════════════════════════════════════ */
+.modal-scrim{
+  position:fixed;inset:0;background:rgba(12,18,36,.55);
+  display:flex;align-items:center;justify-content:center;
+  z-index:9000;animation:fadeIn .15s ease-out;
+}
+.modal-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-xl);
+  max-height:88vh;overflow-y:auto;animation:slideUp .2s cubic-bezier(.4,0,.2,1);
+}
+
+/* ════════════════════════════════════════
+   CARD — subtle Modern Professional polish:
+   the base .card gets a slightly warmer
+   hover lift to hint at interactivity,
+   without changing current layouts.
+   ════════════════════════════════════════ */
+.card.is-interactive{cursor:pointer;transition:var(--transition);}
+.card.is-interactive:hover{box-shadow:var(--shadow);transform:translateY(-1px);}
+
 </style>
 </head>
 <body>
@@ -1352,7 +1467,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div class="pill-av" id="pill-av" style="background:var(--navy);">?</div>
         <span id="pill-name">—</span>
         <span style="color:var(--text-d);font-weight:400;font-size:11px;">▾</span>
-        <div id="user-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px;z-index:999;" onclick="event.stopPropagation()">
+        <div id="user-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-dd);min-width:180px;z-index:999;" onclick="event.stopPropagation()">
           <div onclick="openChangePassword()" style="padding:10px 16px;font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">🔑 Change Password</div>
           <div onclick="signOut()" style="padding:10px 16px;font-size:12px;color:var(--red);cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">🚪 Sign Out</div>
         </div>
@@ -2447,7 +2562,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div style="position:relative;">
                 <input id="sms-client-search" class="field-input" placeholder="Search clients…" autocomplete="off"
                   oninput="smsFilterClients(this.value)" onfocus="smsShowDD()">
-                <div id="sms-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.1);"></div>
+                <div id="sms-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:180px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
               </div>
               <input type="hidden" id="sms-client-id">
             </div>
@@ -2497,7 +2612,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div style="position:relative;margin-bottom:6px;">
                 <input id="sms-save-client-search" class="field-input" placeholder="Search clients…" style="font-size:12px;"
                   oninput="smsSaveClientFilter(this.value)" onfocus="smsSaveClientFilter(this.value)" autocomplete="off">
-                <div id="sms-save-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:160px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.1);"></div>
+                <div id="sms-save-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:160px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
               </div>
               <div id="sms-save-client-selected" style="display:none;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
@@ -2895,7 +3010,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="btn btn-ghost btn-sm" onclick="tcAddProject()" style="font-size:11px;">+ Project</button>
         <div style="position:relative;display:inline-block;">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New Task ▾</button>
-          <div id="tc-newtask-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:200px;z-index:9999;">
+          <div id="tc-newtask-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-dd);min-width:200px;z-index:9999;">
             <div onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNew()" style="padding:10px 16px;font-size:12px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">📝 New Task (for me)</div>
             <div id="tc-send-task-list" style="max-height:250px;overflow-y:auto;"></div>
           </div>
@@ -4964,7 +5079,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 </label>
                 <div style="position:relative;">
                   <button type="button" id="scoots-pl-compare-btn" onclick="scootsPLToggleCompare()" style="font-size:11px;color:#888;background:#f5f5f5;border:1px solid #ddd;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;">🏢 Compare Stores <span id="scoots-pl-compare-count" style="color:#C8102E;"></span></button>
-                  <div id="scoots-pl-compare-popover" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:100;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px;min-width:280px;max-width:360px;">
+                  <div id="scoots-pl-compare-popover" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:100;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:var(--shadow-dd);padding:12px;min-width:280px;max-width:360px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #eee;">
                       <div style="font-size:12px;font-weight:700;color:#1a1a1a;">Pick up to 5 stores</div>
                       <button type="button" onclick="scootsPLClearCompare()" style="font-size:10px;color:#C8102E;background:transparent;border:none;cursor:pointer;font-weight:600;padding:0;">Clear</button>
@@ -5672,7 +5787,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div style="position:relative;">
             <input id="pr-client-search" class="field-input" placeholder="Search clients…" autocomplete="off"
               oninput="prFilterClients(this.value)" onfocus="prShowDD()">
-            <div id="pr-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.1);"></div>
+            <div id="pr-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:180px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
           </div>
           <input type="hidden" id="pr-client-id">
         </div>
@@ -5800,7 +5915,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                   onblur="setTimeout(()=>document.getElementById('mtg-sched-client-dd').style.display='none',180)"
                   class="field-input" style="font-size:12px;">
                 <input type="hidden" id="mtg-sched-client-id">
-                <div id="mtg-sched-client-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+                <div id="mtg-sched-client-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
               </div>
             </div>
             <div style="margin-bottom:8px;">
@@ -7262,7 +7377,7 @@ Now here is what I want to build: [describe your feature]</pre>
             <input id="memp-client-search" placeholder="Search clients…" autocomplete="off"
               oninput="filterEmpClientDD(this.value)" onfocus="showEmpClientDD()"
               style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 11px;width:100%;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;">
-            <div id="memp-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.1);"></div>
+            <div id="memp-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
           </div>
           <input type="hidden" id="memp-client-id">
         </div>
@@ -7426,7 +7541,7 @@ Now here is what I want to build: [describe your feature]</pre>
             oninput="filterPostageClientDD(this.value)" onfocus="showPostageClientDD()"
             style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);background:#fff;outline:none;box-sizing:border-box;transition:border-color .15s;"
             onfocus="this.style.borderColor='var(--navy)';showPostageClientDD()" onblur="setTimeout(()=>hidePostageClientDD(),180)">
-          <div id="postage-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.12);"></div>
+          <div id="postage-client-dd" style="display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);z-index:400;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
         </div>
         <input type="hidden" id="postage-client-id">
       </div>
@@ -7545,7 +7660,7 @@ Now here is what I want to build: [describe your feature]</pre>
               onblur="setTimeout(()=>document.getElementById('f1099-client-dd').style.display='none',180)"
               style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;">
             <input type="hidden" id="f1099-payer-id">
-            <div id="f1099-client-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+            <div id="f1099-client-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
           </div>
         </div>
         <div>
@@ -7609,7 +7724,7 @@ Now here is what I want to build: [describe your feature]</pre>
               onblur="setTimeout(()=>document.getElementById('f1099-vendor-dd').style.display='none',180)"
               style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;box-sizing:border-box;">
             <input type="hidden" id="f1099-vendor-id">
-            <div id="f1099-vendor-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+            <div id="f1099-vendor-dd" style="display:none;position:absolute;z-index:200;width:100%;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;box-shadow:var(--shadow-dd);"></div>
           </div>
           <div style="margin-top:8px;">
             <button type="button" onclick="openAddVendor(true)" style="font-size:12px;color:var(--navy);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;">+ Add New Vendor</button>
@@ -9456,7 +9571,7 @@ addrStateEl.innerHTML = '<option value="">— Select —</option>' + US_STATES.m
 const PAGE_ACTIONS = {
   dashboard: ()=>`<div id="dash-gear-wrap" style="position:relative;display:inline-block;">
     <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();dashGearToggle()" title="Dashboard options" style="font-size:16px;line-height:1;padding:4px 8px;">⚙</button>
-    <div id="dash-gear-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:180px;z-index:1000;overflow:hidden;font-family:'DM Sans',sans-serif;">
+    <div id="dash-gear-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-md);min-width:180px;z-index:1000;overflow:hidden;font-family:'DM Sans',sans-serif;">
       <div onclick="dashGearClose();wgToggleEdit()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">${_wgEditMode?'Done Editing':'Edit Layout'}</div>
       <div onclick="dashGearClose();wgbOpen()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);border-bottom:1px solid var(--border);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">+ Add Widget</div>
       <div onclick="dashGearClose();wgResetWidgets()" style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">Reset to Defaults</div>
@@ -12993,7 +13108,7 @@ async function qboLinkClient() {
   overlay.id = 'qbo-link-picker-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
       <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
         <div>
           <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Link to QBO Company</h3>
@@ -13077,7 +13192,7 @@ function qboOpenFromClient(clientId, realmIdOverride) {
     const overlay = document.createElement('div');
     overlay.id = 'fc-qbo-picker-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
-    overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:400px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:400px;box-shadow:var(--shadow-xl);">
       <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><h3 style="margin:0;font-size:14px;font-family:var(--font-heading);color:var(--text);">Which franchise?</h3></div>
       <div style="padding:12px 20px;">${listHtml}</div>
     </div>`;
@@ -13347,7 +13462,7 @@ async function linkFranchiseToQBO(idx) {
   overlay.id = 'fc-link-picker-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-height:70vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:480px;max-height:70vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
       <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
         <div>
           <h3 style="margin:0;font-size:14px;font-family:var(--font-heading);color:var(--text);">Link Franchise to QBO</h3>
@@ -21911,7 +22026,7 @@ function stfAdHocPickerOpen(){
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10002;display:flex;align-items:center;justify-content:center;';
   overlay.onclick = (e) => { if (_bkdrop(e,overlay)) overlay.remove(); };
   overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:var(--radius);width:540px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="background:var(--surface);border-radius:var(--radius);width:540px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow-xl);">
       <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
         <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);">Add Ad-hoc Jurisdiction</div>
         <div style="font-size:11px;color:var(--text-d);margin-top:3px;">For a one-off filing only. The client's default setup is unchanged.</div>
@@ -23246,7 +23361,7 @@ function sthView(id){
   overlay.id = 'sth-view-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;';
   overlay.onclick = (e) => { if (_bkdrop(e,overlay)) overlay.remove(); };
-  overlay.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius);max-width:760px;width:92%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">${html}</div>`;
+  overlay.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius);max-width:760px;width:92%;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-xl);">${html}</div>`;
   document.body.appendChild(overlay);
 }
 
@@ -25258,7 +25373,7 @@ function plPromptDigestAfterClose(task) {
   overlay.id = 'pl-close-prompt';
   overlay.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;animation:slideUp .3s ease;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid #2ca01c;border-radius:var(--radius);padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.25);max-width:380px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid #2ca01c;border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow-toast);max-width:380px;">
       <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">Books Closed: ${client.biz}</div>
       <div style="font-size:11px;color:var(--text-m);line-height:1.5;margin-bottom:14px;">Run the P&L Digester to check for missing items, variances, and generate meeting prep?</div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -36703,7 +36818,7 @@ function batchBulkLinkModal() {
   overlay.id = 'batch-bulk-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:520px;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-xl);">
       <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
         <div>
           <h3 style="margin:0;font-size:16px;font-family:var(--font-heading);color:var(--text);">Bulk Link ${count} Client${count !== 1 ? 's' : ''}</h3>
