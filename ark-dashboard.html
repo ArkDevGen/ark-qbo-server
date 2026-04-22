@@ -139,55 +139,97 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .logo-sub{font-size:9px;color:rgba(255,255,255,.32);letter-spacing:3.5px;text-transform:uppercase;margin-top:4px;}
 .logo-city{font-size:10px;color:rgba(255,255,255,.22);margin-top:5px;font-style:italic;}
 
-.nav{padding:10px 0;flex:1;overflow-y:auto;}
+.nav{padding:8px 0;flex:1;overflow-y:auto;overflow-x:hidden;}
 .nav::-webkit-scrollbar{width:0;}
 
 .nav-section{
-  font-size:9px;color:rgba(255,255,255,.30);letter-spacing:2.5px;
-  text-transform:uppercase;padding:16px 24px 6px;font-weight:600;
+  font-size:var(--text-xs);color:rgba(255,255,255,.32);letter-spacing:.2em;
+  text-transform:uppercase;padding:18px 22px 8px;font-weight:600;
 }
 
 .nav-item{
-  display:flex;align-items:center;gap:10px;padding:9px 22px 9px 20px;
-  cursor:pointer;font-size:12px;font-weight:500;
-  color:rgba(255,255,255,.52);transition:var(--transition);
-  border-left:2.5px solid transparent;margin:1px 0;position:relative;
+  display:flex;align-items:center;gap:10px;padding:8px 22px 8px 19px;
+  cursor:pointer;font-size:var(--text-md);font-weight:500;
+  color:rgba(255,255,255,.55);transition:var(--transition-fast);
+  border-left:3px solid transparent;margin:1px 6px 1px 0;
+  border-radius:0 var(--radius-md) var(--radius-md) 0;
+  position:relative;
 }
-.nav-item:hover{color:rgba(255,255,255,.88);background:rgba(255,255,255,.05);}
+.nav-item:hover{
+  color:#fff;
+  background:rgba(255,255,255,.06);
+}
 .nav-item.active{
   color:#fff;
   border-left-color:var(--gold);
-  background:rgba(255,255,255,.08);
+  background:linear-gradient(90deg,rgba(184,146,42,.14),rgba(184,146,42,.04) 60%,transparent);
   font-weight:600;
 }
-.nav-item.active::after{
-  content:'';position:absolute;right:0;top:50%;transform:translateY(-50%);
-  width:3px;height:60%;background:transparent;border-radius:2px;
+.nav-item.active .ni{opacity:1;color:var(--gold-lt);}
+.nav-item .ni{
+  font-size:var(--text-base);width:20px;text-align:center;
+  opacity:.65;flex-shrink:0;line-height:1;
+  transition:var(--transition-fast);
 }
-.nav-item .ni{font-size:14px;width:20px;text-align:center;opacity:.6;flex-shrink:0;}
-.nav-item.active .ni{opacity:1;}
-.nav-group{overflow:hidden;max-height:500px;transition:max-height .25s ease-in-out;}
+.nav-item:hover .ni{opacity:.9;}
+
+.nav-group{overflow:hidden;max-height:600px;transition:max-height .25s ease-in-out;}
 .nav-group.collapsed{max-height:0;}
-.nav-section .nav-arrow{transition:transform .2s;}
+.nav-section .nav-arrow{transition:transform .2s;display:inline-block;}
 .nav-group.collapsed + .nav-section .nav-arrow,
 .nav-section.collapsed-header .nav-arrow{transform:rotate(-90deg);}
-.sidebar-footer{padding:14px 24px;border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:rgba(255,255,255,.20);}
+
+.sidebar-footer{
+  padding:12px 22px;border-top:1px solid rgba(255,255,255,.08);
+  font-size:var(--text-xs);color:rgba(255,255,255,.32);
+  display:flex;flex-direction:column;gap:2px;
+}
+
+/* Sidebar utility buttons (Ideas & Feedback / Backup) */
+.sidebar-util-wrap{padding:0 14px 10px;display:flex;flex-direction:column;gap:6px;}
+.sidebar-btn{
+  width:100%;padding:9px 12px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
+  border-radius:var(--radius-md);
+  color:rgba(255,255,255,.55);
+  font-size:var(--text-sm);font-weight:600;font-family:'DM Sans',sans-serif;
+  cursor:pointer;text-align:left;
+  display:flex;align-items:center;gap:8px;justify-content:space-between;
+  transition:var(--transition-fast);
+}
+.sidebar-btn:hover{background:rgba(255,255,255,.09);color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.18);}
+.sidebar-btn .sb-label{display:flex;align-items:center;gap:8px;min-width:0;}
+.sidebar-btn.sidebar-btn-gold{
+  background:rgba(184,146,42,.12);border-color:rgba(184,146,42,.28);
+  color:var(--gold-lt);
+}
+.sidebar-btn.sidebar-btn-gold:hover{background:rgba(184,146,42,.22);border-color:rgba(184,146,42,.42);color:#ebc166;}
 
 /* ════════════════════════════════════════
    TOPBAR — Clean, elevated
    ════════════════════════════════════════ */
 .main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column;}
 .topbar{
-  height:var(--topbar-h);background:rgba(255,255,255,.88);
+  height:var(--topbar-h);
+  background:rgba(255,255,255,.88);
   border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 32px;justify-content:space-between;
+  display:flex;align-items:center;padding:0 28px;
+  justify-content:space-between;gap:16px;
   position:sticky;top:0;z-index:50;
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   box-shadow:0 1px 0 rgba(0,0,0,.04);
 }
-.topbar-left{display:flex;align-items:center;gap:14px;}
-.topbar-title{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.topbar-right{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex-shrink:1;min-width:0;overflow:visible;}
+.topbar-left{display:flex;align-items:center;gap:14px;min-width:0;flex-shrink:1;}
+.topbar-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:var(--text-2xl);font-weight:700;color:var(--navy);
+  letter-spacing:-.01em;line-height:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.topbar-right{
+  display:flex;align-items:center;gap:8px;
+  flex-wrap:nowrap;flex-shrink:0;min-width:0;overflow:visible;
+}
 
 /* ════════════════════════════════════════
    BUTTONS — Intentional, satisfying
@@ -1554,17 +1596,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
   </nav>
   <!-- Sidebar utility buttons -->
-  <div style="padding:0 16px 10px;display:flex;flex-direction:column;gap:6px;">
-    <button onclick="openIdeaBoard()"
-      style="width:100%;padding:8px 12px;background:rgba(184,146,42,.12);border:1px solid rgba(184,146,42,.25);border-radius:var(--radius-sm);color:#d4a94a;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;text-align:left;transition:all .15s;display:flex;align-items:center;gap:8px;"
-      onmouseover="this.style.background='rgba(184,146,42,.22)'" onmouseout="this.style.background='rgba(184,146,42,.12)'">
-      💡 <span>Ideas &amp; Feedback</span>
+  <div class="sidebar-util-wrap">
+    <button class="sidebar-btn sidebar-btn-gold" onclick="openIdeaBoard()">
+      <span class="sb-label">💡 <span>Ideas &amp; Feedback</span></span>
     </button>
     <div id="sidebar-backup-wrap" style="position:relative;display:none;">
-      <button onclick="toggleBackupMenu(event)" id="sidebar-backup-btn"
-        style="width:100%;padding:8px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);color:rgba(255,255,255,.45);font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;text-align:left;transition:all .15s;display:flex;align-items:center;gap:8px;justify-content:space-between;"
-        onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='rgba(255,255,255,.7)'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='rgba(255,255,255,.45)'">
-        <span style="display:flex;align-items:center;gap:8px;">💾 <span>Backup</span></span>
+      <button class="sidebar-btn" id="sidebar-backup-btn" onclick="toggleBackupMenu(event)">
+        <span class="sb-label">💾 <span>Backup</span></span>
         <span style="font-size:9px;opacity:.6;">▾</span>
       </button>
       <div id="sidebar-backup-menu" style="display:none;position:absolute;bottom:100%;left:0;right:0;margin-bottom:4px;background:#1e2536;border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-sm);overflow:hidden;box-shadow:0 -4px 16px rgba(0,0,0,.3);z-index:100;">
@@ -1732,13 +1770,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="emp-panel-search" style="padding:28px;">
       <div class="card">
         <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-          <div><div class="card-title">New Hire Center</div><div class="card-subtitle" id="emp-count"></div></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div class="card-header-left"><div class="card-title">New Hire Center</div><div class="card-subtitle" id="emp-count"></div></div>
+          <div class="card-header-actions" style="flex-wrap:wrap;">
             <div class="search-wrap"><input id="emp-search" placeholder="Search…" oninput="renderEmps()"></div>
-            <select id="emp-client-filter" onchange="renderEmps()"
-              style="height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);min-width:160px;cursor:pointer;">
+            <select id="emp-client-filter" class="field-input" style="min-width:160px;" onchange="renderEmps()">
               <option value="">All Clients</option>
             </select>
+            <button class="btn btn-primary btn-sm" onclick="openAddEmp()">+ Add New Hire</button>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -9775,7 +9813,8 @@ const PAGE_ACTIONS = {
   </div>`,
   clients: ()=>`<button class="btn btn-primary" onclick="openAddClient()">+ Add Client</button>`,
   acctmgrs: ()=>`<button class="btn btn-primary" onclick="openAddAM()">+ Add Account Manager</button>`,
-  employees: ()=>`<button class="btn btn-primary" onclick="openAddEmp()">+ Add New Hire</button>`,
+  // employees: "+ Add New Hire" button moved into the card header
+  employees: ()=>``,
 };
 function closeAllModals(){
   document.querySelectorAll('.overlay').forEach(o=>o.style.display='none');
