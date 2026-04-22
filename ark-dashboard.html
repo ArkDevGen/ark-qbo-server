@@ -189,26 +189,53 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 /* ════════════════════════════════════════
    BUTTONS — Intentional, satisfying
+   One canonical system. Size variants:
+   .btn-xs (tables, toolbars)
+   .btn-sm (card headers, forms)
+   .btn (default)
+   Style variants:
+   .btn-primary, .btn-gold, .btn-ghost,
+   .btn-danger, .btn-icon (icon-only)
    ════════════════════════════════════════ */
 .btn{
-  padding:9px 20px;border-radius:var(--radius-sm);border:none;cursor:pointer;
-  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;
-  transition:var(--transition);display:inline-flex;align-items:center;gap:6px;
-  letter-spacing:.01em;
+  padding:9px 18px;border-radius:var(--radius-md);border:1px solid transparent;
+  cursor:pointer;background:transparent;color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:var(--text-base);font-weight:500;
+  transition:var(--transition-fast);display:inline-flex;align-items:center;
+  justify-content:center;gap:6px;letter-spacing:.01em;line-height:1.25;
+  white-space:nowrap;user-select:none;
 }
+.btn:focus-visible{outline:2px solid var(--navy);outline-offset:2px;}
+.btn:disabled,.btn.is-disabled{opacity:.5;cursor:not-allowed;transform:none !important;box-shadow:none !important;}
+
 .btn-primary{
-  background:var(--navy);color:#fff;
-  box-shadow:0 1px 2px rgba(0,0,0,.15),0 2px 6px rgba(26,36,64,.12);
+  background:var(--navy);color:#fff;border-color:var(--navy);
+  box-shadow:0 1px 2px rgba(0,0,0,.12),0 2px 6px rgba(26,36,64,.12);
 }
-.btn-primary:hover{background:var(--navy2);box-shadow:0 2px 4px rgba(0,0,0,.18),0 4px 14px rgba(26,36,64,.15);transform:translateY(-1px);}
+.btn-primary:hover{background:var(--navy2);border-color:var(--navy2);box-shadow:0 2px 4px rgba(0,0,0,.15),0 6px 16px rgba(26,36,64,.18);transform:translateY(-1px);}
 .btn-primary:active{transform:translateY(0);box-shadow:0 1px 2px rgba(0,0,0,.15);}
-.btn-gold{background:var(--gold);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12);}
-.btn-gold:hover{background:var(--gold-lt);transform:translateY(-1px);}
-.btn-ghost{background:rgba(0,0,0,.015);color:var(--text-m);border:1px solid var(--border);}
-.btn-ghost:hover{border-color:var(--navy);color:var(--navy);background:rgba(26,36,64,.04);}
-.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid rgba(176,58,58,.12);}
-.btn-danger:hover{background:#f5d5d5;border-color:rgba(176,58,58,.25);}
-.btn-sm{padding:6px 14px;font-size:12px;border-radius:var(--radius-sm);}
+
+.btn-gold{background:var(--gold);color:#fff;border-color:var(--gold);box-shadow:0 1px 2px rgba(0,0,0,.10);}
+.btn-gold:hover{background:var(--gold-lt);border-color:var(--gold-lt);transform:translateY(-1px);box-shadow:0 2px 4px rgba(0,0,0,.12),0 6px 16px rgba(184,146,42,.22);}
+.btn-gold:active{transform:translateY(0);}
+
+.btn-ghost{background:var(--surface);color:var(--text-m);border-color:var(--border);}
+.btn-ghost:hover{border-color:var(--navy);color:var(--navy);background:var(--surface2);}
+.btn-ghost:active{background:var(--surface3);}
+
+.btn-danger{background:var(--red-bg);color:var(--red);border-color:rgba(176,58,58,.15);}
+.btn-danger:hover{background:#f5d5d5;border-color:rgba(176,58,58,.28);}
+
+.btn-sm{padding:6px 12px;font-size:var(--text-md);border-radius:var(--radius-sm);gap:5px;}
+.btn-xs{padding:4px 10px;font-size:var(--text-sm);border-radius:var(--radius-sm);gap:4px;font-weight:600;}
+
+/* Icon-only button — for close/overflow/trash triggers */
+.btn-icon{padding:6px;width:32px;height:32px;border-radius:var(--radius-md);
+  color:var(--text-m);background:transparent;border:1px solid transparent;
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:var(--transition-fast);font-size:var(--text-lg);line-height:1;}
+.btn-icon:hover{background:var(--surface2);color:var(--navy);border-color:var(--border);}
+.btn-icon.btn-sm{width:28px;height:28px;padding:4px;font-size:var(--text-base);}
 
 /* ════════════════════════════════════════
    CONTENT
@@ -327,18 +354,32 @@ tr:hover .row-actions{opacity:1;}
 .search-wrap::before{content:'⌕';position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-d);font-size:17px;pointer-events:none;line-height:1;}
 
 /* ════════════════════════════════════════
-   FIELD INPUT — Used throughout
+   FIELD INPUT — Unified input for every
+   form. Sizes: .field-input-sm (toolbars),
+   .field-input (default), .field-input-lg.
+   Works on <input>, <select>, <textarea>.
    ════════════════════════════════════════ */
 .field-input{
-  background:#fff;border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:9px 12px;color:var(--text);
-  font-family:'DM Sans',sans-serif;font-size:13px;outline:none;
-  transition:var(--transition);width:100%;box-sizing:border-box;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:9px 12px;color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:var(--text-base);outline:none;
+  transition:var(--transition-fast);width:100%;box-sizing:border-box;
+  line-height:1.3;
 }
+.field-input:hover:not(:focus){border-color:var(--border2);}
 .field-input:focus{border-color:var(--navy);background:#fff;box-shadow:0 0 0 3px rgba(26,36,64,.08);}
+.field-input:disabled,.field-input[readonly]{background:var(--surface2);color:var(--text-m);cursor:not-allowed;}
+.field-input.is-invalid{border-color:var(--red);box-shadow:0 0 0 3px rgba(176,58,58,.08);}
 .field-input::placeholder{color:var(--text-d);}
-select.field-input{cursor:pointer;}
-textarea.field-input{resize:vertical;min-height:72px;}
+select.field-input{cursor:pointer;padding-right:28px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%239e9890' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 10px center;-webkit-appearance:none;-moz-appearance:none;appearance:none;}
+textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
+
+.field-input-sm{padding:6px 10px;font-size:var(--text-md);border-radius:var(--radius-sm);}
+.field-input-lg{padding:12px 14px;font-size:var(--text-lg);}
+
+.field-label{display:block;font-size:var(--text-sm);font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.field-hint {display:block;font-size:var(--text-xs);color:var(--text-d);margin-top:4px;line-height:1.4;}
+.field-error{display:block;font-size:var(--text-xs);color:var(--red);margin-top:4px;font-weight:600;}
 
 /* ════════════════════════════════════════
    MODAL — Dramatic entrance
@@ -1632,9 +1673,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div class="card-subtitle">Custom date range summary</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-              <button id="btn-print-postage" onclick="printPostageReport()" title="Print report"
-                style="display:none;align-items:center;gap:6px;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--navy);transition:all .15s;"
-                onmouseover="this.style.background='#e0dcd6';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--surface2)';this.style.borderColor='var(--border)'">
+              <button id="btn-print-postage" class="btn btn-ghost btn-sm" style="display:none;" onclick="printPostageReport()" title="Print report">
                 🖨️ Print
               </button>
               <button class="btn btn-primary btn-sm" onclick="runPostageDateReport()">Run Report</button>
@@ -1643,12 +1682,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div style="padding:16px 20px;border-top:1px solid var(--border);margin-top:12px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
               <div>
-                <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:6px;">From</label>
-                <input type="date" id="rpt-postage-from" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);box-sizing:border-box;">
+                <label class="field-label">From</label>
+                <input type="date" id="rpt-postage-from" class="field-input">
               </div>
               <div>
-                <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:6px;">To</label>
-                <input type="date" id="rpt-postage-to" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);box-sizing:border-box;">
+                <label class="field-label">To</label>
+                <input type="date" id="rpt-postage-to" class="field-input">
               </div>
             </div>
             <div style="font-size:11px;color:var(--text-d);font-style:italic;" id="rpt-postage-lastrun">Last run: never</div>
@@ -1726,8 +1765,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card-subtitle">Clients with a Biennial Report Filing ID on file, grouped by Even / Odd year cycle</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button id="btn-print-biennial" onclick="printBiennialReport()" style="display:none;align-items:center;gap:6px;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--navy);transition:all .15s;"
-            onmouseover="this.style.background='#e0dcd6';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--surface2)';this.style.borderColor='var(--border)'">
+          <button id="btn-print-biennial" class="btn btn-ghost btn-sm" style="display:none;" onclick="printBiennialReport()" title="Print report">
             🖨️ Print
           </button>
           <button class="btn btn-primary btn-sm" onclick="runBiennialReport()">Run Report</button>
@@ -1759,16 +1797,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="nacha-settings-body" style="padding:18px 22px;border-top:1px solid var(--border);display:none;">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Company Name <span style="color:var(--red);">*</span></label>
+            <label class="field-label">Company Name <span style="color:var(--red);">*</span></label>
             <input id="nacha-co-name" class="field-input" placeholder="ARK FINANCIAL SERVICES" maxlength="16" style="text-transform:uppercase;">
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Company ID (10-digit) <span style="color:var(--red);">*</span></label>
+            <label class="field-label">Company ID (10-digit) <span style="color:var(--red);">*</span></label>
             <input id="nacha-co-id" class="field-input" placeholder="1234567890" maxlength="10" style="font-family:monospace;">
             <div style="font-size:10px;color:var(--text-d);margin-top:3px;">EIN with 1 prefix, or assigned by bank</div>
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">SEC / Entry Class</label>
+            <label class="field-label">SEC / Entry Class</label>
             <select id="nacha-sec-code" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);width:100%;">
               <option value="CCD">CCD — Corporate Credit/Debit</option>
               <option value="PPD">PPD — Prearranged Payment</option>
@@ -1777,33 +1815,33 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">ODFI Routing (F&amp;M) <span style="color:var(--red);">*</span></label>
+            <label class="field-label">ODFI Routing (F&amp;M) <span style="color:var(--red);">*</span></label>
             <input id="nacha-odfi-routing" class="field-input" placeholder="104914594" maxlength="9" style="font-family:monospace;">
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">ARK Account # <span style="color:var(--red);">*</span></label>
+            <label class="field-label">ARK Account # <span style="color:var(--red);">*</span></label>
             <input id="nacha-ark-account" class="field-input" placeholder="ARK checking account #" style="font-family:monospace;">
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Account Type</label>
+            <label class="field-label">Account Type</label>
             <select id="nacha-ark-accttype" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);width:100%;">
               <option value="DDA" selected>Checking (DDA)</option>
               <option value="SAV">Savings</option>
             </select>
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Immediate Origin (Bank)</label>
+            <label class="field-label">Immediate Origin (Bank)</label>
             <input id="nacha-imm-origin" class="field-input" placeholder="104914594" maxlength="10" style="font-family:monospace;">
             <div style="font-size:10px;color:var(--text-d);margin-top:3px;">Usually same as ODFI routing</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Immediate Destination Name</label>
+            <label class="field-label">Immediate Destination Name</label>
             <input id="nacha-dest-name" class="field-input" placeholder="FARMERS MERCHANTS BANK" maxlength="23" style="text-transform:uppercase;">
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Entry Description</label>
+            <label class="field-label">Entry Description</label>
             <input id="nacha-entry-desc" class="field-input" placeholder="SERVICES" maxlength="10" style="text-transform:uppercase;">
             <div style="font-size:10px;color:var(--text-d);margin-top:3px;">Shows on client's bank statement (max 10 chars)</div>
           </div>
@@ -1830,7 +1868,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
       <!-- Upload zone -->
       <div style="padding:18px 22px;border-bottom:1px solid var(--border);">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:8px;">Step 1 — Upload QBO Billing Export CSV</label>
+        <label class="field-label">Step 1 — Upload QBO Billing Export CSV</label>
         <div id="nacha-drop-zone"
           style="border:2px dashed var(--border);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);"
           onclick="document.getElementById('nacha-csv-input').click()"
@@ -1851,13 +1889,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="nacha-match-section" style="display:none;padding:18px 22px;">
         <div style="display:flex;align-items:center;gap:20px;margin-bottom:16px;flex-wrap:wrap;">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Step 2 — Effective Date</label>
+            <label class="field-label">Step 2 — Effective Date</label>
             <input type="date" id="nacha-eff-date" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);">
           </div>
           <div style="padding-top:18px;font-size:12px;color:var(--text-d);">The date you want the bank to post the ACH debits.</div>
         </div>
 
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:8px;">Step 3 — Review Matches</label>
+        <label class="field-label">Step 3 — Review Matches</label>
         <div id="nacha-match-summary" style="font-size:12px;color:var(--text-d);margin-bottom:10px;"></div>
 
         <div style="overflow-x:auto;">
@@ -1924,8 +1962,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card-subtitle">All employees · punches, hours, OT, PTO · sorted by last name</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button id="btn-print-payroll-rpt" onclick="printPayrollReport()" style="display:none;align-items:center;gap:6px;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--navy);transition:all .15s;"
-            onmouseover="this.style.background='#e0dcd6';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--surface2)';this.style.borderColor='var(--border)'">
+          <button id="btn-print-payroll-rpt" class="btn btn-ghost btn-sm" style="display:none;" onclick="printPayrollReport()" title="Print report">
             🖨️ Print
           </button>
           <button class="btn btn-primary btn-sm" onclick="runPayrollReport()">Run Report</button>
@@ -1933,8 +1970,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Pay Period</label>
-          <select id="rpt-pr-period" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);min-width:280px;"></select>
+          <label class="field-label">Pay Period</label>
+          <select id="rpt-pr-period" class="field-input" style="min-width:280px;"></select>
         </div>
         <div style="padding-top:18px;">
           <button onclick="runPayrollReport()" class="btn btn-primary btn-sm">Run</button>
@@ -1958,7 +1995,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card-subtitle">All submitted ideas and feedback, grouped by category, status, or priority</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button id="btn-print-ideas-rpt" onclick="printIdeasReport()" style="display:none;align-items:center;gap:6px;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--navy);">
+          <button id="btn-print-ideas-rpt" class="btn btn-ghost btn-sm" style="display:none;" onclick="printIdeasReport()" title="Print report">
             🖨️ Print
           </button>
           <button class="btn btn-primary btn-sm" onclick="runIdeasReport()">Run Report</button>
@@ -1966,8 +2003,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
         <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Group By</label>
-          <select id="rpt-ideas-group" onchange="runIdeasReport()" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);min-width:160px;">
+          <label class="field-label">Group By</label>
+          <select id="rpt-ideas-group" class="field-input" style="min-width:160px;" onchange="runIdeasReport()">
             <option value="category">Category</option>
             <option value="status">Status</option>
             <option value="priority">Priority</option>
@@ -1975,8 +2012,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </select>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);display:block;margin-bottom:5px;">Status Filter</label>
-          <select id="rpt-ideas-status" onchange="runIdeasReport()" style="height:38px;padding:0 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);min-width:140px;">
+          <label class="field-label">Status Filter</label>
+          <select id="rpt-ideas-status" class="field-input" style="min-width:140px;" onchange="runIdeasReport()">
             <option value="">All statuses</option>
             <option value="open">Open</option>
             <option value="reviewed">Reviewed</option>
