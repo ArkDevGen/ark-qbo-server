@@ -1482,6 +1482,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ══ REPORTS ══ -->
   <div class="view content" id="view-reports">
 
+    <!-- ── REPORTS TAB BAR ── -->
+    <div id="rpt-tabs" style="display:flex;gap:2px;border-bottom:2px solid var(--border);margin:-4px -4px 22px;flex-wrap:wrap;">
+      <div id="rpt-tab-postage"    class="rpt-tab" data-rpt-tab="postage"    onclick="rptSwitchTab('postage')"    style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">📬 Postage</div>
+      <div id="rpt-tab-clients"    class="rpt-tab" data-rpt-tab="clients"    onclick="rptSwitchTab('clients')"    style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">👥 Clients</div>
+      <div id="rpt-tab-compliance" class="rpt-tab" data-rpt-tab="compliance" onclick="rptSwitchTab('compliance')" style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">📋 Compliance</div>
+      <div id="rpt-tab-ach"        class="rpt-tab" data-rpt-tab="ach"        onclick="rptSwitchTab('ach')"        style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">🏦 ACH</div>
+      <div id="rpt-tab-payroll"    class="rpt-tab" data-rpt-tab="payroll"    onclick="rptSwitchTab('payroll')"    style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">⏱ Payroll</div>
+      <div id="rpt-tab-ideas"      class="rpt-tab" data-rpt-tab="ideas"      onclick="rptSwitchTab('ideas')"      style="padding:11px 18px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-d);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;user-select:none;">💡 Ideas</div>
+    </div>
+
     <!-- ── POSTAGE REPORTS HEADER ── -->
     <div id="rpt-section-postage" style="margin-bottom:18px;">
       <div style="font-size:10px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;">📬 Postage Reports</div>
@@ -10971,25 +10981,53 @@ function rptLockedBanner(label, icon){
   </div>`;
 }
 
+// Report sections: tab-key → dom id, perm-key, label, icon
+const RPT_SECTIONS = [
+  { tab:'postage',    id:'rpt-section-postage',    key:'rptPostage',    label:'Postage Reports',           icon:'📬' },
+  { tab:'clients',    id:'rpt-section-clients',    key:'rptClients',    label:'Client Reports',             icon:'👥' },
+  { tab:'compliance', id:'rpt-section-compliance', key:'rptCompliance', label:'Compliance / Biennial',      icon:'📋' },
+  { tab:'ach',        id:'rpt-section-ach',        key:'rptACH',        label:'ACH Collections',            icon:'🏦' },
+  { tab:'payroll',    id:'rpt-section-payroll',    key:'rptPayroll',    label:'Payroll Time Report',        icon:'⏱' },
+  { tab:'ideas',      id:'rpt-section-ideas',      key:'rptIdeas',      label:'Ideas & Feedback Report',    icon:'💡' },
+];
+let _rptActiveTab = null;
+
 function rptApplyGates(){
   const isAdmin = currentUser && currentUser.role === 'admin';
-  // Map section-id → perm-key, label, icon
-  const sections = [
-    { id:'rpt-section-postage',    key:'rptPostage',    label:'Postage Reports',           icon:'📬' },
-    { id:'rpt-section-clients',    key:'rptClients',    label:'Client Reports',             icon:'👥' },
-    { id:'rpt-section-compliance', key:'rptCompliance', label:'Compliance / Biennial',      icon:'📋' },
-    { id:'rpt-section-ach',        key:'rptACH',        label:'ACH Collections',            icon:'🏦' },
-    { id:'rpt-section-payroll',    key:'rptPayroll',    label:'Payroll Time Report',        icon:'⏱' },
-    { id:'rpt-section-ideas',      key:'rptIdeas',      label:'Ideas & Feedback Report',    icon:'💡' },
-  ];
-  sections.forEach(({ id, key, label, icon }) => {
-    const el = document.getElementById(id);
+  const allowedTabs = [];
+  RPT_SECTIONS.forEach(({ tab, id, key, label, icon }) => {
+    const el     = document.getElementById(id);
+    const tabEl  = document.getElementById('rpt-tab-'+tab);
     if(!el) return;
     const allowed = isAdmin || (currentUser && getPerms(currentUser)[key] === true);
-    // Show the section wrapper either way, but replace content when locked
-    el.style.display = 'block';
     if(!allowed){
       el.innerHTML = rptLockedBanner(label, icon);
+      if(tabEl) tabEl.style.display = 'none';
+    } else {
+      if(tabEl) tabEl.style.display = '';
+      allowedTabs.push(tab);
+    }
+  });
+  // Pick a valid active tab: previous choice if still allowed, else first allowed
+  const target = allowedTabs.includes(_rptActiveTab) ? _rptActiveTab : allowedTabs[0];
+  if(target) rptSwitchTab(target);
+  else {
+    // No allowed reports — hide all sections
+    RPT_SECTIONS.forEach(s => { const el=document.getElementById(s.id); if(el) el.style.display='none'; });
+  }
+}
+
+function rptSwitchTab(tab){
+  _rptActiveTab = tab;
+  RPT_SECTIONS.forEach(s => {
+    const el    = document.getElementById(s.id);
+    const tabEl = document.getElementById('rpt-tab-'+s.tab);
+    if(el)    el.style.display    = (s.tab===tab) ? '' : 'none';
+    if(tabEl){
+      const active = (s.tab===tab);
+      tabEl.style.color           = active ? 'var(--navy)' : 'var(--text-d)';
+      tabEl.style.borderBottomColor = active ? 'var(--navy)' : 'transparent';
+      tabEl.style.background      = active ? 'var(--surface2)' : 'transparent';
     }
   });
 }
