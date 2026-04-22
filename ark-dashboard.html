@@ -672,22 +672,41 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
    TAX HUB CARDS
    ════════════════════════════════════════ */
 .tax-hub-card{
-  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:26px;display:flex;flex-direction:column;gap:12px;
-  transition:var(--transition);box-shadow:var(--shadow-xs);
+  transition:var(--transition-fast);box-shadow:var(--shadow-sm);
+  cursor:pointer;
 }
-.tax-hub-card:hover{border-color:var(--navy);box-shadow:var(--shadow);transform:translateY(-3px);}
-.tax-hub-icon{width:54px;height:54px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;}
-.tax-hub-title{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:700;color:var(--navy);letter-spacing:-.01em;}
-.tax-hub-desc{font-size:13px;color:var(--text-d);line-height:1.65;flex:1;}
-.tax-hub-stats{font-size:12px;color:var(--text-m);font-weight:600;min-height:18px;}
+.tax-hub-card:hover{border-color:var(--navy);box-shadow:var(--shadow);transform:translateY(-2px);}
+.tax-hub-icon{
+  width:52px;height:52px;border-radius:var(--radius-lg);
+  display:flex;align-items:center;justify-content:center;
+  font-size:var(--text-2xl);color:#fff;flex-shrink:0;
+  box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+.tax-hub-title{
+  font-family:'DM Sans',sans-serif;
+  font-size:var(--text-xl);font-weight:700;color:var(--navy);
+  letter-spacing:-.015em;line-height:1.2;
+}
+.tax-hub-desc{font-size:var(--text-base);color:var(--text-m);line-height:1.55;flex:1;}
+.tax-hub-stats{font-size:var(--text-md);color:var(--text-m);font-weight:600;min-height:18px;}
 .tax-hub-modules{display:flex;flex-wrap:wrap;gap:6px;}
-.tax-hub-chip{font-size:11px;padding:2px 10px;border-radius:10px;background:var(--surface2);color:var(--text-m);font-weight:500;border:1px solid var(--border);}
-.tax-hub-action{font-size:13px;font-weight:700;color:var(--navy);margin-top:4px;letter-spacing:.01em;}
-.tax-hub-card:hover .tax-hub-action{color:var(--gold);}
-.deadline-item{display:flex;flex-direction:column;gap:2px;padding:9px 13px;background:var(--surface);border-radius:8px;border:1px solid var(--border);}
-.deadline-date{font-size:12px;font-weight:700;color:var(--navy);}
-.deadline-label{font-size:12px;color:var(--text-d);}
+.tax-hub-chip{
+  font-size:var(--text-sm);padding:3px 10px;border-radius:var(--radius-pill);
+  background:var(--surface2);color:var(--text-m);font-weight:500;
+  border:1px solid var(--border);
+}
+.tax-hub-action{
+  font-size:var(--text-base);font-weight:700;color:var(--navy);
+  margin-top:4px;letter-spacing:.01em;
+  display:inline-flex;align-items:center;gap:4px;
+  transition:var(--transition-fast);
+}
+.tax-hub-card:hover .tax-hub-action{color:var(--gold);gap:8px;}
+.deadline-item{display:flex;flex-direction:column;gap:2px;padding:9px 13px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--border);}
+.deadline-date{font-size:var(--text-md);font-weight:700;color:var(--navy);}
+.deadline-label{font-size:var(--text-md);color:var(--text-d);}
 
 /* ════════════════════════════════════════
    PAYROLL PLATFORM RADIO CARDS
@@ -3485,25 +3504,22 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   </div>
 
-  <div class="view content" id="view-activity">
-    <div class="card">
-      <div class="card-header"><div class="card-title">Full Activity Log</div></div>
-      <div style="padding:18px 22px;" id="full-activity"></div>
-    </div>
-  </div>
+  <!-- view-activity removed — Activity Log now lives inside Reports → Activity tab -->
 
   <!-- ══ TAX CENTER HUB ══ -->
   <div class="view content" id="view-taxcenter">
 
-    <div style="margin-bottom:28px;">
-      <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.01em;">Tax Center</h2>
-      <div style="font-size:13px;color:var(--text-d);margin-top:4px;">Manage filings, corrections, and compliance across all tax modules</div>
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-title">Tax Center</div>
+        <div class="page-subtitle">Manage filings, corrections, and compliance across all tax modules</div>
+      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:22px;">
 
       <!-- 1099 Center card -->
-      <div class="tax-hub-card" onclick="nav('form1099s')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('form1099s')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#1a2440,#2d3f6b);">📋</div>
         <div class="tax-hub-title">1099 Center</div>
         <div class="tax-hub-desc">Manage 1099-NEC, 1099-MISC, and 1099-INT entries. Maintain your vendor library and generate eFileMyForms-ready exports.</div>
@@ -3519,7 +3535,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- Sales Tax card -->
-      <div class="tax-hub-card" onclick="nav('salestax')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('salestax')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#7a5a10,#b8922a);">🧾</div>
         <div class="tax-hub-title">Sales Tax Center</div>
         <div class="tax-hub-desc">Track client sales tax filing info, back-calculate taxable sales from PBi exports, and run the Scooters Coffee tax calculator.</div>
@@ -3533,7 +3549,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- W-2 Center card -->
-      <div class="tax-hub-card" onclick="nav('w2center')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('w2center')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#1a3d2b,#2d6b47);">🗂</div>
         <div class="tax-hub-title">W-2 Center</div>
         <div class="tax-hub-desc">Enter and manage employee W-2 records for all active clients. Generate SSA-compliant EFW2 and EFW2C files for original filings and corrections.</div>
@@ -3550,7 +3566,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
 
       <!-- EFTPS Payment Builder card -->
-      <div class="tax-hub-card" onclick="nav('eftps')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('eftps')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#1a2e1a,#2d6b3f);">🏛</div>
         <div class="tax-hub-title">EFTPS Payment Builder</div>
         <div class="tax-hub-desc">Generate EFTPS Batch Provider import files for ES estimated tax payments and ad-hoc 941/940 deposits. Schedule monthly payments across remaining months of the tax year.</div>
@@ -3565,7 +3581,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- W-9 Generator card -->
-      <div class="tax-hub-card" onclick="nav('w9gen')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('w9gen')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#0d1f3d,#1a3d7a);">📋</div>
         <div class="tax-hub-title">W-9 Generator</div>
         <div class="tax-hub-desc">Search a client and instantly generate a pre-filled W-9 form from CRM data. Print or download as PDF.</div>
@@ -3579,7 +3595,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
 
       <!-- QBO Integration Center card -->
-      <div class="tax-hub-card" onclick="nav('qbo')" style="cursor:pointer;">
+      <div class="tax-hub-card" onclick="nav('qbo')">
         <div class="tax-hub-icon" style="background:linear-gradient(135deg,#0d2e0d,#1a5c1a);">💼</div>
         <div class="tax-hub-title">QBO Integration Center</div>
         <div class="tax-hub-desc">Push journal entries and expenses to QuickBooks Online. Multi-company support with OAuth 2.0 — sandbox and production environments.</div>
@@ -11106,10 +11122,12 @@ function _updateClientSortHeaders() {
 function renderClients(q=''){
   const healthFilter = document.getElementById('client-health-filter')?.value || '';
   const f = (q||'').toLowerCase();
-  let list = f ? DB.clients.filter(c=>{
+  // Always exclude soft-deleted clients (c._deleted = true)
+  const visible = (DB.clients||[]).filter(c => !c._deleted);
+  let list = f ? visible.filter(c=>{
     const ownerNames=(c.owners||[]).map(o=>`${o.fname} ${o.lname}`).join(' ');
     return `${c.biz} ${ownerNames} ${c.ein} ${c.entity}`.toLowerCase().includes(f);
-  }) : DB.clients;
+  }) : visible;
   if(healthFilter==='active')          list=list.filter(c=>c.status==='Active');
   if(healthFilter==='at-risk')         list=list.filter(c=>c.status==='Active'&&typeof betaClientHealth==='function'&&betaClientHealth(c).tier==='red');
   if(healthFilter==='needs-attention') list=list.filter(c=>c.status==='Active'&&typeof betaClientHealth==='function'&&betaClientHealth(c).tier==='yellow');
@@ -11315,16 +11333,18 @@ function unfileNHReport(id){
 //  RENDER REPORTS
 // ══════════════════════════════════════════════
 function renderReports(){
-  const total=DB.clients.length||1;
+  // Exclude soft-deleted clients from all report computations
+  const activeClients = (DB.clients||[]).filter(c => !c._deleted);
+  const total = activeClients.length || 1;
 
   // By AM — merged team list so server users + legacy AMs both appear
   const amTeam = getTeamList();
   // Also surface any "orphaned" AM IDs that are on clients but not in any list
   const knownIds = new Set(amTeam.map(a => a.id));
-  const orphanIds = [...new Set((DB.clients||[]).map(c => c.am).filter(id => id && !knownIds.has(id)))];
+  const orphanIds = [...new Set(activeClients.map(c => c.am).filter(id => id && !knownIds.has(id)))];
   const orphanRows = orphanIds.map(id => ({ id, fname:'Unknown', lname:'', title:`ID: ${id}`, _orphan:true }));
   const amRows = amTeam.concat(orphanRows)
-    .map(a => ({ ...a, _count: (DB.clients||[]).filter(c => c.am === a.id).length }))
+    .map(a => ({ ...a, _count: activeClients.filter(c => c.am === a.id).length }))
     .filter(a => a._count > 0 || a._source === 'server') // show all server users + anyone with clients
     .sort((a,b) => b._count - a._count);
   document.getElementById('rpt-by-am').innerHTML = amRows.map(a => {
@@ -11339,7 +11359,7 @@ function renderReports(){
   // By Service
   const svcs=['Bookkeeping','Payroll','Advisory'];
   document.getElementById('rpt-by-svc').innerHTML=svcs.map(s=>{
-    const cnt=DB.clients.filter(c=>(c.services||[]).includes(s)).length;
+    const cnt=activeClients.filter(c=>(c.services||[]).includes(s)).length;
     return`<div class="prog-row">
       <div class="prog-top"><span class="prog-name">${s}</span><span class="prog-count">${cnt}</span></div>
       <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(cnt/total*100)}%;background:var(--gold)"></div></div>
@@ -11349,7 +11369,7 @@ function renderReports(){
   // By Entity
   const entities=['LLC','S-Corp','C-Corp','Partnership','Non-Profit','Sole Proprietor'];
   document.getElementById('rpt-by-entity').innerHTML=entities.map(e=>{
-    const cnt=DB.clients.filter(c=>c.entity===e).length;
+    const cnt=activeClients.filter(c=>c.entity===e).length;
     if(!cnt) return'';
     return`<div class="prog-row">
       <div class="prog-top"><span class="prog-name">${e}</span><span class="prog-count">${cnt}</span></div>
@@ -11360,7 +11380,7 @@ function renderReports(){
   // By Status
   const statuses=['Active','Lead','Prospect','Inactive'];
   document.getElementById('rpt-by-status').innerHTML=statuses.map(s=>{
-    const cnt=DB.clients.filter(c=>c.status===s).length;
+    const cnt=activeClients.filter(c=>c.status===s).length;
     const colors={Active:'var(--green)',Lead:'#4da6ff',Prospect:'var(--amber)',Inactive:'var(--text-d)'};
     return`<div class="prog-row">
       <div class="prog-top"><span class="prog-name">${s}</span><span class="prog-count" style="color:${colors[s]}">${cnt}</span></div>
@@ -11474,12 +11494,13 @@ function rptSwitchTab(tab){
 
 function renderRptSummary(q){
   const f = (q||'').toLowerCase().trim();
+  const visible = (DB.clients||[]).filter(c => !c._deleted);
   const list = f
-    ? DB.clients.filter(c=>[c.biz,c.entity,c.state,getAMName(c.am),(c.services||[]).join(' ')].join(' ').toLowerCase().includes(f))
-    : DB.clients;
+    ? visible.filter(c=>[c.biz,c.entity,c.state,getAMName(c.am),(c.services||[]).join(' ')].join(' ').toLowerCase().includes(f))
+    : visible;
   const countEl = document.getElementById('rpt-summary-count');
   if(countEl) countEl.textContent = f
-    ? `${list.length} of ${DB.clients.length} clients`
+    ? `${list.length} of ${visible.length} clients`
     : `${list.length} client${list.length!==1?'s':''}`;
   document.getElementById('rpt-summary').innerHTML = list.map(c=>`
     <tr>
@@ -14636,9 +14657,15 @@ function saveClient(){
   obj._updatedBy = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
   if(DB._editClient){
     const i=DB.clients.findIndex(x=>x.id===DB._editClient);
-    // Preserve fields set by external tools (Entity Sync, etc.)
-    if(DB.clients[i]?.qboCustomerId) obj.qboCustomerId = DB.clients[i].qboCustomerId;
-    DB.clients[i]=obj;
+    // Merge new form fields on top of the existing client so any fields
+    // NOT set by the modal form (onboarding progress, QBO sync IDs,
+    // server-set flags, etc.) are preserved. Without this merge, fields
+    // like c.onboarding get wiped every time the user clicks Save.
+    if(i >= 0){
+      DB.clients[i] = { ...DB.clients[i], ...obj };
+    } else {
+      DB.clients.push(obj);
+    }
     logAct(`Client updated: ${biz}`,obj.id);
   } else {
     DB.clients.push(obj);
@@ -14676,9 +14703,17 @@ function saveClient(){
 function deleteClient(id){
   const c=DB.clients.find(x=>x.id===id);if(!c)return;
   if(!confirm(`Delete "${c.biz}"? This cannot be undone.`))return;
-  DB.clients=DB.clients.filter(x=>x.id!==id);
+  // Soft-delete: mark the record with _deleted and keep it in the array
+  // so saveDB()'s payload ships the deletion to the server. The server's
+  // _mergeArrayById merges by id keyed to _updatedAt — if we removed the
+  // record from the local array entirely, the server would preserve its
+  // own copy and the client would come back on next sync.
+  c._deleted  = true;
+  c._updatedAt = new Date().toISOString();
+  // Drop the notes mapping locally — it's a plain object, fully replaced by saveDB
   delete DB.notes[id];
   logAct(`Client deleted: ${c.biz}`);
+  saveDB();
   renderClients();
   if (typeof renderSalesTax === 'function') { try { renderSalesTax(); } catch(_){} }
   if (typeof stfRenderList   === 'function') { try { stfRenderList();   } catch(_){} }
