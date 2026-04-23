@@ -8,25 +8,30 @@ How to add (or remove) teammates to the two platforms this project runs on.
 
 Needed so a teammate can clone, pull, push, or review code.
 
+The repo is owned by the **`ArkDevGen`** personal GitHub account. Because it's a personal account (not an Organization), role options are simpler than most docs describe: there's only **Owner** (ArkDevGen itself) and **Collaborator** (everyone else you invite). Collaborators can push code and review PRs, but cannot change repo settings or invite other collaborators — that has to be done signed in as ArkDevGen.
+
 ### Add someone
 
-1. Go to https://github.com/ArkDevGen/ark-qbo-server/settings/access
-2. Click **"Add people"** (green button, top right)
-3. Enter their GitHub username or email → send invite
-4. Choose a role:
-   - **Read** — view and clone only (good for auditors / observers)
-   - **Write** — can push commits, open PRs _(standard for team devs)_
-   - **Admin** — full control; can manage settings and collaborators
-     _(Jacob-only — don't grant casually)_
-5. They'll receive an email with an accept link. Access is live the moment they accept.
+1. Sign in as `ArkDevGen` (only the owner account can invite collaborators)
+2. Go to https://github.com/ArkDevGen/ark-qbo-server/settings/access
+3. Click **"Add people"** (green button, top right)
+4. Type their **GitHub username** → select from the dropdown
+5. Click **"Add [username] to this repository"**
+6. They receive an invite email — they click the accept link, then access is live
 
 ### Remove someone
 
-Same page — find them in the collaborator list → click the trash icon next to their name. Immediate.
+Same page → find them in the collaborator list → click the trash icon next to their row. Immediate.
 
-### Prereq
+### Prereqs for the teammate
 
-They need a GitHub account (free, 60 seconds to sign up at github.com). Ask them to send their username once they've signed up.
+- They need a personal GitHub account (free, 60 seconds to sign up at [github.com/signup](https://github.com/signup))
+- Each teammate should have **their own** personal account, **not** share the `ArkDevGen` login — that way commits are properly attributed to the real person
+- Ask them to send you their username once they've signed up
+
+### If we ever need true multi-admin control
+
+Right now only the `ArkDevGen` account can change settings or invite people. If managing that single shared login becomes a pain, we can convert to a GitHub **Organization** — takes ~15 minutes, transfers the repo, and unlocks the full Read/Write/Admin/Maintain role ladder so multiple people can be Admin without sharing any login. Not needed today.
 
 ---
 
@@ -64,11 +69,13 @@ Current plan: **Pro ($25/mo, flat)**. **Unlimited seats, no per-user fee.** Add 
 ## Quick reference — who has what today
 
 > _Update this section when access changes._
+> _Last reviewed: April 23, 2026_
 
-| Person | GitHub | Render | Last updated |
+| Person | GitHub | Render | Notes |
 |---|---|---|---|
-| Jacob Malousek | Admin | Admin | — |
-| Mackenzie Hallstrom | — | — | — |
+| Jacob Malousek | Owner of `ArkDevGen` | Admin | Not yet on a personal GitHub account — still operating via shared ArkDevGen login for now |
+| Mackenzie Hallstrom | [`mackenziehallstrom`](https://github.com/mackenziehallstrom) · Collaborator | _(see Render Members)_ | Admin inside the ARK Dashboard app |
+| Shira (last name) | `shira-ark` · Collaborator | _(see Render Members)_ | — |
 
 ---
 
