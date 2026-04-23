@@ -174,7 +174,7 @@
       <!-- Tab bar -->
       <div style="display:flex;border-bottom:2px solid var(--border);margin:-0px -0px 0 -0px;">
         <div id="tab-upload" onclick="switchMainTab('upload')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--gold);margin-bottom:-2px;color:var(--gold);transition:all .15s;">📤 Upload</div>
-        <div id="tab-submissions" onclick="switchMainTab('submissions')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:all .15s;">📥 Submissions</div>
+        <div id="tab-submissions" onclick="switchMainTab('submissions')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:all .15s;display:inline-flex;align-items:center;gap:8px;">📥 Submissions <span id="submissions-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;min-width:18px;text-align:center;">0</span></div>
       </div>
 
       <!-- Upload tab -->
@@ -383,6 +383,11 @@ async function doLogin() {
     document.getElementById('screen-login').classList.add('hidden');
     document.getElementById('screen-main').classList.remove('hidden');
     renderClientList();
+    // Populate the pending badge on the Submissions tab immediately after login
+    refreshSubmissionsBadge();
+    // Poll every 60 seconds while the tab is visible so the badge reflects
+    // new client-side submissions without requiring a manual refresh
+    startSubmissionsBadgePolling();
   } catch (e) {
     statusEl.className = 'status error';
     statusEl.textContent = e.message;
@@ -1040,6 +1045,47 @@ function populateImportClientSelect() {
 // ─── Submissions & Export ─────────────────────────────────────────
 let _submissions = [];
 
+// Update the red count pill next to the "📥 Submissions" tab header.
+// Pulls the count from _submissions (populated by loadSubmissions).
+function updateSubmissionsBadge(){
+  const badge = document.getElementById('submissions-badge');
+  if(!badge) return;
+  const pending = _submissions.filter(s => s.status === 'pending').length;
+  if(pending > 0){
+    badge.textContent = pending;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Fetch just enough to update the badge, without re-rendering the
+// submissions list. Used on login and after a push to client.
+async function refreshSubmissionsBadge(){
+  try {
+    const resp = await fetch(`${API}/payroll/submissions`);
+    const data = await resp.json();
+    _submissions = (data.submissions || []).filter(s => s.status !== 'deleted');
+    updateSubmissionsBadge();
+  } catch(_){}
+}
+
+// Poll for new submissions every 60 seconds while the tab is visible.
+// Pauses automatically when the page is hidden to avoid wasted requests.
+let _submissionsPollTimer = null;
+function startSubmissionsBadgePolling(){
+  if(_submissionsPollTimer) return; // already polling
+  _submissionsPollTimer = setInterval(() => {
+    if(document.visibilityState === 'visible'){
+      refreshSubmissionsBadge();
+    }
+  }, 60000);
+  // Also refresh immediately when the tab becomes visible after being hidden
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible') refreshSubmissionsBadge();
+  });
+}
+
 function toggleProcessed() {
   const body = document.getElementById('processed-body');
   const arrow = document.getElementById('processed-arrow');
@@ -1088,6 +1134,9 @@ async function loadSubmissions() {
     const resp = await fetch(`${API}/payroll/submissions`);
     const data = await resp.json();
     _submissions = (data.submissions || []).filter(s => s.status !== 'deleted');
+
+    // Update the pending badge on the Submissions tab header
+    updateSubmissionsBadge();
 
     if (!_submissions.length) {
       body.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">No submissions yet</div>';
@@ -1240,6 +1289,7 @@ async function tryAutoAuth() {
     renderClientList();
     populateImportClientSelect();
     loadSubmissions();
+    startSubmissionsBadgePolling();
     return true;
   } catch(e) { _token = ''; return false; }
 }
