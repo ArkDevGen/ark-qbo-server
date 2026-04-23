@@ -5932,7 +5932,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ PAYROLL CENTER ════ -->
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:0;">
-    <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:#0d1b2a;"></iframe>
+    <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:var(--bg);"></iframe>
   </div>
 
   <!-- OLD PAYROLL CENTER (removed — replaced with embedded payroll-admin above) -->
@@ -10597,15 +10597,15 @@ async function loadPayrollAdminIframe(){
       loader = document.createElement('div');
       loader.id = 'payroll-admin-loader';
       Object.assign(loader.style, {
-        width:'100%', height:'calc(100vh - 60px)', background:'#0d1b2a',
+        width:'100%', height:'calc(100vh - 60px)', background:'var(--bg)',
         display:'flex', alignItems:'center', justifyContent:'center',
-        flexDirection:'column', gap:'14px', color:'rgba(255,255,255,.7)',
+        flexDirection:'column', gap:'14px', color:'var(--text-m)',
         fontFamily:"'DM Sans',sans-serif",
       });
       loader.innerHTML = `
-        <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
-        <div style="font-size:14px;font-weight:600;color:#fff;">Loading Payroll Center</div>
-        <div id="payroll-admin-status" style="font-size:12px;color:rgba(255,255,255,.5);">Connecting to server…</div>
+        <div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+        <div style="font-size:14px;font-weight:600;color:var(--navy);">Loading Payroll Center</div>
+        <div id="payroll-admin-status" style="font-size:12px;color:var(--text-d);">Connecting to server…</div>
       `;
       iframe.parentNode.insertBefore(loader, iframe);
     }
