@@ -1046,13 +1046,38 @@ function populateImportClientSelect() {
 let _submissions = [];
 
 // Update the red count pill next to the "📥 Submissions" tab header.
-// Pulls the count from _submissions (populated by loadSubmissions).
+// Counts the number of CLIENTS whose most-recent submission batch has
+// any items still marked 'pending' — mirrors the same grouping that
+// loadSubmissions() uses to decide what shows up in the pending list.
+// This way the badge and the list always agree, and old stale 'pending'
+// rows from previous pay cycles don't inflate the count.
 function updateSubmissionsBadge(){
   const badge = document.getElementById('submissions-badge');
   if(!badge) return;
-  const pending = _submissions.filter(s => s.status === 'pending').length;
-  if(pending > 0){
-    badge.textContent = pending;
+
+  // Group submissions by client
+  const byClient = {};
+  (_submissions || []).forEach(s => {
+    const key = s.clientSlug || s.clientName;
+    if(!key) return;
+    if(!byClient[key]) byClient[key] = [];
+    byClient[key].push(s);
+  });
+
+  // For each client, check if the LATEST BATCH has any pending items
+  let pendingClients = 0;
+  for(const subs of Object.values(byClient)){
+    if(!subs.length) continue;
+    subs.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    const latestTime = new Date(subs[0].submittedAt).getTime();
+    const latestBatch = subs.filter(s =>
+      Math.abs(new Date(s.submittedAt).getTime() - latestTime) < 60000
+    );
+    if(latestBatch.some(s => s.status === 'pending')) pendingClients++;
+  }
+
+  if(pendingClients > 0){
+    badge.textContent = pendingClients;
     badge.style.display = 'inline-flex';
   } else {
     badge.style.display = 'none';
