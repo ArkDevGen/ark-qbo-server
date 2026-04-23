@@ -1125,6 +1125,87 @@ app.post('/qbo/api', async (req, res) => {
       res.status(500).json({ error: e.message });
     }
 
+  // ── Action: Find Journal Entry by DocNumber ──────────────────
+  // Used for pre-push duplicate detection. Returns existing JEs
+  // (if any) so callers can decide whether to proceed.
+  } else if (action === 'findJournalEntryByDocNumber') {
+    const docNumber = String(payload?.docNumber || '').trim();
+    if (!docNumber) return res.status(400).json({ error: 'docNumber required' });
+    try {
+      // Refresh token if needed
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      }
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+      // QBO query API — single-quote the DocNumber; escape any single quotes in value
+      const q = `SELECT * FROM JournalEntry WHERE DocNumber = '${docNumber.replace(/'/g, "\\'")}'`;
+      const url = `${baseUrl}/v3/company/${targetRealm}/query?query=${encodeURIComponent(q)}&minorversion=65`;
+      const qResp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+      });
+      const qBody = await qResp.json();
+      if (!qResp.ok) {
+        const msg = qBody?.Fault?.Error?.[0]?.Detail || qBody?.Fault?.Error?.[0]?.Message || `QBO query error ${qResp.status}`;
+        return res.status(qResp.status).json({ error: msg, detail: qBody?.Fault || null });
+      }
+      const found = qBody?.QueryResponse?.JournalEntry || [];
+      const summary = found.map(je => ({
+        id: je.Id,
+        docNumber: je.DocNumber,
+        txnDate: je.TxnDate,
+        privateNote: je.PrivateNote,
+        totalAmount: je.TotalAmt,
+        lineCount: (je.Line || []).length,
+        metaData: je.MetaData,
+      }));
+      return res.json({ success: true, found: summary });
+    } catch (e) {
+      console.error('findJournalEntryByDocNumber exception:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+
+  // ── Action: Get Journal Entry by ID ──────────────────────────
+  // Used for post-push verification — fetch the JE back after creating
+  // and diff it against what we intended to send.
+  } else if (action === 'getJournalEntry') {
+    const jeId = String(payload?.id || '').trim();
+    if (!jeId) return res.status(400).json({ error: 'id required' });
+    try {
+      let tokens = getTokenData(targetRealm);
+      oauthClient.setToken(tokens);
+      const tokenAge = tokens.expires_at ? Date.now() - (tokens.expires_at - 3600000) : Infinity;
+      if (tokenAge > 3000000 || !tokens.expires_at) {
+        const rr = await oauthClient.refresh();
+        tokens = rr.getJson();
+        setTokenData(targetRealm, tokens);
+      }
+      const baseUrl = process.env.QBO_ENVIRONMENT === 'sandbox'
+        ? 'https://sandbox-quickbooks.api.intuit.com'
+        : 'https://quickbooks.api.intuit.com';
+      const url = `${baseUrl}/v3/company/${targetRealm}/journalentry/${encodeURIComponent(jeId)}?minorversion=65`;
+      const gResp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${tokens.access_token}`, 'Accept': 'application/json' },
+      });
+      const gBody = await gResp.json();
+      if (!gResp.ok) {
+        const msg = gBody?.Fault?.Error?.[0]?.Detail || gBody?.Fault?.Error?.[0]?.Message || `QBO fetch error ${gResp.status}`;
+        return res.status(gResp.status).json({ error: msg, detail: gBody?.Fault || null });
+      }
+      return res.json({ success: true, journalEntry: gBody.JournalEntry || gBody });
+    } catch (e) {
+      console.error('getJournalEntry exception:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+
   // ── Action: Create Expense (Purchase) ────────────────────────
   } else if (action === 'createExpense') {
     qbo.createPurchase(payload, (err, data) => {

@@ -47846,6 +47846,10 @@ async function htHandleFiles(fileList){
 
   for(const file of files){
     try {
+      // Compute SHA256 of the file so the audit log can prove provenance
+      let sha256 = '';
+      try { sha256 = await htSha256OfFile(file); } catch(_){}
+
       const fd = new FormData();
       fd.append('file', file);
       const resp = await authFetch(ARK_SERVER + '/hteao/parse-revel', { method:'POST', body: fd });
@@ -47857,12 +47861,13 @@ async function htHandleFiles(fileList){
       _htParsedJEs.push({
         id: uid(),
         storeCode: data.storeCode,
-        store,                           // may be undefined if not configured
+        store,                            // may be undefined if not configured
         period: data.period,
         journal: data.journal,
         sourceFile: data.sourceFile,
-        file,                            // keep the File object so we can attach it to QBO
-        pushStatus: 'pending',           // pending | pushing | success | error
+        sourceFileHash: sha256,           // SHA-256 for audit log provenance
+        file,                             // keep the File object in case we attach it later
+        pushStatus: 'pending',            // pending | pushing | verifying | success | warn-verify | error
         pushError: '',
         qboJeId: '',
       });
@@ -47878,6 +47883,13 @@ async function htHandleFiles(fileList){
 
   statusEl.textContent = '';
   htShowReview();
+}
+
+// Compute SHA256 hash of a File (browser SubtleCrypto). Returns hex string.
+async function htSha256OfFile(file){
+  const buf = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 // ── Step navigation ──────────────────────────────────────────────
@@ -48012,14 +48024,18 @@ function htPushRow(je){
   const statusIcon = {
     pending:       '⏳',
     pushing:       '⟳',
+    verifying:     '🔍',
     success:       '✓',
+    'warn-verify': '⚠',
     error:         '✕',
     'parse-error': '⚠',
   }[je.pushStatus] || '';
   const statusColor = {
     pending:       'var(--text-d)',
     pushing:       'var(--blue)',
+    verifying:     'var(--blue)',
     success:       'var(--green)',
+    'warn-verify': 'var(--amber)',
     error:         'var(--red)',
     'parse-error': 'var(--red)',
   }[je.pushStatus] || 'var(--text-d)';
@@ -48031,21 +48047,44 @@ function htPushRow(je){
     : !je.store
     ? 'Store not configured — open Store Setup to map this Revel code.'
     : je.pushStatus === 'success'
-    ? `Posted to QBO (JE ${je.qboJeId})`
+    ? `✓ Verified in QBO (JE ${je.qboJeId})`
+    : je.pushStatus === 'warn-verify'
+    ? je.pushError
     : je.pushStatus === 'error'
     ? je.pushError
+    : je.pushStatus === 'pushing' || je.pushStatus === 'verifying'
+    ? (je.pushError || 'Working…')
     : `${refNo} · ${je.journal?.date||''}`;
+  const actionBtn = blocked
+    ? ''
+    : je.pushStatus === 'success'
+    ? ''
+    : je.pushStatus === 'warn-verify'
+    ? `<button class="btn btn-ghost btn-sm" onclick="htPushOne('${je.id}')">Retry</button>`
+    : (je.pushStatus === 'pushing' || je.pushStatus === 'verifying')
+    ? ''
+    : `<button class="btn btn-ghost btn-sm" onclick="htPushOne('${je.id}')">${je.pushStatus==='error'?'Retry':'Push'}</button>`;
   return `<div class="card" style="margin-bottom:8px;padding:14px 18px;display:flex;align-items:center;gap:14px;">
     <div style="font-size:22px;color:${statusColor};width:28px;text-align:center;">${statusIcon}</div>
-    <div style="flex:1;">
+    <div style="flex:1;min-width:0;">
       <div style="font-weight:700;color:var(--text);">${title}</div>
-      <div style="font-size:var(--text-sm);color:var(--text-d);">${detail}</div>
+      <div style="font-size:var(--text-sm);color:var(--text-d);line-height:1.4;">${detail}</div>
     </div>
-    ${!blocked && je.pushStatus !== 'success' ? `<button class="btn btn-ghost btn-sm" onclick="htPushOne('${je.id}')">${je.pushStatus==='pending'?'Push':'Retry'}</button>` : ''}
+    ${actionBtn}
   </div>`;
 }
 
-// ── QBO push ─────────────────────────────────────────────────────
+// ── QBO push — with V1 verification layer ───────────────────────
+// V1 = (1) pre-push duplicate check → (2) create JE → (3) post-push
+// fetch-back verification → (4) audit record in DB.hteaoPushLog.
+//
+// States on je.pushStatus:
+//   pending         — not yet attempted
+//   pushing         — creating JE in QBO
+//   verifying       — fetching back from QBO to verify
+//   success         — created AND verified line-for-line
+//   warn-verify     — created but verification surfaced differences
+//   error           — create failed (no JE in QBO) or duplicate blocked
 async function htPushAll(){
   const ready = _htParsedJEs.filter(je => je.store && !je.parseError && je.pushStatus !== 'success');
   for(const je of ready){
@@ -48053,73 +48092,254 @@ async function htPushAll(){
   }
 }
 
-async function htPushOne(jeId){
+async function htPushOne(jeId, { overrideDuplicate = false } = {}){
   const je = _htParsedJEs.find(x => x.id === jeId);
   if(!je) return;
   if(!je.store){ showToast('Store not configured'); return; }
 
+  // Validate all account IDs present BEFORE we start
+  for(const l of je.journal.lines){
+    if(!je.store.accounts?.[l.accountKey]){
+      je.pushStatus = 'error';
+      je.pushError = `Missing QBO account ID for "${htAccountLabel(l.accountKey)}"`;
+      htRenderPush();
+      return;
+    }
+  }
+
+  // ── Step 1: Pre-push duplicate check ─────────────────────────
+  if(!overrideDuplicate){
+    je.pushStatus = 'pushing';
+    je.pushError = 'Checking for duplicate…';
+    htRenderPush();
+    try {
+      const dupResp = await authFetch(ARK_SERVER + '/qbo/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'findJournalEntryByDocNumber',
+          realmId: je.store.realmId,
+          payload: { docNumber: je.journal.refNo },
+        }),
+      });
+      const dupData = await dupResp.json();
+      if(dupResp.ok && dupData.success && dupData.found && dupData.found.length){
+        // Duplicate detected — block and prompt user
+        const choice = await htConfirmDuplicate(je, dupData.found);
+        if(choice === 'cancel'){
+          je.pushStatus = 'pending';
+          je.pushError = '';
+          htRenderPush();
+          return;
+        }
+        // User confirmed — proceed as override
+      }
+    } catch(e){
+      // If the duplicate check itself fails, don't block — just log and continue.
+      // Better to occasionally double-push than to block on network flakes.
+      console.warn('HTeaO duplicate check failed (continuing):', e.message);
+    }
+  }
+
+  // ── Step 2: Build QBO payload and POST ───────────────────────
   je.pushStatus = 'pushing';
+  je.pushError = 'Creating journal entry…';
   htRenderPush();
 
-  try {
-    // Build QBO JournalEntry payload
-    const linesQBO = je.journal.lines.map(l => {
-      const acctId = je.store.accounts?.[l.accountKey];
-      if(!acctId) throw new Error(`No QBO account ID configured for "${htAccountLabel(l.accountKey)}" on ${je.store.displayName}`);
-      const amount = l.debit || l.credit || 0;
-      return {
-        DetailType: 'JournalEntryLineDetail',
-        Amount: amount,
-        Description: l.description || '',
-        JournalEntryLineDetail: {
-          PostingType: l.debit ? 'Debit' : 'Credit',
-          AccountRef: { value: acctId },
-        },
-      };
-    });
-
-    const payload = {
-      TxnDate: je.journal.date,
-      DocNumber: je.journal.refNo,
-      Line: linesQBO,
+  const linesQBO = je.journal.lines.map(l => {
+    const acctId = je.store.accounts[l.accountKey];
+    return {
+      DetailType: 'JournalEntryLineDetail',
+      Amount: l.debit || l.credit || 0,
+      Description: l.description || '',
+      JournalEntryLineDetail: {
+        PostingType: l.debit ? 'Debit' : 'Credit',
+        AccountRef: { value: acctId },
+      },
     };
+  });
+  const intendedPayload = {
+    TxnDate: je.journal.date,
+    DocNumber: je.journal.refNo,
+    PrivateNote: `Pushed from ARK CRM · HTeaO Revel tool · source: ${je.sourceFile.name}`,
+    Line: linesQBO,
+  };
 
+  try {
     const resp = await authFetch(ARK_SERVER + '/qbo/api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'createJournalEntry',
         realmId: je.store.realmId,
-        payload,
+        payload: intendedPayload,
       }),
     });
     const data = await resp.json();
     if(!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
-
-    je.pushStatus = 'success';
     je.qboJeId = data.id || '';
-    logAct(`HTeaO JE pushed: ${je.store.displayName} ${je.journal.refNo} (QBO ID ${je.qboJeId})`);
-
-    // Log push
-    if(!DB.hteaoPushLog) DB.hteaoPushLog = [];
-    DB.hteaoPushLog.unshift({
-      id: uid(),
-      pushedAt: new Date().toISOString(),
-      pushedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
-      storeCode: je.storeCode,
-      storeName: je.store.displayName,
-      realmId: je.store.realmId,
-      refNo: je.journal.refNo,
-      date: je.journal.date,
-      totals: je.journal.totals,
-      qboJeId: je.qboJeId,
-    });
-    saveDB();
   } catch(e){
     je.pushStatus = 'error';
     je.pushError = e.message;
+    htRecordPushAttempt(je, intendedPayload, null, { verified: false, errors: [e.message], status: 'create-failed' });
+    htRenderPush();
+    return;
   }
+
+  // ── Step 3: Post-push verification ───────────────────────────
+  je.pushStatus = 'verifying';
+  je.pushError = 'Verifying against QBO…';
   htRenderPush();
+
+  let fetched = null;
+  try {
+    const vResp = await authFetch(ARK_SERVER + '/qbo/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'getJournalEntry',
+        realmId: je.store.realmId,
+        payload: { id: je.qboJeId },
+      }),
+    });
+    const vData = await vResp.json();
+    if(!vResp.ok || !vData.success) throw new Error(vData.error || `Verify HTTP ${vResp.status}`);
+    fetched = vData.journalEntry;
+  } catch(e){
+    je.pushStatus = 'warn-verify';
+    je.pushError = `Posted to QBO (JE ${je.qboJeId}) but verification call failed: ${e.message}`;
+    htRecordPushAttempt(je, intendedPayload, null, { verified: false, errors: [e.message], status: 'verify-fetch-failed' });
+    htRenderPush();
+    return;
+  }
+
+  // Diff the fetched JE against what we intended to send
+  const verifyResult = htDiffJE(intendedPayload, fetched);
+  if(verifyResult.match){
+    je.pushStatus = 'success';
+    je.pushError = '';
+  } else {
+    je.pushStatus = 'warn-verify';
+    je.pushError = 'Verification mismatch — ' + verifyResult.errors.slice(0, 2).join('; ') + (verifyResult.errors.length > 2 ? '…' : '');
+  }
+
+  logAct(`HTeaO JE pushed: ${je.store.displayName} ${je.journal.refNo} (QBO ID ${je.qboJeId}) · ${verifyResult.match?'verified':'verification-warning'}`);
+  htRecordPushAttempt(je, intendedPayload, fetched, verifyResult);
+  htRenderPush();
+}
+
+// ── Verification helper: deep-diff intended JE vs fetched JE ───
+function htDiffJE(intended, fetched){
+  const errors = [];
+  if(!fetched) return { match:false, status:'missing', errors:['No JE returned from QBO'] };
+  if(String(fetched.TxnDate||'') !== String(intended.TxnDate||''))  errors.push(`TxnDate: sent ${intended.TxnDate}, got ${fetched.TxnDate}`);
+  if(String(fetched.DocNumber||'') !== String(intended.DocNumber||'')) errors.push(`DocNumber: sent ${intended.DocNumber}, got ${fetched.DocNumber}`);
+  const intLines = intended.Line || [];
+  const gotLines = fetched.Line || [];
+  if(intLines.length !== gotLines.length){
+    errors.push(`Line count: sent ${intLines.length}, got ${gotLines.length}`);
+  }
+  // Compare each intended line; QBO typically preserves order but match by position
+  const n = Math.min(intLines.length, gotLines.length);
+  for(let i = 0; i < n; i++){
+    const a = intLines[i];
+    const b = gotLines[i];
+    const aAmt = Math.round((+a.Amount||0) * 100);
+    const bAmt = Math.round((+b.Amount||0) * 100);
+    if(aAmt !== bAmt)
+      errors.push(`Line ${i+1} amount: sent $${(aAmt/100).toFixed(2)}, got $${(bAmt/100).toFixed(2)}`);
+    const aPost = a.JournalEntryLineDetail?.PostingType || '';
+    const bPost = b.JournalEntryLineDetail?.PostingType || '';
+    if(aPost !== bPost)
+      errors.push(`Line ${i+1} type: sent ${aPost}, got ${bPost}`);
+    const aAcct = a.JournalEntryLineDetail?.AccountRef?.value || '';
+    const bAcct = b.JournalEntryLineDetail?.AccountRef?.value || '';
+    if(String(aAcct) !== String(bAcct))
+      errors.push(`Line ${i+1} account: sent ${aAcct}, got ${bAcct}`);
+  }
+  return { match: errors.length === 0, status: errors.length===0?'verified':'mismatch', errors };
+}
+
+// Write an audit record to DB.hteaoPushLog with full verification detail
+function htRecordPushAttempt(je, intendedPayload, fetched, verifyResult){
+  if(!DB.hteaoPushLog) DB.hteaoPushLog = [];
+  DB.hteaoPushLog.unshift({
+    id: uid(),
+    pushedAt: new Date().toISOString(),
+    pushedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
+    storeCode: je.storeCode,
+    storeName: je.store.displayName,
+    realmId: je.store.realmId,
+    refNo: je.journal.refNo,
+    date: je.journal.date,
+    intended: {
+      totals: je.journal.totals,
+      lines: (intendedPayload.Line||[]).map(l => ({
+        amount: +l.Amount || 0,
+        posting: l.JournalEntryLineDetail?.PostingType || '',
+        account: l.JournalEntryLineDetail?.AccountRef?.value || '',
+        description: l.Description || '',
+      })),
+    },
+    qboJeId: je.qboJeId || '',
+    sourceFile: {
+      name: je.sourceFile?.name || '',
+      size: je.sourceFile?.size || 0,
+      sha256: je.sourceFileHash || '',
+    },
+    verification: {
+      status:  verifyResult.status,   // verified | mismatch | create-failed | verify-fetch-failed
+      match:   verifyResult.match,
+      errors:  verifyResult.errors || [],
+      checkedAt: new Date().toISOString(),
+    },
+  });
+  // Keep the log bounded
+  if(DB.hteaoPushLog.length > 500) DB.hteaoPushLog = DB.hteaoPushLog.slice(0, 500);
+  saveDB();
+}
+
+// Duplicate detection UI — returns 'cancel' or 'proceed'
+function htConfirmDuplicate(je, found){
+  return new Promise(resolve => {
+    const existing = found[0];
+    const existingList = found.map(f =>
+      `<li style="margin-bottom:4px;">QBO JE #${f.id} · ${f.txnDate || '?'} · Total $${(+f.totalAmount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</li>`
+    ).join('');
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.style.zIndex = '10001';
+    overlay.innerHTML = `
+      <div class="modal modal-sm" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <div class="modal-head-left">
+            <div class="modal-title">⚠ Duplicate Detected</div>
+            <div class="modal-subtitle">${je.store.displayName} already has a journal entry with this number.</div>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div style="font-size:var(--text-base);color:var(--text);margin-bottom:12px;">
+            Found <strong>${found.length}</strong> existing JE${found.length>1?'s':''} in QBO with DocNumber
+            <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;">${je.journal.refNo}</code>:
+          </div>
+          <ul style="font-size:var(--text-md);color:var(--text-m);margin:8px 0 14px 20px;">${existingList}</ul>
+          <div class="notice notice-warn">
+            Pushing will create a <strong>second</strong> JE with the same number. Usually you want to cancel and either delete the old one in QBO or skip this file.
+          </div>
+        </div>
+        <div class="modal-foot modal-foot-spread">
+          <button class="btn btn-ghost" data-choice="cancel">Cancel push</button>
+          <button class="btn btn-danger" data-choice="proceed">Post anyway</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => {
+      const b = e.target.closest('[data-choice]');
+      if(!b) return;
+      overlay.remove();
+      resolve(b.dataset.choice);
+    });
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
