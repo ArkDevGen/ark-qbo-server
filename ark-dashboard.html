@@ -2639,30 +2639,38 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- ── TIME CENTER ── -->
     <div style="padding:28px 32px 0;">
 
+      <!-- Page header -->
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="page-title">Time Center</div>
+          <div class="page-subtitle">Clock in/out, track hours, request PTO, and review your timecard</div>
+        </div>
+      </div>
+
       <!-- Pay Period Banner -->
-      <div id="tc-period-banner" style="background:var(--navy);color:#fff;border-radius:10px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div id="tc-period-banner" style="background:var(--navy);color:#fff;border-radius:var(--radius-lg);padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
-          <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Current Pay Period</div>
-          <div style="font-size:16px;font-weight:700;" id="tc-period-label">—</div>
+          <div style="font-size:var(--text-sm);opacity:.6;text-transform:uppercase;letter-spacing:.12em;margin-bottom:3px;">Current Pay Period</div>
+          <div style="font-size:var(--text-lg);font-weight:700;" id="tc-period-label">—</div>
         </div>
         <div style="display:flex;gap:24px;text-align:center;">
           <div>
-            <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.8px;">Week 1</div>
-            <div style="font-size:13px;font-weight:600;" id="tc-week1-label">—</div>
+            <div style="font-size:var(--text-sm);opacity:.6;text-transform:uppercase;letter-spacing:.08em;">Week 1</div>
+            <div style="font-size:var(--text-base);font-weight:600;" id="tc-week1-label">—</div>
           </div>
           <div>
-            <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.8px;">Week 2</div>
-            <div style="font-size:13px;font-weight:600;" id="tc-week2-label">—</div>
+            <div style="font-size:var(--text-sm);opacity:.6;text-transform:uppercase;letter-spacing:.08em;">Week 2</div>
+            <div style="font-size:var(--text-base);font-weight:600;" id="tc-week2-label">—</div>
           </div>
           <div>
-            <div style="font-size:11px;opacity:.6;text-transform:uppercase;letter-spacing:.8px;">Payday</div>
-            <div style="font-size:13px;font-weight:600;" id="tc-payday-label">—</div>
+            <div style="font-size:var(--text-sm);opacity:.6;text-transform:uppercase;letter-spacing:.08em;">Payday</div>
+            <div style="font-size:var(--text-base);font-weight:600;" id="tc-payday-label">—</div>
           </div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button onclick="tcPrevPeriod()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;">← Prev</button>
-          <button onclick="tcThisPeriod()" style="background:var(--gold);border:none;color:var(--navy);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;">Today</button>
-          <button onclick="tcNextPeriod()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;">Next →</button>
+          <button onclick="tcPrevPeriod()" class="btn btn-sm" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#fff;">← Prev</button>
+          <button onclick="tcThisPeriod()" class="btn btn-gold btn-sm">Today</button>
+          <button onclick="tcNextPeriod()" class="btn btn-sm" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#fff;">Next →</button>
         </div>
       </div>
 
@@ -2677,7 +2685,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <!-- Employee select (admin) / Employee name (non-admin) -->
             <div id="tc-emp-admin-wrap">
               <label class="field-label">Employee</label>
-              <select id="tc-emp-select" style="width:100%;height:40px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);" onchange="tcLoadEmployee()">
+              <select id="tc-emp-select" class="field-input" onchange="tcLoadEmployee()">
                 <option value="">— Select employee —</option>
               </select>
             </div>
@@ -2692,15 +2700,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
 
             <!-- Mode tabs -->
-            <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:2px;">
-              <button id="tc-mode-quick" onclick="tcSetMode('quick')"
-                style="flex:1;padding:8px;background:none;border:none;border-bottom:2px solid var(--navy);margin-bottom:-2px;cursor:pointer;font-size:12px;font-weight:700;color:var(--navy);font-family:'DM Sans',sans-serif;">
-                Quick Punch
-              </button>
-              <button id="tc-mode-manual" onclick="tcSetMode('manual')"
-                style="flex:1;padding:8px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-d);font-family:'DM Sans',sans-serif;">
-                Manual Entry
-              </button>
+            <div class="seg-tabs" style="margin-bottom:2px;">
+              <button id="tc-mode-quick" class="seg-tab is-active" onclick="tcSetMode('quick')">Quick Punch</button>
+              <button id="tc-mode-manual" class="seg-tab" onclick="tcSetMode('manual')">Manual Entry</button>
             </div>
 
             <!-- QUICK PUNCH mode -->
@@ -2717,13 +2719,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <button id="tc-btn-in" onclick="tcPunch('in')"
-                  style="padding:12px;background:#eaf4ef;border:2px solid #b5deca;color:#2e7d5e;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;transition:all .15s;"
-                  onmouseover="this.style.background='#d0ead8'" onmouseout="this.style.background='#eaf4ef'">
+                  style="padding:12px;background:var(--green-bg);border:2px solid rgba(46,125,94,.3);color:var(--green);border-radius:var(--radius-md);cursor:pointer;font-size:var(--text-lg);font-weight:700;font-family:'DM Sans',sans-serif;transition:var(--transition-fast);">
                   ▶ Clock In
                 </button>
                 <button id="tc-btn-out" onclick="tcPunch('out')"
-                  style="padding:12px;background:#fdf0f0;border:2px solid #f5c6c6;color:#c0392b;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;transition:all .15s;"
-                  onmouseover="this.style.background='#f5d5d5'" onmouseout="this.style.background='#fdf0f0'">
+                  style="padding:12px;background:var(--red-bg);border:2px solid rgba(176,58,58,.3);color:var(--red);border-radius:var(--radius-md);cursor:pointer;font-size:var(--text-lg);font-weight:700;font-family:'DM Sans',sans-serif;transition:var(--transition-fast);">
                   ■ Clock Out
                 </button>
               </div>
@@ -3462,13 +3462,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-filecenter" style="padding:28px 32px;">
 
     <!-- Header row -->
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-      <div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.01em;">File Center</h2>
-        <div style="font-size:13px;color:var(--text-d);margin-top:4px;">Manage documents across all clients — upload, organize, and share files securely</div>
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-title">File Center</div>
+        <div class="page-subtitle">Manage documents across all clients — upload, organize, and share files securely</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span id="fc-storage-badge" style="font-size:11px;color:var(--text-d);padding:4px 10px;background:var(--bg-input);border-radius:var(--radius-sm);"></span>
+      <div class="page-header-actions">
+        <span id="fc-storage-badge" style="font-size:var(--text-sm);color:var(--text-d);padding:4px 10px;background:var(--surface2);border-radius:var(--radius-sm);"></span>
       </div>
     </div>
 
@@ -3480,22 +3480,14 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <span style="cursor:pointer;color:var(--accent);font-weight:600;" onclick="fcNavigate('')">📁 All Files</span>
         </div>
         <!-- Search -->
-        <div style="position:relative;">
-          <input id="fc-search" placeholder="Search files..." oninput="fcFilterFiles()"
-            style="padding:7px 12px 7px 32px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text);width:220px;font-family:'DM Sans',sans-serif;">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.5;">🔍</span>
-        </div>
+        <div class="search-wrap"><input id="fc-search" placeholder="Search files…" oninput="fcFilterFiles()"></div>
         <!-- Actions -->
-        <button id="fc-btn-upload" onclick="fcUploadPrompt()" class="btn btn-sm btn-primary" style="font-size:12px;padding:7px 14px;">
-          ⬆ Upload
-        </button>
-        <button id="fc-btn-newfolder" onclick="fcNewFolder()" class="btn btn-sm" style="font-size:12px;padding:7px 14px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);">
-          + New Folder
-        </button>
+        <button id="fc-btn-upload" onclick="fcUploadPrompt()" class="btn btn-primary btn-sm">⬆ Upload</button>
+        <button id="fc-btn-newfolder" onclick="fcNewFolder()" class="btn btn-ghost btn-sm">+ New Folder</button>
         <!-- View toggle -->
-        <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
-          <button onclick="fcSetView('list')" id="fc-view-list" style="padding:5px 10px;background:var(--navy);color:#fff;border:none;font-size:12px;cursor:pointer;" title="List view">☰</button>
-          <button onclick="fcSetView('grid')" id="fc-view-grid" style="padding:5px 10px;background:var(--bg-input);color:var(--text);border:none;font-size:12px;cursor:pointer;border-left:1px solid var(--border);" title="Grid view">⊞</button>
+        <div class="seg-tabs" style="min-width:0;">
+          <button onclick="fcSetView('list')" id="fc-view-list" class="seg-tab is-active" title="List view" style="padding:6px 12px;">☰</button>
+          <button onclick="fcSetView('grid')" id="fc-view-grid" class="seg-tab" title="Grid view" style="padding:6px 12px;">⊞</button>
         </div>
       </div>
     </div>
@@ -4303,16 +4295,18 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-qbo" style="padding:28px 32px;">
 
     <!-- Page header -->
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <div style="width:28px;height:28px;background:#2ca01c;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</div>
-          <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.01em;">QBO Integration Center</h2>
+    <div class="page-header" style="padding-bottom:18px;border-bottom:1px solid var(--border);">
+      <div class="page-header-left">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:28px;height:28px;background:var(--qbo-green);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--text-sm);color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</div>
+          <div class="page-title">QBO Integration Center</div>
         </div>
-        <div style="font-size:13px;color:var(--text-d);">Push journal entries and expenses to QuickBooks Online · Multi-company OAuth 2.0</div>
+        <div class="page-subtitle">Push journal entries and expenses to QuickBooks Online · Multi-company OAuth 2.0</div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="qboRefreshAllTokens()" id="qbo-refresh-all-btn">🔄 Refresh Tokens</button>
-      <button class="btn btn-ghost btn-sm" onclick="qboOpenFirmSettings()">⚙ API Settings</button>
+      <div class="page-header-actions">
+        <button class="btn btn-ghost btn-sm" onclick="qboRefreshAllTokens()" id="qbo-refresh-all-btn">🔄 Refresh Tokens</button>
+        <button class="btn btn-ghost btn-sm" onclick="qboOpenFirmSettings()">⚙ API Settings</button>
+      </div>
     </div>
 
     <!-- QBO Center Tabs -->
@@ -4336,7 +4330,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;" id="qbo-conn-actions">
-        <button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:#2ca01c;border-color:#2ca01c;display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:var(--qbo-green);border-color:var(--qbo-green);display:flex;align-items:center;gap:8px;">
           <span style="width:16px;height:16px;background:rgba(255,255,255,.2);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">QB</span>
           Connect to QuickBooks
         </button>
@@ -4463,7 +4457,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
                 <button onclick="qboClearGJE()" class="btn btn-ghost btn-sm">Clear</button>
                 <button onclick="qboPreviewGJE()" class="btn btn-ghost btn-sm">Preview JSON</button>
-                <button id="qbo-gje-push-btn" onclick="qboPushGJE()" class="btn btn-primary btn-sm" style="background:#2ca01c;border-color:#2ca01c;" disabled>
+                <button id="qbo-gje-push-btn" onclick="qboPushGJE()" class="btn btn-primary btn-sm" style="background:var(--qbo-green);border-color:var(--qbo-green);" disabled>
                   <span style="width:14px;height:14px;background:rgba(255,255,255,.2);border-radius:2px;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;">QB</span>
                   Push to QBO
                 </button>
@@ -4523,7 +4517,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </div>
               <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
                 <button onclick="qboClearExpense()" class="btn btn-ghost btn-sm">Clear</button>
-                <button id="qbo-exp-push-btn" onclick="qboPushExpense()" class="btn btn-primary btn-sm" style="background:#2ca01c;border-color:#2ca01c;" disabled>
+                <button id="qbo-exp-push-btn" onclick="qboPushExpense()" class="btn btn-primary btn-sm" style="background:var(--qbo-green);border-color:var(--qbo-green);" disabled>
                   <span style="width:14px;height:14px;background:rgba(255,255,255,.2);border-radius:2px;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;">QB</span>
                   Push to QBO
                 </button>
@@ -5129,7 +5123,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-ghost btn-sm" onclick="sjeBackToUpload()">← Back</button>
-            <button class="btn btn-primary" id="sje-push-btn" onclick="sjePushAll()" style="background:#2ca01c;border-color:#2ca01c;">Push All to QBO →</button>
+            <button class="btn btn-primary" id="sje-push-btn" onclick="sjePushAll()" style="background:var(--qbo-green);border-color:var(--qbo-green);">Push All to QBO →</button>
           </div>
         </div>
 
@@ -5249,7 +5243,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             </div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-ghost btn-sm" onclick="cogsBack()">← Back</button>
-              <button class="btn btn-primary btn-sm" id="cogs-push-btn" onclick="cogsPushAll()" style="background:#2ca01c;border-color:#2ca01c;">Push All to QBO →</button>
+              <button class="btn btn-primary btn-sm" id="cogs-push-btn" onclick="cogsPushAll()" style="background:var(--qbo-green);border-color:var(--qbo-green);">Push All to QBO →</button>
             </div>
           </div>
 
@@ -6281,7 +6275,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <div style="display:flex;justify-content:flex-end;gap:10px;padding-top:8px;border-top:1px solid var(--border);">
           <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-meeting-complete')">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="mtgSaveComplete()" style="background:#2ca01c;border-color:#2ca01c;">Save & Complete</button>
+          <button class="btn btn-primary btn-sm" onclick="mtgSaveComplete()" style="background:var(--qbo-green);border-color:var(--qbo-green);">Save & Complete</button>
         </div>
       </div>
     </div>
@@ -7305,7 +7299,7 @@ Now here is what I want to build: [describe your feature]</pre>
             <div style="display:flex;align-items:center;gap:10px;">
               <input type="text" id="mc-qbo-realm-id" class="field-input" placeholder="Not linked" readonly
                      style="font-family:'DM Mono',monospace;font-size:12px;flex:1;background:var(--surface2);">
-              <button class="btn btn-sm" onclick="qboLinkClient()" style="background:#2ca01c;border-color:#2ca01c;color:#fff;white-space:nowrap;">
+              <button class="btn btn-sm" onclick="qboLinkClient()" style="background:var(--qbo-green);border-color:var(--qbo-green);color:#fff;white-space:nowrap;">
                 Link to QBO
               </button>
               <button class="btn btn-ghost btn-sm" onclick="qboUnlinkClient()" id="mc-qbo-unlink-btn" style="display:none;color:var(--red);border-color:var(--red);white-space:nowrap;">
@@ -19145,15 +19139,11 @@ function tcSetMode(mode){
   const isQuick = mode === 'quick';
   document.getElementById('tc-panel-quick').style.display  = isQuick ? '' : 'none';
   document.getElementById('tc-panel-manual').style.display = isQuick ? 'none' : '';
-  // Tab styling
+  // Tab styling — toggle .is-active on the seg-tabs
   const qBtn = document.getElementById('tc-mode-quick');
   const mBtn = document.getElementById('tc-mode-manual');
-  qBtn.style.borderBottomColor = isQuick ? 'var(--navy)' : 'transparent';
-  qBtn.style.color = isQuick ? 'var(--navy)' : 'var(--text-d)';
-  qBtn.style.fontWeight = isQuick ? '700' : '600';
-  mBtn.style.borderBottomColor = isQuick ? 'transparent' : 'var(--navy)';
-  mBtn.style.color = isQuick ? 'var(--text-d)' : 'var(--navy)';
-  mBtn.style.fontWeight = isQuick ? '600' : '700';
+  qBtn?.classList.toggle('is-active', isQuick);
+  mBtn?.classList.toggle('is-active', !isQuick);
   // Wire preview on manual inputs
   if(!isQuick){
     ['tc-manual-in','tc-manual-out'].forEach(id=>{
@@ -25779,7 +25769,7 @@ function plPromptDigestAfterClose(task) {
       <div style="font-size:11px;color:var(--text-m);line-height:1.5;margin-bottom:14px;">Run the P&L Digester to check for missing items, variances, and generate meeting prep?</div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pl-close-prompt')?.remove()" style="font-size:11px;">Skip</button>
-        <button class="btn btn-primary btn-sm" onclick="plAutoRunDigest('${client.id}')" style="font-size:11px;background:#2ca01c;border-color:#2ca01c;">Run P&L Digest</button>
+        <button class="btn btn-primary btn-sm" onclick="plAutoRunDigest('${client.id}')" style="font-size:11px;background:var(--qbo-green);border-color:var(--qbo-green);">Run P&L Digest</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -34620,7 +34610,7 @@ async function qboDisconnect() {
     const detail = document.getElementById('qbo-conn-detail');
     if (detail) detail.textContent = 'Connect a QuickBooks Online company to get started';
     const actions = document.getElementById('qbo-conn-actions');
-    if (actions) actions.innerHTML = `<button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:#2ca01c;border-color:#2ca01c;display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;background:rgba(255,255,255,.2);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">QB</span>Connect to QuickBooks</button>`;
+    if (actions) actions.innerHTML = `<button class="btn btn-primary" onclick="qboOpenConnectModal()" style="background:var(--qbo-green);border-color:var(--qbo-green);display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;background:rgba(255,255,255,.2);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;">QB</span>Connect to QuickBooks</button>`;
     const bar = document.getElementById('qbo-company-bar'); if (bar) bar.style.display = 'none';
     const stats = document.getElementById('qbo-stats-row'); if (stats) stats.style.display = 'none';
     const oauthEl = document.getElementById('qbo-cfg-oauth');
@@ -42185,7 +42175,7 @@ function sjeShowReview() {
     const statusHtml = !linked
       ? '<span style="color:var(--red);font-weight:600;">Not Linked</span>'
       : balanced
-        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();sjePushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:#2ca01c;border-color:#2ca01c;color:#fff;" id="sje-push-${i}">Push</button>`
+        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();sjePushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:var(--qbo-green);border-color:var(--qbo-green);color:#fff;" id="sje-push-${i}">Push</button>`
         : '<span style="color:#f5a623;font-weight:600;">⚠ Imbalance</span>';
 
     const tr = document.createElement('tr');
@@ -43121,7 +43111,7 @@ function cogsShowReview() {
     const statusHtml = !linked
       ? '<span style="color:var(--red);font-weight:600;">Not Linked</span>'
       : balanced
-        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();cogsPushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:#2ca01c;border-color:#2ca01c;color:#fff;" id="cogs-push-${i}">Push</button>`
+        ? `<span style="color:var(--green);font-weight:600;">✓ Ready</span> <button onclick="event.stopPropagation();cogsPushOne(${i})" class="btn btn-sm" style="font-size:9px;padding:2px 8px;margin-left:6px;background:var(--qbo-green);border-color:var(--qbo-green);color:#fff;" id="cogs-push-${i}">Push</button>`
         : '<span style="color:#f5a623;font-weight:600;">⚠ Imbalance</span>';
 
     const tr = document.createElement('tr');
@@ -45189,10 +45179,10 @@ function fcNavigateTo(breadcrumbIndex) {
 // ── View toggle ──
 function fcSetView(mode) {
   _fcViewMode = mode;
-  document.getElementById('fc-view-list').style.background = mode === 'list' ? 'var(--navy)' : 'var(--bg-input)';
-  document.getElementById('fc-view-list').style.color = mode === 'list' ? '#fff' : 'var(--text)';
-  document.getElementById('fc-view-grid').style.background = mode === 'grid' ? 'var(--navy)' : 'var(--bg-input)';
-  document.getElementById('fc-view-grid').style.color = mode === 'grid' ? '#fff' : 'var(--text)';
+  const listBtn = document.getElementById('fc-view-list');
+  const gridBtn = document.getElementById('fc-view-grid');
+  listBtn?.classList.toggle('is-active', mode === 'list');
+  gridBtn?.classList.toggle('is-active', mode === 'grid');
   fcRenderFiles();
 }
 
