@@ -5444,13 +5444,73 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     </div><!-- /qbo-tab-scooters -->
 
-    <!-- ═══ HTEAO TAB (placeholder) ═══ -->
+    <!-- ═══ HTEAO TAB ═══ -->
     <div id="qbo-tab-hteao" style="display:none;">
-      <div style="text-align:center;padding:80px 20px;">
-        <div style="font-size:48px;margin-bottom:16px;">🍵</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">HTeaO Integration</div>
-        <div style="font-size:13px;color:var(--text-d);">Coming Soon — Sales journal entries and reporting for HTeaO franchises</div>
+
+      <!-- Tab header -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <div style="width:36px;height:36px;border-radius:var(--radius-md);background:#d4a94a;display:flex;align-items:center;justify-content:center;font-size:18px;">🍵</div>
+        <div style="flex:1;">
+          <div style="font-size:var(--text-lg);font-weight:700;color:var(--text);">HTeaO — Revel Sales Journal Entries</div>
+          <div style="font-size:var(--text-sm);color:var(--text-d);">Upload Revel Sales Summary CSVs → preview → push to each store's QBO</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="htOpenStoreConfig()" title="Manage per-store account mappings">⚙ Store Setup</button>
       </div>
+
+      <!-- Step indicator -->
+      <div style="display:flex;gap:0;margin-bottom:24px;">
+        <div id="ht-step-1" style="flex:1;padding:10px 16px;background:var(--navy);color:#fff;font-size:var(--text-sm);font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);transition:all .2s;">1 · Upload</div>
+        <div id="ht-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:var(--text-sm);font-weight:700;text-align:center;transition:all .2s;">2 · Review</div>
+        <div id="ht-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:var(--text-sm);font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;transition:all .2s;">3 · Push to QBO</div>
+      </div>
+
+      <!-- Step 1: Upload -->
+      <div id="ht-panel-upload" class="card" style="padding:32px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:12px;">📊</div>
+        <div style="font-size:var(--text-lg);font-weight:600;color:var(--text);margin-bottom:6px;">Upload Revel Sales Summary CSV(s)</div>
+        <div style="font-size:var(--text-md);color:var(--text-d);margin-bottom:20px;">Drop one CSV per store. Filenames like <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;">Sales_Summary_tx-67-tyler-...csv</code></div>
+        <div id="ht-dropzone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:40px 20px;margin-bottom:16px;cursor:pointer;transition:all .2s;"
+          onclick="document.getElementById('ht-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--navy)';this.style.background='var(--surface2)'"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';htHandleDrop(event)">
+          <div style="font-size:var(--text-base);color:var(--text-m);">Drop CSV files here or click to browse</div>
+          <div style="font-size:var(--text-sm);color:var(--text-d);margin-top:4px;">Multiple files OK — we'll process each store separately</div>
+        </div>
+        <input type="file" id="ht-file-input" accept=".csv" multiple style="display:none;" onchange="htHandleFiles(this.files)">
+        <div id="ht-upload-status" style="font-size:var(--text-md);color:var(--text-d);min-height:16px;"></div>
+      </div>
+
+      <!-- Step 2: Review -->
+      <div id="ht-panel-review" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-size:var(--text-lg);font-weight:700;color:var(--text);">Review Journal Entries</div>
+            <div style="font-size:var(--text-sm);color:var(--text-d);" id="ht-review-count">—</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="htBackToUpload()">← Back</button>
+            <button class="btn btn-primary btn-sm" onclick="htGoToPush()">Continue to Push →</button>
+          </div>
+        </div>
+        <div id="ht-review-list"></div>
+      </div>
+
+      <!-- Step 3: Push -->
+      <div id="ht-panel-push" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-size:var(--text-lg);font-weight:700;color:var(--text);">Push to QBO</div>
+            <div style="font-size:var(--text-sm);color:var(--text-d);" id="ht-push-summary">Review each entry and push to its store's QBO company.</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="htBackToReview()">← Back to Review</button>
+            <button class="btn btn-primary btn-sm" onclick="htPushAll()" id="ht-push-all-btn">🚀 Push All to QBO</button>
+          </div>
+        </div>
+        <div id="ht-push-list"></div>
+      </div>
+
     </div>
 
     <!-- ═══ DEVILED EGG CO TAB (placeholder) ═══ -->
@@ -6294,6 +6354,99 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:13px;color:var(--text-m);">Small utilities used across the firm. Click a tool to launch it.</div>
       </div>
       <div id="tools-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
+    </div>
+  </div>
+
+  <!-- HTeaO Store Config Modal — per-store Revel → QBO mapping -->
+  <div class="overlay" id="modal-hteao-stores" style="display:none;" onclick="overlayClose(event,'modal-hteao-stores')">
+    <div class="modal modal-xl" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title">🍵 HTeaO Store Setup</div>
+          <div class="modal-subtitle">Map each Revel store code to its QBO company and GL accounts. Set up once per store.</div>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-hteao-stores')" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="font-size:var(--text-md);color:var(--text-m);">Configured stores</div>
+          <button class="btn btn-primary btn-sm" onclick="htAddStore()">+ Add Store</button>
+        </div>
+        <div id="ht-stores-list"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-hteao-stores')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HTeaO Store Edit Modal — edit a single store's details -->
+  <div class="overlay" id="modal-hteao-store-edit" style="display:none;" onclick="overlayClose(event,'modal-hteao-store-edit')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title" id="ht-edit-title">Edit HTeaO Store</div>
+          <div class="modal-subtitle">Revel store code, QBO company, and GL account mapping</div>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-hteao-store-edit')" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="fg">
+            <label class="field-label">Revel Store Code <span class="fg-required"></span></label>
+            <input id="ht-edit-revelcode" class="field-input" placeholder="tx-67-tyler-old-jacksonvill">
+            <div class="fg-hint">Found in the Revel CSV filename: <code>Sales_Summary_&lt;code&gt;_...csv</code></div>
+          </div>
+          <div class="fg">
+            <label class="field-label">Display Name <span class="fg-required"></span></label>
+            <input id="ht-edit-displayname" class="field-input" placeholder="Tyler COB">
+            <div class="fg-hint">Friendly name used in previews and JE attachment names</div>
+          </div>
+          <div class="fg full">
+            <label class="field-label">QBO Company (Realm) <span class="fg-required"></span></label>
+            <select id="ht-edit-realm" class="field-input">
+              <option value="">— Select a linked QBO company —</option>
+            </select>
+            <div class="fg-hint">Must be a client (or franchise) in the CRM that has a QBO realm linked</div>
+          </div>
+
+          <hr class="section-divider">
+          <div class="section-label">QBO Account IDs</div>
+
+          <div class="fg">
+            <label class="field-label">Sales</label>
+            <input id="ht-edit-acct-sales" class="field-input" placeholder="42">
+          </div>
+          <div class="fg">
+            <label class="field-label">Discounts</label>
+            <input id="ht-edit-acct-discounts" class="field-input" placeholder="58">
+          </div>
+          <div class="fg">
+            <label class="field-label">Sales Tax Payable</label>
+            <input id="ht-edit-acct-salestax" class="field-input" placeholder="21">
+          </div>
+          <div class="fg">
+            <label class="field-label">Suspense Deposits</label>
+            <input id="ht-edit-acct-suspense" class="field-input" placeholder="77">
+          </div>
+          <div class="fg full">
+            <label class="field-label">Employee Tips</label>
+            <input id="ht-edit-acct-tips" class="field-input" placeholder="93">
+          </div>
+          <div class="fg full">
+            <div class="fg-hint">💡 Click "Fetch from QBO" to pull the chart of accounts and pick from a list instead of typing IDs.</div>
+            <button class="btn btn-ghost btn-sm" onclick="htFetchQBOAccounts()" style="margin-top:6px;" id="ht-fetch-btn">↻ Fetch Accounts from QBO</button>
+            <div id="ht-fetch-status" style="font-size:var(--text-sm);color:var(--text-d);margin-top:6px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot modal-foot-spread">
+        <button class="btn btn-danger" id="ht-edit-delete-btn" onclick="htDeleteCurrentStore()" style="display:none;">Delete</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="closeModal('modal-hteao-store-edit')">Cancel</button>
+          <button class="btn btn-primary" onclick="htSaveStore()">Save Store</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -8320,6 +8473,9 @@ function _buildDBPayload() {
     devProjects:    DB.devProjects||[],
     devTemplates:   DB.devTemplates||[],
     sjePushLog:     DB.sjePushLog||[],
+    // HTeaO Revel integration
+    hteaoStores:    DB.hteaoStores||[],
+    hteaoPushLog:   DB.hteaoPushLog||[],
     // Sales Tax Filing Center
     salesTaxRates:       DB.salesTaxRates||[],
     salesTaxFilings:     DB.salesTaxFilings||[],
@@ -8364,6 +8520,9 @@ function _applyDBPayload(saved) {
     devProjects:    saved.devProjects    || [],
     devTemplates:   saved.devTemplates   || [],
     sjePushLog:     saved.sjePushLog     || [],
+    // HTeaO Revel integration
+    hteaoStores:    saved.hteaoStores    || [],
+    hteaoPushLog:   saved.hteaoPushLog   || [],
     // Sales Tax Filing Center
     salesTaxRates:       saved.salesTaxRates       || [],
     salesTaxFilings:     saved.salesTaxFilings     || [],
@@ -47638,6 +47797,518 @@ async function intConnectWithToken() {
     msg.textContent = 'Error: ' + e.message;
     msg.style.color = '#ef4444';
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HTEAO — Revel CSV → Journal Entry workflow
+// ══════════════════════════════════════════════════════════════════
+// Data model:
+//   DB.hteaoStores[] = [
+//     {
+//       id: uid(),
+//       revelCode: 'tx-67-tyler-old-jacksonvill',
+//       displayName: 'Tyler COB',
+//       realmId: '123456789',          // QBO company id
+//       accounts: {
+//         sales:            '42',      // QBO account IDs
+//         discounts:        '58',
+//         salesTaxPayable:  '21',
+//         suspenseDeposits: '77',
+//         employeeTips:     '93',
+//       }
+//     }, ...
+//   ]
+//   DB.hteaoPushLog[] = history of JE pushes
+
+// Parsed JEs pending review/push — one entry per uploaded CSV
+let _htParsedJEs = [];
+// Cached QBO chart of accounts keyed by realmId (for the Store Edit modal fetch button)
+let _htQBOAccountsCache = {};
+// The store currently being edited
+let _htEditingStore = null;
+
+// ── File drop + upload ───────────────────────────────────────────
+function htHandleDrop(event){
+  const files = event.dataTransfer?.files;
+  if(files && files.length) htHandleFiles(files);
+}
+
+async function htHandleFiles(fileList){
+  if(!fileList || !fileList.length) return;
+  const files = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.csv'));
+  if(!files.length){
+    document.getElementById('ht-upload-status').textContent = 'Only .csv files are supported.';
+    return;
+  }
+  const statusEl = document.getElementById('ht-upload-status');
+  statusEl.textContent = `Parsing ${files.length} file${files.length>1?'s':''}…`;
+  _htParsedJEs = [];
+
+  for(const file of files){
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await authFetch(ARK_SERVER + '/hteao/parse-revel', { method:'POST', body: fd });
+      const data = await resp.json();
+      if(!resp.ok || !data.success) throw new Error(data.error || `Parse failed (HTTP ${resp.status})`);
+
+      // Match to configured store by Revel code
+      const store = (DB.hteaoStores || []).find(s => s.revelCode === data.storeCode);
+      _htParsedJEs.push({
+        id: uid(),
+        storeCode: data.storeCode,
+        store,                           // may be undefined if not configured
+        period: data.period,
+        journal: data.journal,
+        sourceFile: data.sourceFile,
+        file,                            // keep the File object so we can attach it to QBO
+        pushStatus: 'pending',           // pending | pushing | success | error
+        pushError: '',
+        qboJeId: '',
+      });
+    } catch(e) {
+      _htParsedJEs.push({
+        id: uid(),
+        storeCode: file.name,
+        parseError: e.message,
+        pushStatus: 'parse-error',
+      });
+    }
+  }
+
+  statusEl.textContent = '';
+  htShowReview();
+}
+
+// ── Step navigation ──────────────────────────────────────────────
+function htShowReview(){
+  document.getElementById('ht-panel-upload').style.display = 'none';
+  document.getElementById('ht-panel-push').style.display   = 'none';
+  document.getElementById('ht-panel-review').style.display = '';
+  document.getElementById('ht-step-1').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-1').style.color = 'var(--text-d)';
+  document.getElementById('ht-step-2').style.background = 'var(--navy)';
+  document.getElementById('ht-step-2').style.color = '#fff';
+  document.getElementById('ht-step-3').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-3').style.color = 'var(--text-d)';
+  htRenderReview();
+}
+function htBackToUpload(){
+  document.getElementById('ht-panel-review').style.display = 'none';
+  document.getElementById('ht-panel-push').style.display   = 'none';
+  document.getElementById('ht-panel-upload').style.display = '';
+  document.getElementById('ht-step-1').style.background = 'var(--navy)';
+  document.getElementById('ht-step-1').style.color = '#fff';
+  document.getElementById('ht-step-2').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-2').style.color = 'var(--text-d)';
+  document.getElementById('ht-step-3').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-3').style.color = 'var(--text-d)';
+  _htParsedJEs = [];
+  document.getElementById('ht-file-input').value = '';
+}
+function htGoToPush(){
+  document.getElementById('ht-panel-upload').style.display = 'none';
+  document.getElementById('ht-panel-review').style.display = 'none';
+  document.getElementById('ht-panel-push').style.display   = '';
+  document.getElementById('ht-step-1').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-1').style.color = 'var(--text-d)';
+  document.getElementById('ht-step-2').style.background = 'var(--surface2)';
+  document.getElementById('ht-step-2').style.color = 'var(--text-d)';
+  document.getElementById('ht-step-3').style.background = 'var(--navy)';
+  document.getElementById('ht-step-3').style.color = '#fff';
+  htRenderPush();
+}
+function htBackToReview(){ htShowReview(); }
+
+// ── Render Review step — one card per uploaded CSV ─────────────
+function htRenderReview(){
+  const list = document.getElementById('ht-review-list');
+  const countEl = document.getElementById('ht-review-count');
+  if(!_htParsedJEs.length){
+    list.innerHTML = '<div class="empty">No parsed files.</div>';
+    countEl.textContent = '0 files';
+    return;
+  }
+  countEl.textContent = `${_htParsedJEs.length} file${_htParsedJEs.length===1?'':'s'} parsed`;
+  list.innerHTML = _htParsedJEs.map(je => htReviewCard(je)).join('');
+}
+
+function htReviewCard(je){
+  if(je.parseError){
+    return `<div class="card card-red" style="padding:16px;margin-bottom:10px;">
+      <div style="font-weight:700;color:var(--red);">⚠ ${je.storeCode}</div>
+      <div style="font-size:var(--text-sm);color:var(--text-m);margin-top:4px;">${je.parseError}</div>
+    </div>`;
+  }
+  const j = je.journal;
+  const storeLabel = je.store
+    ? `${je.store.displayName} <span style="font-size:var(--text-xs);color:var(--text-d);">(${je.storeCode})</span>`
+    : `<span style="color:var(--red);">⚠ Unmapped store:</span> <code>${je.storeCode}</code>`;
+  const linesHtml = j.lines.map(l => `
+    <tr>
+      <td style="color:var(--text-d);">${l.lineNo}</td>
+      <td><strong>${htAccountLabel(l.accountKey)}</strong>${l.description?`<div style="font-size:var(--text-xs);color:var(--text-d);">${l.description}</div>`:''}</td>
+      <td class="num mono" style="color:${l.debit?'var(--text)':'var(--text-dd)'};">${l.debit?'$'+l.debit.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td class="num mono" style="color:${l.credit?'var(--text)':'var(--text-dd)'};">${l.credit?'$'+l.credit.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+    </tr>`).join('');
+  const balBadge = j.totals.balanced
+    ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;">✓ Balanced</span>`
+    : `<span style="background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;">⚠ Out of balance</span>`;
+  const unmappedWarn = !je.store
+    ? `<div class="notice notice-warn" style="margin:12px 16px;">⚠ This Revel store code isn't configured yet. Set it up in <a href="javascript:void(0)" onclick="htOpenStoreConfig()" style="color:inherit;text-decoration:underline;">Store Setup</a> before pushing.</div>`
+    : '';
+  return `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden;">
+    <div style="padding:14px 18px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:var(--text-lg);font-weight:700;color:var(--navy);">${storeLabel}</div>
+        <div style="font-size:var(--text-sm);color:var(--text-d);margin-top:2px;">
+          Period ${je.period.start} → ${je.period.end} ·
+          <strong>${j.refNo}</strong> ·
+          Date ${j.date}
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        ${balBadge}
+      </div>
+    </div>
+    ${unmappedWarn}
+    <div class="tbl-wrap"><table>
+      <thead><tr><th style="width:40px;">#</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+      <tbody>${linesHtml}</tbody>
+      <tfoot><tr style="background:var(--surface2);">
+        <td colspan="2" style="font-weight:700;text-align:right;">Totals</td>
+        <td class="num mono" style="font-weight:700;">$${j.totals.debits.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="num mono" style="font-weight:700;">$${j.totals.credits.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      </tr></tfoot>
+    </table></div>
+    <div style="padding:10px 18px;font-size:var(--text-sm);color:var(--text-d);border-top:1px solid var(--border);">📎 Source: ${je.sourceFile.name} (${(je.sourceFile.size/1024).toFixed(1)} KB)</div>
+  </div>`;
+}
+
+function htAccountLabel(key){
+  return {
+    sales:            'Sales',
+    discounts:        'Discounts',
+    salesTaxPayable:  'Sales Tax Payable',
+    suspenseDeposits: 'Suspense Deposits',
+    employeeTips:     'Employee Tips',
+  }[key] || key;
+}
+
+// ── Render Push step ─────────────────────────────────────────────
+function htRenderPush(){
+  const list = document.getElementById('ht-push-list');
+  const summary = document.getElementById('ht-push-summary');
+  const ready   = _htParsedJEs.filter(je => je.store && !je.parseError);
+  const blocked = _htParsedJEs.filter(je => !je.store || je.parseError);
+  summary.textContent = `${ready.length} ready · ${blocked.length} blocked${blocked.length?' (unmapped stores or parse errors)':''}`;
+  list.innerHTML = _htParsedJEs.map(je => htPushRow(je)).join('');
+  // Disable push-all if nothing is ready
+  const btn = document.getElementById('ht-push-all-btn');
+  if(btn) btn.disabled = ready.length === 0;
+}
+
+function htPushRow(je){
+  const statusIcon = {
+    pending:       '⏳',
+    pushing:       '⟳',
+    success:       '✓',
+    error:         '✕',
+    'parse-error': '⚠',
+  }[je.pushStatus] || '';
+  const statusColor = {
+    pending:       'var(--text-d)',
+    pushing:       'var(--blue)',
+    success:       'var(--green)',
+    error:         'var(--red)',
+    'parse-error': 'var(--red)',
+  }[je.pushStatus] || 'var(--text-d)';
+  const blocked = !je.store || je.parseError;
+  const title = je.store ? je.store.displayName : je.storeCode;
+  const refNo = je.journal?.refNo || '';
+  const detail = je.parseError
+    ? je.parseError
+    : !je.store
+    ? 'Store not configured — open Store Setup to map this Revel code.'
+    : je.pushStatus === 'success'
+    ? `Posted to QBO (JE ${je.qboJeId})`
+    : je.pushStatus === 'error'
+    ? je.pushError
+    : `${refNo} · ${je.journal?.date||''}`;
+  return `<div class="card" style="margin-bottom:8px;padding:14px 18px;display:flex;align-items:center;gap:14px;">
+    <div style="font-size:22px;color:${statusColor};width:28px;text-align:center;">${statusIcon}</div>
+    <div style="flex:1;">
+      <div style="font-weight:700;color:var(--text);">${title}</div>
+      <div style="font-size:var(--text-sm);color:var(--text-d);">${detail}</div>
+    </div>
+    ${!blocked && je.pushStatus !== 'success' ? `<button class="btn btn-ghost btn-sm" onclick="htPushOne('${je.id}')">${je.pushStatus==='pending'?'Push':'Retry'}</button>` : ''}
+  </div>`;
+}
+
+// ── QBO push ─────────────────────────────────────────────────────
+async function htPushAll(){
+  const ready = _htParsedJEs.filter(je => je.store && !je.parseError && je.pushStatus !== 'success');
+  for(const je of ready){
+    await htPushOne(je.id);
+  }
+}
+
+async function htPushOne(jeId){
+  const je = _htParsedJEs.find(x => x.id === jeId);
+  if(!je) return;
+  if(!je.store){ showToast('Store not configured'); return; }
+
+  je.pushStatus = 'pushing';
+  htRenderPush();
+
+  try {
+    // Build QBO JournalEntry payload
+    const linesQBO = je.journal.lines.map(l => {
+      const acctId = je.store.accounts?.[l.accountKey];
+      if(!acctId) throw new Error(`No QBO account ID configured for "${htAccountLabel(l.accountKey)}" on ${je.store.displayName}`);
+      const amount = l.debit || l.credit || 0;
+      return {
+        DetailType: 'JournalEntryLineDetail',
+        Amount: amount,
+        Description: l.description || '',
+        JournalEntryLineDetail: {
+          PostingType: l.debit ? 'Debit' : 'Credit',
+          AccountRef: { value: acctId },
+        },
+      };
+    });
+
+    const payload = {
+      TxnDate: je.journal.date,
+      DocNumber: je.journal.refNo,
+      Line: linesQBO,
+    };
+
+    const resp = await authFetch(ARK_SERVER + '/qbo/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createJournalEntry',
+        realmId: je.store.realmId,
+        payload,
+      }),
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+
+    je.pushStatus = 'success';
+    je.qboJeId = data.id || '';
+    logAct(`HTeaO JE pushed: ${je.store.displayName} ${je.journal.refNo} (QBO ID ${je.qboJeId})`);
+
+    // Log push
+    if(!DB.hteaoPushLog) DB.hteaoPushLog = [];
+    DB.hteaoPushLog.unshift({
+      id: uid(),
+      pushedAt: new Date().toISOString(),
+      pushedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
+      storeCode: je.storeCode,
+      storeName: je.store.displayName,
+      realmId: je.store.realmId,
+      refNo: je.journal.refNo,
+      date: je.journal.date,
+      totals: je.journal.totals,
+      qboJeId: je.qboJeId,
+    });
+    saveDB();
+  } catch(e){
+    je.pushStatus = 'error';
+    je.pushError = e.message;
+  }
+  htRenderPush();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HTEAO Store Config — per-store Revel → QBO mapping
+// ══════════════════════════════════════════════════════════════════
+
+function htOpenStoreConfig(){
+  htRenderStoresList();
+  document.getElementById('modal-hteao-stores').style.display = 'flex';
+}
+
+function htRenderStoresList(){
+  const list = document.getElementById('ht-stores-list');
+  const stores = (DB.hteaoStores || []).filter(s => !s._deleted);
+  if(!stores.length){
+    list.innerHTML = `<div class="empty"><strong>No HTeaO stores configured yet.</strong>Click "+ Add Store" to map your first Revel store code to its QBO company.</div>`;
+    return;
+  }
+  list.innerHTML = '<div class="tbl-wrap"><table>' +
+    '<thead><tr><th>Display Name</th><th>Revel Code</th><th>QBO Company</th><th>Accounts Mapped</th><th></th></tr></thead><tbody>' +
+    stores.map(s => {
+      const acctCount = Object.values(s.accounts||{}).filter(v => !!v).length;
+      const acctBadge = acctCount >= 5
+        ? `<span style="color:var(--green);font-weight:600;">✓ All 5</span>`
+        : `<span style="color:var(--amber);font-weight:600;">${acctCount}/5</span>`;
+      const realmLabel = htLabelForRealm(s.realmId) || `<code>${s.realmId||'—'}</code>`;
+      return `<tr class="is-clickable" onclick="htEditStore('${s.id}')">
+        <td><strong>${s.displayName||'—'}</strong></td>
+        <td class="mono" style="color:var(--text-m);">${s.revelCode||'—'}</td>
+        <td style="color:var(--text-m);">${realmLabel}</td>
+        <td>${acctBadge}</td>
+        <td class="col-actions"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();htEditStore('${s.id}')">Edit</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+// Build a realm ID → "Client · Franchise" label map for UI display
+function htLabelForRealm(realmId){
+  if(!realmId) return '';
+  for(const c of (DB.clients||[])){
+    if(c.qboRealmId === realmId) return c.biz;
+    for(const f of (c.franchises||[])){
+      if(f.qboRealmId === realmId) return `${c.biz} · ${f.name || f.storeNumber || ''}`;
+    }
+  }
+  return '';
+}
+
+function htAddStore(){
+  _htEditingStore = {
+    id: uid(),
+    revelCode: '',
+    displayName: '',
+    realmId: '',
+    accounts: { sales:'', discounts:'', salesTaxPayable:'', suspenseDeposits:'', employeeTips:'' },
+    _isNew: true,
+  };
+  htOpenEditModal();
+}
+
+function htEditStore(id){
+  const s = (DB.hteaoStores||[]).find(x => x.id === id);
+  if(!s) return;
+  _htEditingStore = JSON.parse(JSON.stringify(s));  // deep clone
+  htOpenEditModal();
+}
+
+function htOpenEditModal(){
+  const s = _htEditingStore;
+  document.getElementById('ht-edit-title').textContent = s._isNew ? 'Add HTeaO Store' : `Edit ${s.displayName || 'HTeaO Store'}`;
+  document.getElementById('ht-edit-revelcode').value   = s.revelCode || '';
+  document.getElementById('ht-edit-displayname').value = s.displayName || '';
+  document.getElementById('ht-edit-acct-sales').value       = s.accounts?.sales || '';
+  document.getElementById('ht-edit-acct-discounts').value   = s.accounts?.discounts || '';
+  document.getElementById('ht-edit-acct-salestax').value    = s.accounts?.salesTaxPayable || '';
+  document.getElementById('ht-edit-acct-suspense').value    = s.accounts?.suspenseDeposits || '';
+  document.getElementById('ht-edit-acct-tips').value        = s.accounts?.employeeTips || '';
+  // Populate realm dropdown from linked QBO companies
+  const realmSel = document.getElementById('ht-edit-realm');
+  const realms = htGetLinkedRealms();
+  realmSel.innerHTML = '<option value="">— Select a linked QBO company —</option>' +
+    realms.map(r => `<option value="${r.realmId}" ${r.realmId===s.realmId?'selected':''}>${r.label}</option>`).join('');
+  document.getElementById('ht-edit-delete-btn').style.display = s._isNew ? 'none' : '';
+  document.getElementById('ht-fetch-status').textContent = '';
+  document.getElementById('modal-hteao-store-edit').style.display = 'flex';
+}
+
+function htGetLinkedRealms(){
+  const seen = new Set();
+  const out = [];
+  for(const c of (DB.clients||[])){
+    if(c.qboRealmId && !seen.has(c.qboRealmId)){
+      seen.add(c.qboRealmId);
+      out.push({ realmId: c.qboRealmId, label: c.biz });
+    }
+    for(const f of (c.franchises||[])){
+      if(f.qboRealmId && !seen.has(f.qboRealmId)){
+        seen.add(f.qboRealmId);
+        out.push({ realmId: f.qboRealmId, label: `${c.biz} · ${f.name || f.storeNumber || ''}` });
+      }
+    }
+  }
+  return out;
+}
+
+function htSaveStore(){
+  const s = _htEditingStore;
+  s.revelCode   = document.getElementById('ht-edit-revelcode').value.trim();
+  s.displayName = document.getElementById('ht-edit-displayname').value.trim();
+  s.realmId     = document.getElementById('ht-edit-realm').value.trim();
+  s.accounts = {
+    sales:            document.getElementById('ht-edit-acct-sales').value.trim(),
+    discounts:        document.getElementById('ht-edit-acct-discounts').value.trim(),
+    salesTaxPayable:  document.getElementById('ht-edit-acct-salestax').value.trim(),
+    suspenseDeposits: document.getElementById('ht-edit-acct-suspense').value.trim(),
+    employeeTips:     document.getElementById('ht-edit-acct-tips').value.trim(),
+  };
+  if(!s.revelCode || !s.displayName || !s.realmId){
+    alert('Revel code, display name, and QBO company are required.');
+    return;
+  }
+  s._updatedAt = new Date().toISOString();
+  if(!DB.hteaoStores) DB.hteaoStores = [];
+  if(s._isNew){
+    delete s._isNew;
+    DB.hteaoStores.push(s);
+  } else {
+    const i = DB.hteaoStores.findIndex(x => x.id === s.id);
+    if(i >= 0) DB.hteaoStores[i] = s;
+    else DB.hteaoStores.push(s);
+  }
+  saveDB();
+  closeModal('modal-hteao-store-edit');
+  htRenderStoresList();
+  showToast(`✓ ${s.displayName} saved`);
+}
+
+function htDeleteCurrentStore(){
+  const s = _htEditingStore;
+  if(!s) return;
+  if(!confirm(`Delete HTeaO store "${s.displayName}"?`)) return;
+  const rec = (DB.hteaoStores||[]).find(x => x.id === s.id);
+  if(rec){
+    rec._deleted = true;
+    rec._updatedAt = new Date().toISOString();
+  }
+  saveDB();
+  closeModal('modal-hteao-store-edit');
+  htRenderStoresList();
+  showToast(`${s.displayName} deleted`);
+}
+
+async function htFetchQBOAccounts(){
+  const realmId = document.getElementById('ht-edit-realm').value.trim();
+  const statusEl = document.getElementById('ht-fetch-status');
+  if(!realmId){ statusEl.textContent = 'Select a QBO company first.'; return; }
+  statusEl.textContent = 'Fetching chart of accounts from QBO…';
+  try {
+    const resp = await authFetch(ARK_SERVER + '/qbo/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'getAccounts', realmId }),
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+    _htQBOAccountsCache[realmId] = data.accounts || [];
+    // Replace each account ID input with a datalist-backed input for picking by name
+    htAttachAccountPickers(data.accounts);
+    statusEl.innerHTML = `✓ Loaded <strong>${data.accounts.length}</strong> accounts — each field above now shows an autocomplete picker.`;
+  } catch(e){
+    statusEl.textContent = `✕ ${e.message}`;
+  }
+}
+
+function htAttachAccountPickers(accounts){
+  // Make or reuse a single <datalist> with all account IDs
+  let dl = document.getElementById('ht-qbo-accts-datalist');
+  if(!dl){
+    dl = document.createElement('datalist');
+    dl.id = 'ht-qbo-accts-datalist';
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = accounts
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''))
+    .map(a => `<option value="${a.id}" label="${(a.name||'').replace(/"/g,'&quot;')} — ${a.type||''}">${a.name||''}</option>`).join('');
+  ['ht-edit-acct-sales','ht-edit-acct-discounts','ht-edit-acct-salestax','ht-edit-acct-suspense','ht-edit-acct-tips'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.setAttribute('list', 'ht-qbo-accts-datalist');
+  });
 }
 
 </script>

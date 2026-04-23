@@ -5890,6 +5890,9 @@ const _MERGE_ARRAYS_BY_ID = [
   'devProjects', 'devTemplates',
   // Scooters JE push history
   'sjePushLog',
+  // HTeaO Revel integration
+  'hteaoStores',    // per-store config: Revel code -> realmId + account IDs
+  'hteaoPushLog',   // history of HTeaO JE pushes to QBO
   // Sales Tax Filing Center
   'salesTaxRates',       // jurisdiction rate database (state/city/county)
   'salesTaxFilings',     // filing history per client per period
@@ -6470,6 +6473,143 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
 
   } catch (e) {
     console.error('Scooter\'s parse error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// HTEAO — Revel Sales Summary parser
+// Parses a Revel "Sales Summary" CSV into a balanced monthly JE.
+//
+// Output JE structure (confirmed by the user against manual QBO entries):
+//   1  Sales                                       CR  Gross Sales
+//   2  Discounts                                   DR  Total Discounts
+//   3  Sales Tax Payable                           CR  Sales Tax
+//   4  Suspense Deposits (Gift Cards Sold)         CR  Gift Sales
+//   5  Suspense Deposits (Gift Cards Redeemed)     DR  Gift Payments
+//   6  Employee Tips                               CR  Tips Total + Liabilities Tips Total + Declared Tips
+//   7  Suspense Deposits (bank deposit)            DR  PLUG (balances the JE)
+// ─────────────────────────────────────────────────────────────────
+app.post('/hteao/parse-revel', requireAuth, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    console.log(`HTeaO parse: received "${req.file.originalname}" (${req.file.size} bytes)`);
+
+    // Parse CSV — Revel exports as comma-delimited UTF-8
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false, raw: false });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    if (!rows.length) return res.status(400).json({ error: 'CSV is empty' });
+
+    // Find the "Total" row (last row — Time To column contains literal "Total")
+    const totalRow = rows.find(r => String(r['Time To'] || '').trim().toLowerCase() === 'total');
+    if (!totalRow) return res.status(400).json({ error: 'Could not find a "Total" summary row in the CSV' });
+
+    // Find daily rows (everything except the Total) to compute the period
+    const dailyRows = rows.filter(r => {
+      const t = String(r['Time To'] || '').trim().toLowerCase();
+      return t && t !== 'total';
+    });
+
+    // Parse Revel dollar strings ("1,886.23", "0.00", "41.28% ") to numbers
+    const money = (v) => {
+      if (v === null || v === undefined || v === '') return 0;
+      const s = String(v).replace(/[$,\s%]/g, '').trim();
+      const n = parseFloat(s);
+      return isFinite(n) ? n : 0;
+    };
+
+    // Extract period from the first and last daily rows
+    let periodStart = '', periodEnd = '';
+    if (dailyRows.length) {
+      // "Time From" is like "03/01/2026 12:00 AM"; "Time To" on last row is "04/01/2026 12:00 AM"
+      const firstFrom = String(dailyRows[0]['Time From'] || '').split(' ')[0];
+      const lastFrom  = String(dailyRows[dailyRows.length - 1]['Time From'] || '').split(' ')[0];
+      const toISO = (s) => {
+        const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (!m) return '';
+        return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+      };
+      periodStart = toISO(firstFrom);
+      periodEnd   = toISO(lastFrom);
+    }
+
+    // Extract Revel store code from original filename
+    // Revel filenames look like:
+    //   Sales_Summary_tx-67-tyler-old-jacksonvill_2026-03-01_00-00_2026-04-01_00-00.csv
+    let storeCode = '';
+    const nameMatch = (req.file.originalname || '').match(/^Sales_Summary_(.+?)_\d{4}-\d{2}-\d{2}/i);
+    if (nameMatch) storeCode = nameMatch[1];
+
+    // Extract mapped values from the Total row
+    const grossSales     = money(totalRow['Gross Sales']);
+    const totalDiscounts = money(totalRow['Total Discounts']);
+    const salesTax       = money(totalRow['Sales Tax']);
+    const giftSales      = money(totalRow['Gift Sales']);      // new liability, credit
+    const giftPayments   = money(totalRow['Gift Payments']);   // reduces liability, debit
+    const tipsTotal      = money(totalRow['Tips Total']);
+    const liabTips       = money(totalRow['Liabilities Tips Total']);
+    const declaredTips   = money(totalRow['Declared Tips']);
+
+    const employeeTips = tipsTotal + liabTips + declaredTips;
+
+    // JE math — compute the bank-deposit DR as the plug
+    const credits     = grossSales + salesTax + giftSales + employeeTips;
+    const knownDebits = totalDiscounts + giftPayments;
+    const bankDeposit = +(credits - knownDebits).toFixed(2);
+
+    // Build JE line structure using logical account keys;
+    // the UI maps these to QBO account IDs per store.
+    const lines = [
+      { lineNo: 1, accountKey: 'sales',             credit: +grossSales.toFixed(2),     description: '' },
+      { lineNo: 2, accountKey: 'discounts',         debit:  +totalDiscounts.toFixed(2), description: '' },
+      { lineNo: 3, accountKey: 'salesTaxPayable',   credit: +salesTax.toFixed(2),       description: '' },
+      { lineNo: 4, accountKey: 'suspenseDeposits',  credit: +giftSales.toFixed(2),      description: 'Gift Cards Sold' },
+      { lineNo: 5, accountKey: 'suspenseDeposits',  debit:  +giftPayments.toFixed(2),   description: 'Gift Cards Redeemed' },
+      { lineNo: 6, accountKey: 'employeeTips',      credit: +employeeTips.toFixed(2),   description: '' },
+      { lineNo: 7, accountKey: 'suspenseDeposits',  debit:  +bankDeposit.toFixed(2),    description: '' },
+    ];
+
+    // Journal date and ref number
+    let journalDate = '';
+    let refNo = '';
+    if (periodEnd) {
+      // Use the last day OF the period (not the exclusive end) as the JE date
+      const d = new Date(periodEnd + 'T12:00:00');
+      d.setDate(d.getDate() - 1);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      journalDate = `${yyyy}-${mm}-${dd}`;
+      refNo = `REVEL ${parseInt(mm, 10)}.${yyyy}`;
+    }
+
+    const creditsTotal = lines.reduce((s, l) => s + (l.credit || 0), 0);
+    const debitsTotal  = lines.reduce((s, l) => s + (l.debit  || 0), 0);
+
+    res.json({
+      success: true,
+      storeCode,
+      period: { start: periodStart, end: periodEnd },
+      journal: {
+        refNo,
+        date: journalDate,
+        lines,
+        totals: {
+          credits: +creditsTotal.toFixed(2),
+          debits:  +debitsTotal.toFixed(2),
+          balanced: Math.abs(creditsTotal - debitsTotal) < 0.01,
+        },
+      },
+      sourceFile: {
+        name: req.file.originalname,
+        size: req.file.size,
+      },
+      daysInPeriod: dailyRows.length,
+    });
+  } catch (e) {
+    console.error('HTeaO parse error:', e);
     res.status(500).json({ error: e.message });
   }
 });
