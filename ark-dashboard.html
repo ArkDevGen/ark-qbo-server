@@ -10177,24 +10177,22 @@ const WIDGET_COMPUTED = {
       if(ins.length>outs.length) clockedIn.push({user:u,since:ins[ins.length-1].time});
     });
     const count=clockedIn.length;
+    const isAdmin = currentUser && currentUser.role === 'admin';
     let avatarsHtml='';
     if(count>0){
-      // Show up to 4 avatars; if more, show "+N" badge
-      const MAX_AVATARS = 4;
-      const visible = clockedIn.slice(0, MAX_AVATARS);
-      const overflow = count - visible.length;
-      avatarsHtml=visible.map(({user,since})=>{
+      // Show ALL clocked-in avatars, wrapping to new lines as needed
+      avatarsHtml=clockedIn.map(({user,since})=>{
         const name=`${user.fname} ${user.lname||''}`.trim();
         const ini=(user.fname[0]+(user.lname?user.lname[0]:'')).toUpperCase();
         const color=user.color||'#1a2440';
-        const tip=since?`${name} · in since ${typeof tcFmtTime==='function'?tcFmtTime(since):since}`:name;
+        // Admins see clock-in time on hover; everyone else just sees the name
+        const tip = (isAdmin && since)
+          ? `${name} · in since ${typeof tcFmtTime==='function'?tcFmtTime(since):since}`
+          : name;
         return `<div title="${tip}" style="width:26px;height:26px;border-radius:50%;background:${color};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.15);flex-shrink:0;">${ini}</div>`;
       }).join('');
-      if(overflow>0){
-        avatarsHtml += `<div title="${overflow} more" style="width:26px;height:26px;border-radius:50%;background:var(--surface2);color:var(--text-m);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;flex-shrink:0;">+${overflow}</div>`;
-      }
     }
-    return {value:count,sub:count===0?'no open punches today':`${count} employee${count!==1?'s':''} on the clock`,extraHtml:`<div style="display:flex;flex-wrap:nowrap;gap:4px;margin-top:8px;overflow:hidden;">${avatarsHtml||'<span style="font-size:11px;color:var(--text-d);font-style:italic;">No one clocked in</span>'}</div>`};
+    return {value:count,sub:count===0?'no open punches today':`${count} employee${count!==1?'s':''} on the clock`,extraHtml:`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${avatarsHtml||'<span style="font-size:11px;color:var(--text-d);font-style:italic;">No one clocked in</span>'}</div>`};
   },
   onboarding(){
     const incomplete=(DB.clients||[]).filter(c=>{const p=obGetProgress(c);return p.total>0&&p.done<p.total;}).length;
