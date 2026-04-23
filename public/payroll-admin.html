@@ -238,21 +238,20 @@
       </div>
     </div>
     <div id="emp-section" style="display:none;">
-    <div class="grid-2">
-      <!-- Left: Client list -->
-      <div>
-        <input type="text" id="client-search" placeholder="Search clients..." oninput="renderClientList()" style="margin-bottom:12px;">
+      <!-- Hidden client-list + search kept for legacy JS references; client is
+           now driven by the top selector via importClientChange(). -->
+      <div style="display:none;">
+        <input type="text" id="client-search" oninput="renderClientList()">
         <div id="client-list"></div>
       </div>
 
-      <!-- Right: Client detail -->
+      <!-- Client detail (full width now that the list is hidden) -->
       <div id="client-detail">
         <div class="card" style="text-align:center;padding:60px 20px;color:var(--muted);">
-          <div style="font-size:32px;margin-bottom:12px;">👈</div>
-          <div>Select a client to manage employees</div>
+          <div style="font-size:32px;margin-bottom:12px;">👆</div>
+          <div>Pick a client at the top to manage its employees here.</div>
         </div>
       </div>
-    </div>
     </div><!-- /emp-section -->
   </div>
 </div>
@@ -796,10 +795,40 @@ function toggleEmpSection() {
   if (section.style.display === 'none') {
     section.style.display = '';
     arrow.style.transform = 'rotate(180deg)';
+    // Auto-sync to whatever client is selected at the top
+    syncEmpSectionToTopClient();
   } else {
     section.style.display = 'none';
     arrow.style.transform = '';
   }
+}
+
+// Pull the client slug from the top selector and load it into the
+// Manage Employees detail panel. Called on top-selector change and
+// whenever the employees section is opened.
+function syncEmpSectionToTopClient(){
+  const slug = document.getElementById('import-client')?.value || '';
+  if(!slug){
+    // Nothing selected at top — show the placeholder hint
+    _activeClient = null;
+    _activeStore = null;
+    const detailEl = document.getElementById('client-detail');
+    if(detailEl){
+      detailEl.innerHTML = `
+        <div class="card" style="text-align:center;padding:60px 20px;color:var(--muted);">
+          <div style="font-size:32px;margin-bottom:12px;">👆</div>
+          <div>Pick a client at the top to manage its employees here.</div>
+        </div>`;
+    }
+    return;
+  }
+  // If it's already the active client, no-op to avoid clobbering store selection
+  if(_activeClient && _activeClient.slug === slug){
+    renderClientDetail();
+    return;
+  }
+  // Delegate to the existing client-selection logic
+  if(typeof selectClient === 'function') selectClient(slug);
 }
 
 // ─── Import & Push to Client ─────────────────────────────────────
@@ -808,6 +837,12 @@ let _importTips = null;     // { [storeNum]: tipTotal }
 
 function importClientChange() {
   updatePushBtn();
+  // If the Manage Employees section is open, sync its detail panel to
+  // the newly-selected client so users don't have to pick again.
+  const empSection = document.getElementById('emp-section');
+  if(empSection && empSection.style.display !== 'none'){
+    syncEmpSectionToTopClient();
+  }
 }
 
 function parseCSVLine(line) {
