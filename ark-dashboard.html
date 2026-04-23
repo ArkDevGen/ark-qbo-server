@@ -42661,7 +42661,9 @@ async function sjePushOne(idx) {
   if (btn) btn.textContent = 'Pushing…';
 
   let success = 0, failed = 0;
+  let verified = 0, verifyWarnings = 0;
   const errors = [];
+  const verifyIssues = [];  // [{date, journalNo, issues:[]}]
 
   for (const entry of toPush) {
     try {
@@ -42699,8 +42701,30 @@ async function sjePushOne(idx) {
       const unmapped = entry.lines.filter(l => l.account && !sjeResolveAcctId(l.account, acctMap)).map(l => l.account);
       if (unmapped.length) console.warn('Unmapped accounts for', f.label, ':', [...new Set(unmapped)].join(', '));
 
-      await qboCall('createJournalEntry', payload, f.realmId);
+      const createResult = await qboCall('createJournalEntry', payload, f.realmId);
       success++;
+
+      // ── Post-push verification — fetch the JE back and compare ──
+      // Doesn't block success; any mismatch is captured as a warning
+      // so the user can review without failing the push.
+      const jeId = createResult?.id;
+      if(jeId){
+        try {
+          const vData = await qboCall('getJournalEntry', { id: jeId }, f.realmId);
+          const fetched = vData?.journalEntry;
+          const diff = sjeDiffJE(payload, fetched);
+          if(diff.match){
+            verified++;
+          } else {
+            verifyWarnings++;
+            verifyIssues.push({ date: entry.date, journalNo: entry.journalNo, jeId, issues: diff.errors });
+          }
+        } catch(vErr){
+          verifyWarnings++;
+          verifyIssues.push({ date: entry.date, journalNo: entry.journalNo, jeId, issues:[`Verification fetch failed: ${vErr.message}`] });
+        }
+      }
+
       // Small delay between entries to avoid QBO rate limiting
       await new Promise(r => setTimeout(r, 350));
     } catch(e) {
@@ -42754,8 +42778,77 @@ async function sjePushOne(idx) {
     }
   }
 
+  // Show verification-warning panel if any JEs pushed but failed the
+  // fetch-back diff. These are NOT counted as failures (the JE was
+  // created successfully) — just something to review.
+  if (verifyIssues.length) {
+    const warnHtml = `<div style="margin-top:12px;padding:12px 16px;background:var(--amber-bg);border:1px solid rgba(176,106,26,.25);border-radius:var(--radius);max-height:300px;overflow-y:auto;">
+      <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">⚠ Verification Warnings — ${f.label} (${verifyIssues.length} of ${success} pushed need review)</div>
+      <div style="font-size:11px;color:var(--text-m);margin-bottom:8px;">These JEs were posted to QBO, but the fetch-back diff found differences. Usually harmless (QBO may reorder lines or normalize class/account names) — but worth a spot-check.</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Date</th>
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Journal #</th>
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">QBO JE ID</th>
+          <th style="text-align:left;padding:4px 8px;font-size:9px;color:var(--text-d);">Differences</th>
+        </tr>
+        ${verifyIssues.map(v => `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${v.date}</td>
+          <td style="padding:4px 8px;font-family:'DM Mono',monospace;">${v.journalNo}</td>
+          <td style="padding:4px 8px;font-family:'DM Mono',monospace;color:var(--text-d);">${v.jeId || '—'}</td>
+          <td style="padding:4px 8px;color:var(--amber);word-break:break-word;">${v.issues.slice(0,3).join('; ')}${v.issues.length>3?`…(+${v.issues.length-3} more)`:''}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+    const detailRow = document.getElementById('sje-detail-' + idx);
+    if (detailRow) {
+      detailRow.style.display = '';
+      detailRow.querySelector('td').insertAdjacentHTML('beforeend', warnHtml);
+    }
+  }
+
   const skipMsg = skipped > 0 ? `, ${skipped} skipped (already in QBO)` : '';
-  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}${skipMsg}`);
+  const verifyMsg = success > 0
+    ? (verifyWarnings === 0
+        ? ` · all ${verified} verified ✓`
+        : ` · ${verified} verified, ${verifyWarnings} need review ⚠`)
+    : '';
+  showToast(`${f.label}: ${success} pushed${failed ? ', ' + failed + ' failed' : ''}${skipMsg}${verifyMsg}`);
+}
+
+// ── Post-push verification helper for Scooter's JEs ──
+// Compares the intended createJournalEntry payload against what QBO
+// returned on getJournalEntry. Returns { match, errors }.
+// Matches by line position (QBO typically preserves order).
+function sjeDiffJE(intended, fetched){
+  const errors = [];
+  if(!fetched) return { match:false, errors:['No JE returned from QBO'] };
+  if(String(fetched.TxnDate||'')   !== String(intended.TxnDate||''))    errors.push(`TxnDate: sent ${intended.TxnDate}, got ${fetched.TxnDate}`);
+  if(String(fetched.DocNumber||'') !== String(intended.DocNumber||'')) errors.push(`DocNumber: sent ${intended.DocNumber}, got ${fetched.DocNumber}`);
+  const intLines = intended.Line || [];
+  const gotLines = fetched.Line || [];
+  if(intLines.length !== gotLines.length)
+    errors.push(`Line count: sent ${intLines.length}, got ${gotLines.length}`);
+  const n = Math.min(intLines.length, gotLines.length);
+  for(let i = 0; i < n; i++){
+    const a = intLines[i];
+    const b = gotLines[i];
+    const aAmt = Math.round((+a.Amount||0) * 100);
+    const bAmt = Math.round((+b.Amount||0) * 100);
+    if(aAmt !== bAmt)
+      errors.push(`Line ${i+1} amount: $${(aAmt/100).toFixed(2)} vs $${(bAmt/100).toFixed(2)}`);
+    const aPost = a.JournalEntryLineDetail?.PostingType || '';
+    const bPost = b.JournalEntryLineDetail?.PostingType || '';
+    if(aPost !== bPost) errors.push(`Line ${i+1} type: ${aPost} vs ${bPost}`);
+    const aAcct = a.JournalEntryLineDetail?.AccountRef?.value || '';
+    const bAcct = b.JournalEntryLineDetail?.AccountRef?.value || '';
+    // Some Scooter's entries send account NAME without ID — QBO resolves the ID
+    // server-side. In that case, intended AccountRef.value is empty and we can't
+    // compare IDs; skip the check rather than false-alarm.
+    if(aAcct && String(aAcct) !== String(bAcct))
+      errors.push(`Line ${i+1} account: ${aAcct} vs ${bAcct}`);
+  }
+  return { match: errors.length === 0, errors };
 }
 
 function sjeShowConfirm() {
