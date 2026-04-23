@@ -6330,7 +6330,33 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
         }
       }
       return row;
-    }).filter(r => r['_date'] && !isNaN(r['_date'].getTime()));
+    });
+
+    const totalRawRows = rows.length;
+    const rowsBeforeFilter = rows.slice();
+    const filteredRows = rows.filter(r => r['_date'] && !isNaN(r['_date'].getTime()));
+    rows.length = 0;
+    rows.push(...filteredRows);
+
+    // If every row got dropped for missing date, return a specific error
+    // so the user knows *why* the upload silently produced nothing.
+    if (totalRawRows > 0 && rows.length === 0) {
+      const hasAnyDay = rowsBeforeFilter.some(r => r['Day']);
+      const mapped = Object.entries(colMap).filter(([k,v]) => v).map(([k]) => k);
+      const missing = !colMap['Day']
+        ? `No "Day"/"Date" column found in this file — the parser needs a date per row to build daily journal entries.`
+        : (hasAnyDay
+            ? `"Day" column exists but no rows had a parseable date value. Check the Day column's format.`
+            : `"Day" column exists but every row is blank there.`);
+      return res.status(400).json({
+        error: missing,
+        detail: {
+          rowsInFile: totalRawRows,
+          mappedColumns: mapped,
+          hint: 'Re-export the report from Power BI with a "Day" column (one row per store per day).',
+        },
+      });
+    }
 
     console.log(`  Parsed ${rows.length} valid rows, columns: ${Object.entries(colMap).filter(([k,v])=>v).map(([k])=>k).join(', ')}`);
     // Log unique franchise names and stores in the data for debugging
