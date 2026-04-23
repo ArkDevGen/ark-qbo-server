@@ -3726,103 +3726,6 @@ app.post('/pl/thresholds', (req, res) => {
   res.json({ success: true });
 });
 
-// ── AI Analysis Endpoint ─────────────────────────────────────────
-app.post('/pl/digest', async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
-  }
-
-  const { plData, preFlags, summary, history, fleetContext, clientName, coaAccounts } = req.body;
-
-  // Use real COA if provided, otherwise fall back to generic template
-  let coaBlock = `Known Scooters COA structure:
-- Revenue: Sales (may also appear as "Store Sales"), Catering Income, Tip Income
-- COGS: Consumable COGS (Harvest products), Paper COGS, Other COGS
-- Royalties/Fees: Royalty Fees (~6% of sales), Ad Fund National (~2%), Ad Fund Local (~1-2%), Technology Fee
-- Payroll: Wages, Payroll Taxes, Workers Comp, Health Insurance, 401k, Bonuses
-- Occupancy: Rent, CAM, Utilities, Property Tax
-- Operating: Bank Charges, Insurance, Repairs, Supplies, Marketing`;
-
-  if (coaAccounts && coaAccounts.length > 0) {
-    coaBlock = `This client's actual Chart of Accounts (${coaAccounts.length} accounts from QBO):\n` +
-      coaAccounts.map(a => `- ${a.name} (${a.type}${a.subType ? '/' + a.subType : ''})`).join('\n') +
-      '\n\nWhen suggesting reclassifications, ONLY suggest accounts from this list.';
-  }
-
-  const systemPrompt = `You are a senior forensic bookkeeper reviewing a monthly P&L for a Scooters Coffee franchise store.
-You work for ARK Financial Services. Your job is to identify errors, misclassifications, missing items, and anomalies.
-
-RULES:
-- Always include dollar amounts and percentages in your explanations
-- When flagging a misclassification, suggest the SPECIFIC correct account from the COA below
-- Severity levels: CRITICAL (likely error), WARNING (review needed), INFO (informational)
-- Be specific — "COGS is 42% of sales ($7,560 / $18,000) which exceeds the 35% benchmark" not "COGS seems high"
-- If history data is provided, compare against rolling average and same-month-last-year
-- If fleet data is provided, flag accounts that differ from 75%+ of other stores
-
-${coaBlock}
-- ALWAYS FLAG: Uncategorized Expense, Uncategorized Income, Uncategorized Asset, Ask My Accountant, Reconciliation Discrepancies
-
-Return JSON array of flags: [{ severity, category, account, amount, message, suggestedAccount, variance }]`;
-
-  const userPrompt = `Client: ${clientName || 'Unknown'}
-
-P&L Data:
-${JSON.stringify(plData, null, 2)}
-
-${preFlags ? `Pre-analysis flags from rule engine (DO NOT re-flag these — they are already shown to the user):\n${JSON.stringify(preFlags, null, 2)}` : ''}
-${summary ? `Summary metrics:\n${JSON.stringify(summary, null, 2)}` : ''}
-${history ? `Historical comparison data:\n${JSON.stringify(history, null, 2)}` : ''}
-${fleetContext ? `Fleet intelligence (other stores):\n${JSON.stringify(fleetContext, null, 2)}` : ''}
-
-Analyze this P&L and return a JSON array of flags. DO NOT include flags for accounts already in the pre-analysis list above — focus only on NEW findings. Each flag: { severity: "CRITICAL"|"WARNING"|"INFO", category: string, account: string, amount: number|null, message: string, suggestedAccount: string|null, variance: string|null }`;
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error('Anthropic API error:', response.status, errBody);
-      return res.status(502).json({ error: `AI service error: ${response.status}` });
-    }
-
-    const aiData = await response.json();
-    const content = aiData.content?.[0]?.text || '[]';
-
-    // Try to parse the JSON from the AI response
-    let flags = [];
-    try {
-      // AI sometimes wraps in markdown code blocks
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) flags = JSON.parse(jsonMatch[0]);
-    } catch(e) {
-      console.error('Failed to parse AI flags:', e.message);
-      flags = [{ severity: 'INFO', category: 'System', account: '', amount: null, message: 'AI analysis returned non-parseable results. Raw: ' + content.slice(0, 200), suggestedAccount: null, variance: null }];
-    }
-
-    console.log(`  ✓ P&L Digest: ${flags.length} AI flags generated`);
-    res.json({ success: true, flags, usage: aiData.usage });
-
-  } catch (e) {
-    console.error('P&L Digest error:', e.message);
-    res.status(500).json({ error: 'AI analysis failed: ' + e.message });
-  }
-});
-
 // Health check for P&L Digester
 app.get('/pl/health', (req, res) => {
   res.json({
@@ -4227,10 +4130,15 @@ app.get('/pl/benchmarks/:realmId', (req, res) => {
 
 // Pass 1: Structural Analysis — forensic bookkeeper findings
 app.post('/pl/digest/analyze', async (req, res) => {
+  const { plData, preFlags, summary, history, historySMLY, fleetContext, fleetCohort, vendorConsolidationHints, anticipated, clientName, period, overrides, coaAccounts } = req.body;
+
+  // Validate the one field we truly can't work without — before key check
+  if (!Array.isArray(plData)) {
+    return res.status(400).json({ error: 'plData array is required' });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
-
-  const { plData, preFlags, summary, history, fleetContext, anticipated, clientName, period, overrides, coaAccounts } = req.body;
 
   // Build COA context string — use client's real COA if available, fall back to generic template
   let coaSection = '';
@@ -4259,10 +4167,11 @@ IMPORTANT: When suggesting account reclassifications, ONLY suggest accounts from
 
 You have access to:
 - The current month's P&L (account-level data with amounts)
-- Up to 6 months of historical P&L data for this specific store
+- Up to 13 months of historical P&L data for this specific store (enables MoM AND YoY comparison)
+- A dedicated same-month-last-year (SMLY) comparison block with YoY deltas on the key metrics
 - Fleet-wide averages across all Scooters stores ARK manages
 - A list of anticipated/expected monthly expenses configured for this store
-- Pre-flags from our automated rule engine
+- Pre-flags from our automated rule engine (includes 'mom' and 'smly' source flags for month-over-month and year-over-year variances)
 - AM overrides (accounts the AM has previously reviewed and marked as acceptable — DO NOT re-flag these unless the amount has changed significantly beyond the override tolerance)
 - The client's actual Chart of Accounts from QuickBooks Online${coaSection}
 
@@ -4274,14 +4183,15 @@ YOUR ANALYSIS MUST COVER:
 1. MISSING EXPENSES — ONLY flag items NOT already in the pre-flags. Check anticipated expenses and historical patterns, but skip any account already flagged by the rule engine.
 
 2. VARIANCE ALERTS: For each account, compare the current amount against:
-   - The store's own rolling 6-month average (flag >25% variance)
+   - The store's own rolling 12-month average (flag >25% variance)
+   - Same-month-last-year (use the historySMLY block — flag YoY swings that aren't explained by seasonality or store growth)
    - The fleet average % of revenue (flag if this store is an outlier)
    - The anticipated/expected amount if configured
 
 3. TREND FINDINGS: Look for multi-month patterns:
-   - Revenue growth or decline trends
+   - Revenue growth or decline trends (use full 13-month history)
    - Expense creep (payroll slowly climbing as % of sales over months)
-   - Seasonal patterns that might explain current variances
+   - Seasonal patterns — compare this month vs SMLY to distinguish seasonal shifts from structural changes
    - Deteriorating or improving margins
 
 4. ANOMALIES: Transactions or accounts that don't belong:
@@ -4327,11 +4237,22 @@ ${JSON.stringify(anticipated, null, 2)}` : 'No anticipated expenses configured.'
 ${preFlags && preFlags.length ? `RULE ENGINE PRE-FLAGS:
 ${JSON.stringify(preFlags, null, 2)}` : ''}
 
-${history ? `HISTORICAL DATA (up to 6 months):
+${history ? `HISTORICAL DATA (trailing 13 months — includes SMLY when available):
 ${JSON.stringify(history, null, 2)}` : 'No historical data available.'}
+
+${historySMLY ? `SAME-MONTH-LAST-YEAR (YoY comparison, ${historySMLY.period || 'prior year'}):
+${JSON.stringify(historySMLY, null, 2)}` : 'No SMLY data yet (store has <12 months of history).'}
 
 ${fleetContext ? `FLEET DATA (all Scooters stores):
 ${JSON.stringify(fleetContext, null, 2)}` : 'No fleet data available.'}
+
+${fleetCohort ? `PEER COHORT (this store is in the "${fleetCohort.tier}" revenue tier of ${fleetCohort.tierSize} stores):
+Use these peer averages when comparing this store — they are more meaningful than fleet-wide averages because they control for store size. Revenue range for this tier: ${fleetCohort.tierRevenueRange ? `$${Math.round(fleetCohort.tierRevenueRange.min).toLocaleString()} – $${Math.round(fleetCohort.tierRevenueRange.max).toLocaleString()}` : 'unknown'}.
+${JSON.stringify(fleetCohort.peerAvgs, null, 2)}` : ''}
+
+${vendorConsolidationHints && vendorConsolidationHints.length ? `VENDOR CONSOLIDATION HINTS (vendors mapped to multiple accounts across the fleet):
+These vendors appear under different accounts at different stores. If any of this store's transactions involve these vendors, consider whether the account matches the fleet majority.
+${JSON.stringify(vendorConsolidationHints, null, 2)}` : ''}
 
 ${overrides && Object.keys(overrides).length ? `AM OVERRIDES (previously approved — skip these unless amount changed significantly):
 ${JSON.stringify(overrides, null, 2)}` : ''}
@@ -4362,18 +4283,23 @@ Analyze this P&L thoroughly and return the structured JSON object.`;
 
     const aiData = await response.json();
     const content = aiData.content?.[0]?.text || '{}';
+    const truncated = aiData.stop_reason === 'max_tokens';
 
     let findings = {};
+    let parseError = null;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) findings = JSON.parse(jsonMatch[0]);
+      else parseError = 'No JSON object in AI response';
     } catch(e) {
+      parseError = e.message;
       console.error('Failed to parse AI findings:', e.message);
-      findings = { anomalies: [{ severity: 'INFO', account: '', amount: null, message: 'AI analysis returned non-parseable results.', suggestedAccount: null }] };
+      findings = { anomalies: [{ severity: 'INFO', account: '', amount: null, message: `AI analysis returned non-parseable results${truncated ? ' (response was truncated at max_tokens)' : ''}.`, suggestedAccount: null }] };
     }
 
-    console.log(`  ✓ P&L Analyze (Pass 1): ${Object.values(findings).flat().length} total findings`);
-    res.json({ success: true, findings, usage: aiData.usage });
+    const findingCount = Object.values(findings).flat().length;
+    console.log(`  ✓ P&L Analyze (Pass 1): ${findingCount} total findings${truncated ? ' [TRUNCATED]' : ''}${parseError ? ' [parse: ' + parseError + ']' : ''}`);
+    res.json({ success: true, findings, truncated, parseError, usage: aiData.usage });
 
   } catch (e) {
     console.error('P&L Analyze error:', e.message);
@@ -4387,6 +4313,10 @@ app.post('/pl/digest/meeting-prep', async (req, res) => {
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
   const { findings, summary, clientName, period } = req.body;
+  // Scale max_tokens with finding volume — larger analyses need more room
+  // for the brief without getting truncated mid-JSON.
+  const findingCount = findings && typeof findings === 'object' ? Object.values(findings).flat().length : 0;
+  const maxTokens = findingCount > 20 ? 4096 : (findingCount > 10 ? 3072 : 2048);
 
   const systemPrompt = `You are a senior financial advisor at ARK Financial Services preparing a client meeting brief for a Scooters Coffee franchise owner. The owner is NOT an accountant — they understand their business but need financial information presented clearly and actionably.
 
@@ -4433,7 +4363,7 @@ Generate the meeting prep brief.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 2048,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),
@@ -4447,22 +4377,108 @@ Generate the meeting prep brief.`;
 
     const aiData = await response.json();
     const content = aiData.content?.[0]?.text || '{}';
+    const truncated = aiData.stop_reason === 'max_tokens';
 
     let prep = {};
+    let parseError = null;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) prep = JSON.parse(jsonMatch[0]);
+      else parseError = 'No JSON object in AI response';
     } catch(e) {
+      parseError = e.message;
       console.error('Failed to parse meeting prep:', e.message);
-      prep = { executiveSummary: 'Meeting prep generation failed.', talkingPoints: [], clientInsights: [], actionItems: [] };
+      prep = { executiveSummary: `Meeting prep generation failed${truncated ? ' (response truncated at max_tokens)' : ''}.`, talkingPoints: [], clientInsights: [], actionItems: [] };
     }
 
-    console.log(`  ✓ P&L Meeting Prep (Pass 2): ${(prep.talkingPoints||[]).length} talking points`);
-    res.json({ success: true, prep, usage: aiData.usage });
+    console.log(`  ✓ P&L Meeting Prep (Pass 2): ${(prep.talkingPoints||[]).length} talking points [max=${maxTokens}]${truncated ? ' [TRUNCATED]' : ''}${parseError ? ' [parse: ' + parseError + ']' : ''}`);
+    res.json({ success: true, prep, truncated, parseError, usage: aiData.usage });
 
   } catch (e) {
     console.error('P&L Meeting Prep error:', e.message);
     res.status(500).json({ error: 'Meeting prep failed: ' + e.message });
+  }
+});
+
+// ── Import Wizard: AI column mapping ─────────────────────────────
+// Proxies an Anthropic call to map CSV headers → ARK CRM field keys.
+// Lives server-side so the API key never touches the browser. Body:
+//   { headers: string[], samples: string[][], arkFields: [{key,label}] }
+// Returns: { success, mapping: { [header]: arkKey } }
+app.post('/api/import/map-columns', async (req, res) => {
+  const { headers, samples, arkFields } = req.body || {};
+  if (!Array.isArray(headers) || !headers.length) {
+    return res.status(400).json({ error: 'headers array is required' });
+  }
+  if (!Array.isArray(arkFields) || !arkFields.length) {
+    return res.status(400).json({ error: 'arkFields array is required' });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const sampleLines = headers.map((h, i) => {
+    const vals = (Array.isArray(samples) ? samples : []).slice(0, 3).map(r => (r && r[i]) || '').filter(Boolean);
+    return `"${h}": [${vals.map(v => `"${String(v).replace(/"/g,'\\"')}"`).join(', ')}]`;
+  });
+  const fieldList = arkFields.map(f => `${f.key} (${f.label})`).join(', ');
+
+  const prompt = `You are a data analyst mapping CSV column headers to a CRM field schema.
+
+CSV column headers and sample values:
+${sampleLines.join('\n')}
+
+Available ARK CRM fields:
+${fieldList}
+
+For each CSV column, suggest the best matching ARK field key, or "_skip" if none fits.
+Reply ONLY with a JSON object: { "columnName": "arkFieldKey", ... }
+Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank account, password, routing number, PIN), map it to "_skip".`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error('Anthropic API error (import/map-columns):', response.status, errBody);
+      return res.status(502).json({ error: `AI service error: ${response.status}` });
+    }
+
+    const aiData = await response.json();
+    const content = (aiData.content || []).map(b => b.text || '').join('');
+    const jsonMatch = content.match(/\{[\s\S]+\}/);
+    if (!jsonMatch) {
+      return res.status(502).json({ error: 'No JSON object in AI response' });
+    }
+    let mapping = {};
+    try { mapping = JSON.parse(jsonMatch[0]); }
+    catch (e) { return res.status(502).json({ error: 'AI returned non-parseable JSON: ' + e.message }); }
+
+    const validKeys = new Set(arkFields.map(f => f.key).concat(['_skip']));
+    const cleanMapping = {};
+    for (const h of headers) {
+      const v = mapping[h];
+      cleanMapping[h] = validKeys.has(v) ? v : '_skip';
+    }
+
+    console.log(`  ✓ Import AI map-columns: ${Object.keys(cleanMapping).length} headers mapped`);
+    res.json({ success: true, mapping: cleanMapping, usage: aiData.usage });
+
+  } catch (e) {
+    console.error('Import map-columns error:', e.message);
+    res.status(500).json({ error: 'Column mapping failed: ' + e.message });
   }
 });
 

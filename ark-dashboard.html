@@ -37623,8 +37623,8 @@ function plRenderAnticipated() {
     body.innerHTML = '<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--text-d);font-size:11px;">No expected expenses configured. Click "Apply Scooter\'s Template" to start.</td></tr>';
     return;
   }
-  body.innerHTML = plAnticipatedExpenses.map((e, i) => `<tr style="border-bottom:1px solid var(--border);">
-    <td style="padding:4px 8px;"><input type="text" value="${e.name||''}" onchange="plAnticipatedExpenses[${i}].name=this.value" class="field-input" style="font-size:11px;padding:3px 6px;"></td>
+  body.innerHTML = plAnticipatedExpenses.map((e, i) => `<tr style="border-bottom:1px solid var(--border);${e.autoSeeded ? 'background:rgba(46,117,182,.04);' : ''}">
+    <td style="padding:4px 8px;">${e.autoSeeded ? '<span title="Auto-seeded from this P&L — review and adjust as needed" style="display:inline-block;font-size:8px;font-weight:700;padding:1px 5px;border-radius:8px;background:rgba(46,117,182,.12);color:var(--navy);letter-spacing:.04em;margin-right:4px;vertical-align:middle;">SEEDED</span>' : ''}<input type="text" value="${e.name||''}" onchange="plAnticipatedExpenses[${i}].name=this.value;plAnticipatedExpenses[${i}].autoSeeded=false" class="field-input" style="font-size:11px;padding:3px 6px;"></td>
     <td style="padding:4px 8px;"><input type="number" value="${e.amount||''}" onchange="plAnticipatedExpenses[${i}].amount=parseFloat(this.value)||null" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:80px;" placeholder="$0"></td>
     <td style="padding:4px 8px;"><input type="number" value="${e.pctOfSales ? (e.pctOfSales*100).toFixed(1) : ''}" onchange="plAnticipatedExpenses[${i}].pctOfSales=this.value?(parseFloat(this.value)/100):null" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:60px;" placeholder="%" step="0.1"></td>
     <td style="padding:4px 8px;"><input type="number" value="${e.tolerance ? (e.tolerance*100).toFixed(0) : '15'}" onchange="plAnticipatedExpenses[${i}].tolerance=parseFloat(this.value)/100" class="field-input" style="font-size:11px;padding:3px 6px;text-align:right;width:50px;" placeholder="%" step="5">%</td>
@@ -37723,15 +37723,18 @@ function plAutoPopulateAfterDigest() {
     const n = plNormalizeName(a.name);
     return n.includes('income') || n.includes('sale') || n.includes('revenue');
   })?.amount || 1);
+  const seededAt = new Date().toISOString();
   plAnticipatedExpenses = accounts.map(a => ({
     name: a.name,
     amount: Math.abs(a.amount) > 50 ? Math.round(Math.abs(a.amount)) : null,
     pctOfSales: sales > 0 ? Math.round((Math.abs(a.amount) / sales) * 1000) / 1000 : null,
     tolerance: 0.20,
+    autoSeeded: true,
+    seededAt,
   }));
   plRenderAnticipated();
   plSaveAnticipated();
-  showToast(`Auto-populated ${plAnticipatedExpenses.length} expected expenses from this P&L`);
+  showToast(`Auto-seeded ${plAnticipatedExpenses.length} expected expenses from this P&L — review in the panel above`);
 }
 
 async function plSaveAnticipated() {
@@ -37781,19 +37784,10 @@ async function plRemoveOverride(account) {
 async function plTeachFleetAlias(canonical, actual) {
   if (!canonical || !actual) return false;
 
-  // Always save locally first so the user's work is never lost even if the
-  // server call fails (offline, deploy in progress, etc.)
+  // Update in-memory plFleetKnowledge so this session sees the alias
+  // immediately, even before the server round-trip completes. Fleet-wide
+  // is the single source of truth — no per-client alias cache.
   if (plSelectedClient) {
-    const dbClient = (DB.clients || []).find(c => c.id === plSelectedClient.id);
-    if (dbClient) {
-      if (!dbClient.plAccountAliases) dbClient.plAccountAliases = {};
-      if (!dbClient.plAccountAliases[canonical]) dbClient.plAccountAliases[canonical] = [];
-      if (!dbClient.plAccountAliases[canonical].includes(actual)) {
-        dbClient.plAccountAliases[canonical].push(actual);
-        saveDB();
-      }
-    }
-    // Also update in-memory plFleetKnowledge so this session sees it immediately
     if (!plFleetKnowledge.aliases[canonical]) plFleetKnowledge.aliases[canonical] = { candidates: [], rejected: [] };
     const bucket = plFleetKnowledge.aliases[canonical];
     if (!bucket.candidates.find(c => c.actual.toLowerCase() === actual.toLowerCase())) {
@@ -37829,8 +37823,25 @@ async function plTeachFleetAlias(canonical, actual) {
 }
 
 // ── Fleet Knowledge: silently push vendor → account observations
+// Resolve the vendor column from the report's Columns metadata rather
+// than a hardcoded index. QBO sometimes omits the Num column or reorders
+// them depending on report flavor, so index 3 isn't reliable.
+function plResolveDetailColIndex(detailReport, headerCandidates) {
+  const cols = detailReport?.Columns?.Column;
+  if (!Array.isArray(cols)) return -1;
+  const wanted = headerCandidates.map(h => h.toLowerCase());
+  for (let i = 0; i < cols.length; i++) {
+    const title = (cols[i]?.ColTitle || '').toLowerCase().trim();
+    if (wanted.includes(title)) return i;
+  }
+  return -1;
+}
+
 async function plContributeVendorPatterns(detailReport) {
   if (!detailReport) return;
+  // Resolve vendor column by header name, with fallback to legacy index 3.
+  let nameIdx = plResolveDetailColIndex(detailReport, ['Name', 'Vendor', 'Payee']);
+  if (nameIdx < 0) nameIdx = 3;
   const patterns = [];
   const seen = new Set();
   function walkDetail(rows, parentName) {
@@ -37841,8 +37852,8 @@ async function plContributeVendorPatterns(detailReport) {
         if (row.Rows?.Row) walkDetail(row.Rows.Row, accountName || parentName);
       } else if (row.ColData && parentName) {
         const cols = row.ColData.map(c => c.value || '');
-        // QBO detail rows: Date, Type, Num, Name (vendor), Memo, Split, Amount
-        const vendor = cols[3] || '';
+        if (cols.length <= nameIdx) continue;
+        const vendor = cols[nameIdx] || '';
         if (vendor) {
           const key = `${vendor.toLowerCase()}::${parentName}`;
           if (!seen.has(key)) {
@@ -37879,6 +37890,20 @@ function plGetTransactionsForAccount(accountName) {
   const transactions = [];
   const relatedAccounts = []; // accounts in the same parent section (useful for MISSING)
 
+  // Resolve column indexes from the report's Columns metadata so we don't
+  // break if QBO reorders or omits a column (e.g., no Num column).
+  const col = (titles) => {
+    let idx = typeof plResolveDetailColIndex === 'function' ? plResolveDetailColIndex(plDetailReport, titles) : -1;
+    return idx;
+  };
+  const idxDate   = col(['Date', 'Transaction Date']);
+  const idxType   = col(['Transaction Type', 'Type']);
+  const idxNum    = col(['Num', 'Ref No']);
+  const idxVendor = col(['Name', 'Vendor', 'Payee']);
+  const idxMemo   = col(['Memo/Description', 'Memo', 'Description']);
+  const idxSplit  = col(['Split']);
+  const idxAmount = col(['Amount']);
+
   function walkDetail(rows, parentName, depth, inTargetSection) {
     if (!rows) return;
     for (const row of rows) {
@@ -37914,15 +37939,19 @@ function plGetTransactionsForAccount(accountName) {
         const cols = row.ColData.map(c => c.value || '');
         if (cols.length >= 2) {
           const last = cols.length - 1;
-          const amount = parseFloat(cols[last]) || parseFloat(cols[last - 1]) || 0;
+          const pick = (i, fallback) => (i >= 0 && i < cols.length ? cols[i] : (fallback != null && fallback < cols.length ? cols[fallback] : '')) || '';
+          const amtRaw = idxAmount >= 0 && idxAmount < cols.length
+            ? cols[idxAmount]
+            : (cols[last] || cols[last - 1]);
+          const amount = parseFloat(amtRaw) || 0;
           if (cols[0] && (amount !== 0 || cols[1])) {
             transactions.push({
-              date: cols[0] || '',
-              type: cols[1] || '',
-              num: cols[2] || '',
-              vendor: cols[3] || '',
-              memo: cols[4] || '',
-              split: cols[5] || '',
+              date:   pick(idxDate, 0),
+              type:   pick(idxType, 1),
+              num:    pick(idxNum, 2),
+              vendor: pick(idxVendor, 3),
+              memo:   pick(idxMemo, 4),
+              split:  pick(idxSplit, 5),
               amount,
               account: parentName || accountName,
             });
@@ -38137,11 +38166,14 @@ async function plRunDigest() {
     if (!plRes.success) throw new Error(plRes.error || 'Failed to fetch P&L');
     plRawReport = plRes.report;
 
-    // ── Step 3: Pull trailing 5 months of history from QBO ─────
-    plProgress(15, 'Pulling 5-month history from QBO...');
+    // ── Step 3: Pull trailing 13 months of history from QBO ───
+    // 13 months gives us the immediate prior month (MoM) plus the
+    // same month last year (SMLY) in a single batch, self-bootstrapping
+    // SMLY comparison for new stores without needing prior digest runs.
+    plProgress(15, 'Pulling 13-month history from QBO...');
     const sd = new Date(startDate);
     const histPeriods = [];
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 13; i++) {
       const s = new Date(sd.getFullYear(), sd.getMonth() - i, 1);
       const e = new Date(sd.getFullYear(), sd.getMonth() - i + 1, 0);
       histPeriods.push({ startDate: s.toISOString().slice(0,10), endDate: e.toISOString().slice(0,10), label: s.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) });
@@ -38249,11 +38281,16 @@ async function plRunDigest() {
 
     // ── Step 7b: Run enhanced local rule engine ─────────────────
     plProgress(42, 'Running rule engine + pattern analysis...');
+    // Build SMLY + fleet-avg lookup indexes before rules run — so any
+    // renderer or debug call can query them for chip context.
+    plRebuildLookupIndexes(plHistoryData, startDate);
+
     const ruleFlags = plRunRuleEngine(accounts);
     const patternFlags = plAnalyzePatterns(accounts, plHistoryData);
     const anticipatedFlags = plCheckAnticipated(accounts, plCurrentSummary);
     const momFlags = plCheckMoM(accounts, plHistoryData);
-    const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags, ...momFlags];
+    const smlyFlags = plCheckSMLY(accounts, plHistoryData, startDate, endDate);
+    const allLocalFlags = [...ruleFlags, ...patternFlags, ...anticipatedFlags, ...momFlags, ...smlyFlags];
 
     // ── Step 7c: Silently accumulate vendor → account patterns ─
     if (plDetailReport) {
@@ -38288,7 +38325,10 @@ async function plRunDigest() {
           preFlags: allLocalFlags,
           summary: plCurrentSummary,
           history: plHistoryData,
+          historySMLY: plBuildHistorySMLY(plHistoryData, startDate, plCurrentSummary),
           fleetContext: plFleetData,
+          fleetCohort: plBuildFleetCohortContext(plFleetData, plGetEffectiveRealmKey(), plCurrentSummary?.sales),
+          vendorConsolidationHints: plBuildVendorConsolidationHints(plFleetKnowledge),
           anticipated: plAnticipatedExpenses,
           overrides: plOverrides,
           clientName: plSelectedClient.biz,
@@ -38711,6 +38751,277 @@ function plCheckMoM(currentAccounts, historyData) {
   return flags;
 }
 
+// ── AI-only fleet context: cohort tiers + vendor consolidation ──
+// These are not rendered in the UI — they enrich the Pass 1 prompt so
+// the AI can reason about peer stores of similar size and spot vendor
+// consolidation opportunities across the fleet.
+
+// Split the fleet into top/mid/bottom revenue tiers and return the tier
+// this store belongs to along with the matching tier's per-account
+// averages. Returns null if the fleet is too small for tiering.
+function plBuildFleetCohortContext(fleetData, currentRealmId, currentRevenue) {
+  if (!fleetData?.accounts || !currentRealmId) return null;
+  const salesCandidates = ['Sales', 'Store Sales', 'Net Sales', 'Total Income', 'Income'];
+  let salesKey = null;
+  for (const k of Object.keys(fleetData.accounts)) {
+    if (salesCandidates.some(s => k.toLowerCase().includes(s.toLowerCase()))) { salesKey = k; break; }
+  }
+  if (!salesKey) return null;
+  const salesAmounts = fleetData.accounts[salesKey]?.amounts || {};
+  const storeRevenues = Object.entries(salesAmounts)
+    .map(([realmId, d]) => ({ realmId, revenue: d.amount || 0 }))
+    .filter(s => s.revenue > 0);
+  // Include the current store's revenue if missing from fleet aggregate yet
+  if (!salesAmounts[currentRealmId] && currentRevenue) {
+    storeRevenues.push({ realmId: currentRealmId, revenue: currentRevenue });
+  }
+  if (storeRevenues.length < 6) return null; // need at least 2 stores/tier
+  storeRevenues.sort((a, b) => b.revenue - a.revenue);
+  const tierSize = Math.ceil(storeRevenues.length / 3);
+  const top = storeRevenues.slice(0, tierSize).map(s => s.realmId);
+  const bottom = storeRevenues.slice(-tierSize).map(s => s.realmId);
+  const mid = storeRevenues.slice(tierSize, storeRevenues.length - tierSize).map(s => s.realmId);
+  let myTier = 'mid';
+  if (top.includes(currentRealmId)) myTier = 'top';
+  else if (bottom.includes(currentRealmId)) myTier = 'bottom';
+  const peers = myTier === 'top' ? top : (myTier === 'bottom' ? bottom : mid);
+  const peerSet = new Set(peers);
+
+  // Compute per-account averages within the matching tier only
+  const peerAvgs = {};
+  for (const [acctName, data] of Object.entries(fleetData.accounts)) {
+    const amounts = data.amounts || {};
+    const peerAmounts = [];
+    for (const [rid, a] of Object.entries(amounts)) {
+      if (peerSet.has(rid) && a.amount > 0) peerAmounts.push(a.amount);
+    }
+    if (peerAmounts.length >= 2) {
+      peerAvgs[acctName] = {
+        avgAmount: Math.round(peerAmounts.reduce((s, v) => s + v, 0) / peerAmounts.length),
+        peerCount: peerAmounts.length,
+      };
+    }
+  }
+  return {
+    tier: myTier,
+    tierSize: peers.length,
+    tierRevenueRange: peers.length ? {
+      min: Math.min(...peers.map(r => salesAmounts[r]?.amount || 0).filter(v => v > 0)),
+      max: Math.max(...peers.map(r => salesAmounts[r]?.amount || 0).filter(v => v > 0)),
+    } : null,
+    peerAvgs,
+  };
+}
+
+// Detect vendors that map to >1 account across the fleet — signals
+// that the same real-world vendor is being categorized inconsistently.
+function plBuildVendorConsolidationHints(fleetKnowledge) {
+  const patterns = fleetKnowledge?.vendorPatterns || {};
+  const hints = [];
+  for (const [vendor, accountCounts] of Object.entries(patterns)) {
+    const accounts = Object.entries(accountCounts || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([acct, count]) => ({ account: acct, count }));
+    if (accounts.length >= 2) {
+      // Only flag if the split is meaningful (top account <80% of total)
+      const total = accounts.reduce((s, a) => s + a.count, 0);
+      const topShare = accounts[0].count / total;
+      if (topShare < 0.8 && total >= 3) {
+        hints.push({
+          vendor,
+          totalTransactions: total,
+          topAccount: accounts[0].account,
+          topShare: Math.round(topShare * 100),
+          splitAcross: accounts,
+        });
+      }
+    }
+  }
+  // Keep the prompt tight — return the top 15 most-split vendors
+  return hints.sort((a, b) => b.totalTransactions - a.totalTransactions).slice(0, 15);
+}
+
+// ── UI lookup helpers: SMLY + Fleet Avg for flag detail chips ───
+// These build small in-memory indexes the review card renderer can
+// query without rebuilding the same maps per card.
+let _plSmlyAccountIndex = null;   // Map<cleanName, {amount, period}>
+let _plFleetAccountIndex = null;  // Map<cleanName, {avgAmount, avgPct, storeCount}>
+
+function plRebuildLookupIndexes(historyData, startDate) {
+  // SMLY index — amounts from the same month last year, keyed by clean name
+  _plSmlyAccountIndex = new Map();
+  const smly = plFindSmlyEntry(historyData, startDate);
+  if (smly && Array.isArray(smly.entry?.accounts)) {
+    for (const a of smly.entry.accounts) {
+      const name = typeof a === 'string' ? a : a.name;
+      const amount = typeof a === 'object' ? Math.abs(a.amount || 0) : 0;
+      const cleaned = plCleanAccountName(name);
+      if (cleaned && amount > 0) {
+        const existing = _plSmlyAccountIndex.get(cleaned);
+        if (!existing || amount > existing.amount) {
+          _plSmlyAccountIndex.set(cleaned, { amount, period: smly.key });
+        }
+      }
+    }
+  }
+
+  // Fleet index — average dollar amount and % of revenue, keyed by clean name
+  _plFleetAccountIndex = new Map();
+  const fleetAccts = plFleetData?.accounts || {};
+  for (const [name, data] of Object.entries(fleetAccts)) {
+    const cleaned = plCleanAccountName(name);
+    if (!cleaned) continue;
+    // When multiple original names clean to the same key, keep the one with more stores
+    const existing = _plFleetAccountIndex.get(cleaned);
+    const candidate = {
+      avgAmount: data.avgAmount || 0,
+      avgPct: data.avgPct || 0,
+      storeCount: data.storeCount || 0,
+    };
+    if (!existing || candidate.storeCount > existing.storeCount) {
+      _plFleetAccountIndex.set(cleaned, candidate);
+    }
+  }
+}
+
+function plLookupSmly(accountName) {
+  if (!_plSmlyAccountIndex) return null;
+  const cleaned = plCleanAccountName(accountName);
+  return cleaned ? (_plSmlyAccountIndex.get(cleaned) || null) : null;
+}
+
+function plLookupFleetAvg(accountName) {
+  if (!_plFleetAccountIndex) return null;
+  const cleaned = plCleanAccountName(accountName);
+  return cleaned ? (_plFleetAccountIndex.get(cleaned) || null) : null;
+}
+
+// ── Same-Month-Last-Year Comparison ─────────────────────────────
+// Finds the trailing-history entry that matches the same calendar
+// month 12 months back and emits YoY variance flags. Seasonality is
+// real (coffee sales ≠ Jan to Jun), so thresholds are looser than MoM.
+//
+// IMPORTANT: dates are parsed as LOCAL calendar values (not UTC) so
+// "2026-03-01" stays March 1 regardless of the browser's timezone.
+// `new Date('2026-03-01')` alone is UTC-midnight, which flips to the
+// prior day in negative-UTC zones — breaks month arithmetic.
+function _plParseLocalDate(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return new Date(s);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function plComputeSmlyPeriodKey(startDate, endDate) {
+  if (!startDate || !endDate) return null;
+  const s = _plParseLocalDate(startDate);
+  const e = _plParseLocalDate(endDate);
+  const sY = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate());
+  const eY = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate());
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  return `${fmt(sY)}_${fmt(eY)}`;
+}
+
+// Locate the SMLY entry in historyData. Tries an exact key match first,
+// then falls back to any key whose start month+year matches (handles
+// slightly-different day boundaries like 03-01 vs 03-02).
+function plFindSmlyEntry(historyData, startDate) {
+  if (!historyData || !startDate) return null;
+  const s = _plParseLocalDate(startDate);
+  const yearMonth = `${s.getFullYear() - 1}-${String(s.getMonth() + 1).padStart(2, '0')}`;
+  for (const [key, entry] of Object.entries(historyData)) {
+    const ks = (key.split('_')[0] || '').slice(0, 7);
+    if (ks === yearMonth) return { key, entry };
+  }
+  return null;
+}
+
+function plCheckSMLY(currentAccounts, historyData, startDate, endDate) {
+  const flags = [];
+  const smly = plFindSmlyEntry(historyData, startDate);
+  if (!smly || !smly.entry) return flags;
+  const smlyAccounts = smly.entry.accounts || [];
+  if (!Array.isArray(smlyAccounts) || !smlyAccounts.length) return flags;
+
+  // Build cleaned-name → amount map for the SMLY month
+  const smlyByClean = new Map();
+  for (const a of smlyAccounts) {
+    const name = typeof a === 'string' ? a : a.name;
+    const amount = typeof a === 'object' ? Math.abs(a.amount || 0) : 0;
+    const cleaned = plCleanAccountName(name);
+    if (cleaned && amount > 0) {
+      const existing = smlyByClean.get(cleaned);
+      if (!existing || amount > existing.amount) smlyByClean.set(cleaned, { name, amount });
+    }
+  }
+
+  const fmt$ = (v) => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0 });
+  const fmtPct = (v) => (v >= 0 ? '+' : '') + v.toFixed(0) + '%';
+
+  for (const acct of currentAccounts) {
+    if (acct.type === 'section') continue;
+    if (plIsOverridden(acct.name, acct.amount)) continue;
+    const cleaned = plCleanAccountName(acct.name);
+    if (!cleaned) continue;
+    const smlyRow = smlyByClean.get(cleaned);
+    if (!smlyRow) continue;
+
+    const currentAmt = Math.abs(acct.amount || 0);
+    const smlyAmt = smlyRow.amount;
+    const diff = currentAmt - smlyAmt;
+    const pct = smlyAmt > 0 ? (diff / smlyAmt) * 100 : 0;
+
+    // Looser thresholds than MoM — seasonality makes some YoY variance normal
+    if (Math.abs(diff) < 500) continue;
+    if (Math.abs(pct) < 30) continue;
+
+    const displayName = acct.name.split(':').pop().replace(/^\d{3,6}\s+/g, '').trim() || acct.name;
+    const direction = diff > 0 ? 'up' : 'down';
+    const severity = Math.abs(pct) > 75 || Math.abs(diff) > 5000 ? 'WARNING' : 'INFO';
+
+    flags.push({
+      severity,
+      category: 'Year-over-Year',
+      account: displayName,
+      amount: acct.amount,
+      message: `${displayName} is ${fmt$(currentAmt)} vs ${fmt$(smlyAmt)} same month last year (${fmtPct(pct)}, ${direction} ${fmt$(Math.abs(diff))} YoY). Seasonal or structural?`,
+      suggestedAccount: null,
+      variance: fmtPct(pct),
+      source: 'smly',
+      smlyAmount: smlyAmt,
+      smlyPeriod: smly.key,
+    });
+  }
+
+  return flags;
+}
+
+// Build a compact YoY summary for the AI payload: summary-level metrics
+// YoY plus the top N accounts with the largest YoY swings. Keeps the
+// prompt tight vs. dumping the full SMLY account list.
+function plBuildHistorySMLY(historyData, startDate, currentSummary) {
+  const smly = plFindSmlyEntry(historyData, startDate);
+  if (!smly || !smly.entry) return null;
+  const smlyMetrics = smly.entry.metrics || {};
+  const curM = currentSummary || {};
+  const delta = (cur, prev) => {
+    if (!prev || prev === 0) return null;
+    return Math.round(((cur - prev) / prev) * 1000) / 10; // one decimal
+  };
+  return {
+    period: smly.key,
+    metrics: {
+      sales:      { current: curM.sales      || 0, smly: smlyMetrics.sales      || 0, yoyPct: delta(curM.sales      || 0, smlyMetrics.sales) },
+      cogs:       { current: curM.cogs       || 0, smly: smlyMetrics.cogs       || 0, yoyPct: delta(curM.cogs       || 0, smlyMetrics.cogs) },
+      payroll:    { current: curM.payroll    || 0, smly: smlyMetrics.payroll    || 0, yoyPct: delta(curM.payroll    || 0, smlyMetrics.payroll) },
+      rent:       { current: curM.rent       || 0, smly: smlyMetrics.rent       || 0, yoyPct: delta(curM.rent       || 0, smlyMetrics.rent) },
+      royalty:    { current: curM.royalty    || 0, smly: smlyMetrics.royalty    || 0, yoyPct: delta(curM.royalty    || 0, smlyMetrics.royalty) },
+      netIncome:  { current: curM.netIncome  || 0, smly: smlyMetrics.netIncome  || 0, yoyPct: delta(curM.netIncome  || 0, smlyMetrics.netIncome) },
+    },
+  };
+}
+
 // ── Anticipated Expense Checker ──────────────────────────────────
 // Normalize an account name for matching: lowercase, strip non-alphanumerics,
 // drop trailing 's' to handle simple plurals.
@@ -38725,10 +39036,9 @@ function plNormalizeName(s) {
 // (with .name and .amount) or null.
 //
 // Order of precedence:
-//   1. Per-client alias (client.plAccountAliases[canonical] = ['Coffee Sales', ...])
-//   2. Fleet alias (DB-wide knowledge from any other store)
-//   3. Section/parent header match (treats account headers as candidates)
-//   4. Fuzzy leaf match (substring on normalized form)
+//   1. Fleet alias (DB-wide knowledge from any store)
+//   2. Section/parent header match (treats account headers as candidates)
+//   3. Fuzzy leaf match (substring on normalized form)
 function plResolveAccount(canonical, accounts, sectionNames) {
   if (!canonical || !accounts) return null;
   const targetN = plNormalizeName(canonical);
@@ -38745,15 +39055,7 @@ function plResolveAccount(canonical, accounts, sectionNames) {
     return null;
   };
 
-  // 1. Per-client alias
-  const clientAliases = plSelectedClient?.plAccountAliases || {};
-  const cAliases = clientAliases[canonical] || clientAliases[targetN] || [];
-  for (const actual of cAliases) {
-    const m = findByActual(actual);
-    if (m) return { ...m, _matchSource: 'client-alias', _matchActual: actual };
-  }
-
-  // 2. Fleet alias (top-voted candidate that exists in this P&L)
+  // Fleet alias (top-voted candidate that exists in this P&L)
   const fleetBucket = plFleetKnowledge?.aliases?.[canonical] || plFleetKnowledge?.aliases?.[targetN];
   if (fleetBucket && Array.isArray(fleetBucket.candidates)) {
     // candidates are sorted by votes desc on the server
@@ -38935,39 +39237,44 @@ function plRunRuleEngine(accounts) {
 }
 
 // ── Merge rule + AI flags ────────────────────────────────────────
+// Local flags (rule/pattern/anticipated/mom/smly) collapse to one best
+// flag per account — they all measure the same axis. AI flags are kept
+// separate and deduped by category+account, because a "Trend" finding
+// on Payroll and a "Variance" finding on Payroll are different lenses
+// and both should surface in the review UI.
 function plMergeFlags(ruleFlags, aiFlags) {
-  // Combine all flags from every source into one pool.
-  const all = [...ruleFlags];
-  for (const af of aiFlags) { af.source = 'ai'; all.push(af); }
-
-  // Deduplicate on NORMALIZED ACCOUNT NAME — keep the highest-severity,
-  // most-informative flag per account. This collapses the 4 "Missing"
-  // categories (Rule Engine, Anticipated, Pattern, AI) into one flag.
   const sevRank = { CRITICAL: 0, WARNING: 1, INFO: 2 };
-  const byAccount = new Map();
-  for (const f of all) {
+
+  // Dedup local flags by normalized account name — keep the highest-
+  // severity, most-informative flag per account.
+  const localByAccount = new Map();
+  for (const f of ruleFlags) {
     const key = plNormalizeName(f.account || '');
     if (!key) continue;
-    const existing = byAccount.get(key);
-    if (!existing) {
-      byAccount.set(key, f);
-    } else {
-      // Keep the one with higher severity; break ties by preferring
-      // the one with more detail (longer message, has suggested account, etc.)
-      const existingRank = sevRank[existing.severity] ?? 9;
-      const newRank = sevRank[f.severity] ?? 9;
-      if (newRank < existingRank) {
-        byAccount.set(key, f);
-      } else if (newRank === existingRank) {
-        // Same severity: prefer the one with more context
-        const existingScore = (existing.message||'').length + (existing.suggestedAccount ? 50 : 0) + (existing.amount != null ? 20 : 0);
-        const newScore = (f.message||'').length + (f.suggestedAccount ? 50 : 0) + (f.amount != null ? 20 : 0);
-        if (newScore > existingScore) byAccount.set(key, f);
-      }
+    const existing = localByAccount.get(key);
+    if (!existing) { localByAccount.set(key, f); continue; }
+    const existingRank = sevRank[existing.severity] ?? 9;
+    const newRank = sevRank[f.severity] ?? 9;
+    if (newRank < existingRank) {
+      localByAccount.set(key, f);
+    } else if (newRank === existingRank) {
+      const existingScore = (existing.message||'').length + (existing.suggestedAccount ? 50 : 0) + (existing.amount != null ? 20 : 0);
+      const newScore = (f.message||'').length + (f.suggestedAccount ? 50 : 0) + (f.amount != null ? 20 : 0);
+      if (newScore > existingScore) localByAccount.set(key, f);
     }
   }
 
-  const merged = [...byAccount.values()];
+  // Dedup AI flags by category+account — one flag per (AI lens, account)
+  const aiByKey = new Map();
+  for (const af of aiFlags) {
+    af.source = 'ai';
+    const key = (af.category || '') + '::' + plNormalizeName(af.account || '');
+    if (!key.endsWith('::')) {
+      if (!aiByKey.has(key)) aiByKey.set(key, af);
+    }
+  }
+
+  const merged = [...localByAccount.values(), ...aiByKey.values()];
   merged.sort((a, b) => (sevRank[a.severity]||9) - (sevRank[b.severity]||9));
   return merged;
 }
@@ -39130,6 +39437,37 @@ function plRenderProblemCards() {
       trendLine = `<span style="font-size:10px;color:${borderColor};font-family:'DM Mono',monospace;">${f.variance}</span>`;
     }
 
+    // SMLY + Fleet chips — show YoY and fleet-comparison context where
+    // data is available. Skip the SMLY chip on SMLY-source flags since
+    // the message itself already carries that number.
+    const chips = [];
+    if (f.account && f.source !== 'smly') {
+      const smly = plLookupSmly(f.account);
+      if (smly && smly.amount > 0 && f.amount != null) {
+        const cur = Math.abs(f.amount);
+        const diff = cur - smly.amount;
+        const pct = smly.amount > 0 ? (diff / smly.amount) * 100 : 0;
+        const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
+        const sign = pct >= 0 ? '+' : '';
+        chips.push(`<span title="Same month last year (${smly.period || ''})" style="display:inline-block;font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:10px;background:rgba(46,117,182,.08);color:var(--navy);">YoY ${arrow} ${fmt$(smly.amount)} (${sign}${pct.toFixed(0)}%)</span>`);
+      }
+    }
+    if (f.account) {
+      const fa = plLookupFleetAvg(f.account);
+      if (fa && fa.avgAmount > 0 && fa.storeCount >= 2) {
+        let comparison = '';
+        if (f.amount != null) {
+          const cur = Math.abs(f.amount);
+          const diff = cur - fa.avgAmount;
+          const pct = fa.avgAmount > 0 ? (diff / fa.avgAmount) * 100 : 0;
+          const sign = pct >= 0 ? '+' : '';
+          comparison = ` (this store ${sign}${pct.toFixed(0)}%)`;
+        }
+        chips.push(`<span title="Rolling average across ${fa.storeCount} Scooters stores in the ARK fleet" style="display:inline-block;font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:10px;background:rgba(46,125,94,.08);color:var(--green);">Fleet avg: ${fmt$(fa.avgAmount)}${comparison}</span>`);
+      }
+    }
+    const chipLine = chips.length ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">${chips.join('')}</div>` : '';
+
     const isMissing = f.variance === 'MISSING';
 
     return `<div class="card pl-problem-card" id="pl-card-${i}" style="margin-bottom:8px;border-left:4px solid ${borderColor};overflow:visible;transition:opacity .3s,transform .3s;">
@@ -39145,6 +39483,7 @@ function plRenderProblemCards() {
             <div style="font-size:13px;font-weight:600;color:var(--text);">${esc(f.account) || '—'}</div>
             <div style="font-size:11px;color:var(--text-m);margin-top:2px;line-height:1.5;">${esc(f.message)}</div>
             ${trendLine ? `<div style="margin-top:4px;">${trendLine}</div>` : ''}
+            ${chipLine}
             ${f.suggestedAccount ? `<div style="font-size:10px;margin-top:4px;color:var(--green);"><strong>Suggested:</strong> ${esc(f.suggestedAccount)}</div>` : ''}
           </div>
         </div>
@@ -44440,35 +44779,22 @@ async function importRunAIMapping() {
     .map(f => `${f.key} (${f.label})`)
     .join(', ');
 
-  const prompt = `You are a data analyst mapping CSV column headers to a CRM field schema.
-
-CSV column headers and sample values:
-${samples.join('\n')}
-
-Available ARK CRM fields:
-${arkFieldList}
-
-For each CSV column, suggest the best matching ARK field key, or "_skip" if none fits.
-Reply ONLY with a JSON object: { "columnName": "arkFieldKey", ... }
-Use exact ARK field keys. If a column contains sensitive data (SSN, EIN, bank account, password, routing number, PIN), map it to "_skip".`;
-
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    // Proxy through the server so the Anthropic key stays server-side.
+    // The server handles prompt construction from the headers/samples we send.
+    const resp = await fetch(`${QBO_SERVER}/api/import/map-columns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
+        headers: _importCSVHeaders,
+        samples: _importCSVRows.slice(0, 3),
+        arkFields: IMPORT_ARK_FIELDS.filter(f => f.key !== '_skip').map(f => ({ key: f.key, label: f.label })),
       })
     });
+    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
     const data = await resp.json();
-    const text = (data.content || []).map(b => b.text || '').join('');
-
-    // Parse JSON from response
-    const jsonMatch = text.match(/\{[\s\S]+\}/);
-    if (!jsonMatch) throw new Error('No JSON in response');
-    const mapping = JSON.parse(jsonMatch[0]);
+    if (!data.success || !data.mapping) throw new Error(data.error || 'No mapping in response');
+    const mapping = data.mapping;
 
     // Build internal mapping: colIndex → arkKey
     _importMapping = {};
