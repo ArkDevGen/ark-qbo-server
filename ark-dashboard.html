@@ -48395,15 +48395,17 @@ function htRecordPushAttempt(je, intendedPayload, fetched, verifyResult){
 // Duplicate detection UI — returns 'cancel' or 'proceed'
 function htConfirmDuplicate(je, found){
   return new Promise(resolve => {
-    const existing = found[0];
     const existingList = found.map(f =>
       `<li style="margin-bottom:4px;">QBO JE #${f.id} · ${f.txnDate || '?'} · Total $${(+f.totalAmount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</li>`
     ).join('');
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.style.zIndex = '10001';
+    // NOTE: no onclick="event.stopPropagation()" on the modal — we want
+    // clicks on the Cancel / Post-anyway buttons to bubble to the
+    // overlay-level click delegator below.
     overlay.innerHTML = `
-      <div class="modal modal-sm" onclick="event.stopPropagation()">
+      <div class="modal modal-sm">
         <div class="modal-head">
           <div class="modal-head-left">
             <div class="modal-title">⚠ Duplicate Detected</div>
@@ -48417,7 +48419,7 @@ function htConfirmDuplicate(je, found){
           </div>
           <ul style="font-size:var(--text-md);color:var(--text-m);margin:8px 0 14px 20px;">${existingList}</ul>
           <div class="notice notice-warn">
-            Pushing will create a <strong>second</strong> JE with the same number. Usually you want to cancel and either delete the old one in QBO or skip this file.
+            <div>Pushing will create a <strong>second</strong> JE with the same number. Usually you want to cancel and either delete the old one in QBO or skip this file.</div>
           </div>
         </div>
         <div class="modal-foot modal-foot-spread">
@@ -48426,6 +48428,8 @@ function htConfirmDuplicate(je, found){
         </div>
       </div>`;
     document.body.appendChild(overlay);
+    // Single delegated handler on the overlay — works for clicks on
+    // either button since they bubble up unblocked.
     overlay.addEventListener('click', e => {
       const b = e.target.closest('[data-choice]');
       if(!b) return;
