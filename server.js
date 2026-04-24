@@ -5337,6 +5337,7 @@ app.get('/letters/:id/signed', requireAuth, (req, res) => {
 
 const TIME_PUNCHES_FILE = path.join(DATA_DIR, 'time-punches.json');
 const TIME_PTO_FILE = path.join(DATA_DIR, 'time-pto.json');
+const ARK_DB_FILE = path.join(DATA_DIR, 'ark-db.json');
 
 function _loadTimePunches() {
   try { if (fs.existsSync(TIME_PUNCHES_FILE)) return JSON.parse(fs.readFileSync(TIME_PUNCHES_FILE, 'utf8')); } catch (_) {}
@@ -6041,7 +6042,6 @@ app.post('/staging/push-file', requireAuth, async (req, res) => {
 // DATABASE: Server-side persistent storage for dashboard data
 // Both users share the same ark-db.json on disk
 // ─────────────────────────────────────────────────────────────────
-const ARK_DB_FILE = path.join(DATA_DIR, 'ark-db.json');
 
 app.get('/db/load', requireAuth, (req, res) => {
   try {
