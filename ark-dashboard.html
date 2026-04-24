@@ -3311,6 +3311,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div class="page-header-actions">
         <button class="btn btn-ghost btn-sm" onclick="tdImportOpen()">📥 Import</button>
+        <!-- TEMP: remove once Production redesign ships -->
+        <button class="btn btn-ghost btn-sm" onclick="tcClearMyImported()" title="Hard-delete tasks imported from Todoist assigned to you. Temporary cleanup action." style="color:var(--red);">🧹 Clear My Imported</button>
         <button class="btn btn-ghost btn-sm" onclick="tcAddProject()">+ Project</button>
         <div style="position:relative;display:inline-block;">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New Task ▾</button>
@@ -27187,6 +27189,31 @@ function tcAddProject() {
   nbOpenCreateModal();
 }
 
+// TEMP cleanup action — hard-delete Todoist-imported tasks assigned to the
+// current user. Remove once the Production redesign ships with proper import
+// tagging + an in-app "undo import" flow. Heuristic: imported tasks carry
+// _sectionName / _indent / parentTaskId fields that manual tasks don't, plus
+// the new _importedFromTodoist flag for imports going forward.
+function tcClearMyImported(){
+  if(!currentUser?.id){ alert('You need to be logged in.'); return; }
+  if(!Array.isArray(DB.tasks) || !DB.tasks.length){ alert('No tasks to clear.'); return; }
+  const isImported = t =>
+    t._importedFromTodoist === true
+    || t._sectionName !== undefined
+    || t._indent !== undefined
+    || Object.prototype.hasOwnProperty.call(t, 'parentTaskId');
+  const mine = DB.tasks.filter(t => t.amId === currentUser.id && isImported(t));
+  if(!mine.length){ alert('No imported tasks found for your account.'); return; }
+  const msg = `Permanently delete ${mine.length} task${mine.length===1?'':'s'} imported from Todoist and assigned to you?\n\nThis cannot be undone.`;
+  if(!confirm(msg)) return;
+  const ids = new Set(mine.map(t => t.id));
+  DB.tasks = DB.tasks.filter(t => !ids.has(t.id));
+  saveDB();
+  logAct(`Cleared ${mine.length} imported Todoist task${mine.length===1?'':'s'} (temp cleanup)`);
+  tcRender();
+  showToast(`✓ Deleted ${mine.length} imported task${mine.length===1?'':'s'}`);
+}
+
 // ── View Switching ──────────────────────────────────────────────
 // ── Project Groups (collapsible sidebar folders) ────────────────
 function tcToggleGroup(groupId) {
@@ -28596,8 +28623,11 @@ function tdExecuteImport(){
   if(!toImport.length){ alert('Select at least one task to import.'); return; }
 
   if(!DB.tasks) DB.tasks = [];
+  const importedAt = new Date().toISOString();
   toImport.forEach(t => {
     const { _import, _checked, _row, ...clean } = t;
+    clean._importedFromTodoist = true;
+    clean._importedAt = importedAt;
     DB.tasks.push(clean);
   });
   saveDB();
