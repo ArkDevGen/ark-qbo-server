@@ -20713,7 +20713,7 @@ function ccRenderSMSLog(q){
 }
 
 function smsFilterLog(q){ ccRenderSMSLog(q); }
-function ccDeleteSMS(id){ const m=(DB.smsLog||[]).find(x=>x.id===id); if(m){ m._deleted=true; m._updatedAt=new Date().toISOString(); } saveDB(); ccRenderSMSLog(); }
+async function ccDeleteSMS(id){ const m=(DB.smsLog||[]).find(x=>x.id===id); if(m){ m._deleted=true; m._updatedAt=new Date().toISOString(); } await saveDB({ immediate: true }); ccRenderSMSLog(); }
 
 // ════════════════════════════════════════════════════════════════
 // ════ SMS CONVERSATIONS ════
@@ -20883,7 +20883,7 @@ function smsOpenThread(phone){
 }
 
 // ── Delete SMS (admin-only, tombstone pattern) ──
-function smsDeleteMessage(id){
+async function smsDeleteMessage(id){
   if(currentUser?.role !== 'admin'){ showToast('Only admins can delete messages'); return; }
   if(!id) return;
   if(!confirm('Delete this message? This cannot be undone.')) return;
@@ -20891,13 +20891,23 @@ function smsDeleteMessage(id){
   if(!m) return;
   m._deleted = true;
   m._updatedAt = new Date().toISOString();
-  saveDB();
+  // Immediate save bypasses the 1s debounce; otherwise an SSE-triggered /db/load
+  // can race and re-pull the pre-delete state, making the message "flash back"
+  // and requiring multiple clicks before the delete sticks.
+  await saveDB({ immediate: true });
+  // Also scrub the message from the chat popup + Comm Center chat view if the
+  // same id happens to live in either cache, so a delete in the SMS thread is
+  // reflected in the other UIs without needing a page refresh.
+  if (Array.isArray(_chatMessages))   _chatMessages   = _chatMessages.filter(x => x.id !== id);
+  if (Array.isArray(_ccChatMessages)) _ccChatMessages = _ccChatMessages.filter(x => x.id !== id);
+  if (typeof chatRenderMessages === 'function')   { try { chatRenderMessages();   } catch(_){} }
+  if (typeof ccChatRenderMessages === 'function') { try { ccChatRenderMessages(); } catch(_){} }
   // Re-render the thread to reflect the deletion
   if(_smsActivePhone) smsOpenThread(_smsActivePhone);
   showToast('Message deleted');
 }
 
-function smsDeleteConversation(phone){
+async function smsDeleteConversation(phone){
   if(currentUser?.role !== 'admin'){ showToast('Only admins can delete conversations'); return; }
   if(!phone) return;
   const convos = smsGetConversations();
@@ -20906,13 +20916,20 @@ function smsDeleteConversation(phone){
   if(!count){ showToast('Nothing to delete'); return; }
   if(!confirm(`Delete this entire conversation (${count} message${count===1?'':'s'})? This cannot be undone.`)) return;
   const now = new Date().toISOString();
+  const deletedIds = new Set();
   (DB.smsMessages||[]).forEach(m => {
     if(m.phone === phone && !m._deleted){
       m._deleted = true;
       m._updatedAt = now;
+      deletedIds.add(m.id);
     }
   });
-  saveDB();
+  await saveDB({ immediate: true });
+  // Scrub the same ids from the chat popup + Comm Center chat caches
+  if (Array.isArray(_chatMessages))   _chatMessages   = _chatMessages.filter(x => !deletedIds.has(x.id));
+  if (Array.isArray(_ccChatMessages)) _ccChatMessages = _ccChatMessages.filter(x => !deletedIds.has(x.id));
+  if (typeof chatRenderMessages === 'function')   { try { chatRenderMessages();   } catch(_){} }
+  if (typeof ccChatRenderMessages === 'function') { try { ccChatRenderMessages(); } catch(_){} }
   _smsActivePhone = null;
   // Reset thread view + refresh sidebar
   const msgEl = document.getElementById('sms-thread-messages');
@@ -32450,6 +32467,15 @@ async function chatDeleteMsg(msgId, source) {
       // Refresh channel lists to update previews
       chatLoadChannels();
       ccChatInit();
+      // Cross-UI sync: if this id also exists in the SMS thread cache, soft-
+      // delete there too so the SMS Conversations view doesn't keep showing it.
+      const sms = (DB.smsMessages||[]).find(x => x.id === msgId);
+      if (sms && !sms._deleted) {
+        sms._deleted = true;
+        sms._updatedAt = new Date().toISOString();
+        await saveDB({ immediate: true });
+        if (_smsActivePhone) smsOpenThread(_smsActivePhone);
+      }
     }
   } catch (_) {}
 }
