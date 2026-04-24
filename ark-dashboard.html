@@ -5073,7 +5073,22 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <button class="btn btn-sm" id="sje-mode-fleet" onclick="sjeMode('fleet')" style="font-size:12px;border-color:#f0b429;color:#f0b429;">🏆 Fleet Scoreboard</button>
           <button class="btn btn-sm" id="sje-mode-history" onclick="sjeMode('history')" style="font-size:12px;border-color:#6b3fa0;color:#6b3fa0;">📋 Push History</button>
           <button class="btn btn-sm" id="sje-mode-health" onclick="sjeMode('health')" style="font-size:12px;border-color:#2c5fa1;color:#2c5fa1;">🩺 Health Check</button>
+          <button class="btn btn-sm" id="sje-mode-mapping" onclick="sjeMode('mapping')" style="font-size:12px;border-color:#475569;color:#475569;">🔗 Account Mapping</button>
         </div>
+      </div>
+
+      <!-- ═══ ACCOUNT MAPPING PANEL ═══ -->
+      <div id="sje-mapping-panel" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">Account Mapping</div>
+            <div style="font-size:11px;color:var(--text-d);">Which QBO account name each Sales JE / COGS JE line posts to, per franchise. Click a row to see the full mapping.</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="sje-mapping-search" placeholder="Search franchise…" oninput="sjeMappingRenderList()" style="font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);width:200px;">
+          </div>
+        </div>
+        <div id="sje-mapping-list"></div>
       </div>
 
       <!-- ═══ HEALTH CHECK PANEL ═══ -->
@@ -6377,6 +6392,25 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div style="font-size:13px;color:var(--text-m);">Small utilities used across the firm. Click a tool to launch it.</div>
       </div>
       <div id="tools-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
+    </div>
+  </div>
+
+  <!-- Scooter's Account Mapping — per-franchise view of preset → account names -->
+  <div class="overlay" id="modal-sje-mapping" style="display:none;" onclick="overlayClose(event,'modal-sje-mapping')">
+    <div class="modal modal-xl" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="modal-head-left">
+          <div class="modal-title" id="sje-mapping-title">Account Mapping</div>
+          <div class="modal-subtitle" id="sje-mapping-subtitle"></div>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-sje-mapping')" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="sje-mapping-detail"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-sje-mapping')">Close</button>
+      </div>
     </div>
   </div>
 
@@ -43615,6 +43649,8 @@ function sjeMode(mode) {
   if (histPanel) histPanel.style.display = mode === 'history' ? '' : 'none';
   const healthPanel = document.getElementById('sje-health-panel');
   if (healthPanel) healthPanel.style.display = mode === 'health' ? '' : 'none';
+  const mappingPanel = document.getElementById('sje-mapping-panel');
+  if (mappingPanel) mappingPanel.style.display = mode === 'mapping' ? '' : 'none';
 
   // Move the P&L Review workspace into the Scooter's tab when in review mode,
   // otherwise move it back to the general tab so qboOpenTool('pldigest') still works
@@ -43638,15 +43674,17 @@ function sjeMode(mode) {
   const fleetBtn = document.getElementById('sje-mode-fleet');
   const histBtn = document.getElementById('sje-mode-history');
   const healthBtn = document.getElementById('sje-mode-health');
+  const mappingBtn = document.getElementById('sje-mode-mapping');
   // Theme color per tab: active = filled, inactive = outlined in same color.
   const themes = [
-    ['sales',   salesBtn,  '#0d9488'], // teal
-    ['cogs',    cogsBtn,   '#78350f'], // coffee brown
-    ['pl',      plBtn,     '#C8102E'], // red
-    ['review',  reviewBtn, '#2ca01c'], // green
-    ['fleet',   fleetBtn,  '#f0b429'], // amber
-    ['history', histBtn,   '#6b3fa0'], // purple
-    ['health',  healthBtn, '#2c5fa1'], // blue
+    ['sales',   salesBtn,   '#0d9488'], // teal
+    ['cogs',    cogsBtn,    '#78350f'], // coffee brown
+    ['pl',      plBtn,      '#C8102E'], // red
+    ['review',  reviewBtn,  '#2ca01c'], // green
+    ['fleet',   fleetBtn,   '#f0b429'], // amber
+    ['history', histBtn,    '#6b3fa0'], // purple
+    ['health',  healthBtn,  '#2c5fa1'], // blue
+    ['mapping', mappingBtn, '#475569'], // slate
   ];
   for(const [key, b, c] of themes){
     if(!b) continue;
@@ -43674,7 +43712,148 @@ function sjeMode(mode) {
     fleetScoreboardLoad();
   } else if (mode === 'history') {
     sjeRenderHistory();
+  } else if (mode === 'mapping') {
+    sjeMappingLoad();
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ACCOUNT MAPPING — view-only for now; edit support (per-franchise
+//  overrides in DB.scootersAccountOverrides) coming in Phase 2
+// ══════════════════════════════════════════════════════════════════
+
+let _sjeMappingConfig = null; // cached { franchises, presets, cogsPresets }
+
+async function sjeMappingLoad(){
+  const listEl = document.getElementById('sje-mapping-list');
+  if(!listEl) return;
+  if(!_sjeMappingConfig){
+    listEl.innerHTML = `<div class="empty">Loading config…</div>`;
+    try {
+      const resp = await authFetch(ARK_SERVER + '/scooters/account-config');
+      if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      _sjeMappingConfig = await resp.json();
+    } catch(e){
+      listEl.innerHTML = `<div class="empty"><strong>Couldn't load mapping config.</strong>${e.message}</div>`;
+      return;
+    }
+  }
+  sjeMappingRenderList();
+}
+
+function sjeMappingRenderList(){
+  const listEl = document.getElementById('sje-mapping-list');
+  if(!listEl || !_sjeMappingConfig) return;
+  const q = (document.getElementById('sje-mapping-search')?.value || '').toLowerCase().trim();
+  const franchises = Object.entries(_sjeMappingConfig.franchises || {})
+    .map(([key, info]) => ({ key, ...info }))
+    .filter(f => !q || f.key.toLowerCase().includes(q) || (f.label||'').toLowerCase().includes(q))
+    .sort((a, b) => (a.label || a.key).localeCompare(b.label || b.key));
+
+  if(!franchises.length){
+    listEl.innerHTML = `<div class="empty">No franchises match your search.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = '<div class="tbl-wrap"><table>' +
+    '<thead><tr><th>Franchise</th><th>Preset</th><th>Stores</th><th>Classes</th><th></th></tr></thead><tbody>' +
+    franchises.map(f => {
+      const storeCount = Object.keys(f.stores || {}).length;
+      const presetLabel = f.account_preset || 'default';
+      const classesLabel = f.use_classes ? '<span style="color:var(--green);font-weight:600;">Yes</span>' : '<span style="color:var(--text-d);">No</span>';
+      const keyEsc = f.key.replace(/'/g, "\\'");
+      return `<tr class="is-clickable" onclick="sjeMappingOpenDetail('${keyEsc}')">
+        <td><strong>${f.label || f.key}</strong><div style="font-size:var(--text-xs);color:var(--text-d);">${f.key}</div></td>
+        <td><code style="font-size:11px;">${presetLabel}</code></td>
+        <td>${storeCount}</td>
+        <td>${classesLabel}</td>
+        <td class="col-actions"><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();sjeMappingOpenDetail('${keyEsc}')">View</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+// Merge the default preset with the franchise's preset so missing keys fall
+// through to the default — matches server-side sjeGetAccount behavior.
+function _sjeResolvedPreset(presetName, presetMap){
+  const def = presetMap?.default || {};
+  const specific = (presetName && presetMap?.[presetName]) || {};
+  return { ...def, ...specific };
+}
+
+const SJE_SALES_KEYS = [
+  ['sales',                 'Sales'],
+  ['store_discounts',       'Store Discounts'],
+  ['emp_discounts',         'Employee Discounts'],
+  ['gift_card_sold',        'Gift Cards Sold'],
+  ['sales_tax_payable',     'Sales Tax'],
+  ['tips_received',         'Employee Tips'],
+  ['cash_deposits',         'Cash Deposits'],
+  ['credit_card_deposits',  'Credit Card Deposits'],
+  ['gift_card_redeemed',    'Gift Cards Redeemed'],
+  ['adyen_deposits',        'Adyen Deposits'],
+  ['adyen_fees',            'Adyen Fees'],
+  ['advertising_marketing', 'Advertising & Marketing'],
+  ['royalty_fees',          'Royalty Fees'],
+  ['ad_fund_national',      'Ad Fund'],
+  ['royalty_payable',       'Royalty Payable'],
+];
+
+const SJE_COGS_KEYS = [
+  ['advertising',      'Advertising'],
+  ['consumable_cogs',  'Consumable COGS'],
+  ['dairy_cogs',       'Dairy COGS'],
+  ['supplies_cogs',    'Supplies COGS'],
+  ['repairs',          'Repairs & Maintenance'],
+  ['shipping',         'Shipping'],
+  ['store_supplies',   'Store Supplies'],
+  ['uniforms',         'Uniforms'],
+  ['tax',              'Tax Expense'],
+  ['harvest_payable',  'Harvest Payable'],
+];
+
+function sjeMappingOpenDetail(franchiseKey){
+  if(!_sjeMappingConfig) return;
+  const f = _sjeMappingConfig.franchises?.[franchiseKey];
+  if(!f){ alert('Franchise not found'); return; }
+  const salesPreset = _sjeResolvedPreset(f.account_preset, _sjeMappingConfig.presets);
+  const cogsPreset  = _sjeResolvedPreset(f.account_preset, _sjeMappingConfig.cogsPresets);
+  document.getElementById('sje-mapping-title').textContent = `🔗 ${f.label || franchiseKey}`;
+  document.getElementById('sje-mapping-subtitle').textContent =
+    `Preset: ${f.account_preset || 'default'}  ·  ${Object.keys(f.stores||{}).length} store${Object.keys(f.stores||{}).length===1?'':'s'}  ·  ${f.use_classes ? 'Uses QBO classes' : 'No classes'}`;
+
+  const mkRow = ([key, label]) => {
+    const val = salesPreset[key] ?? cogsPreset[key] ?? '';
+    const isDefault = !(_sjeMappingConfig.presets?.[f.account_preset]?.[key] || _sjeMappingConfig.cogsPresets?.[f.account_preset]?.[key]);
+    return `<tr>
+      <td style="font-size:12px;font-weight:600;color:var(--text);">${label}</td>
+      <td style="font-size:11px;color:var(--text-d);"><code>${key}</code></td>
+      <td style="font-size:12px;"><strong>${val || '<span style=\"color:var(--red);\">(not set)</span>'}</strong>${isDefault && val ? ' <span style="font-size:10px;color:var(--text-d);font-style:italic;">(from default)</span>' : ''}</td>
+    </tr>`;
+  };
+
+  const storesHtml = Object.keys(f.stores || {}).length
+    ? `<div style="font-size:12px;color:var(--text-d);margin-top:20px;margin-bottom:6px;"><strong>Stores in this franchise:</strong></div>
+       <div style="font-size:11px;color:var(--text-m);font-family:'DM Mono',monospace;">${Object.entries(f.stores).map(([id, cls])=>`${id}${cls?' → '+cls:''}`).join(' · ')}</div>`
+    : '';
+
+  document.getElementById('sje-mapping-detail').innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">Sales JE Accounts</div>
+    <div class="tbl-wrap" style="margin-bottom:20px;"><table>
+      <thead><tr><th style="width:38%;">Line Type</th><th style="width:22%;">Key</th><th>QBO Account Name</th></tr></thead>
+      <tbody>${SJE_SALES_KEYS.map(mkRow).join('')}</tbody>
+    </table></div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">COGS JE Accounts</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th style="width:38%;">Line Type</th><th style="width:22%;">Key</th><th>QBO Account Name</th></tr></thead>
+      <tbody>${SJE_COGS_KEYS.map(mkRow).join('')}</tbody>
+    </table></div>
+    ${storesHtml}
+    <div style="font-size:11px;color:var(--text-d);margin-top:16px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+      <strong>Read-only for now.</strong> Edit support (per-franchise overrides) is coming next. These account names come from <code>config/account_presets.json</code> — changes there require a redeploy.
+    </div>
+  `;
+
+  openModal('modal-sje-mapping');
 }
 
 // ── Push History Logging ─────────────────────────────────────────

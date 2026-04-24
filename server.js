@@ -6237,6 +6237,18 @@ function sjeGetAccount(key, franchiseKey) {
   return key;
 }
 
+// Expose Scooter's account-mapping config to the dashboard so the Account
+// Mapping tab can render which QBO account name each line-item key resolves to
+// per franchise. Read-only — mapping changes (per-franchise overrides) will
+// land in DB.scootersAccountOverrides via normal saveDB sync.
+app.get('/scooters/account-config', (req, res) => {
+  res.json({
+    franchises: FRANCHISE_MAP,
+    presets:    ACCOUNT_PRESETS,
+    cogsPresets: COGS_PRESETS,
+  });
+});
+
 function sjeGetRoyaltyRate(franchiseKey, storeId) {
   // Check royalty_overrides.json first
   const override = ROYALTY_OVERRIDES[franchiseKey];
