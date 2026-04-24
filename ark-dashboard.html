@@ -7400,7 +7400,6 @@ Now here is what I want to build: [describe your feature]</pre>
       <div class="mc-panel" id="mc-panel-4">
         <div class="form-grid">
           <div class="section-label">Tax Information</div>
-          <div class="fg"><label>EIN / Federal Tax ID</label><input id="mc-tax-ein-display" placeholder="Auto-filled from Payroll tab" readonly style="background:var(--surface2);color:var(--text-m);"></div>
           <div class="fg"><label>Accounting Method</label>
             <select id="mc-tax-method">
               <option value="">— Select —</option>
@@ -13899,7 +13898,7 @@ function renderFranchiseList(franchises) {
             <button type="button" class="btn btn-ghost btn-sm" onclick="copyParentPayrollToFranchise(${idx})" style="font-size:10px;padding:3px 8px;" title="Copy company-wide payroll settings from the Payroll tab">⎘ Copy from parent</button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div class="fg" style="margin:0;"><label style="font-size:10px;">EIN / FEIN</label><input type="text" class="field-input fc-pr-ein" value="${(f.prEin||'').replace(/"/g,'&quot;')}" placeholder="XX-XXXXXXX" style="font-size:11px;"></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">EIN / Federal Tax ID</label><input type="text" class="field-input fc-pr-ein" value="${(f.prEin||'').replace(/"/g,'&quot;')}" placeholder="XX-XXXXXXX" style="font-size:11px;"></div>
             <div class="fg" style="margin:0;"><label style="font-size:10px;">State Withholding ID</label><input type="text" class="field-input fc-pr-swid" value="${(f.prSwid||'').replace(/"/g,'&quot;')}" placeholder="State WH account #" style="font-size:11px;"></div>
             <div class="fg" style="margin:0;"><label style="font-size:10px;">SUTA Account #</label><input type="text" class="field-input fc-pr-suta" value="${(f.prSuta||'').replace(/"/g,'&quot;')}" placeholder="SUTA / SUI account #" style="font-size:11px;"></div>
             <div class="fg" style="margin:0;"><label style="font-size:10px;">Deposit Frequency</label>
@@ -14390,7 +14389,6 @@ function mcTab(n){
   document.getElementById('mc-prev-btn').style.display = n===0?'none':'inline-flex';
   document.getElementById('mc-next-btn').style.display = n===10?'none':'inline-flex';
   if(n===7) obRenderChecklist();
-  if(n===4) document.getElementById('mc-tax-ein-display').value = document.getElementById('mc-ein').value||'';
   if(n===5) renderWLList();
 }
 function mcTabStep(dir){ mcTab(Math.max(0,Math.min(10,mcCurrentTab+dir))); }
@@ -14657,7 +14655,6 @@ function openAddClient(){
   document.getElementById('mc-pr-payschedule').value='';
   setPaySchedule('','','','');
   document.getElementById('mc-tax-method').value='';
-  document.getElementById('mc-tax-ein-display').value='';
   setPrPlatform('');
   setSvcs([]);
   populateAMSelect();
@@ -14753,7 +14750,6 @@ function openEditClient(id){
   document.getElementById('mc-tax-cpa').value=c.taxCpa||'';
   document.getElementById('mc-tax-cpa-email').value=c.taxCpaEmail||'';
   document.getElementById('mc-tax-notes').value=c.taxNotes||'';
-  document.getElementById('mc-tax-ein-display').value=c.ein||'';
   setSvcs(c.services||[]);
   populateAMSelect(c.am);
   clearOwners();
