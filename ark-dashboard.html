@@ -49191,7 +49191,24 @@ function htSaveStore(){
   saveDB();
   closeModal('modal-hteao-store-edit');
   htRenderStoresList();
+  htReresolveParsedStores();
   showToast(`✓ ${s.displayName} saved`);
+}
+
+// Re-attach je.store for any parsed entries whose storeCode now matches a
+// configured store, then re-render whichever step panel is open. Called after
+// saves/deletes so the Review page reflects the new mapping without re-upload.
+function htReresolveParsedStores(){
+  if(!Array.isArray(_htParsedJEs) || !_htParsedJEs.length) return;
+  const stores = (DB.hteaoStores || []).filter(x => !x._deleted);
+  for(const je of _htParsedJEs){
+    if(je.parseError) continue;
+    je.store = stores.find(s => s.revelCode === je.storeCode);
+  }
+  const reviewOpen = document.getElementById('ht-panel-review')?.style.display !== 'none';
+  const pushOpen   = document.getElementById('ht-panel-push')?.style.display   !== 'none';
+  if(reviewOpen) htRenderReview();
+  if(pushOpen)   htRenderPush();
 }
 
 function htDeleteCurrentStore(){
@@ -49206,6 +49223,7 @@ function htDeleteCurrentStore(){
   saveDB();
   closeModal('modal-hteao-store-edit');
   htRenderStoresList();
+  htReresolveParsedStores();
   showToast(`${s.displayName} deleted`);
 }
 
