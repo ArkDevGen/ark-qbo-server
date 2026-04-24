@@ -703,18 +703,46 @@ if (fs.existsSync(TOKEN_FILE)) {
         console.log(`✓ Migrated ${Object.keys(tokenStore).length} company tokens to enriched format`);
       } else {
         tokenStore = raw;
-        console.log(`✓ Token store loaded — ${Object.keys(tokenStore).length} company(ies)`);
       }
     }
-    saveTokenStore();
   } catch(e) {
-    console.log('Could not load saved tokens, will need to re-authorize');
+    console.error('⚠  Could not load saved tokens:', e.message);
   }
 }
 
+// Startup banner — makes it obvious at-a-glance whether token persistence is
+// actually configured. If DATA_DIR is not /data, a Render redeploy wipes
+// every QBO connection and everyone re-authorizes. Check this on every boot.
+console.log('');
+console.log('━━━ QBO Token Persistence ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('  DATA_DIR     :', DATA_DIR);
+console.log('  Persistent?  :', DATA_DIR === '/data' ? 'YES (Render disk)' : '⚠  NO — ephemeral, tokens WILL be wiped on redeploy');
+console.log('  Token file   :', TOKEN_FILE, fs.existsSync(TOKEN_FILE) ? '(exists)' : '(missing)');
+console.log('  Realms loaded:', Object.keys(tokenStore).length);
+for (const [rid, entry] of Object.entries(tokenStore)) {
+  console.log(`    · ${rid}  ${entry.companyName || '(unnamed)'}  lastUsed=${entry.lastUsed || 'never'}`);
+}
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('');
+
+// Atomic write + read-back verification. If any step fails we THROW so the
+// caller (e.g. the OAuth callback) can surface the failure to the user instead
+// of claiming success and losing the token. Previously this swallowed errors,
+// so a disk write failure looked identical to a successful connection.
 function saveTokenStore() {
-  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore, null, 2)); }
-  catch(e) { console.error('Failed to save token store:', e.message); }
+  const tmp = TOKEN_FILE + '.tmp';
+  const data = JSON.stringify(tokenStore, null, 2);
+  try {
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, TOKEN_FILE);  // atomic on the same filesystem
+    const verify = fs.readFileSync(TOKEN_FILE, 'utf8');
+    if (verify !== data) throw new Error('read-back mismatch — disk may be read-only or out of space');
+  } catch (e) {
+    console.error('🔴 TOKEN SAVE FAILED:', e.message);
+    console.error('   DATA_DIR:', DATA_DIR, DATA_DIR === '/data' ? '' : '(ephemeral — not a Render persistent disk)');
+    try { fs.unlinkSync(tmp); } catch(_){}
+    throw e;
+  }
 }
 
 // Helpers for enriched token entries
@@ -860,6 +888,41 @@ app.get('/qbo/callback', async (req, res) => {
       <p style="font-family:sans-serif;">Check your server console for details.</p>
     `);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Diagnostic: persistence sanity check
+// Load https://ark-qbo-server.onrender.com/qbo/diag anytime to confirm
+// tokens are being written to the Render persistent disk. Returns metadata
+// only — no access/refresh tokens are exposed.
+// ─────────────────────────────────────────────────────────────────
+app.get('/qbo/diag', (req, res) => {
+  let tokenFileExists = false, fileSize = null, lastMtime = null;
+  try {
+    const st = fs.statSync(TOKEN_FILE);
+    tokenFileExists = true;
+    fileSize = st.size;
+    lastMtime = st.mtime.toISOString();
+  } catch(_) {}
+  res.json({
+    dataDir: DATA_DIR,
+    persistentDisk: DATA_DIR === '/data',
+    tokenFilePath: TOKEN_FILE,
+    tokenFileExists,
+    tokenFileSize: fileSize,
+    tokenFileLastModified: lastMtime,
+    realmCount: Object.keys(tokenStore).length,
+    realms: Object.entries(tokenStore).map(([rid, entry]) => ({
+      realmId: rid,
+      companyName: entry.companyName || '',
+      connectedAt: entry.connectedAt || null,
+      lastUsed: entry.lastUsed || null,
+      linkedClientCount: (entry.linkedClients || []).length,
+      hasTokenData: !!entry.tokenData,
+      accessExpiresAt: entry.tokenData?.expires_at ? new Date(entry.tokenData.expires_at).toISOString() : null,
+    })),
+    uptimeSeconds: Math.round(process.uptime()),
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────
