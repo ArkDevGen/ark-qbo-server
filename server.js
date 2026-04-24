@@ -1042,6 +1042,32 @@ app.post('/qbo/unlink-client', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// Strip a clientId from every realm's linkedClients. Called by the ARK
+// dashboard when a client is deleted in Client Center so Batch Connect
+// and QBO Center don't show stale links. Also strips any
+// "clientId:franchiseId" entries owned by the same client.
+// ─────────────────────────────────────────────────────────────────
+app.post('/qbo/unlink-client', (req, res) => {
+  const { clientId } = req.body || {};
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+  let removed = 0;
+  for (const entry of Object.values(tokenStore)) {
+    if (!entry.linkedClients) continue;
+    const before = entry.linkedClients.length;
+    entry.linkedClients = entry.linkedClients.filter(cid =>
+      cid !== clientId && !(typeof cid === 'string' && cid.startsWith(clientId + ':'))
+    );
+    removed += before - entry.linkedClients.length;
+  }
+  if (removed > 0) {
+    try { saveTokenStore(); }
+    catch (e) { return res.status(500).json({ error: 'Save failed: ' + e.message }); }
+  }
+  console.log(`Unlinked client ${clientId} from ${removed} realm(s)`);
+  res.json({ success: true, removed });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ROUTE 3e: Store/update company name for a realmId
 // ─────────────────────────────────────────────────────────────────
 app.post('/qbo/update-company-name', (req, res) => {

@@ -14913,10 +14913,19 @@ function deleteClient(id){
   delete DB.notes[id];
   logAct(`Client deleted: ${c.biz}`);
   saveDB();
+  // Ask server to strip this client from every QBO realm's linkedClients so
+  // Batch Connect and QBO Center don't keep showing stale links. Fire-and-
+  // forget — the local delete already succeeded; if this fails we log it.
+  fetch(ARK_SERVER + '/qbo/unlink-client', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId: id }),
+  }).catch(e => console.warn('QBO unlink failed:', e.message));
   renderClients();
   if (typeof renderSalesTax === 'function') { try { renderSalesTax(); } catch(_){} }
   if (typeof stfRenderList   === 'function') { try { stfRenderList();   } catch(_){} }
   if (typeof sthRender       === 'function') { try { sthRender();       } catch(_){} }
+  if (typeof renderBatchConnect === 'function') { try { renderBatchConnect(); } catch(_){} }
 }
 
 // ══════════════════════════════════════════════
@@ -27202,12 +27211,15 @@ function tcClearMyImported(){
     || t._sectionName !== undefined
     || t._indent !== undefined
     || Object.prototype.hasOwnProperty.call(t, 'parentTaskId');
-  const mine = DB.tasks.filter(t => t.amId === currentUser.id && isImported(t));
+  const mine = DB.tasks.filter(t => !t._deleted && t.amId === currentUser.id && isImported(t));
   if(!mine.length){ alert('No imported tasks found for your account.'); return; }
   const msg = `Permanently delete ${mine.length} task${mine.length===1?'':'s'} imported from Todoist and assigned to you?\n\nThis cannot be undone.`;
   if(!confirm(msg)) return;
-  const ids = new Set(mine.map(t => t.id));
-  DB.tasks = DB.tasks.filter(t => !ids.has(t.id));
+  // Soft-delete via _deleted flag so the deletion ships through saveDB() and
+  // the server's merge-by-id keeps the record marked deleted. Hard-removing
+  // from the array would let the server push them back on next sync.
+  const stamp = new Date().toISOString();
+  mine.forEach(t => { t._deleted = true; t._updatedAt = stamp; });
   saveDB();
   logAct(`Cleared ${mine.length} imported Todoist task${mine.length===1?'':'s'} (temp cleanup)`);
   tcRender();
@@ -37046,7 +37058,7 @@ async function batchEnrichClient(client, ci, realmId) {
 // Build flat list of linkable items (simple clients + franchise entries)
 function getBatchItems() {
   const items = [];
-  const allQbo = (DB.clients || []).filter(c => c.qbType === 'QBO');
+  const allQbo = (DB.clients || []).filter(c => c.qbType === 'QBO' && !c._deleted);
   for (const c of allQbo) {
     if (c.franchises && c.franchises.length > 0) {
       // One row per franchise
