@@ -5058,14 +5058,14 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div id="qbo-tab-scooters" style="display:none;">
 
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-        <div style="width:36px;height:36px;border-radius:8px;background:#c8102e;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:700;">☕</div>
+        <div style="font-size:28px;line-height:1;">☕</div>
         <div style="flex:1;">
           <div style="font-size:16px;font-weight:700;color:var(--text);">Scooter's Coffee — Journal Entries</div>
           <div style="font-size:11px;color:var(--text-d);">Upload data → preview → push to QBO</div>
         </div>
         <div style="display:flex;gap:4px;">
-          <button class="btn btn-sm" id="sje-mode-sales" onclick="sjeMode('sales')" style="font-size:12px;font-weight:600;background:var(--accent);color:#fff;border-color:var(--accent);">Sales JE</button>
-          <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;">COGS JE</button>
+          <button class="btn btn-sm" id="sje-mode-sales" onclick="sjeMode('sales')" style="font-size:12px;font-weight:600;background:#0d9488;color:#fff;border-color:#0d9488;">Sales JE</button>
+          <button class="btn btn-sm" id="sje-mode-cogs" onclick="sjeMode('cogs')" style="font-size:12px;border-color:#78350f;color:#78350f;">COGS JE</button>
           <button class="btn btn-sm" id="sje-mode-pl" onclick="sjeMode('pl')" style="font-size:12px;border-color:#C8102E;color:#C8102E;">📊 P&L Report</button>
           <button class="btn btn-sm" id="sje-mode-review" onclick="sjeMode('review')" style="font-size:12px;border-color:#2ca01c;color:#2ca01c;">☑ P&L Review</button>
           <button class="btn btn-sm" id="sje-mode-fleet" onclick="sjeMode('fleet')" style="font-size:12px;border-color:#f0b429;color:#f0b429;">🏆 Fleet Scoreboard</button>
@@ -5117,7 +5117,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
       <!-- Step indicator -->
       <div id="sje-steps" style="display:flex;gap:0;margin-bottom:24px;">
-        <div id="sje-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);transition:all .2s;">1 · Upload</div>
+        <div id="sje-step-1" style="flex:1;padding:10px 16px;background:var(--navy);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);transition:all .2s;">1 · Upload</div>
         <div id="sje-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;transition:all .2s;">2 · Review</div>
         <div class="sje-step" id="sje-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;">3 · Confirm</div>
       </div>
@@ -5238,7 +5238,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
         <!-- COGS Step indicator -->
         <div id="cogs-steps" style="display:flex;gap:0;margin-bottom:24px;">
-          <div class="sje-step active" id="cogs-step-1" style="flex:1;padding:10px 16px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);">1 · Upload</div>
+          <div class="sje-step active" id="cogs-step-1" style="flex:1;padding:10px 16px;background:var(--navy);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--radius) 0 0 var(--radius);">1 · Upload</div>
           <div class="sje-step" id="cogs-step-2" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;">2 · Review</div>
           <div class="sje-step" id="cogs-step-3" style="flex:1;padding:10px 16px;background:var(--surface2);color:var(--text-d);font-size:11px;font-weight:700;text-align:center;border-radius:0 var(--radius) var(--radius) 0;">3 · Confirm</div>
         </div>
@@ -43581,21 +43581,33 @@ function sjeMode(mode) {
   const fleetBtn = document.getElementById('sje-mode-fleet');
   const histBtn = document.getElementById('sje-mode-history');
   const healthBtn = document.getElementById('sje-mode-health');
-  // Reset all buttons
-  [salesBtn, cogsBtn, plBtn, reviewBtn, fleetBtn, histBtn, healthBtn].filter(Boolean).forEach(b => { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; b.style.fontWeight = ''; });
-  if (mode === 'sales') {
-    salesBtn.style.background = 'var(--accent)'; salesBtn.style.color = '#fff'; salesBtn.style.borderColor = 'var(--accent)'; salesBtn.style.fontWeight = '600';
-  } else if (mode === 'cogs') {
-    cogsBtn.style.background = 'var(--accent)'; cogsBtn.style.color = '#fff'; cogsBtn.style.borderColor = 'var(--accent)'; cogsBtn.style.fontWeight = '600';
-  } else if (mode === 'pl') {
-    plBtn.style.background = '#C8102E'; plBtn.style.color = '#fff'; plBtn.style.borderColor = '#C8102E'; plBtn.style.fontWeight = '600';
-  } else if (mode === 'review') {
-    reviewBtn.style.background = '#2ca01c'; reviewBtn.style.color = '#fff'; reviewBtn.style.borderColor = '#2ca01c'; reviewBtn.style.fontWeight = '600';
-    // Auto-filter client picker to Scooters clients and populate
-    plPopulateClients(true); // pass true to filter Scooters only
+  // Theme color per tab: active = filled, inactive = outlined in same color.
+  const themes = [
+    ['sales',   salesBtn,  '#0d9488'], // teal
+    ['cogs',    cogsBtn,   '#78350f'], // coffee brown
+    ['pl',      plBtn,     '#C8102E'], // red
+    ['review',  reviewBtn, '#2ca01c'], // green
+    ['fleet',   fleetBtn,  '#f0b429'], // amber
+    ['history', histBtn,   '#6b3fa0'], // purple
+    ['health',  healthBtn, '#2c5fa1'], // blue
+  ];
+  for(const [key, b, c] of themes){
+    if(!b) continue;
+    if(key === mode){
+      b.style.background = c;
+      b.style.color = c === '#f0b429' ? '#000' : '#fff';
+      b.style.borderColor = c;
+      b.style.fontWeight = '600';
+    } else {
+      b.style.background = '';
+      b.style.color = c;
+      b.style.borderColor = c;
+      b.style.fontWeight = '';
+    }
+  }
+  if (mode === 'review') {
+    plPopulateClients(true); // filter client picker to Scooters clients
   } else if (mode === 'fleet') {
-    fleetBtn.style.background = '#f0b429'; fleetBtn.style.color = '#000'; fleetBtn.style.borderColor = '#f0b429'; fleetBtn.style.fontWeight = '600';
-    // Set default period to last month and load
     const pi = document.getElementById('fleet-period-input');
     if (pi && !pi.value) {
       const now = new Date();
@@ -43604,10 +43616,7 @@ function sjeMode(mode) {
     }
     fleetScoreboardLoad();
   } else if (mode === 'history') {
-    histBtn.style.background = '#6b3fa0'; histBtn.style.color = '#fff'; histBtn.style.borderColor = '#6b3fa0'; histBtn.style.fontWeight = '600';
     sjeRenderHistory();
-  } else if (mode === 'health') {
-    if(healthBtn){ healthBtn.style.background = '#2c5fa1'; healthBtn.style.color = '#fff'; healthBtn.style.borderColor = '#2c5fa1'; healthBtn.style.fontWeight = '600'; }
   }
 }
 
