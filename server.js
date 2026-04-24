@@ -7285,9 +7285,13 @@ app.delete('/chat/channels/:channelId', requireAuth, (req, res) => {
   try {
     const channelId = req.params.channelId;
     if (channelId === 'general') return res.status(403).json({ error: 'Cannot delete Team Chat' });
-    if (!channelId.startsWith('dm_') && !channelId.startsWith('dm~')) return res.status(403).json({ error: 'Can only delete DM channels' });
+    // Allow hiding DM channels (for the participant) and SMS channels (shared,
+    // hidden for the current user only). Team Chat stays protected above.
+    const isDm  = channelId.startsWith('dm_') || channelId.startsWith('dm~');
+    const isSms = channelId.startsWith('sms~');
+    if (!isDm && !isSms) return res.status(403).json({ error: 'Can only delete DM or SMS channels' });
     const userId = req.arkUser.userId;
-    if (!channelId.includes(userId)) return res.status(403).json({ error: 'Not a participant' });
+    if (isDm && !channelId.includes(userId)) return res.status(403).json({ error: 'Not a participant' });
 
     const hidden = _loadChatHidden();
     if (!hidden[userId]) hidden[userId] = { messages: [], channels: [], channelsHiddenAt: {} };

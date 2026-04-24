@@ -32435,27 +32435,58 @@ async function chatDeleteChannel(channelId) {
   if (!confirm('Delete this entire conversation? All messages will be removed.')) return;
   try {
     const resp = await authFetch(ARK_SERVER + '/chat/channels/' + encodeURIComponent(channelId), { method: 'DELETE' });
-    if (resp.ok) {
-      // Reset floating panel
-      if (_chatChannel === channelId) {
-        _chatChannel = null; _chatMessages = [];
-        chatBackToList();
-      } else {
-        chatLoadChannels();
-      }
-      // Reset Comm Center
-      if (_ccChatChannel === channelId) {
-        _ccChatChannel = null; _ccChatMessages = [];
-        const header = document.getElementById('cc-chat-thread-header'); if (header) header.style.display = 'none';
-        const compose = document.getElementById('cc-chat-compose'); if (compose) compose.style.display = 'none';
-        const msgs = document.getElementById('cc-chat-messages');
-        if (msgs) msgs.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">Select a conversation</div>';
-        ccChatStopPoll();
-      }
-      ccChatInit();
-      showToast('Conversation deleted');
+    if (!resp.ok) {
+      let errMsg = `HTTP ${resp.status}`;
+      try { const j = await resp.json(); if (j && j.error) errMsg = j.error; } catch(_){}
+      showToast(`Couldn't delete: ${errMsg}`);
+      return;
     }
-  } catch (_) {}
+    // Reset floating panel
+    if (_chatChannel === channelId) {
+      _chatChannel = null; _chatMessages = [];
+      chatBackToList();
+    } else {
+      chatLoadChannels();
+    }
+    // Reset Comm Center
+    if (_ccChatChannel === channelId) {
+      _ccChatChannel = null; _ccChatMessages = [];
+      const header = document.getElementById('cc-chat-thread-header'); if (header) header.style.display = 'none';
+      const compose = document.getElementById('cc-chat-compose'); if (compose) compose.style.display = 'none';
+      const msgs = document.getElementById('cc-chat-messages');
+      if (msgs) msgs.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dd);font-size:13px;font-style:italic;">Select a conversation</div>';
+      ccChatStopPoll();
+    }
+    ccChatInit();
+    // Cross-UI sync for SMS: also soft-delete every DB.smsMessages entry with
+    // that phone so the Comm Center SMS thread view doesn't keep showing them.
+    if (channelId.startsWith('sms~')) {
+      const phone = channelId.slice(4); // strip "sms~"
+      const now = new Date().toISOString();
+      let changed = false;
+      (DB.smsMessages||[]).forEach(m => {
+        if (m.phone === phone && !m._deleted) {
+          m._deleted = true;
+          m._updatedAt = now;
+          changed = true;
+        }
+      });
+      if (changed) {
+        await saveDB({ immediate: true });
+        if (_smsActivePhone === phone) {
+          _smsActivePhone = null;
+          const msgEl = document.getElementById('sms-thread-messages');
+          if (msgEl) msgEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-d);font-size:12px;font-style:italic;">Select a conversation</div>';
+          const hdr = document.getElementById('sms-thread-header'); if (hdr) hdr.style.display = 'none';
+          const rpl = document.getElementById('sms-thread-reply'); if (rpl) rpl.style.display = 'none';
+        }
+        if (typeof smsRenderConvoList === 'function') { try { smsRenderConvoList(document.getElementById('sms-convo-search')?.value||''); } catch(_){} }
+      }
+    }
+    showToast('Conversation deleted');
+  } catch (e) {
+    showToast(`Delete failed: ${e.message || 'network error'}`);
+  }
 }
 
 async function chatDeleteMsg(msgId, source) {
