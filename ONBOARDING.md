@@ -2,6 +2,15 @@
 
 This doc gets a new developer from zero to "editing the CRM, testing locally, pushing to production." Work through it top to bottom.
 
+## Using Claude to help with setup
+
+You can have Claude walk you through this doc as you go — recommended if you're not already comfortable with a terminal.
+
+- **Steps 1–2 (access grants + installing tools):** drop this file into [claude.ai](https://claude.ai) and ask it questions as you go. Example: *"I'm on Windows 11 — walk me through installing Node.js."* claude.ai can't run commands on your computer, but it's a great co-pilot for clicking through installers.
+- **Steps 3–7 (clone repo and onward):** once you've installed Claude Code in Step 2, open a terminal in the cloned `ark-qbo-server` folder and run `claude`. It automatically picks up this doc, [CLAUDE.md](CLAUDE.md), and the whole repo. From there Claude can **actually execute** the commands — `git clone`, `npm install`, `node server.js`, edits, commits — with your permission for each action.
+
+If you get stuck at any step, paste the exact error message into Claude and ask what to do.
+
 ## What this project is
 
 The ARK dashboard is a single-file HTML app (`ark-dashboard.html`) served by an Express server (`server.js`). It deploys to Render automatically on every push to `main`. There's no build step — you edit the file, test locally, push, and it's live in ~2 minutes.
