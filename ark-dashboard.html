@@ -5524,6 +5524,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div style="font-size:var(--text-sm);color:var(--text-d);" id="ht-push-summary">Review each entry and push to its store's QBO company.</div>
           </div>
           <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="htStartOver()" title="Clear the current batch and return to upload">↺ Start Over</button>
             <button class="btn btn-ghost btn-sm" onclick="htBackToReview()">← Back to Review</button>
             <button class="btn btn-primary btn-sm" onclick="htPushAll()" id="ht-push-all-btn">🚀 Push All to QBO</button>
           </div>
@@ -48613,6 +48614,22 @@ function htBackToUpload(){
   document.getElementById('ht-step-3').style.color = 'var(--text-d)';
   _htParsedJEs = [];
   document.getElementById('ht-file-input').value = '';
+}
+
+// Clear the current batch and return to the upload step. Used when the user
+// wants to abandon a parsed batch mid-flow (e.g. after cancelling a duplicate).
+function htStartOver(){
+  const inFlight = _htParsedJEs.some(je => je.pushStatus === 'pushing' || je.pushStatus === 'verifying');
+  if(inFlight){
+    alert('A push is in progress — wait for it to finish before starting over.');
+    return;
+  }
+  const pushed = _htParsedJEs.some(je => je.pushStatus === 'success' || je.pushStatus === 'warn-verify');
+  const msg = pushed
+    ? 'Some entries were already pushed to QBO. Clear this batch and return to upload? (Pushed entries will remain in QBO.)'
+    : 'Clear the current batch and return to upload?';
+  if(!confirm(msg)) return;
+  htBackToUpload();
 }
 function htGoToPush(){
   document.getElementById('ht-panel-upload').style.display = 'none';
