@@ -32457,7 +32457,10 @@ async function chatDeleteMsg(msgId, source) {
   if (!confirm('Delete this message?')) return;
   try {
     const resp = await authFetch(ARK_SERVER + '/chat/messages/' + msgId, { method: 'DELETE' });
-    if (resp.ok) {
+    // Treat 404 as "already gone server-side" — still clean up local cache so
+    // orphaned client-cached rows (e.g. from a previous Comm Center delete
+    // that never synced to the chat store) disappear from the popup too.
+    if (resp.ok || resp.status === 404) {
       // Remove from floating panel and re-render
       _chatMessages = _chatMessages.filter(m => m.id !== msgId);
       chatRenderMessages();
@@ -32476,8 +32479,16 @@ async function chatDeleteMsg(msgId, source) {
         await saveDB({ immediate: true });
         if (_smsActivePhone) smsOpenThread(_smsActivePhone);
       }
+      return;
     }
-  } catch (_) {}
+    // Other error — surface the real reason instead of failing silently.
+    // 403 means the server refused (e.g. Team Chat messages are protected).
+    let errMsg = `HTTP ${resp.status}`;
+    try { const j = await resp.json(); if (j && j.error) errMsg = j.error; } catch(_){}
+    showToast(`Couldn't delete: ${errMsg}`);
+  } catch (e) {
+    showToast(`Delete failed: ${e.message || 'network error'}`);
+  }
 }
 
 // Handle SSE chat-delete events
