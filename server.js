@@ -6333,8 +6333,6 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
   const adFund = Math.round(netSales * sjeGetAdFundRate() * 100) / 100;
   const royaltyPayable = royaltyFees + adFund;
 
-  const royaltyDesc = Math.abs(royaltyRate - 0.08) < 0.0001 ? '8%' : '';
-
   const advTotal = other + promo - recon - donation - rounding;
   const advDebits = advTotal >= 0 ? Math.round(advTotal * 100) / 100 : null;
   const advCredits = advTotal < 0 ? Math.round(-advTotal * 100) / 100 : null;
@@ -6348,21 +6346,21 @@ function sjeBuildEntry(row, franchiseKey, className, dateStr, storeId) {
   const r = (v) => v !== null && v !== undefined ? Math.round(v * 100) / 100 : null;
 
   const lines = [
-    { account: sjeGetAccount('sales', franchiseKey),              debit: null,           credit: r(grossSales),  description: avgCheckDesc, class: className },
-    { account: sjeGetAccount('store_discounts', franchiseKey),    debit: r(discount),    credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('emp_discounts', franchiseKey),      debit: r(empDiscount), credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('gift_card_sold', franchiseKey),     debit: null,           credit: r(gcLoad),      description: 'Gift Cards Sold', class: className },
-    { account: sjeGetAccount('sales_tax_payable', franchiseKey),  debit: null,           credit: r(tax),         description: '',           class: className },
-    { account: sjeGetAccount('tips_received', franchiseKey),      debit: null,           credit: r(tip),         description: '',           class: className },
-    { account: sjeGetAccount('cash_deposits', franchiseKey),      debit: r(cash),        credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('credit_card_deposits', franchiseKey), debit: r(cc),        credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('gift_card_redeemed', franchiseKey), debit: r(gc),          credit: null,           description: 'Gift Cards Redeemed', class: className },
-    { account: sjeGetAccount('adyen_deposits', franchiseKey),     debit: r(adyenDeposits), credit: null,         description: '',           class: className },
-    { account: sjeGetAccount('adyen_fees', franchiseKey),         debit: r(adyenFees),   credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('advertising_marketing', franchiseKey), debit: advDebits,   credit: advCredits,     description: 'Donations, Promo, Recon, Rounding & Other', class: className },
-    { account: sjeGetAccount('royalty_fees', franchiseKey),       debit: r(royaltyFees), credit: null,           description: royaltyDesc,  class: className },
-    { account: sjeGetAccount('ad_fund_national', franchiseKey),   debit: r(adFund),      credit: null,           description: '',           class: className },
-    { account: sjeGetAccount('royalty_payable', franchiseKey),    debit: null,           credit: r(royaltyPayable), description: '',        class: className },
+    { account: sjeGetAccount('sales', franchiseKey),                debit: null,             credit: r(grossSales),     description: avgCheckDesc,                 class: className },
+    { account: sjeGetAccount('store_discounts', franchiseKey),      debit: r(discount),      credit: null,              description: 'Store Discounts',            class: className },
+    { account: sjeGetAccount('emp_discounts', franchiseKey),        debit: r(empDiscount),   credit: null,              description: 'Employee Discounts',         class: className },
+    { account: sjeGetAccount('gift_card_sold', franchiseKey),       debit: null,             credit: r(gcLoad),         description: 'Gift Cards Sold',            class: className },
+    { account: sjeGetAccount('sales_tax_payable', franchiseKey),    debit: null,             credit: r(tax),            description: 'Sales Tax',                  class: className },
+    { account: sjeGetAccount('tips_received', franchiseKey),        debit: null,             credit: r(tip),            description: 'Employee Tips',              class: className },
+    { account: sjeGetAccount('cash_deposits', franchiseKey),        debit: r(cash),          credit: null,              description: 'Cash Deposits',              class: className },
+    { account: sjeGetAccount('credit_card_deposits', franchiseKey), debit: r(cc),            credit: null,              description: 'Credit Card Deposits',       class: className },
+    { account: sjeGetAccount('gift_card_redeemed', franchiseKey),   debit: r(gc),            credit: null,              description: 'Gift Cards Redeemed',        class: className },
+    { account: sjeGetAccount('adyen_deposits', franchiseKey),       debit: r(adyenDeposits), credit: null,              description: 'Adyen Deposits',             class: className },
+    { account: sjeGetAccount('adyen_fees', franchiseKey),           debit: r(adyenFees),     credit: null,              description: 'Adyen Fees',                 class: className },
+    { account: sjeGetAccount('advertising_marketing', franchiseKey), debit: advDebits,       credit: advCredits,        description: 'Advertising & Marketing',    class: className },
+    { account: sjeGetAccount('royalty_fees', franchiseKey),         debit: r(royaltyFees),   credit: null,              description: 'Royalty Fees',               class: className },
+    { account: sjeGetAccount('ad_fund_national', franchiseKey),     debit: r(adFund),        credit: null,              description: 'Ad Fund',                    class: className },
+    { account: sjeGetAccount('royalty_payable', franchiseKey),      debit: null,             credit: r(royaltyPayable), description: 'Royalty Payable',            class: className },
   ];
 
   return { date: journalDate, journalNo, lines };
