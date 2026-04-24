@@ -32269,7 +32269,7 @@ function chatRenderMessages() {
       const bubbleBg = isSmsChannel ? '#2e7d5e' : 'var(--navy)';
       html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;position:relative;" class="chat-msg-row" onmouseover="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='flex')" onmouseout="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='none')">
         ${delBtn}
-        <div style="max-width:75%;background:${bubbleBg};color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:12px;line-height:1.5;">
+        <div style="max-width:75%;background:${bubbleBg};color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:12px;line-height:1.5;overflow-wrap:anywhere;">
           ${_chatEscape(msg.text)}
           <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}${smsPill}</div>
         </div>
@@ -32282,7 +32282,7 @@ function chatRenderMessages() {
         <div style="width:28px;height:28px;border-radius:50%;background:${avatarBg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:${avatarFontSize};font-weight:700;flex-shrink:0;margin-top:2px;">${avatarContent}</div>
         <div style="max-width:75%;">
           <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(displayName)}</div>
-          <div style="background:${isSmsChannel?'#eaf4ef':'var(--surface2)'};border:1px solid ${isSmsChannel?'#c8e6d7':'var(--border)'};border-radius:4px 14px 14px 14px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);">
+          <div style="background:${isSmsChannel?'#eaf4ef':'var(--surface2)'};border:1px solid ${isSmsChannel?'#c8e6d7':'var(--border)'};border-radius:4px 14px 14px 14px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);overflow-wrap:anywhere;">
             ${_chatEscape(msg.text)}
             <div style="font-size:9px;color:var(--text-dd);margin-top:2px;">${time}${smsPill}</div>
           </div>
