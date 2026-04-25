@@ -7027,6 +7027,7 @@ Now here is what I want to build: [describe your feature]</pre>
     <div class="mc-tabs">
       <div class="mc-tab active" data-tab="0" onclick="mcTab(0)">🏢 Business</div>
       <div class="mc-tab" data-tab="1" onclick="mcTab(1)">👤 Owners</div>
+      <div class="mc-tab" data-tab="11" onclick="mcTab(11)" id="mc-tab-locations">🏬 Locations</div>
       <div class="mc-tab" data-tab="2" onclick="mcTab(2)">🧾 Sales Tax</div>
       <div class="mc-tab" data-tab="3" onclick="mcTab(3)">💵 Payroll</div>
       <div class="mc-tab" data-tab="4" onclick="mcTab(4)">📋 Tax</div>
@@ -7525,24 +7526,7 @@ Now here is what I want to build: [describe your feature]</pre>
             </div>
           </div>
 
-          <!-- Franchises / Entities — shown when QBO selected, for multi-QBO clients -->
-          <div class="fg full" id="mc-franchises-wrap" style="display:none;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <label id="mc-franchise-label" style="font-size:13px;font-weight:600;color:var(--text);">Entities</label>
-                <select id="mc-franchise-brand" class="field-input" onchange="updateFranchiseLabels()" style="font-size:11px;padding:3px 8px;width:auto;min-width:120px;">
-                  <option value="">— No Brand —</option>
-                  <option value="Scooter's">Scooter's</option>
-                  <option value="HTeaO">HTeaO</option>
-                  <option value="Little Caesar's">Little Caesar's</option>
-                  <option value="Deviled Egg Co">Deviled Egg Co</option>
-                </select>
-              </div>
-              <button id="mc-franchise-add-btn" class="btn btn-ghost btn-sm" onclick="addFranchise()" style="font-size:11px;display:flex;align-items:center;gap:4px;">+ Add Entity</button>
-            </div>
-            <div id="mc-franchise-list"></div>
-            <div id="mc-franchise-empty" style="font-size:12px;color:var(--text-d);text-align:center;padding:14px 0;">No entities — this client has a single QBO company linked above.</div>
-          </div>
+          <!-- Locations (formerly Franchises / Entities) lives on its own tab now — see mc-panel-11 -->
 
           <!-- QBO options — shown when QBO selected -->
           <div class="fg full" id="mc-qbo-billing-wrap" style="display:none;">
@@ -7801,6 +7785,37 @@ Now here is what I want to build: [describe your feature]</pre>
             MICR alignment must be verified once on your hardware + toner. Once it scans cleanly, you're good.
           </div>
 
+        </div>
+      </div>
+
+      <!-- ── TAB 11: LOCATIONS ──
+           Per-location/per-entity settings for clients with multiple stores,
+           clinics, offices, etc. Replaces the old "Franchises / Entities"
+           section that lived in the General tab. Brand selector is optional —
+           used by Scooter's/HTeaO clients but blank for non-franchise clients.
+      -->
+      <div class="mc-panel" id="mc-panel-11">
+        <div class="form-grid">
+          <div class="fg full">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <label id="mc-franchise-label" style="font-size:13px;font-weight:600;color:var(--text);">Locations</label>
+                <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:5px;">
+                  Franchise brand (optional):
+                  <select id="mc-franchise-brand" class="field-input" onchange="updateFranchiseLabels()" style="font-size:11px;padding:3px 8px;width:auto;min-width:120px;margin:0;">
+                    <option value="">— None —</option>
+                    <option value="Scooter's">Scooter's</option>
+                    <option value="HTeaO">HTeaO</option>
+                    <option value="Little Caesar's">Little Caesar's</option>
+                    <option value="Deviled Egg Co">Deviled Egg Co</option>
+                  </select>
+                </label>
+              </div>
+              <button id="mc-franchise-add-btn" class="btn btn-ghost btn-sm" onclick="addFranchise()" style="font-size:11px;display:flex;align-items:center;gap:4px;">+ Add Location</button>
+            </div>
+            <div id="mc-franchise-list"></div>
+            <div id="mc-franchise-empty" style="font-size:12px;color:var(--text-d);text-align:center;padding:14px 0;">No additional locations yet. Click <strong>+ Add Location</strong> to add a store, clinic, office, or franchise entity.</div>
+          </div>
         </div>
       </div>
 
@@ -13630,7 +13645,8 @@ function onQBTypeChange(){
   const val = document.querySelector('input[name="mc-qb-type"]:checked')?.value||'';
   document.getElementById('mc-qbo-billing-wrap').style.display = val==='QBO' ? '' : 'none';
   document.getElementById('mc-qbo-link-wrap').style.display    = val==='QBO' ? '' : 'none';
-  document.getElementById('mc-franchises-wrap').style.display  = val==='QBO' ? '' : 'none';
+  // mc-franchises-wrap was removed — Locations now lives on its own tab and is
+  // always available, not gated by QBO selection.
   document.getElementById('mc-qbd-user-wrap').style.display    = val==='QBD' ? '' : 'none';
   document.getElementById('mc-qbd-pass-wrap').style.display    = val==='QBD' ? '' : 'none';
   if(val!=='QBO'){ document.querySelectorAll('input[name="mc-qbo-billing"]').forEach(r=>r.checked=false); document.getElementById('mc-qbo-billing-hint').textContent=''; }
@@ -14384,14 +14400,26 @@ function getPrPlatform(){
 
 function mcTab(n){
   mcCurrentTab = n;
-  document.querySelectorAll('.mc-tab').forEach((t,i)=>t.classList.toggle('active',i===n));
-  document.querySelectorAll('.mc-panel').forEach((p,i)=>p.classList.toggle('active',i===n));
-  document.getElementById('mc-prev-btn').style.display = n===0?'none':'inline-flex';
-  document.getElementById('mc-next-btn').style.display = n===10?'none':'inline-flex';
+  // Match by data-tab attribute (not DOM index) because tab visual order
+  // doesn't have to match the numeric data-tab values — e.g. Locations is
+  // data-tab=11 but appears between Owners (1) and Sales Tax (2) visually.
+  document.querySelectorAll('.mc-tab').forEach(t => t.classList.toggle('active', String(t.dataset.tab) === String(n)));
+  document.querySelectorAll('.mc-panel').forEach(p => p.classList.toggle('active', p.id === 'mc-panel-' + n));
+  // Prev/next button visibility uses visual tab order, not data-tab number.
+  const tabs = [...document.querySelectorAll('.mc-tab')];
+  const visualIdx = tabs.findIndex(t => String(t.dataset.tab) === String(n));
+  document.getElementById('mc-prev-btn').style.display = visualIdx <= 0 ? 'none' : 'inline-flex';
+  document.getElementById('mc-next-btn').style.display = visualIdx >= tabs.length - 1 ? 'none' : 'inline-flex';
   if(n===7) obRenderChecklist();
   if(n===5) renderWLList();
 }
-function mcTabStep(dir){ mcTab(Math.max(0,Math.min(10,mcCurrentTab+dir))); }
+function mcTabStep(dir){
+  // Step through tabs in their visual order, not data-tab number order.
+  const tabs = [...document.querySelectorAll('.mc-tab')];
+  const idx = tabs.findIndex(t => String(t.dataset.tab) === String(mcCurrentTab));
+  const next = Math.max(0, Math.min(tabs.length - 1, idx + dir));
+  mcTab(parseInt(tabs[next].dataset.tab, 10));
+}
 
 // ══════════════════════════════════════════════
 //  WORK LOCATIONS
