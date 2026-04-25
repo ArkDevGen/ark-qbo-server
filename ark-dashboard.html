@@ -7065,9 +7065,13 @@ Now here is what I want to build: [describe your feature]</pre>
             </select>
           </div>
           <hr class="section-divider">
-          <div class="section-label">Business Contact</div>
-          <div class="fg"><label>Business Phone</label><input id="mc-phone" placeholder="(402) 000-0000"></div>
-          <div class="fg"><label>Business Email</label><input id="mc-email" type="email" placeholder="info@smith.com"></div>
+          <!-- Phone & email moved to the Locations tab — primary location's
+               phone/email mirrors back to client.phone/client.email on save
+               so Comm Center, fax cover sheets, and other consumers keep
+               working unchanged. Inputs stay in the DOM (hidden) for legacy
+               read/write paths but the user no longer edits them here. -->
+          <input id="mc-phone" type="hidden">
+          <input id="mc-email" type="hidden">
           <div class="fg full"><label>Street Address</label><input id="mc-addr-street" placeholder="123 Main St"></div>
           <div class="fg"><label>City</label><input id="mc-addr-city" placeholder="Ashland"></div>
           <div class="fg"><label>State</label><select id="mc-addr-state"></select></div>
@@ -13972,8 +13976,9 @@ function renderFranchiseList(franchises) {
           <select class="field-input fc-loc-state" ${locked?'disabled':''} style="font-size:11px;${addrBg}">${stateOpts}</select>
           <input type="text" class="field-input fc-loc-zip" value="${(loc.zip||'').replace(/"/g,'&quot;')}" placeholder="ZIP" maxlength="10" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
         </div>
-        <div style="margin-top:6px;">
-          <input type="text" class="field-input fc-loc-phone" value="${(loc.phone||'').replace(/"/g,'&quot;')}" placeholder="Phone at this location (optional)" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+          <input type="text" class="field-input fc-loc-phone" value="${(loc.phone||'').replace(/"/g,'&quot;')}" placeholder="Phone at this location" style="font-size:11px;">
+          <input type="email" class="field-input fc-loc-email" value="${(loc.email||'').replace(/"/g,'&quot;')}" placeholder="Email at this location" style="font-size:11px;">
         </div>
       </div>
 
@@ -14065,8 +14070,11 @@ function syncFranchiseAddressesToWlData() {
       loc.city   = row.querySelector('.fc-loc-city')?.value?.trim() || '';
       loc.state  = row.querySelector('.fc-loc-state')?.value || 'Nebraska';
       loc.zip    = row.querySelector('.fc-loc-zip')?.value?.trim() || '';
-      loc.phone  = row.querySelector('.fc-loc-phone')?.value?.trim() || '';
     }
+    // Phone/email are not "address" — they're per-location contact info, so
+    // they stay editable even when sameAsCompany is on.
+    loc.phone = row.querySelector('.fc-loc-phone')?.value?.trim() || '';
+    loc.email = row.querySelector('.fc-loc-email')?.value?.trim() || '';
     // Use the location card's name field as the location label so they stay in sync
     const nameField = row.querySelector('.fc-name')?.value?.trim() || '';
     if (nameField) loc.label = nameField;
@@ -14579,10 +14587,12 @@ function renderBizLocationsSummary() {
         city:   loc.city   || '',
         state:  loc.state  || '',
         zip:    loc.zip    || '',
+        phone:  loc.phone  || '',
+        email:  loc.email  || '',
       };
     });
   }
-  if (entries.length < 2) { wrap.style.display = 'none'; return; }
+  if (!entries.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   list.innerHTML = entries.map((e, i) => {
@@ -14592,12 +14602,17 @@ function renderBizLocationsSummary() {
       : (e.street || place
           ? `${esc(e.street)}${e.street && place ? ' · ' : ''}${esc(place)}`
           : `<span style="color:var(--text-dd);font-style:italic;">No address yet</span>`);
+    const contactBits = [
+      e.phone ? `📞 ${esc(e.phone)}` : '',
+      e.email ? `✉ ${esc(e.email)}` : '',
+    ].filter(Boolean).join(' · ');
     const qboBadge = e.realm ? `<span style="font-size:10px;background:#eaf4ef;color:#2e7d5e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600;">QBO</span>` : '';
     const storeBadge = e.storeNum ? `<span style="font-size:10px;background:var(--surface);color:var(--text-d);padding:1px 6px;border-radius:4px;margin-left:6px;font-family:'DM Mono',monospace;">#${esc(e.storeNum)}</span>` : '';
     const isLast = i === entries.length - 1;
     return `<div style="padding:6px 0;${isLast?'':'border-bottom:1px solid var(--border);'}">
       <div><strong style="color:var(--text);font-size:12px;">${esc(e.name)}</strong>${storeBadge}${qboBadge}</div>
       <div style="color:var(--text-d);font-size:11px;margin-top:2px;">${fullAddr}</div>
+      ${contactBits ? `<div style="color:var(--text-d);font-size:11px;margin-top:2px;">${contactBits}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -14971,12 +14986,40 @@ function openEditClient(id){
   clearOwners();
   (c.owners||[]).forEach(o=>addOwnerRow(o));
   initWorkLocations(c.locations||[]);
+  // Migrate the legacy client-level phone/email into the Primary Location if
+  // it has none yet — phone/email is now edited per-location, but the input
+  // values still mirror back to client.phone/email on save for downstream
+  // consumers (Comm Center, fax cover sheets, etc.).
+  if (Array.isArray(_wlData) && _wlData[0]) {
+    if (!_wlData[0].phone && c.phone) _wlData[0].phone = c.phone;
+    if (!_wlData[0].email && c.email) _wlData[0].email = c.email;
+  }
+  // Every client gets at least one Location card. If the client has no
+  // franchises configured, synthesize a "Primary" entry linked to the primary
+  // work-location so the Locations tab always has somewhere to edit address,
+  // phone, and email.
+  let _franchisesForRender = c.franchises || [];
+  if (!_franchisesForRender.length && Array.isArray(_wlData) && _wlData[0]) {
+    _franchisesForRender = [{
+      id: uid(),
+      locationId: _wlData[0].id,
+      name: _wlData[0].label || 'Primary',
+      legalName: '',
+      qboRealmId: '',
+      qboName: '',
+      state: '',
+      storeNumber: '',
+      notes: '',
+      separatePayroll: false,
+      _autoPrimary: true,
+    }];
+  }
   setPrPlatform(c.prPlatform||'');
   document.getElementById('mc-pr-slug').value=c.prSlug||'';
   document.getElementById('mc-pr-portal-pass').value=c.prPortalPass||'';
   document.getElementById('mc-pr-portal-link').href=ARK_SERVER+'/payroll-entry';
   document.getElementById('mc-pr-script').value=c.prScript||'';
-  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'', c.franchises||[]);
+  setQBType(c.qbType||'', c.qboBilling||'', c.qbdUser||'', c.qbdPass||'', c.qboRealmId||'', _franchisesForRender);
   const brandEl = document.getElementById('mc-franchise-brand'); if(brandEl) brandEl.value = c.franchiseBrand||'';
   updateFranchiseLabels();
   const realmEl = document.getElementById('mc-qbo-realm-id'); if(realmEl) realmEl.value = c.qboRealmId||'';
@@ -15023,6 +15066,16 @@ function saveClient(){
   // Flush address fields from each Locations card into _wlData before reading
   // — getWorkLocations() reads from _wlData, so this keeps addresses in sync.
   syncFranchiseAddressesToWlData();
+  // Mirror the primary location's phone/email back to the (hidden) Business-tab
+  // inputs so client.phone/client.email stay populated for downstream consumers
+  // (Comm Center, fax cover sheets, lead conversion, etc.). The user no longer
+  // edits these on the Business tab — they're now per-location fields.
+  if (Array.isArray(_wlData) && _wlData[0]) {
+    const phoneEl = document.getElementById('mc-phone');
+    const emailEl = document.getElementById('mc-email');
+    if (phoneEl) phoneEl.value = _wlData[0].phone || '';
+    if (emailEl) emailEl.value = _wlData[0].email || '';
+  }
   const obj={
     id:DB._editClient||uid(),
     biz,
