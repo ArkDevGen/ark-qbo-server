@@ -7031,7 +7031,8 @@ Now here is what I want to build: [describe your feature]</pre>
       <div class="mc-tab" data-tab="2" onclick="mcTab(2)">🧾 Sales Tax</div>
       <div class="mc-tab" data-tab="3" onclick="mcTab(3)">💵 Payroll</div>
       <div class="mc-tab" data-tab="4" onclick="mcTab(4)">📋 Tax</div>
-      <div class="mc-tab" data-tab="5" onclick="mcTab(5)">📍 Work Locations</div>
+      <!-- Work Locations is now folded into the Locations tab; data still lives in client.locations[] and the panel below stays mounted for legacy code paths -->
+      <div class="mc-tab" data-tab="5" onclick="mcTab(5)" style="display:none;">📍 Work Locations</div>
       <div class="mc-tab" data-tab="6" onclick="mcTab(6)">⚙️ General</div>
       <div class="mc-tab" data-tab="7" onclick="mcTab(7)" id="mc-tab-onboarding">✅ Onboarding</div>
       <div class="mc-tab" data-tab="8" onclick="mcTab(8)" id="mc-tab-eftps">🏛 EFTPS</div>
@@ -7087,6 +7088,14 @@ Now here is what I want to build: [describe your feature]</pre>
             </div>
           </div>
           <div class="fg full"><label>Notes</label><textarea id="mc-notes" rows="3" placeholder="General notes about this client…"></textarea></div>
+          <!-- Locations summary — only shown when this client has more than one location -->
+          <div class="fg full" id="mc-biz-locations-summary" style="display:none;margin-top:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div class="section-label" style="margin:0;">📍 Locations</div>
+              <button class="btn btn-ghost btn-sm" onclick="mcTab(11)" style="font-size:11px;">Manage in Locations →</button>
+            </div>
+            <div id="mc-biz-locations-list" style="font-size:12px;color:var(--text-m);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;"></div>
+          </div>
         </div>
       </div>
 
@@ -13863,10 +13872,53 @@ async function qboUnlinkClient() {
 }
 
 // ── Franchise helpers ──────────────────────────────────────────────
+// Ensure every franchise has a locationId pointing to a client.locations[]
+// entry (held in _wlData while the modal is open). Each franchise card on
+// the Locations tab shows that entry's address fields. If a franchise has
+// no locationId, we either match an unclaimed work-location by label, or
+// create a new one — so address fields always have a target.
+function ensureFranchiseLocationLinks(franchises) {
+  if (!Array.isArray(franchises) || !franchises.length) return franchises || [];
+  if (!Array.isArray(_wlData)) _wlData = [];
+  const claimed = new Set(franchises.filter(f => f.locationId).map(f => f.locationId));
+  for (const f of franchises) {
+    if (f.locationId && _wlData.some(l => l.id === f.locationId)) continue;
+    f.locationId = '';
+    const fname = (f.name || '').toLowerCase().trim();
+    const flegal = (f.legalName || '').toLowerCase().trim();
+    const candidate = _wlData.find(l =>
+      !claimed.has(l.id) &&
+      ((l.label||'').toLowerCase().trim() === fname && fname) ||
+      ((l.label||'').toLowerCase().trim() === flegal && flegal)
+    );
+    if (candidate) {
+      f.locationId = candidate.id;
+      claimed.add(candidate.id);
+    } else {
+      const newLoc = {
+        id: uid(),
+        label: f.name || f.legalName || '',
+        sameAsCompany: false,
+        street: '',
+        city: '',
+        state: 'Nebraska',
+        zip: '',
+        phone: '',
+      };
+      _wlData.push(newLoc);
+      f.locationId = newLoc.id;
+      claimed.add(newLoc.id);
+    }
+  }
+  return franchises;
+}
+
 function renderFranchiseList(franchises) {
   const list = document.getElementById('mc-franchise-list');
   const empty = document.getElementById('mc-franchise-empty');
   if (!list) return;
+  // Make sure every franchise has a linked work-location before rendering
+  ensureFranchiseLocationLinks(franchises);
   if (!franchises || !franchises.length) {
     list.innerHTML = '';
     if (empty) empty.style.display = '';
@@ -13882,11 +13934,15 @@ function renderFranchiseList(franchises) {
     const depOpts = ['Monthly','Semi-Weekly','Next Day','Quarterly'];
     const schedOpts = ['Weekly (52x/year)','Bi-Weekly (26x/year)','Semi-Monthly (24x/year)','Monthly (12x/year)','Quarterly (4x/year)'];
     const procOpts = ['Same day as pay day','1 business day prior','2 business days prior','3 business days prior','4 business days prior','5 business days prior'];
-    return `<div class="franchise-row" data-idx="${idx}" data-id="${f.id||''}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
+    const loc = (_wlData||[]).find(l => l.id === f.locationId) || {};
+    const locked = !!loc.sameAsCompany;
+    const stateOpts = (typeof US_STATES !== 'undefined' ? US_STATES : ['Nebraska']).map(s => `<option ${s===(loc.state||'Nebraska')?'selected':''}>${s}</option>`).join('');
+    const addrBg = locked ? 'background:var(--surface);' : '';
+    return `<div class="franchise-row" data-idx="${idx}" data-id="${f.id||''}" data-location-id="${f.locationId||''}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
-        <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Franchise city" style="font-size:12px;font-weight:600;">
-        <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Franchise name" style="font-size:12px;">
-        <button onclick="removeFranchise(${idx})" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-d)'" title="Remove franchise">✕</button>
+        <input type="text" class="field-input fc-name" value="${(f.name||'').replace(/"/g,'&quot;')}" placeholder="Location name (city)" style="font-size:12px;font-weight:600;">
+        <input type="text" class="field-input fc-legal" value="${(f.legalName||'').replace(/"/g,'&quot;')}" placeholder="Legal entity name" style="font-size:12px;">
+        <button onclick="removeFranchise(${idx})" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-d)'" title="Remove location">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:80px 80px 1fr;gap:8px;align-items:center;margin-bottom:8px;">
         <input type="text" class="field-input fc-state" value="${f.state||''}" placeholder="State" style="font-size:11px;text-transform:uppercase;" maxlength="2">
@@ -13900,6 +13956,26 @@ function renderFranchiseList(franchises) {
         </div>
       </div>
       ${f.qboName ? `<div style="font-size:10px;color:var(--green);font-family:'DM Mono',monospace;margin-bottom:6px;">QBO: ${f.qboName}</div>` : ''}
+
+      <!-- Address (folds in what used to live on the Work Locations tab) -->
+      <div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-d);">📍 Address</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-m);cursor:pointer;">
+            <input type="checkbox" class="fc-loc-same" ${locked?'checked':''} onchange="toggleFranchiseSameAsCompany(${idx}, this.checked)">
+            Same as company address
+          </label>
+        </div>
+        <div class="fc-loc-fields" style="display:grid;grid-template-columns:2fr 1fr 70px 90px;gap:6px;">
+          <input type="text" class="field-input fc-loc-street" value="${(loc.street||'').replace(/"/g,'&quot;')}" placeholder="Street" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
+          <input type="text" class="field-input fc-loc-city" value="${(loc.city||'').replace(/"/g,'&quot;')}" placeholder="City" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
+          <select class="field-input fc-loc-state" ${locked?'disabled':''} style="font-size:11px;${addrBg}">${stateOpts}</select>
+          <input type="text" class="field-input fc-loc-zip" value="${(loc.zip||'').replace(/"/g,'&quot;')}" placeholder="ZIP" maxlength="10" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
+        </div>
+        <div style="margin-top:6px;">
+          <input type="text" class="field-input fc-loc-phone" value="${(loc.phone||'').replace(/"/g,'&quot;')}" placeholder="Phone at this location (optional)" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
+        </div>
+      </div>
 
       <!-- Separate payroll toggle -->
       <div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:8px;">
@@ -13955,17 +14031,78 @@ function addFranchise() {
   const empty = document.getElementById('mc-franchise-empty');
   if (!list) return;
   if (empty) empty.style.display = 'none';
+  // Flush current address fields back to _wlData before re-rendering, otherwise
+  // the user loses any unsaved address edits when adding a new row.
+  syncFranchiseAddressesToWlData();
   const current = getFranchisesFromModal();
-  current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '', separatePayroll: false });
+  // Seed a fresh work-location entry for the new card so the address row has
+  // a target. ensureFranchiseLocationLinks() inside renderFranchiseList() will
+  // do this anyway, but doing it here keeps id stability across the render.
+  const newLocId = uid();
+  if (!Array.isArray(_wlData)) _wlData = [];
+  _wlData.push({ id: newLocId, label: '', sameAsCompany: false, street: '', city: '', state: 'Nebraska', zip: '', phone: '' });
+  current.push({ id: uid(), name: '', legalName: '', qboRealmId: '', qboName: '', state: '', storeNumber: '', notes: '', separatePayroll: false, locationId: newLocId });
   renderFranchiseList(current);
   // Hide parent QBO link when franchises exist
   const linkWrap = document.getElementById('mc-qbo-link-wrap');
   if(linkWrap) linkWrap.style.display = 'none';
 }
 
-function removeFranchise(idx) {
+// Read the address fields off each franchise card and write them back to the
+// matching entry in _wlData. Called before any operation that re-renders the
+// list (add/remove franchise, toggle, save) so address edits aren't lost.
+function syncFranchiseAddressesToWlData() {
+  if (!Array.isArray(_wlData)) return;
+  const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
+  for (const row of rows) {
+    const lid = row.dataset.locationId;
+    if (!lid) continue;
+    const loc = _wlData.find(l => l.id === lid);
+    if (!loc) continue;
+    loc.sameAsCompany = !!row.querySelector('.fc-loc-same')?.checked;
+    if (!loc.sameAsCompany) {
+      loc.street = row.querySelector('.fc-loc-street')?.value?.trim() || '';
+      loc.city   = row.querySelector('.fc-loc-city')?.value?.trim() || '';
+      loc.state  = row.querySelector('.fc-loc-state')?.value || 'Nebraska';
+      loc.zip    = row.querySelector('.fc-loc-zip')?.value?.trim() || '';
+      loc.phone  = row.querySelector('.fc-loc-phone')?.value?.trim() || '';
+    }
+    // Use the location card's name field as the location label so they stay in sync
+    const nameField = row.querySelector('.fc-name')?.value?.trim() || '';
+    if (nameField) loc.label = nameField;
+  }
+}
+
+// Toggle the "Same as company address" checkbox on a franchise card. When
+// toggled on, the card's address fields lock and inherit from the Business tab.
+function toggleFranchiseSameAsCompany(idx, checked) {
+  syncFranchiseAddressesToWlData();
   const current = getFranchisesFromModal();
-  if (current[idx]?.qboRealmId && !confirm('This franchise is linked to QBO. Remove it?')) return;
+  const f = current[idx];
+  if (!f) return;
+  if (!Array.isArray(_wlData)) _wlData = [];
+  const loc = _wlData.find(l => l.id === f.locationId);
+  if (loc) {
+    loc.sameAsCompany = checked;
+    if (checked) {
+      loc.street = document.getElementById('mc-addr-street')?.value || '';
+      loc.city   = document.getElementById('mc-addr-city')?.value || '';
+      loc.state  = document.getElementById('mc-addr-state')?.value || 'Nebraska';
+      loc.zip    = document.getElementById('mc-addr-zip')?.value || '';
+    }
+  }
+  renderFranchiseList(current);
+}
+
+function removeFranchise(idx) {
+  syncFranchiseAddressesToWlData();
+  const current = getFranchisesFromModal();
+  if (current[idx]?.qboRealmId && !confirm('This location is linked to QBO. Remove it?')) return;
+  // Also drop the linked work-location entry so we don't leave orphans behind
+  const orphanLid = current[idx]?.locationId;
+  if (orphanLid && Array.isArray(_wlData)) {
+    _wlData = _wlData.filter(l => l.id !== orphanLid);
+  }
   current.splice(idx, 1);
   renderFranchiseList(current);
   // Show parent QBO link when no franchises remain
@@ -13979,6 +14116,7 @@ function getFranchisesFromModal() {
     const separatePayroll = !!row.querySelector('.fc-sep-pr')?.checked;
     const out = {
       id: row.dataset.id || uid(),
+      locationId: row.dataset.locationId || '',
       name: row.querySelector('.fc-name')?.value?.trim() || '',
       legalName: row.querySelector('.fc-legal')?.value?.trim() || '',
       qboRealmId: row.querySelector('.fc-realm')?.value?.trim() || '',
@@ -14003,6 +14141,7 @@ function getFranchisesFromModal() {
 }
 
 function toggleFranchisePayroll(idx, checked) {
+  syncFranchiseAddressesToWlData();
   const current = getFranchisesFromModal();
   if (!current[idx]) return;
   current[idx].separatePayroll = checked;
@@ -14412,6 +14551,41 @@ function mcTab(n){
   document.getElementById('mc-next-btn').style.display = visualIdx >= tabs.length - 1 ? 'none' : 'inline-flex';
   if(n===7) obRenderChecklist();
   if(n===5) renderWLList();
+  if(n===0) renderBizLocationsSummary();
+}
+
+// Read-only summary of locations rendered on the Business tab. Hides when
+// there's 0 or 1 locations — single-site clients don't need the noise.
+function renderBizLocationsSummary() {
+  const wrap = document.getElementById('mc-biz-locations-summary');
+  const list = document.getElementById('mc-biz-locations-list');
+  if (!wrap || !list) return;
+  // Pull live from the Locations tab DOM if it's been rendered, otherwise from
+  // the in-memory franchise/_wlData state — gives an accurate count even
+  // before the user clicks the Locations tab.
+  const rows = document.querySelectorAll('#mc-franchise-list .franchise-row');
+  let entries = [];
+  if (rows.length) {
+    entries = [...rows].map(row => {
+      const lid = row.dataset.locationId;
+      const loc = (_wlData||[]).find(l => l.id === lid) || {};
+      const name = row.querySelector('.fc-name')?.value?.trim() || row.querySelector('.fc-legal')?.value?.trim() || '(unnamed location)';
+      const realm = row.querySelector('.fc-realm')?.value?.trim() || '';
+      const city = loc.city || '';
+      const state = loc.state || '';
+      return { name, realm, city, state };
+    });
+  }
+  if (entries.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  list.innerHTML = entries.map(e => {
+    const place = [e.city, e.state].filter(Boolean).join(', ');
+    const qboBadge = e.realm ? `<span style="font-size:10px;background:#eaf4ef;color:#2e7d5e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600;">QBO</span>` : '';
+    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">
+      <strong style="color:var(--text);">${e.name}</strong>${qboBadge}
+      ${place?`<span style="color:var(--text-d);margin-left:8px;font-size:11px;">${place}</span>`:''}
+    </div>`;
+  }).join('');
 }
 function mcTabStep(dir){
   // Step through tabs in their visual order, not data-tab number order.
@@ -14832,6 +15006,9 @@ function openEditClient(id){
 function saveClient(){
   const biz=document.getElementById('mc-biz').value.trim();
   if(!biz){mcTab(0);setTimeout(()=>document.getElementById('mc-biz').focus(),50);alert('Please enter a business name.');return;}
+  // Flush address fields from each Locations card into _wlData before reading
+  // — getWorkLocations() reads from _wlData, so this keeps addresses in sync.
+  syncFranchiseAddressesToWlData();
   const obj={
     id:DB._editClient||uid(),
     biz,
