@@ -14570,20 +14570,34 @@ function renderBizLocationsSummary() {
       const lid = row.dataset.locationId;
       const loc = (_wlData||[]).find(l => l.id === lid) || {};
       const name = row.querySelector('.fc-name')?.value?.trim() || row.querySelector('.fc-legal')?.value?.trim() || '(unnamed location)';
+      const storeNum = row.querySelector('.fc-store')?.value?.trim() || '';
       const realm = row.querySelector('.fc-realm')?.value?.trim() || '';
-      const city = loc.city || '';
-      const state = loc.state || '';
-      return { name, realm, city, state };
+      return {
+        name, storeNum, realm,
+        sameAsCompany: !!loc.sameAsCompany,
+        street: loc.street || '',
+        city:   loc.city   || '',
+        state:  loc.state  || '',
+        zip:    loc.zip    || '',
+      };
     });
   }
   if (entries.length < 2) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
-  list.innerHTML = entries.map(e => {
-    const place = [e.city, e.state].filter(Boolean).join(', ');
+  const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  list.innerHTML = entries.map((e, i) => {
+    const place    = [e.city, e.state].filter(Boolean).join(', ') + (e.zip ? ' ' + e.zip : '');
+    const fullAddr = e.sameAsCompany
+      ? `<span style="color:var(--text-d);font-style:italic;">Same as company address</span>`
+      : (e.street || place
+          ? `${esc(e.street)}${e.street && place ? ' · ' : ''}${esc(place)}`
+          : `<span style="color:var(--text-dd);font-style:italic;">No address yet</span>`);
     const qboBadge = e.realm ? `<span style="font-size:10px;background:#eaf4ef;color:#2e7d5e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600;">QBO</span>` : '';
-    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">
-      <strong style="color:var(--text);">${e.name}</strong>${qboBadge}
-      ${place?`<span style="color:var(--text-d);margin-left:8px;font-size:11px;">${place}</span>`:''}
+    const storeBadge = e.storeNum ? `<span style="font-size:10px;background:var(--surface);color:var(--text-d);padding:1px 6px;border-radius:4px;margin-left:6px;font-family:'DM Mono',monospace;">#${esc(e.storeNum)}</span>` : '';
+    const isLast = i === entries.length - 1;
+    return `<div style="padding:6px 0;${isLast?'':'border-bottom:1px solid var(--border);'}">
+      <div><strong style="color:var(--text);font-size:12px;">${esc(e.name)}</strong>${storeBadge}${qboBadge}</div>
+      <div style="color:var(--text-d);font-size:11px;margin-top:2px;">${fullAddr}</div>
     </div>`;
   }).join('');
 }
