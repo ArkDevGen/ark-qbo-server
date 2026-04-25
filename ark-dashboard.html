@@ -7065,18 +7065,19 @@ Now here is what I want to build: [describe your feature]</pre>
             </select>
           </div>
           <hr class="section-divider">
-          <!-- Phone & email moved to the Locations tab — primary location's
-               phone/email mirrors back to client.phone/client.email on save
-               so Comm Center, fax cover sheets, and other consumers keep
-               working unchanged. Inputs stay in the DOM (hidden) for legacy
-               read/write paths but the user no longer edits them here. -->
+          <!-- Phone, email, and address all moved to the Locations tab — the
+               primary location's values mirror back to client.phone, .email,
+               .addrStreet, .addrCity, .addrState, .addrZip on save so Comm
+               Center, fax cover sheets, lead conversion, and other consumers
+               keep working unchanged. Inputs stay in the DOM (hidden) for
+               legacy read/write paths only; the user edits them on a Location
+               card. -->
           <input id="mc-phone" type="hidden">
           <input id="mc-email" type="hidden">
-          <div class="fg full"><label>Street Address</label><input id="mc-addr-street" placeholder="123 Main St"></div>
-          <div class="fg"><label>City</label><input id="mc-addr-city" placeholder="Ashland"></div>
-          <div class="fg"><label>State</label><select id="mc-addr-state"></select></div>
-          <div class="fg"><label>ZIP</label><input id="mc-addr-zip" placeholder="68003" maxlength="10"></div>
-          <hr class="section-divider">
+          <input id="mc-addr-street" type="hidden">
+          <input id="mc-addr-city" type="hidden">
+          <select id="mc-addr-state" style="display:none;"></select>
+          <input id="mc-addr-zip" type="hidden">
           <div class="section-label">Engagement</div>
           <div class="fg"><label>Status</label>
             <select id="mc-status"><option>Active</option><option>Lead</option><option>Prospect</option><option>Inactive</option></select>
@@ -13939,7 +13940,10 @@ function renderFranchiseList(franchises) {
     const schedOpts = ['Weekly (52x/year)','Bi-Weekly (26x/year)','Semi-Monthly (24x/year)','Monthly (12x/year)','Quarterly (4x/year)'];
     const procOpts = ['Same day as pay day','1 business day prior','2 business days prior','3 business days prior','4 business days prior','5 business days prior'];
     const loc = (_wlData||[]).find(l => l.id === f.locationId) || {};
-    const locked = !!loc.sameAsCompany;
+    // The Primary Location is the FIRST entry in _wlData. Its address IS the
+    // client's address — no "same as primary" toggle for itself.
+    const isPrimary = !!(Array.isArray(_wlData) && _wlData[0] && f.locationId === _wlData[0].id);
+    const locked = !isPrimary && !!loc.sameAsCompany;
     const stateOpts = (typeof US_STATES !== 'undefined' ? US_STATES : ['Nebraska']).map(s => `<option ${s===(loc.state||'Nebraska')?'selected':''}>${s}</option>`).join('');
     const addrBg = locked ? 'background:var(--surface);' : '';
     return `<div class="franchise-row" data-idx="${idx}" data-id="${f.id||''}" data-location-id="${f.locationId||''}" style="background:var(--surface2);border:1px solid ${linked ? '#2ca01c' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
@@ -13964,11 +13968,11 @@ function renderFranchiseList(franchises) {
       <!-- Address (folds in what used to live on the Work Locations tab) -->
       <div style="border-top:1px dashed var(--border);margin-top:8px;padding-top:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-d);">📍 Address</div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-m);cursor:pointer;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-d);">📍 Address${isPrimary?' <span style="font-weight:600;color:var(--navy);background:#eef1f8;padding:1px 6px;border-radius:4px;margin-left:6px;letter-spacing:0;text-transform:none;">PRIMARY</span>':''}</div>
+          ${isPrimary ? '' : `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-m);cursor:pointer;">
             <input type="checkbox" class="fc-loc-same" ${locked?'checked':''} onchange="toggleFranchiseSameAsCompany(${idx}, this.checked)">
-            Same as company address
-          </label>
+            Same as primary location
+          </label>`}
         </div>
         <div class="fc-loc-fields" style="display:grid;grid-template-columns:2fr 1fr 70px 90px;gap:6px;">
           <input type="text" class="field-input fc-loc-street" value="${(loc.street||'').replace(/"/g,'&quot;')}" placeholder="Street" ${locked?'disabled':''} style="font-size:11px;${addrBg}">
@@ -14986,13 +14990,20 @@ function openEditClient(id){
   clearOwners();
   (c.owners||[]).forEach(o=>addOwnerRow(o));
   initWorkLocations(c.locations||[]);
-  // Migrate the legacy client-level phone/email into the Primary Location if
-  // it has none yet — phone/email is now edited per-location, but the input
-  // values still mirror back to client.phone/email on save for downstream
-  // consumers (Comm Center, fax cover sheets, etc.).
+  // Migrate the legacy client-level phone/email/address into the Primary
+  // Location if it has none yet — these are all edited per-location now, but
+  // the values still mirror back to client.phone/email/addr* on save for
+  // downstream consumers (Comm Center, fax cover sheets, lead conversion).
   if (Array.isArray(_wlData) && _wlData[0]) {
-    if (!_wlData[0].phone && c.phone) _wlData[0].phone = c.phone;
-    if (!_wlData[0].email && c.email) _wlData[0].email = c.email;
+    if (!_wlData[0].phone  && c.phone)      _wlData[0].phone  = c.phone;
+    if (!_wlData[0].email  && c.email)      _wlData[0].email  = c.email;
+    if (!_wlData[0].street && c.addrStreet) _wlData[0].street = c.addrStreet;
+    if (!_wlData[0].city   && c.addrCity)   _wlData[0].city   = c.addrCity;
+    if (!_wlData[0].state  && c.addrState)  _wlData[0].state  = c.addrState;
+    if (!_wlData[0].zip    && c.addrZip)    _wlData[0].zip    = c.addrZip;
+    // The Primary Location should never claim "same as company" — there is
+    // no separate company address anymore; the Primary IS the company address.
+    if (_wlData[0].sameAsCompany) _wlData[0].sameAsCompany = false;
   }
   // Every client gets at least one Location card. If the client has no
   // franchises configured, synthesize a "Primary" entry linked to the primary
@@ -15066,15 +15077,20 @@ function saveClient(){
   // Flush address fields from each Locations card into _wlData before reading
   // — getWorkLocations() reads from _wlData, so this keeps addresses in sync.
   syncFranchiseAddressesToWlData();
-  // Mirror the primary location's phone/email back to the (hidden) Business-tab
-  // inputs so client.phone/client.email stay populated for downstream consumers
-  // (Comm Center, fax cover sheets, lead conversion, etc.). The user no longer
-  // edits these on the Business tab — they're now per-location fields.
+  // Mirror the primary location's phone, email, AND street/city/state/zip
+  // back to the (hidden) Business-tab inputs so client.phone/email/addr*
+  // stay populated for downstream consumers (Comm Center, fax cover sheets,
+  // lead conversion, etc.). The user no longer edits any of these on the
+  // Business tab — they're per-location fields now.
   if (Array.isArray(_wlData) && _wlData[0]) {
-    const phoneEl = document.getElementById('mc-phone');
-    const emailEl = document.getElementById('mc-email');
-    if (phoneEl) phoneEl.value = _wlData[0].phone || '';
-    if (emailEl) emailEl.value = _wlData[0].email || '';
+    const p = _wlData[0];
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    set('mc-phone',       p.phone);
+    set('mc-email',       p.email);
+    set('mc-addr-street', p.street);
+    set('mc-addr-city',   p.city);
+    set('mc-addr-state',  p.state);
+    set('mc-addr-zip',    p.zip);
   }
   const obj={
     id:DB._editClient||uid(),
