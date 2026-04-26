@@ -1804,7 +1804,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <thead><tr>
             <th onclick="sortClientsBy('biz')" style="cursor:pointer;user-select:none;" id="cth-biz">Business Name ↕</th>
             <th onclick="sortClientsBy('entity')" style="cursor:pointer;user-select:none;" id="cth-entity">Entity Type ↕</th>
-            <th>EIN / Tax ID</th>
             <th onclick="sortClientsBy('services')" style="cursor:pointer;user-select:none;" id="cth-services">Services ↕</th>
             <th onclick="sortClientsBy('status')" style="cursor:pointer;user-select:none;" id="cth-status">Status ↕</th>
             <th onclick="sortClientsBy('am')" style="cursor:pointer;user-select:none;" id="cth-am">Account Manager ↕</th>
@@ -11454,7 +11453,6 @@ function renderClients(q=''){
     <tr>
       <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:var(--qbo-green);border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}${(()=>{const lm=typeof mtgLastMeetingDate==='function'?mtgLastMeetingDate(c.id):null;return lm?' <span style="color:var(--text-d);font-size:10px;opacity:.7;">· mtg '+new Date(lm).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</span>':'';})()}</div></div></div></td>
       <td>${badgeEntity(c.entity)}</td>
-      <td class="mono" style="color:var(--text-m);">${c.ein||'—'}</td>
       <td><div class="chip-row">${svcChips(c.services)}</div></td>
       <td>${badgeStatus(c.status)}</td>
       <td style="font-size:12px;color:var(--text-m)">${getAMName(c.am)}</td>
