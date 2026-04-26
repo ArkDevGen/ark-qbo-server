@@ -13591,8 +13591,10 @@ async function populateAMSelect(selId=''){
   const sel=document.getElementById('mc-am');
   sel.innerHTML=`<option value="">— Unassigned —</option>`;
   try {
-    const resp = await authFetch(ARK_SERVER + '/users');
-    if(!resp.ok) return;
+    // /users/team is open to any authenticated user; /users requires admin
+    // and would 403 the dropdown empty for non-admins.
+    const resp = await authFetch(ARK_SERVER + '/users/team');
+    if(!resp.ok) throw new Error('users/team ' + resp.status);
     const data = await resp.json();
     const users = (data.users || data).filter(u => !u.status || u.status.toLowerCase() === 'active');
     sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>{
