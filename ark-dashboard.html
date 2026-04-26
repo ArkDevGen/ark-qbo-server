@@ -10007,10 +10007,14 @@ function openUserModal(userId){
           document.getElementById('ue-role').value = u.role || 'am';
           document.getElementById('ue-title').value = u.title || '';
           document.getElementById('ue-status').value = u.status || 'active';
-          // Check assigned clients
+          // Check assigned clients. Derive from c.am (single source of truth)
+          // so an AM change made in the client modal shows up here without
+          // needing the admin-only u.assignedClients server PUT to land first.
+          // Fall back to u.assignedClients for any clients no longer in DB.clients.
+          const fromCam = new Set((DB.clients||[]).filter(c => c.am === userId).map(c => c.id));
           const assigned = u.assignedClients || [];
           document.querySelectorAll('.ue-client-cb').forEach(cb => {
-            if(assigned.includes(cb.value)) cb.checked = true;
+            if(fromCam.has(cb.value) || assigned.includes(cb.value)) cb.checked = true;
           });
         }
       } catch(e){ console.warn('Load user failed:', e); }
