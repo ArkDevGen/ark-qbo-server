@@ -3305,7 +3305,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
 
   <!-- ════ TASK CENTER VIEW ════ -->
-  <div class="view content" id="view-tasks" style="padding:28px 32px;">
+  <!-- overflow-x:hidden prevents the page from scrolling horizontally when
+       the day-column board is wide. The inner .tc-board has its own
+       overflow-x:auto so day columns scroll WITHIN the board container,
+       leaving the sticky page-header / KPIs / filter bar above frozen. -->
+  <div class="view content" id="view-tasks" style="padding:28px 32px;overflow-x:hidden;">
 
     <!-- Header — sticky so Import / + Project / + New Task stay visible
          while the user scrolls the board horizontally or vertically. -->
