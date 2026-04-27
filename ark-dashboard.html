@@ -26549,6 +26549,10 @@ function tcOpenNew(){
   // Most of the time empty, defaulted by tcOpenNewInSection() if applicable.
   const secEl = document.getElementById('tc-section');
   if (secEl) secEl.value = '';
+  // Parent picker — populate later once the client is known. For now reset
+  // it to the empty option.
+  const pSel = document.getElementById('tc-parent-id');
+  if (pSel) pSel.innerHTML = '<option value="">— None (top-level task) —</option>';
   document.getElementById('tc-due').value = new Date().toISOString().slice(0,10);
   document.getElementById('tc-category').value = 'Bookkeeping';
   document.getElementById('tc-recurring').checked = false;
@@ -26583,6 +26587,7 @@ function tcEditTask(id){
   const secEl = document.getElementById('tc-section');
   if (secEl) secEl.value = t.section || '';
   tcPopulateSectionSuggestions(t.clientId || '');
+  tcPopulateParentSelect(t.clientId || '', t.id);
   document.getElementById('tc-due').value = t.dueDate||'';
   document.getElementById('tc-category').value = t.category||'Bookkeeping';
   document.getElementById('tc-recurring').checked = !!t.recurring;
@@ -26718,7 +26723,14 @@ function tcSaveTask(){
       reviewTaskId: existing?.reviewTaskId || null,
       parentTaskId: existing?.parentTaskId || null,
       type:         existing?.type || 'task',
-      parentId:     existing?.parentId || null,
+      // Parent for sub-task hierarchy. When the picker is present its value
+      // is authoritative — including the empty value, which means "make this
+      // a top-level task" (so users can un-nest a sub-task by setting None).
+      parentId:     (function(){
+                      const pSel = document.getElementById('tc-parent-id');
+                      if (pSel) return pSel.value || null;
+                      return existing?.parentId || null;
+                    })(),
       viewedAt:     existing?.viewedAt || null,
       viewedBy:     existing?.viewedBy || null,
       acknowledgedAt: existing?.acknowledgedAt || null,
@@ -27399,6 +27411,36 @@ function tcMigrateSections() {
   }
 }
 
+// Build the parent-task <select> options. Eligible parents are top-level
+// tasks (no parentId of their own) on the same client, excluding the task
+// being edited and any of its descendants (preventing cycles).
+function tcPopulateParentSelect(clientId, currentTaskId) {
+  const sel = document.getElementById('tc-parent-id');
+  if (!sel) return;
+  const allTasks = (DB.tasks || []).filter(t => !t._deleted && !_taskHiddenForMe(t));
+  // Walk descendants of currentTaskId so we never offer a child as a parent
+  const banned = new Set();
+  if (currentTaskId) {
+    banned.add(currentTaskId);
+    const queue = [currentTaskId];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const t of allTasks) {
+        if (t.parentId === id && !banned.has(t.id)) { banned.add(t.id); queue.push(t.id); }
+      }
+    }
+  }
+  const candidates = allTasks
+    .filter(t => !t.parentId)              // only top-level tasks can be parents (one level of nesting kept simple)
+    .filter(t => !banned.has(t.id))
+    .filter(t => !clientId || t.clientId === clientId);
+  candidates.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const current = (DB.tasks || []).find(t => t.id === currentTaskId);
+  const currentParent = current?.parentId || '';
+  sel.innerHTML = '<option value="">— None (top-level task) —</option>' +
+    candidates.map(t => `<option value="${t.id}" ${t.id===currentParent?'selected':''}>${(t.name||'(unnamed)').replace(/</g,'&lt;')}</option>`).join('');
+}
+
 // Build the <datalist> of section suggestions for the section input — pulls
 // existing sections (de-duped, sorted) for the given client, plus any sections
 // from other clients as a secondary group so users can re-use familiar names.
@@ -27562,7 +27604,8 @@ async function tcRender(){
   if(typeof tcPopulateSendList === 'function') await tcPopulateSendList();
 }
 
-function tcTaskCard(t, today, todayStr){
+function tcTaskCard(t, today, todayStr, depth){
+  depth = depth || 0;
   const client = (DB.clients||[]).find(c=>c.id===t.clientId);
   const clientName = client ? client.biz : (t.clientName||'—');
   const amName = getAMName(t.amId);
@@ -27570,6 +27613,13 @@ function tcTaskCard(t, today, todayStr){
   const isReview    = t.status === 'review';
   const isOverdue   = !isCompleted && !isReview && t.dueDate < todayStr;
   const isToday     = !isCompleted && !isReview && t.dueDate === todayStr;
+  const subs        = tcGetSubtasks(t.id);
+  const hasSubs     = subs.length > 0;
+  const collapsed   = hasSubs && _tcCollapsedTasks && _tcCollapsedTasks.has(t.id);
+  // Visually indent sub-tasks one level per depth, with a left guide line so
+  // hierarchy is readable at multiple depths (Todoist-style).
+  const indentPx    = depth * 32;
+  const wrapStyle   = depth > 0 ? `margin-left:${indentPx}px;border-left:2px solid var(--border);padding-left:8px;` : '';
 
   const dueD = new Date(t.dueDate+'T12:00:00');
   const dueFmt = dueD.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
@@ -27613,7 +27663,10 @@ function tcTaskCard(t, today, todayStr){
     ? `<button onclick="event.stopPropagation();tcDismissNotify('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;">Dismiss</button>`
     : '';
 
-  return `<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open task details">
+  return `<div style="${wrapStyle}"><div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open task details">
+
+    <!-- Collapse/expand arrow — only when this task has children -->
+    ${hasSubs ? `<span onclick="event.stopPropagation();tcToggleCollapse('${t.id}')" style="cursor:pointer;color:var(--text-d);font-size:13px;flex-shrink:0;padding:0 2px;width:16px;text-align:center;user-select:none;" title="${collapsed?'Expand':'Collapse'} sub-tasks">${collapsed?'▸':'▾'}</span>` : '<span style="width:16px;flex-shrink:0;"></span>'}
 
     <!-- Checkbox -->
     <div onclick="event.stopPropagation();${t.isReviewTask||t.isNotifyTask?'':` tcToggleComplete('${t.id}')`}" title="${isCompleted?'Mark as open':isReview?'In review — cannot check off':'Mark complete'}"
@@ -27650,22 +27703,18 @@ function tcTaskCard(t, today, todayStr){
       <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" class="btn btn-danger btn-sm" style="font-size:11px;padding:4px 8px;">×</button>
     </div>
   </div>
-  ${(function(){
-    const subs = tcGetSubtasks(t.id);
-    if(!subs.length) return '';
-    const done = subs.filter(s=>s.status==='completed').length;
-    let html = `<div style="margin-left:36px;margin-bottom:4px;font-size:10px;color:var(--text-d);font-weight:600;">${done}/${subs.length} subtasks</div>`;
-    html += subs.map(s => {
-      const subCompleted = s.status==='completed';
-      return `<div style="margin-left:36px;padding:6px 10px;border-left:2px solid var(--border);margin-bottom:2px;display:flex;align-items:center;gap:8px;${subCompleted?'opacity:.5;':''}">
-        <input type="checkbox" ${subCompleted?'checked':''} onclick="event.stopPropagation();tcToggleComplete('${s.id}')" style="accent-color:var(--navy);cursor:pointer;">
-        <span style="font-size:12px;${subCompleted?'text-decoration:line-through;color:var(--text-d);':'color:var(--text);'}">${s.name}</span>
-        ${s.dueDate?`<span style="font-size:10px;color:var(--text-d);margin-left:auto;">${s.dueDate}</span>`:''}
-        <button onclick="event.stopPropagation();tcDeleteTask('${s.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:12px;opacity:.4;margin-left:auto;">×</button>
-      </div>`;
-    }).join('');
-    return html;
-  })()}`;
+  ${(hasSubs && !collapsed) ? subs.map(s => tcTaskCard(s, today, todayStr, depth+1)).join('') : ''}
+  </div>`;
+}
+
+// Module-level set of task IDs whose sub-tasks should be hidden. Persists for
+// the session (not saved to DB). Mutating it requires a re-render to update.
+let _tcCollapsedTasks = new Set();
+
+function tcToggleCollapse(id){
+  if (_tcCollapsedTasks.has(id)) _tcCollapsedTasks.delete(id);
+  else _tcCollapsedTasks.add(id);
+  if (typeof tcRender === 'function') tcRender();
 }
 
 function tcRenderHistory(t){
@@ -51179,6 +51228,17 @@ function htAttachAccountPickers(accounts){
         </label>
         <input id="tc-section" class="field-input" placeholder="e.g. PAYROLL" list="tc-section-suggestions" autocomplete="off">
         <datalist id="tc-section-suggestions"></datalist>
+      </div>
+
+      <!-- Parent task — convert this task into a sub-task of another task -->
+      <div>
+        <label>
+          Parent Task
+          <span style="font-size:11px;color:var(--text-d);font-weight:400;">— optional, makes this a sub-task</span>
+        </label>
+        <select id="tc-parent-id" class="field-input">
+          <option value="">— None (top-level task) —</option>
+        </select>
       </div>
 
       <!-- Notes -->
