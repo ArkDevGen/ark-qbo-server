@@ -3266,10 +3266,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div style="margin-bottom:8px;display:flex;justify-content:flex-end;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="propOpenNew('full')">+ Full Service Proposal</button>
         <button class="btn btn-ghost btn-sm" onclick="propOpenNew('payroll')">+ Payroll Only</button>
+        <button class="btn btn-ghost btn-sm" onclick="propOpenNew('cleanup')">+ Cleanup (One-Time)</button>
       </div>
       <div class="card" style="padding:0;overflow:hidden;"><div style="overflow-x:auto;">
         <table class="data-table" id="prop-table">
-          <thead><tr><th>Client</th><th>Type / Services</th><th>Monthly Fee</th><th>Created</th><th>Status</th><th>AM</th><th></th></tr></thead>
+          <thead><tr><th>Client</th><th>Type / Services</th><th>Fee</th><th>Created</th><th>Status</th><th>AM</th><th></th></tr></thead>
           <tbody id="prop-tbody"><tr><td colspan="7" class="empty">No proposals yet.</td></tr></tbody>
         </table>
       </div></div>
@@ -24657,6 +24658,26 @@ const PROP_OPTIONAL_SERVICES = [
   { id:'advisory',   label:'Advisory / Consulting',        note:'' },
 ];
 
+// One-time cleanup verification items — checkboxes shown in modal and listed in PDF
+const PROP_CLEANUP_VERIFY_ITEMS = [
+  { id:'bank_recon',     label:'Bank account reconciliations' },
+  { id:'cc_recon',       label:'Credit card reconciliations' },
+  { id:'loan_recon',     label:'Loan balance reconciliations' },
+  { id:'ap_review',      label:'Accounts payable review' },
+  { id:'ar_review',      label:'Accounts receivable review' },
+  { id:'payroll_tieout', label:'Payroll tie-out to general ledger' },
+  { id:'sales_tax',      label:'Sales tax filings reconciliation' },
+  { id:'owner_eq',       label:'Owner draws / contributions classification' },
+  { id:'uncat',          label:'Uncategorized transactions cleanup' },
+  { id:'coa',            label:'Chart of Accounts review' },
+  { id:'opening_bal',    label:'Opening balance verification' },
+  { id:'income_class',   label:'Income / revenue classification review' },
+  { id:'expense_class',  label:'Expense classification review' },
+  { id:'inventory',      label:'Inventory reconciliation' },
+  { id:'year_end',       label:'Year-end close out' },
+  { id:'vendor_1099',    label:'1099 vendor review' },
+];
+
 let _propEditId = null;
 
 function propRender(){
@@ -24697,15 +24718,26 @@ function propRender(){
     const clientName = client ? client.biz : (p.clientName||'—');
     const am = (DB.accountManagers||[]).find(a=>a.id===p.amId);
     const amName = am ? am.fname+' '+am.lname : '—';
-    const svcs = (p.services||[]).join(', ') || '—';
-    const fee = '$' + (p.totalFee||0).toLocaleString('en-US',{minimumFractionDigits:0});
+    const isCleanup = p.type === 'cleanup';
+    const svcs = isCleanup
+      ? (p.cleanupPeriodStart && p.cleanupPeriodEnd ? p.cleanupPeriodStart + ' → ' + p.cleanupPeriodEnd : 'Cleanup engagement')
+      : ((p.services||[]).join(', ') || '—');
+    const feeAmt = isCleanup ? (p.cleanupFlatFee || 0) : (p.totalFee || 0);
+    const fee = '$' + feeAmt.toLocaleString('en-US',{minimumFractionDigits:0});
+    const feeSuffix = isCleanup ? ' flat' : '/mo';
     const created = p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
     const sc = statusColor[p.status]||'var(--text)';
 
+    const typeBadge = p.type === 'payroll'
+      ? '<span style="background:#0e2035;color:var(--accent);border:1px solid var(--navy);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">PAYROLL</span>'
+      : (p.type === 'cleanup'
+          ? '<span style="background:#2a1a05;color:#f0c068;border:1px solid #8a5a1a;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">CLEANUP</span>'
+          : '<span style="background:#0d1a0d;color:var(--green);border:1px solid #1a6b30;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">FULL SVC</span>');
+
     return `<tr>
       <td style="font-weight:600">${clientName}</td>
-      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.type==='payroll'?'<span style="background:#0e2035;color:var(--accent);border:1px solid var(--navy);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">PAYROLL</span>':'<span style="background:#0d1a0d;color:var(--green);border:1px solid #1a6b30;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">FULL SVC</span>'} <span style='color:var(--text-d)' title='${svcs}'>${svcs.length>35?svcs.slice(0,35)+'…':svcs}</span></td>
-      <td style="font-family:monospace">${fee}/mo</td>
+      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${typeBadge} <span style='color:var(--text-d)' title='${svcs}'>${svcs.length>35?svcs.slice(0,35)+'…':svcs}</span></td>
+      <td style="font-family:monospace">${fee}${feeSuffix}</td>
       <td style="color:var(--text-m);font-size:12px">${created}</td>
       <td>
         <span style="font-weight:600;color:${sc};">${p.status}</span>
@@ -24728,10 +24760,12 @@ function propOpenNew(type){
   _propEditId = null;
   const t = type || 'full';
   document.getElementById('prop-type').value = t;
-  document.getElementById('prop-modal-title').innerHTML =
-    t === 'payroll'
-      ? 'New Proposal <span style="font-size:11px;background:#0e2035;color:var(--accent);border:1px solid var(--navy);border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">PAYROLL ONLY</span>'
-      : 'New Proposal <span style="font-size:11px;background:#0d1a0d;color:var(--green);border:1px solid #1a6b30;border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">FULL SERVICE</span>';
+  const titleBadges = {
+    payroll: '<span style="font-size:11px;background:#0e2035;color:var(--accent);border:1px solid var(--navy);border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">PAYROLL ONLY</span>',
+    cleanup: '<span style="font-size:11px;background:#2a1a05;color:#f0c068;border:1px solid #8a5a1a;border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">CLEANUP — ONE-TIME</span>',
+    full:    '<span style="font-size:11px;background:#0d1a0d;color:var(--green);border:1px solid #1a6b30;border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">FULL SERVICE</span>',
+  };
+  document.getElementById('prop-modal-title').innerHTML = 'New Proposal ' + (titleBadges[t] || titleBadges.full);
   document.getElementById('prop-client-search').value = '';
   document.getElementById('prop-client-id').value = '';
   document.getElementById('prop-start-date').value = '';
@@ -24746,19 +24780,86 @@ function propOpenNew(type){
   document.getElementById('prop-status').value = 'Draft';
 
   document.getElementById('prop-contact-name').value = '';
+
+  // Cleanup-specific defaults
+  const cps = document.getElementById('prop-cleanup-period-start'); if(cps) cps.value = '';
+  const cpe = document.getElementById('prop-cleanup-period-end');   if(cpe) cpe.value = '';
+  const cpt = document.getElementById('prop-cleanup-target');       if(cpt) cpt.value = '';
+  const cff = document.getElementById('prop-cleanup-flat-fee');     if(cff) cff.value = '';
+  const cdp = document.getElementById('prop-cleanup-deposit-pct');  if(cdp) cdp.value = '50';
+  const cad = document.getElementById('prop-cleanup-additional');   if(cad) cad.value = '';
+
   propTogglePayrollUI(t);
   propBuildAMSelect(null);
   propBuildServicesGrid([]);
+  propBuildVerifyGrid([]);
   propUpdateTotal();
+  propUpdateCleanupCalc();
   openModal('modal-proposal');
 }
 
 function propTogglePayrollUI(type){
   const isPayroll = type === 'payroll';
-  const banner = document.getElementById('prop-payroll-banner');
-  const contactRow = document.getElementById('prop-contact-row');
-  if(banner) banner.style.display = isPayroll ? '' : 'none';
-  if(contactRow) contactRow.style.display = isPayroll ? '' : 'none';
+  const isCleanup = type === 'cleanup';
+
+  const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? '' : 'none'; };
+
+  // Banners
+  show('prop-payroll-banner', isPayroll);
+  show('prop-cleanup-banner', isCleanup);
+
+  // Payroll-only contact row
+  show('prop-contact-row', isPayroll);
+
+  // Cleanup-only sections
+  show('prop-cleanup-section', isCleanup);
+  show('prop-cleanup-verify-section', isCleanup);
+
+  // Recurring proposal sections — hidden for cleanup
+  show('prop-fee-schedule-section', !isCleanup);
+  show('prop-services-section', !isCleanup);
+}
+
+function propBuildVerifyGrid(selected){
+  const container = document.getElementById('prop-verify-grid');
+  if(!container) return;
+  const sel = selected || [];
+  container.innerHTML = PROP_CLEANUP_VERIFY_ITEMS.map(item => {
+    const checked = sel.includes(item.id);
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${checked?'#1a1305':'var(--surface2)'};border:1px solid ${checked?'#8a5a1a':'var(--border)'};border-radius:var(--radius);cursor:pointer;font-size:13px;transition:all .15s;">
+      <input type="checkbox" value="${item.id}" ${checked?'checked':''} onchange="propToggleVerify(this)" style="accent-color:#f0c068;width:15px;height:15px;">
+      <span>${item.label}</span>
+    </label>`;
+  }).join('');
+}
+
+function propToggleVerify(cb){
+  const wrap = cb.closest('label');
+  if(!wrap) return;
+  if(cb.checked){
+    wrap.style.background = '#1a1305';
+    wrap.style.borderColor = '#8a5a1a';
+  } else {
+    wrap.style.background = 'var(--surface2)';
+    wrap.style.borderColor = 'var(--border)';
+  }
+}
+
+function propGetSelectedVerifyItems(){
+  return [...document.querySelectorAll('#prop-verify-grid input[type=checkbox]:checked')]
+    .map(cb => cb.value);
+}
+
+function propUpdateCleanupCalc(){
+  const fee = parseFloat(document.getElementById('prop-cleanup-flat-fee')?.value)||0;
+  const pct = parseFloat(document.getElementById('prop-cleanup-deposit-pct')?.value)||0;
+  const dep = Math.round(fee * pct / 100 * 100) / 100;
+  const bal = Math.round((fee - dep) * 100) / 100;
+  const fmt = (n) => '$' + n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  const dEl = document.getElementById('prop-cleanup-deposit-amt');
+  const bEl = document.getElementById('prop-cleanup-balance-amt');
+  if(dEl) dEl.textContent = fmt(dep);
+  if(bEl) bEl.textContent = fmt(bal);
 }
 
 function propEdit(id){
@@ -24767,8 +24868,12 @@ function propEdit(id){
   _propEditId = id;
   const t = p.type || 'full';
   document.getElementById('prop-type').value = t;
-  document.getElementById('prop-modal-title').innerHTML =
-    'Edit Proposal <span style="font-size:11px;background:' + (t==='payroll'?'#0e2035;color:var(--accent);border:1px solid var(--navy)':'#0d1a0d;color:var(--green);border:1px solid #1a6b30') + ';border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">' + (t==='payroll'?'PAYROLL ONLY':'FULL SERVICE') + '</span>';
+  const editBadges = {
+    payroll: '<span style="font-size:11px;background:#0e2035;color:var(--accent);border:1px solid var(--navy);border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">PAYROLL ONLY</span>',
+    cleanup: '<span style="font-size:11px;background:#2a1a05;color:#f0c068;border:1px solid #8a5a1a;border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">CLEANUP — ONE-TIME</span>',
+    full:    '<span style="font-size:11px;background:#0d1a0d;color:var(--green);border:1px solid #1a6b30;border-radius:10px;padding:2px 9px;margin-left:8px;font-weight:600;letter-spacing:.04em;">FULL SERVICE</span>',
+  };
+  document.getElementById('prop-modal-title').innerHTML = 'Edit Proposal ' + (editBadges[t] || editBadges.full);
   const client = (DB.clients||[]).find(c=>c.id===p.clientId);
   document.getElementById('prop-client-search').value = client ? client.biz : (p.clientName||'');
   document.getElementById('prop-client-id').value = p.clientId||'';
@@ -24781,10 +24886,21 @@ function propEdit(id){
   document.getElementById('prop-notes').value = p.notes||'';
   document.getElementById('prop-status').value = p.status||'Draft';
   document.getElementById('prop-contact-name').value = p.contactName || '';
+
+  // Cleanup-specific fields
+  const cps = document.getElementById('prop-cleanup-period-start'); if(cps) cps.value = p.cleanupPeriodStart || '';
+  const cpe = document.getElementById('prop-cleanup-period-end');   if(cpe) cpe.value = p.cleanupPeriodEnd || '';
+  const cpt = document.getElementById('prop-cleanup-target');       if(cpt) cpt.value = p.cleanupTargetDate || '';
+  const cff = document.getElementById('prop-cleanup-flat-fee');     if(cff) cff.value = p.cleanupFlatFee || '';
+  const cdp = document.getElementById('prop-cleanup-deposit-pct');  if(cdp) cdp.value = (p.cleanupDepositPct != null ? p.cleanupDepositPct : 50);
+  const cad = document.getElementById('prop-cleanup-additional');   if(cad) cad.value = p.cleanupAdditional || '';
+
   propTogglePayrollUI(t);
   propBuildAMSelect(p.amId);
   propBuildServicesGrid(p.services||[]);
+  propBuildVerifyGrid(p.cleanupVerifyItems || []);
   propUpdateTotal();
+  propUpdateCleanupCalc();
   openModal('modal-proposal');
 }
 
@@ -25153,30 +25269,54 @@ async function chkGeneratePdf(){
 }
 
 function propCollect(){
+  const type = document.getElementById('prop-type').value || 'full';
   const clientId = document.getElementById('prop-client-id').value.trim();
   const clientName = document.getElementById('prop-client-search').value.trim();
   const startDate = document.getElementById('prop-start-date').value;
-  const baseFee = parseFloat(document.getElementById('prop-base-fee').value)||0;
 
   if(!clientName){ alert('Please enter a client name.'); return null; }
   if(!startDate){ alert('Please enter a start date.'); return null; }
-  if(!baseFee){ alert('Please enter a base monthly fee.'); return null; }
+
+  // Cleanup-specific fields
+  const cleanupPeriodStart = (document.getElementById('prop-cleanup-period-start')?.value || '');
+  const cleanupPeriodEnd   = (document.getElementById('prop-cleanup-period-end')?.value   || '');
+  const cleanupTargetDate  = (document.getElementById('prop-cleanup-target')?.value       || '');
+  const cleanupFlatFee     = parseFloat(document.getElementById('prop-cleanup-flat-fee')?.value)||0;
+  const cleanupDepositPct  = parseFloat(document.getElementById('prop-cleanup-deposit-pct')?.value)||0;
+  const cleanupAdditional  = (document.getElementById('prop-cleanup-additional')?.value   || '').trim();
+  const cleanupVerifyItems = propGetSelectedVerifyItems();
+  const cleanupDepositAmt  = Math.round(cleanupFlatFee * cleanupDepositPct / 100 * 100) / 100;
+  const cleanupBalanceAmt  = Math.round((cleanupFlatFee - cleanupDepositAmt) * 100) / 100;
+
+  if(type === 'cleanup'){
+    if(!cleanupPeriodStart || !cleanupPeriodEnd){ alert('Please enter the cleanup period (start and end month).'); return null; }
+    if(cleanupPeriodEnd < cleanupPeriodStart){ alert('Cleanup period end must be on or after the start month.'); return null; }
+    if(!cleanupFlatFee){ alert('Please enter a flat fee for the cleanup.'); return null; }
+    if(!cleanupVerifyItems.length && !cleanupAdditional){ alert('Please select at least one verification item or list additional items.'); return null; }
+  }
+
+  // Recurring fee fields (still captured for full/payroll)
+  const baseFee = parseFloat(document.getElementById('prop-base-fee').value)||0;
+  if(type !== 'cleanup' && !baseFee){ alert('Please enter a base monthly fee.'); return null; }
 
   const services = propGetSelectedServices();
   const amId = document.getElementById('prop-am').value;
   const qboFee = parseFloat(document.getElementById('prop-qbo-fee').value)||0;
   const payrollFee = parseFloat(document.getElementById('prop-payroll-fee').value)||0;
   const perEeFee = parseFloat(document.getElementById('prop-per-ee-fee').value)||0;
-  const totalFee = baseFee + qboFee + payrollFee;
+  const totalFee = type === 'cleanup' ? cleanupFlatFee : (baseFee + qboFee + payrollFee);
 
   return {
     id: _propEditId || uid(),
-    type: document.getElementById('prop-type').value || 'full',
+    type,
     contactName: (document.getElementById('prop-contact-name').value||'').trim(),
     clientId, clientName, amId, startDate,
     validUntil: document.getElementById('prop-valid-until').value,
     baseFee, qboFee, payrollFee, perEeFee, totalFee,
     services,
+    cleanupPeriodStart, cleanupPeriodEnd, cleanupTargetDate,
+    cleanupFlatFee, cleanupDepositPct, cleanupDepositAmt, cleanupBalanceAmt,
+    cleanupVerifyItems, cleanupAdditional,
     status: document.getElementById('prop-status').value,
     notes: document.getElementById('prop-notes').value.trim(),
     createdAt: _propEditId ? ((DB.proposals||[]).find(p=>p.id===_propEditId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -25206,31 +25346,36 @@ function propSave(data){
     if(p.status === 'Signed'){
       p.status = 'Active';
       p.signedAt = p.signedAt || new Date().toISOString();
+      const isCleanup = p.type === 'cleanup';
       // Update matching client record
       const client = (DB.clients||[]).find(c=>c.id===p.clientId);
       if(client){
         const oldStatus = client.status;
         client.status = 'Active';
-        logAct(`Client "${client.biz}" status changed ${oldStatus} → Active (proposal signed)`);
-        showToast(`✓ ${client.biz} marked Active`);
+        if(isCleanup){
+          if(!Array.isArray(client.services)) client.services = [];
+          if(!client.services.includes('Cleanup Only')) client.services.push('Cleanup Only');
+        }
+        logAct(`Client "${client.biz}" status changed ${oldStatus} → Active (proposal signed${isCleanup?' — cleanup':''})`);
+        showToast(`✓ ${client.biz} marked Active${isCleanup?' (Cleanup Only)':''}`);
       } else if(p.clientName){
-        // No matching client record — create one as Lead so they appear in client list
+        // No matching client record — create one as Active for cleanup, Lead otherwise
         const newClient = {
           id: uid(),
           biz: p.clientName,
           entity: '',
-          status: 'Lead',
+          status: isCleanup ? 'Active' : 'Lead',
           since: new Date().toISOString().slice(0,10),
           am: p.amId||'',
-          services: p.services||[],
-          notes: 'Auto-created from signed proposal.',
+          services: isCleanup ? ['Cleanup Only'] : (p.services||[]),
+          notes: isCleanup ? 'Auto-created from signed cleanup engagement.' : 'Auto-created from signed proposal.',
           createdAt: new Date().toISOString(),
         };
         if(!DB.clients) DB.clients=[];
         DB.clients.push(newClient);
         p.clientId = newClient.id;
-        logAct(`New client "${p.clientName}" created from signed proposal (Lead status)`);
-        showToast(`✓ New client "${p.clientName}" added as Lead`);
+        logAct(`New client "${p.clientName}" created from signed proposal (${newClient.status})`);
+        showToast(`✓ New client "${p.clientName}" added${isCleanup?' as Active (Cleanup Only)':' as Lead'}`);
       }
     }
 
@@ -25265,6 +25410,7 @@ function propDownloadPDF(id){
 // ────────────────────────────────────────────────────────────────
 async function propGeneratePDF(p){
   if((p.type||'full') === 'payroll'){ return propGeneratePDFPayroll(p); }
+  if((p.type||'full') === 'cleanup'){ return propGeneratePDFCleanup(p); }
   // ── Full-service proposal PDF follows ──
   // Load jsPDF from CDN if not already loaded
   if(typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined'){
@@ -25874,6 +26020,350 @@ async function propGeneratePDFPayroll(p){
 }
 
 
+// ══════════════════════════════════════════════════════════════════
+//  ONE-TIME BOOKKEEPING CLEANUP ENGAGEMENT PDF
+// ══════════════════════════════════════════════════════════════════
+async function propGeneratePDFCleanup(p){
+  if(typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined'){
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const jsPDF = window.jsPDF?.jsPDF || window.jspdf?.jsPDF || window.jsPDF;
+  const doc = new jsPDF({ unit:'pt', format:'letter' });
+
+  const PW = 612, PH = 792;
+  const ML = 72, MR = 540;
+  let y = 72;
+
+  const navy  = [31, 78, 121];
+  const dark  = [30, 30, 30];
+  const gray  = [100, 100, 100];
+  const lgray = [200, 200, 200];
+  const white = [255, 255, 255];
+  const gold  = [184, 146, 42];
+
+  const setFont = (style, size, color) => {
+    doc.setFont('helvetica', style);
+    doc.setFontSize(size);
+    doc.setTextColor(...(color || dark));
+  };
+  const drawLine = (x1, yy, x2, w, color) => {
+    doc.setLineWidth(w || 0.5);
+    doc.setDrawColor(...(color || lgray));
+    doc.line(x1, yy, x2, yy);
+  };
+  const newPage = () => { doc.addPage(); y = 72; };
+  const checkY = (n) => { if(y + n > PH - 60) newPage(); };
+  const fmt$ = (n) => '$' + (n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtMonth = (ym) => {
+    if(!ym) return '___________';
+    const [yy, mm] = ym.split('-');
+    if(!yy || !mm) return ym;
+    const d = new Date(parseInt(yy), parseInt(mm)-1, 1);
+    return d.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  };
+
+  // Resolve names + dates
+  const client = (DB.clients||[]).find(c => c.id === p.clientId);
+  const clientName = client ? client.biz : (p.clientName || 'Client');
+  const am = (DB.accountManagers||[]).find(a => a.id === p.amId);
+  const amName = am ? am.fname + ' ' + am.lname : 'Jacob Malousek';
+  const startFmt = p.startDate
+    ? new Date(p.startDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+    : '___________';
+  const targetFmt = p.cleanupTargetDate
+    ? new Date(p.cleanupTargetDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+    : 'to be agreed upon during engagement';
+  const periodStartFmt = fmtMonth(p.cleanupPeriodStart);
+  const periodEndFmt   = fmtMonth(p.cleanupPeriodEnd);
+  const today = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  const flatFee   = p.cleanupFlatFee || 0;
+  const depositPct = p.cleanupDepositPct != null ? p.cleanupDepositPct : 50;
+  const depositAmt = p.cleanupDepositAmt != null ? p.cleanupDepositAmt : Math.round(flatFee * depositPct / 100 * 100) / 100;
+  const balanceAmt = p.cleanupBalanceAmt != null ? p.cleanupBalanceAmt : Math.round((flatFee - depositAmt) * 100) / 100;
+
+  // ═══════════════════════════════════════
+  //  PAGE 1 — COVER + SCOPE
+  // ═══════════════════════════════════════
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, PW, 90, 'F');
+
+  setFont('bold', 22, white);
+  doc.text('Ark Financial', ML, 38);
+  setFont('normal', 10, [180, 210, 240]);
+  doc.text('ACCOUNTING', ML, 52);
+  setFont('bold', 14, white);
+  doc.text('ONE-TIME BOOKKEEPING CLEANUP ENGAGEMENT', ML, 72);
+
+  setFont('normal', 9, [180, 210, 240]);
+  doc.text('Date: ' + today, MR - 10, 38, {align:'right'});
+  if(p.validUntil){
+    const vu = new Date(p.validUntil + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    doc.text('Valid until: ' + vu, MR - 10, 52, {align:'right'});
+  }
+
+  y = 110;
+
+  setFont('bold', 20, navy);
+  doc.text('Cleanup Engagement Letter', ML, y); y += 28;
+
+  setFont('normal', 12, dark);
+  doc.text('This engagement covers a one-time bookkeeping cleanup for:', ML, y); y += 20;
+  setFont('bold', 14, navy);
+  doc.text(clientName.toUpperCase(), ML, y); y += 24;
+
+  drawLine(ML, y, MR, 1, navy); y += 18;
+
+  // ── Engagement summary ──
+  setFont('bold', 12, dark);
+  doc.text('Engagement Summary', ML, y); y += 18;
+
+  const summaryRows = [
+    ['Cleanup Period',      periodStartFmt + '  through  ' + periodEndFmt],
+    ['Work Begins',          startFmt],
+    ['Target Completion',    targetFmt],
+    ['Account Manager',      amName],
+  ];
+  summaryRows.forEach(row => {
+    checkY(20);
+    setFont('bold', 10, dark);
+    doc.text(row[0] + ':', ML, y);
+    setFont('normal', 10, dark);
+    doc.text(row[1], ML + 140, y);
+    y += 16;
+  });
+
+  y += 10;
+  drawLine(ML, y, MR, 1, lgray); y += 18;
+
+  // ── IMPORTANT: Client-Provided Documents Notice ──
+  checkY(80);
+  doc.setFillColor(252, 245, 220);
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(1);
+  const noticeStartY = y;
+  // Reserve space, draw box later after computing height
+  setFont('bold', 11, gold);
+  const noticeTitle = 'IMPORTANT — SCOPE LIMITED TO CLIENT-PROVIDED DOCUMENTS';
+  const noticeBody = 'This cleanup engagement is performed exclusively using documents and records provided by Client. Ark Financial is not engaged to audit, verify the authenticity of, or independently confirm any underlying transactions. The accuracy and completeness of the resulting books depends entirely on the accuracy and completeness of what Client supplies. Items, periods, accounts, or activity not represented in the documents Client delivers are outside the scope of this engagement.';
+  // Measure
+  const noticeBodyLines = doc.splitTextToSize(noticeBody, MR - ML - 24);
+  const noticeH = 16 + 4 + (noticeBodyLines.length * 13) + 14;
+  doc.rect(ML - 4, noticeStartY - 12, MR - ML + 8, noticeH, 'FD');
+  doc.text(noticeTitle, ML + 6, noticeStartY + 4); y = noticeStartY + 20;
+  setFont('normal', 9.5, dark);
+  noticeBodyLines.forEach(line => { doc.text(line, ML + 6, y); y += 13; });
+  y += 14;
+
+  // ── Items We Will Verify ──
+  checkY(40);
+  setFont('bold', 12, dark);
+  doc.text('Items We Will Verify & Clean Up', ML, y); y += 14;
+  setFont('italic', 9, gray);
+  doc.text('Subject in every case to documents provided by Client.', ML, y); y += 14;
+
+  const selectedIds = p.cleanupVerifyItems || [];
+  const selectedLabels = (window.PROP_CLEANUP_VERIFY_ITEMS || PROP_CLEANUP_VERIFY_ITEMS)
+    .filter(it => selectedIds.includes(it.id))
+    .map(it => it.label);
+
+  if(selectedLabels.length === 0 && !p.cleanupAdditional){
+    setFont('italic', 10, gray);
+    doc.text('No specific items selected.', ML, y); y += 14;
+  } else {
+    selectedLabels.forEach(label => {
+      checkY(16);
+      doc.setFillColor(...navy);
+      doc.circle(ML + 5, y - 3.5, 2, 'F');
+      setFont('normal', 10, dark);
+      const wrapped = doc.splitTextToSize(label, MR - ML - 14);
+      wrapped.forEach(line => { checkY(14); doc.text(line, ML + 14, y); y += 14; });
+      y += 1;
+    });
+
+    if(p.cleanupAdditional){
+      y += 6;
+      checkY(20);
+      setFont('bold', 10, dark);
+      doc.text('Additional Items / Special Notes:', ML, y); y += 14;
+      setFont('normal', 10, dark);
+      const addLines = doc.splitTextToSize(p.cleanupAdditional, MR - ML);
+      addLines.forEach(line => { checkY(14); doc.text(line, ML, y); y += 14; });
+    }
+  }
+
+  y += 10;
+  drawLine(ML, y, MR, 1, lgray); y += 18;
+
+  // ── Pricing & Payment Terms ──
+  checkY(140);
+  setFont('bold', 12, dark);
+  doc.text('Pricing & Payment Terms', ML, y); y += 18;
+
+  const priceRows = [
+    ['Total Flat Fee',                                    fmt$(flatFee)],
+    ['Deposit Due Upon Signature (' + depositPct + '%)',  fmt$(depositAmt)],
+    ['Balance Due Upon Completion',                       fmt$(balanceAmt)],
+  ];
+  const tableL = ML + 30, tableR = MR - 30;
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(...lgray);
+  doc.rect(tableL, y, tableR - tableL, priceRows.length * 26 + 8, 'S');
+  priceRows.forEach((row, i) => {
+    if(i > 0) drawLine(tableL, y + i*26, tableR, 0.3, lgray);
+    setFont(i === 0 ? 'bold' : 'normal', 11, dark);
+    doc.text(row[0], tableL + 12, y + i*26 + 17);
+    setFont('bold', 11, i === 0 ? navy : (i === 1 ? [46, 125, 94] : gold));
+    doc.text(row[1], tableR - 12, y + i*26 + 17, {align:'right'});
+  });
+  y += priceRows.length * 26 + 8 + 14;
+
+  setFont('normal', 9.5, dark);
+  const billingNotes = [
+    '• This is a one-time, fixed-fee engagement. It is not a recurring monthly service.',
+    '• Deposit is non-refundable once cleanup work has commenced.',
+    '• Balance is invoiced upon delivery of cleaned books and is due within 7 days of delivery.',
+    '• If during the cleanup we determine that materially additional work is required beyond the items above (for example, missing periods, prior-period reopens, or scope expansion), Ark will pause work and obtain Client\'s written approval before proceeding. Additional work is billed separately.',
+  ];
+  billingNotes.forEach(n => {
+    const lines = doc.splitTextToSize(n, MR - ML - 8);
+    checkY(lines.length * 13 + 4);
+    lines.forEach((line, i) => {
+      doc.text(line, ML + (i === 0 ? 0 : 8), y); y += 13;
+    });
+    y += 2;
+  });
+
+  // ═══════════════════════════════════════
+  //  PAGE 2+ — TERMS & CONDITIONS
+  // ═══════════════════════════════════════
+  newPage();
+
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, PW, 70, 'F');
+  setFont('bold', 18, white);
+  doc.text('CLEANUP ENGAGEMENT — TERMS & CONDITIONS', ML, 44);
+  y = 100;
+
+  setFont('normal', 10, dark);
+  const intro = 'This Cleanup Engagement Letter (the "Agreement") is made and entered into by and between Ark Financial (hereinafter referred to as "Bookkeeper") and ' + clientName + ' (hereinafter referred to as "Client"). The terms below apply in addition to the Engagement Summary, Scope, and Pricing on the prior page.';
+  doc.splitTextToSize(intro, MR - ML).forEach(line => { checkY(14); doc.text(line, ML, y); y += 14; });
+  y += 6;
+
+  const sections = [
+    ['1. Nature of Engagement',
+     `This is a one-time, finite-scope bookkeeping cleanup engagement. It is not a continuing engagement and does not create any monthly, ongoing, or recurring obligation on either party. Upon delivery of the cleaned books and final payment, this engagement is complete.\n\nBookkeeper is being engaged solely to perform the verification and cleanup items expressly identified in the Engagement Summary. No service is to be inferred that is not expressly stated.`],
+
+    ['2. Scope Limited to Client-Provided Documents',
+     `Client expressly acknowledges and agrees that the cleanup work performed under this Agreement is based exclusively on documents and records provided by Client (or by third parties at Client's direction).\n\nBookkeeper will not, and is not engaged to:\n\n• Audit, examine, review, or compile financial statements as those terms are defined by the AICPA or any other standard-setting body\n• Investigate, detect, or report fraud, misappropriation, or any other illegal acts\n• Independently verify the authenticity, accuracy, or completeness of any document, transaction, ledger, statement, or representation provided by Client\n• Reconstruct or reconcile any period, account, or activity for which Client has not provided complete supporting documentation\n• Provide tax advice, tax preparation, audit defense, or legal services\n\nThe accuracy, reliability, and usefulness of the cleaned books is wholly dependent on the accuracy and completeness of the records Client provides.`],
+
+    ['3. Client Responsibilities & Document Acknowledgment',
+     `Client is solely responsible for:\n\n• Providing all source documents needed for the cleanup, including but not limited to: bank statements, credit card statements, loan statements, payroll reports, sales tax filings, prior tax returns, prior financial statements, vendor and customer invoices, deposit records, receipts, and any other supporting records relevant to the cleanup period\n• The completeness, accuracy, and authenticity of all documents and information provided to Bookkeeper\n• Promptly answering Bookkeeper's questions regarding transactions, classifications, and intent\n• Reviewing and confirming the cleaned books upon delivery\n\nBy signing this Agreement, Client represents and warrants that the documents and records Client has provided (or will provide) are, to the best of Client's knowledge, complete, authentic, and accurate. Client further acknowledges that Bookkeeper is relying on this representation in performing the cleanup.`],
+
+    ['4. Limitations on Findings & Reports',
+     `Any cleaned books, schedules, reconciliations, or reports delivered under this Agreement are unaudited and are intended for Client's internal use and for use by Client's tax preparer. They are not to be relied upon as a substitute for an audit, review, compilation, or tax advice. Bookkeeper makes no representation and provides no assurance about whether the cleaned books are free from material misstatement.`],
+
+    ['5. Out-of-Scope Items & Change Orders',
+     `If, during the course of the cleanup, Bookkeeper identifies items or scope that materially exceed the engagement defined herein (for example, additional periods, missing accounts, prior-period reopens, or rework due to revised documentation), Bookkeeper will notify Client and pause the affected portion of the work. Bookkeeper will resume only upon Client's written approval of either an expanded scope or a written change order at rates mutually agreed in writing at that time.`],
+
+    ['6. Pricing, Deposit & Payment',
+     `Client agrees to pay the flat fee set forth in the Pricing section, in two installments: (a) the deposit, due upon signature, and (b) the balance, due upon delivery of the cleaned books. The deposit is non-refundable once cleanup work has commenced. Final payment is due within seven (7) days of delivery. Late balances accrue interest at the lesser of 1.5% per month or the maximum rate permitted by law.\n\nClient authorizes Bookkeeper to charge Client's designated checking, savings, or card account for amounts due under this Agreement.`],
+
+    ['7. Indemnification',
+     `Client agrees to indemnify, defend, and hold harmless Bookkeeper, its employees, agents, officers, and directors from any claims, liabilities, losses, damages, costs, or expenses (including reasonable attorneys' fees) arising from:\n\n• Inaccurate, incomplete, or fraudulent documents or information provided by Client or by third parties at Client's direction\n• Any acts or omissions of Client\n• Any breach of this Agreement by Client\n• Any reliance by Client or any third party (including Client's tax preparer, lender, investor, or auditor) on the cleaned books beyond their stated unaudited nature\n\nThis obligation survives termination or completion of this Agreement.`],
+
+    ['8. Limitation of Liability',
+     `Bookkeeper shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to lost profits, lost opportunity, tax penalties, or interest, arising out of or related to this Agreement. Bookkeeper's total aggregate liability for any and all claims arising under this Agreement shall not exceed the total fees actually paid by Client under this Agreement.\n\nBookkeeper shall not be responsible for errors, penalties, fines, or losses resulting from inaccurate or incomplete information provided by Client or by any third party at Client's direction.`],
+
+    ['9. Confidentiality',
+     `Bookkeeper agrees to maintain the confidentiality of Client's financial and business information, disclosing it only with Client's prior written consent or as required by law or to perform the services outlined herein.`],
+
+    ['10. Non-Solicitation',
+     `During the term of this Agreement and for a period of twelve (12) months following its completion or termination, Client agrees not to directly or indirectly solicit, recruit, or hire any employee or contractor of Bookkeeper who has provided services to Client under this Agreement. If Client breaches this provision, Client agrees to pay Bookkeeper a fee equal to thirty percent (30%) of the solicited employee's or contractor's first-year annual salary or contract value as liquidated damages.`],
+
+    ['11. Termination',
+     `Either party may terminate this Agreement upon written notice. If Client terminates after work has commenced, the deposit is non-refundable and Client is responsible for any work performed up to the date of termination at Bookkeeper's standard rates, payable upon termination.`],
+
+    ['12. Entire Agreement & Governing Law',
+     `This Agreement is the entire understanding between the parties regarding the cleanup engagement and supersedes all prior agreements regarding the same subject matter. Amendments must be in writing and signed by both parties. This Agreement is governed by the laws of the State of Nebraska. If any provision is found invalid, the remaining provisions remain in effect.`],
+  ];
+
+  sections.forEach(([title, body]) => {
+    checkY(30);
+    y += 6;
+    setFont('bold', 11, navy);
+    doc.text(title, ML, y);
+    y += 16;
+
+    const lines = body.split('\n');
+    lines.forEach(line => {
+      if(line.startsWith('•')){
+        const wrapped = doc.splitTextToSize(line.substring(1).trim(), MR - ML - 16);
+        checkY(wrapped.length * 14 + 2);
+        doc.setFillColor(...navy);
+        doc.circle(ML + 6, y - 3.5, 2, 'F');
+        setFont('normal', 10, dark);
+        wrapped.forEach(wl => { checkY(14); doc.text(wl, ML + 14, y); y += 14; });
+      } else if(line.trim() === ''){
+        y += 4;
+      } else {
+        const wrapped = doc.splitTextToSize(line, MR - ML);
+        checkY(wrapped.length * 14);
+        setFont('normal', 10, dark);
+        wrapped.forEach(wl => { checkY(14); doc.text(wl, ML, y); y += 14; });
+      }
+    });
+  });
+
+  // ── Signature page ──
+  checkY(220);
+  y += 16;
+  drawLine(ML, y, MR, 1, lgray); y += 22;
+
+  setFont('bold', 12, dark);
+  doc.text('Acknowledgment & Acceptance', ML, y); y += 14;
+  setFont('normal', 10, dark);
+  const ackLines = doc.splitTextToSize(
+    'I have read and agree to the terms outlined in this Cleanup Engagement Letter. I specifically acknowledge that this is a one-time, fixed-scope cleanup performed using documents I (Client) provide, and that Ark Financial is not auditing, verifying, or independently confirming the underlying transactions or records.',
+    MR - ML);
+  ackLines.forEach(line => { checkY(14); doc.text(line, ML, y); y += 14; });
+  y += 22;
+
+  const sigL = ML, sigR = ML + 280;
+  const lineLen = 200;
+
+  drawLine(sigL, y, sigL + lineLen, 1, dark);
+  drawLine(sigR, y, sigR + 80, 1, dark);
+  y += 14;
+  setFont('normal', 10, dark);
+  doc.text('Client — ' + clientName, sigL, y);
+  doc.text('Date', sigR, y);
+  y += 36;
+
+  drawLine(sigL, y, sigL + lineLen, 1, dark);
+  drawLine(sigR, y, sigR + 80, 1, dark);
+  y += 14;
+  setFont('normal', 10, dark);
+  doc.text('Ark Financial Services', sigL, y);
+  doc.text('Date', sigR, y);
+
+  // Page footer
+  const pageCount = doc.getNumberOfPages();
+  for(let i = 1; i <= pageCount; i++){
+    doc.setPage(i);
+    setFont('normal', 8, gray);
+    doc.text('Ark Financial Services  ·  133 N 14th St, Ashland NE 68003  ·  888-576-5525  ·  Page ' + i + ' of ' + pageCount, PW/2, PH - 24, {align:'center'});
+  }
+
+  const safeName = clientName.replace(/[^a-z0-9]/gi,'_').substring(0,30);
+  doc.save('ARK_Cleanup_Engagement_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+  logAct('Cleanup engagement PDF downloaded for ' + clientName);
+}
 
 
 
@@ -50030,6 +50520,11 @@ function htAttachAccountPickers(accounts){
         📋 <strong>Payroll Only Agreement</strong> — generates a standalone Payroll Services Agreement matching your ARK template.
       </div>
 
+      <!-- Cleanup type banner -->
+      <div id="prop-cleanup-banner" style="display:none;background:#2a1a05;border:1px solid #8a5a1a;border-radius:var(--radius);padding:10px 16px;font-size:12px;color:#f0c068;margin-bottom:14px;">
+        🧹 <strong>One-Time Bookkeeping Cleanup</strong> — generates a fixed-scope cleanup engagement letter. Scope is limited to client-provided documents.
+      </div>
+
       <!-- Client search / selection -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
         <div class="fg full" style="grid-column:1/-1;">
@@ -50065,8 +50560,74 @@ function htAttachAccountPickers(accounts){
         </div>
       </div>
 
+      <!-- Cleanup engagement section (cleanup type only) -->
+      <div id="prop-cleanup-section" style="display:none;background:#1a1305;border:1px solid #8a5a1a;border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#f0c068;margin-bottom:12px;">Cleanup Scope &amp; Pricing</div>
+
+        <!-- Date range we will work on -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+          <div>
+            <label>Cleanup Period — Start Month <span style="color:var(--red)">*</span></label>
+            <input type="month" id="prop-cleanup-period-start" class="field-input">
+          </div>
+          <div>
+            <label>Cleanup Period — End Month <span style="color:var(--red)">*</span></label>
+            <input type="month" id="prop-cleanup-period-end" class="field-input">
+          </div>
+          <div>
+            <label>Target Completion Date</label>
+            <input type="date" id="prop-cleanup-target" class="field-input">
+          </div>
+        </div>
+
+        <!-- Flat fee + deposit -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
+          <div>
+            <label>Flat Fee <span style="color:var(--red)">*</span></label>
+            <div style="position:relative;">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-d);font-size:13px;">$</span>
+              <input type="number" id="prop-cleanup-flat-fee" class="field-input" style="padding-left:22px;" placeholder="2500" min="0" step="1" oninput="propUpdateCleanupCalc()">
+            </div>
+          </div>
+          <div>
+            <label>Deposit %</label>
+            <div style="position:relative;">
+              <input type="number" id="prop-cleanup-deposit-pct" class="field-input" style="padding-right:22px;" value="50" min="0" max="100" step="1" oninput="propUpdateCleanupCalc()">
+              <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text-d);font-size:13px;">%</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+            <label style="opacity:0;">.</label>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:13px;font-weight:700;color:var(--navy);">
+              Deposit: <span id="prop-cleanup-deposit-amt" style="color:var(--green);">$0</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+            <label style="opacity:0;">.</label>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:13px;font-weight:700;color:var(--navy);">
+              Balance: <span id="prop-cleanup-balance-amt" style="color:var(--gold);">$0</span>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:8px;font-style:italic;">
+          Deposit is due upon signature. Balance is due upon completion of the cleanup work.
+        </div>
+      </div>
+
+      <!-- Verification items (cleanup type only) -->
+      <div id="prop-cleanup-verify-section" style="display:none;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:10px;">Items We Will Verify &amp; Clean Up</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="prop-verify-grid">
+          <!-- rendered by JS -->
+        </div>
+        <div style="margin-top:12px;">
+          <label>Additional Items / Special Notes (appears on engagement letter)</label>
+          <textarea id="prop-cleanup-additional" class="field-input" rows="3" placeholder="e.g. Re-class 2024 owner draws coded as expenses; rebuild 1099 vendor list..." style="resize:vertical;font-family:inherit;"></textarea>
+        </div>
+      </div>
+
       <!-- Fee schedule -->
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+      <div id="prop-fee-schedule-section" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:12px;">Fee Schedule</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
           <div>
@@ -50107,7 +50668,7 @@ function htAttachAccountPickers(accounts){
       </div>
 
       <!-- Services checklist -->
-      <div style="margin-bottom:16px;">
+      <div id="prop-services-section" style="margin-bottom:16px;">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:10px;">Services Included</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="prop-services-grid">
           <!-- Standard services always included -->
