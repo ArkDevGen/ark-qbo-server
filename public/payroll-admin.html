@@ -1431,6 +1431,10 @@ function hteaoParseRevel(file) {
 // Parse Sales Summary CSV — sum Tips Total + Liabilities Tips Total + Declared
 // Tips across every data row. Matches the manual entry the Python script asks
 // for (the user types these three numbers and they're summed).
+//
+// Revel appends a grand-totals row at the bottom with an empty Time From
+// column. Including it doubles every total — skip any row whose first column
+// is blank (the period-start timestamp).
 function hteaoParseSalesSummary(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1450,6 +1454,11 @@ function hteaoParseSalesSummary(file) {
         let total = 0;
         for (let i = 1; i < lines.length; i++) {
           const cols = parseCSVLine(lines[i]);
+          // Skip the grand-totals row (and any other footer/blank rows) —
+          // identified by an empty first column ('Time From' is blank on the
+          // totals row but populated with a timestamp on every daily row).
+          const periodStart = String(cols[0] || '').trim();
+          if (!periodStart) continue;
           if (tipsIdx     >= 0) total += parseFloat(String(cols[tipsIdx]    || '0').replace(/[$,]/g,'')) || 0;
           if (liaIdx      >= 0) total += parseFloat(String(cols[liaIdx]     || '0').replace(/[$,]/g,'')) || 0;
           if (declaredIdx >= 0) total += parseFloat(String(cols[declaredIdx]|| '0').replace(/[$,]/g,'')) || 0;
