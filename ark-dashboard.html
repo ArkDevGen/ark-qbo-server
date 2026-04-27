@@ -27735,8 +27735,29 @@ async function tcRender(){
   const emptyHtml = '<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">No tasks match this filter. <a href="#" onclick="tcSetFilter(\'all\');return false;" style="color:var(--gold);">Show all →</a></div>';
 
   if (viewMode === 'board') {
+    // Board always groups by due-date status — that's the Kanban mental model
+    // (Overdue / Today / This Week / Later / No Date / Completed). The list
+    // view's group-by setting (Section, Client, AM, etc.) does NOT apply to
+    // the board, otherwise an overdue task could be hidden inside a section
+    // column with no visible urgency cue.
+    const boardGroups = {};
+    for (const t of list) {
+      let key;
+      if (t.status === 'completed')         key = '✓ Completed';
+      else if (!t.dueDate)                  key = '📌 No Due Date';
+      else if (t.dueDate < todayStr)        key = '🔴 Overdue';
+      else if (t.dueDate === todayStr)      key = '🟡 Due Today';
+      else if (t.dueDate <= weekStr)        key = '📅 This Week';
+      else                                   key = '📅 Later';
+      if (!boardGroups[key]) boardGroups[key] = [];
+      boardGroups[key].push(t);
+    }
+    // Stable column order — empty buckets simply don't render.
+    const colOrder = ['🔴 Overdue','🟡 Due Today','📅 This Week','📅 Later','📌 No Due Date','✓ Completed'];
+    const ordered = {};
+    for (const k of colOrder) if (boardGroups[k]) ordered[k] = boardGroups[k];
     const el = document.getElementById('tc-view-board');
-    if (el) el.innerHTML = list.length ? tcRenderBoard(list, groups, today, todayStr) : emptyHtml;
+    if (el) el.innerHTML = list.length ? tcRenderBoard(list, ordered, today, todayStr) : emptyHtml;
   } else if (viewMode === 'calendar') {
     const el = document.getElementById('tc-view-calendar');
     if (el) tcRenderCalendar(el, list, today, todayStr);
@@ -29774,7 +29795,7 @@ function tdParseCSV(){
     const explicitDue = parseDate(dateRaw) || parseDate(deadRaw);
     const dueDate = explicitDue || (recurParsed ? tcFirstDueFromPattern(recurParsed) : '');
 
-    if(!dueDate) warnings.push(`Row ${i+1}: "${name}" — no due date, will use today's date`);
+    if(!dueDate) warnings.push(`Row ${i+1}: "${name}" — no due date, imported as a Note (won't appear on Today/Upcoming)`);
 
     const project = iProject >= 0 ? (cols[iProject] || '').trim() : '';
 
@@ -29793,7 +29814,11 @@ function tdParseCSV(){
       // pattern; the structured fields below are what the auto-roll honors.
       notes:     [desc, sectionName ? `[Section: ${sectionName}]` : '', recurParsed ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
       priority,
-      dueDate:   dueDate || new Date().toISOString().slice(0,10),
+      // Leave empty when no concrete date was in the CSV — undated tasks
+      // become type:'note' and surface in the Notes panel rather than
+      // polluting Today / Upcoming with fake "due today" entries.
+      dueDate:   dueDate || '',
+      type:      dueDate ? 'task' : 'note',
       clientId:   defaultClientId,
       clientName: defaultClientName,
       amId:       defaultAM,
