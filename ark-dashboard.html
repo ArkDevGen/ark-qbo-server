@@ -26436,7 +26436,9 @@ const TC_CAT_COLOR = {
   'Sales Tax':'#6b3fa0', Compliance:'#b03a3a', Advisory:'#4a6f8a',
   Onboarding:'#1a6b30', Other:'#555'
 };
-const TC_PRI_COLOR = { low:'#2e7d5e', medium:'#2e75b6', high:'#b03a3a' };
+// urgent (above high) maps to Todoist's P1 — bright red so it pops past the
+// existing red "high" tier; high stays the standard red used elsewhere.
+const TC_PRI_COLOR = { low:'#2e7d5e', medium:'#2e75b6', high:'#b03a3a', urgent:'#d11616' };
 
 // ── Recurrence helpers ──────────────────────────────────────────
 function tcRecurDays(task){
@@ -27688,7 +27690,13 @@ function tcTaskCard(t, today, todayStr, depth){
     ? `<button onclick="event.stopPropagation();tcDismissNotify('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;">Dismiss</button>`
     : '';
 
-  return `<div style="${wrapStyle}"><div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open task details">
+  // Left-edge priority stripe — only painted for high/urgent so normal tasks
+  // stay visually neutral. Overrides the regular 1px left border.
+  const priStripe = (t.priority === 'high' || t.priority === 'urgent')
+    ? `border-left:4px solid ${priColor};`
+    : '';
+
+  return `<div style="${wrapStyle}"><div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};${priStripe}border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open task details">
 
     <!-- Collapse/expand arrow — only when this task has children -->
     ${hasSubs ? `<span onclick="event.stopPropagation();tcToggleCollapse('${t.id}')" style="cursor:pointer;color:var(--text-d);font-size:13px;flex-shrink:0;padding:0 2px;width:16px;text-align:center;user-select:none;" title="${collapsed?'Expand':'Collapse'} sub-tasks">${collapsed?'▸':'▾'}</span>` : '<span style="width:16px;flex-shrink:0;"></span>'}
@@ -51276,6 +51284,7 @@ function htAttachAccountPickers(accounts){
             <option value="low">🟢 Low</option>
             <option value="medium" selected>🔵 Medium</option>
             <option value="high">🔴 High</option>
+            <option value="urgent">⚠️ Urgent</option>
           </select>
         </div>
       </div>
