@@ -14798,26 +14798,14 @@ function _wlSyncFromCompany(id){
 }
 
 function getWorkLocations(){
-  // Flush current DOM values back into _wlData before returning
-  _wlData.forEach(loc=>{
-    const g = sfx => document.getElementById(`wl-${sfx}-${loc.id}`)?.value||'';
-    loc.label         = g('label');
-    loc.sameAsCompany = document.getElementById(`wl-same-${loc.id}`)?.checked||false;
-    loc.street        = g('street');
-    loc.city          = g('city');
-    loc.state         = g('state');
-    loc.zip           = g('zip');
-    loc.phone         = g('phone');
-    // If sameAsCompany, copy current company address
-    if(loc.sameAsCompany){
-      loc.street = document.getElementById('mc-addr-street')?.value||'';
-      loc.city   = document.getElementById('mc-addr-city')?.value||'';
-      loc.state  = document.getElementById('mc-addr-state')?.value||'Nebraska';
-      loc.zip    = document.getElementById('mc-addr-zip')?.value||'';
-      loc.phone  = document.getElementById('mc-phone')?.value||'';
-    }
-  });
-  return _wlData.map(l=>({...l}));
+  // _wlData is kept in sync with the Locations-tab DOM via
+  // syncFranchiseAddressesToWlData() (called at the top of saveClient).
+  // This function used to re-read from the legacy Work Locations tab's
+  // wl-${sfx}-${id} DOM nodes — but those were hidden when we merged the
+  // Work Locations tab into the Locations tab, so they no longer exist.
+  // Re-reading turned every address into '' on every save, silently
+  // wiping data. Just return the synced _wlData.
+  return (_wlData || []).map(l => ({ ...l }));
 }
 
 function renderWLList(){
