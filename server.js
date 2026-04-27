@@ -2982,12 +2982,68 @@ app.get('/payroll-admin', (req, res) => {
 // Get all payroll data (admin only — requires valid CRM session)
 app.get('/payroll/admin/data', requireAuth, (req, res) => {
   // Strip sensitive fields like passwords and session tokens before sending
-  const safe = { clients: {} };
+  const safe = { clients: {}, hteaoHistory: payrollData.hteaoHistory || [] };
   for (const [slug, client] of Object.entries(payrollData.clients || {})) {
     const { _sessionToken, ...rest } = client;
     safe.clients[slug] = rest;
   }
   res.json(safe);
+});
+
+// Upsert a HTeaO store config. Body: { store, prefix, label, frequency, calculateTips }
+app.post('/payroll/admin/hteao-store', requireAuth, (req, res) => {
+  const { store, prefix, label, frequency, calculateTips } = req.body || {};
+  if (!store) return res.status(400).json({ error: 'store required' });
+  if (!payrollData.clients) payrollData.clients = {};
+  if (!payrollData.clients.hteao) {
+    payrollData.clients.hteao = { name: 'HTeaO Payroll', mode: 'hteao-revel', storeConfigs: {} };
+  }
+  if (!payrollData.clients.hteao.storeConfigs) payrollData.clients.hteao.storeConfigs = {};
+  payrollData.clients.hteao.storeConfigs[String(store)] = {
+    prefix:        String(prefix || ''),
+    label:         String(label || ''),
+    frequency:     String(frequency || 'weekly'),
+    calculateTips: calculateTips !== false,
+  };
+  savePayrollData();
+  res.json({ success: true, storeConfigs: payrollData.clients.hteao.storeConfigs });
+});
+
+// Delete a HTeaO store config
+app.delete('/payroll/admin/hteao-store/:store', requireAuth, (req, res) => {
+  const store = req.params.store;
+  if (payrollData.clients && payrollData.clients.hteao && payrollData.clients.hteao.storeConfigs) {
+    delete payrollData.clients.hteao.storeConfigs[store];
+    savePayrollData();
+  }
+  res.json({ success: true, storeConfigs: (payrollData.clients?.hteao?.storeConfigs) || {} });
+});
+
+// Append a HTeaO payroll run to history. One entry per Process & Download
+// click — covers however many stores were in that batch. Capped at 200 runs.
+app.post('/payroll/admin/hteao-history', requireAuth, (req, res) => {
+  const { runBy, stores } = req.body || {};
+  if (!Array.isArray(stores) || !stores.length) {
+    return res.status(400).json({ error: 'stores array required' });
+  }
+  if (!Array.isArray(payrollData.hteaoHistory)) payrollData.hteaoHistory = [];
+  const entry = {
+    id: crypto.randomUUID(),
+    runAt: new Date().toISOString(),
+    runBy: String(runBy || 'Unknown'),
+    stores: stores.map(s => ({
+      store:     String(s.store || ''),
+      prefix:    String(s.prefix || ''),
+      dateRange: String(s.dateRange || ''),
+      outName:   String(s.outName || ''),
+      employees: Number(s.employees) || 0,
+      tips:      Number(s.tips) || 0,
+    })),
+  };
+  payrollData.hteaoHistory.unshift(entry);
+  if (payrollData.hteaoHistory.length > 200) payrollData.hteaoHistory.length = 200;
+  savePayrollData();
+  res.json({ success: true, entry, history: payrollData.hteaoHistory });
 });
 
 // ── Employee Change Log helper ───────────────────────────────────

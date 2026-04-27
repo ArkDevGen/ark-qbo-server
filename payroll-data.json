@@ -1825,10 +1825,10 @@
     "hteao": {
       "name": "HTeaO Payroll",
       "mode": "hteao-revel",
-      "storePrefixes": {
-        "66":  "OZ",
-        "67":  "COB",
-        "346": "OV"
+      "storeConfigs": {
+        "66":  { "prefix": "OZ",  "label": "Oz Tea",        "frequency": "weekly",   "calculateTips": true },
+        "67":  { "prefix": "COB", "label": "Clark on Brew", "frequency": "weekly",   "calculateTips": true },
+        "346": { "prefix": "OV",  "label": "Opal Vault",    "frequency": "weekly",   "calculateTips": true }
       }
     }
   },

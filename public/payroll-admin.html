@@ -284,6 +284,30 @@
           </button>
         </div>
         <div id="hteao-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+
+        <!-- Collapsible: Processed (run history) -->
+        <div style="margin-top:14px;">
+          <button onclick="hteaoToggleHistory()" id="hteao-history-toggle"
+                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            📁 Processed <span id="hteao-history-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
+            <span id="hteao-history-arrow" style="transition:transform .2s;">▼</span>
+          </button>
+          <div id="hteao-history-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);"></div>
+        </div>
+
+        <!-- Collapsible: Store Setup (per-store config) -->
+        <div style="margin-top:8px;">
+          <button onclick="hteaoToggleStores()" id="hteao-stores-toggle"
+                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            ⚙ Store Setup <span id="hteao-stores-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
+            <span id="hteao-stores-arrow" style="transition:transform .2s;">▼</span>
+          </button>
+          <div id="hteao-stores-body" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:10px 12px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -888,13 +912,40 @@ function importClientChange() {
   });
   const hteaoCard = document.getElementById('hteao-card');
   if (hteaoCard) hteaoCard.style.display = isHteao ? '' : 'none';
-  if (isHteao) hteaoReset();
+  if (isHteao) {
+    hteaoReset();
+    hteaoRenderHistory();
+    hteaoRenderStores();
+  }
   // If the Manage Employees section is open, sync its detail panel to
   // the newly-selected client so users don't have to pick again.
   const empSection = document.getElementById('emp-section');
   if(!isHteao && empSection && empSection.style.display !== 'none'){
     syncEmpSectionToTopClient();
   }
+}
+
+// Read the per-store configs for HTeaO. Returns a map keyed by store number.
+// Falls back to the legacy storePrefixes shape so older payroll-data.json
+// files keep working until they're migrated.
+function hteaoGetStoreConfigs() {
+  const slug = document.getElementById('import-client').value;
+  const c = slug ? _payrollData?.clients?.[slug] : null;
+  if (!c) return {};
+  if (c.storeConfigs && typeof c.storeConfigs === 'object') return c.storeConfigs;
+  if (c.storePrefixes && typeof c.storePrefixes === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(c.storePrefixes)) {
+      out[k] = { prefix: String(v || ''), label: '', frequency: 'weekly', calculateTips: true };
+    }
+    return out;
+  }
+  return {};
+}
+
+function hteaoStoreCfg(storeNum) {
+  const cfgs = hteaoGetStoreConfigs();
+  return cfgs[storeNum] || { prefix: '', label: '', frequency: 'weekly', calculateTips: true };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -966,22 +1017,26 @@ function hteaoRender() {
     byStore[f.store][f.kind] = f;
     if (f.dateRange) byStore[f.store].dateRange = f.dateRange;
   }
-  const slug = document.getElementById('import-client').value;
-  const prefixes = (_payrollData?.clients?.[slug]?.storePrefixes) || {};
   const stores = Object.keys(byStore).sort((a,b) => parseInt(a,10) - parseInt(b,10));
   let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Detected ${stores.length} store${stores.length===1?'':'s'}</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:6px;">`;
   for (const s of stores) {
     const g = byStore[s];
-    const prefix = prefixes[s] || `Store ${s}`;
+    const cfg = hteaoStoreCfg(s);
+    const prefix = cfg.prefix || `Store${s}-`;
     const outName = g.dateRange ? `${prefix}${s} (${g.dateRange}).csv` : `${prefix}${s}.csv`;
     const payOk = !!g.payroll;
+    const wantTips = cfg.calculateTips !== false;
     const tipOk = !!g.tips;
-    const tipNote = tipOk ? '✓ tips' : '<span style="color:var(--gold);">no tips file → $0</span>';
+    let tipNote;
+    if (!wantTips) tipNote = '<span style="color:var(--muted);">tips disabled</span>';
+    else if (tipOk) tipNote = '✓ tips';
+    else tipNote = '<span style="color:var(--gold);">no tips file → $0</span>';
+    const labelHtml = cfg.label ? ` <span style="color:var(--muted);font-size:11px;">${cfg.label}</span>` : '';
     html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px;">
-      <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:60px;">#${s}</span>
+      <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:60px;">#${s}</span>${labelHtml}
       <span style="color:${payOk?'var(--green)':'var(--red)'};">${payOk?'✓ payroll':'✗ payroll missing'}</span>
-      <span style="color:${tipOk?'var(--green)':'var(--gold)'};">${tipNote}</span>
+      <span style="color:${tipOk||!wantTips?'var(--green)':'var(--gold)'};">${tipNote}</span>
       <span style="margin-left:auto;color:var(--muted);font-size:11px;">→ ${outName}</span>
     </div>`;
   }
@@ -1020,20 +1075,21 @@ async function hteaoProcessAll() {
   btn.textContent = '⏳ Processing…';
   hteaoSetStatus('Processing…','var(--muted)');
 
-  const slug = document.getElementById('import-client').value;
-  const prefixes = (_payrollData?.clients?.[slug]?.storePrefixes) || {};
   const results = [];
   try {
     for (const s of stores) {
       const g = byStore[s];
+      const cfg = hteaoStoreCfg(s);
       const rows = await hteaoParseRevel(g.payroll.file);
       if (!rows.length) throw new Error(`Store #${s}: no employee rows found in ${g.payroll.name}`);
-      const totalTips = g.tips ? await hteaoParseSalesSummary(g.tips.file) : 0;
+      // calculateTips=false skips the Sales Summary lookup entirely (tips=$0)
+      const wantTips = cfg.calculateTips !== false;
+      const totalTips = (wantTips && g.tips) ? await hteaoParseSalesSummary(g.tips.file) : 0;
       const distributed = hteaoDistributeTips(rows, totalTips);
       const csv = hteaoMakeCSV(distributed, totalTips);
-      const prefix = prefixes[s] || `Store ${s}`;
+      const prefix = cfg.prefix || `Store${s}-`;
       const outName = g.dateRange ? `${prefix}${s} (${g.dateRange}).csv` : `${prefix}${s}.csv`;
-      results.push({ name: outName, csv, store: s, tips: totalTips, employees: rows.length });
+      results.push({ name: outName, csv, store: s, prefix, dateRange: g.dateRange, tips: totalTips, employees: rows.length });
     }
     // Trigger one download per file. Browsers prompt once for permission then
     // allow the rest. No zipping needed for the small file counts here.
@@ -1046,11 +1102,181 @@ async function hteaoProcessAll() {
     }
     const summary = results.map(r => `#${r.store} (${r.employees} emp, $${r.tips.toFixed(2)} tips)`).join(', ');
     hteaoSetStatus(`✓ Downloaded ${results.length} file${results.length===1?'':'s'}: ${summary}`, 'var(--green)');
+    // Record the run in server-side history (best-effort — UI keeps working if it fails)
+    try {
+      const runBy = _currentUser ? (`${_currentUser.fname||''} ${_currentUser.lname||''}`.trim() || _currentUser.username || 'Unknown') : 'Unknown';
+      const resp = await fetch(`${API}/payroll/admin/hteao-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({
+          runBy,
+          stores: results.map(r => ({
+            store: r.store, prefix: r.prefix, dateRange: r.dateRange || '',
+            outName: r.name, employees: r.employees, tips: r.tips,
+          })),
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (_payrollData) _payrollData.hteaoHistory = data.history || [];
+        hteaoRenderHistory();
+      }
+    } catch(_) {}
   } catch (err) {
     hteaoSetStatus(`✗ ${err.message}`, 'var(--red)');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '⬇ Process &amp; Download';
+  }
+}
+
+// ── Processed history (collapsible) ──────────────────────────────
+function hteaoToggleHistory() {
+  const body = document.getElementById('hteao-history-body');
+  const arrow = document.getElementById('hteao-history-arrow');
+  if (!body) return;
+  const open = body.style.display === 'none' || !body.style.display;
+  body.style.display = open ? '' : 'none';
+  if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
+  if (open) hteaoRenderHistory();
+}
+
+function hteaoRenderHistory() {
+  const body = document.getElementById('hteao-history-body');
+  const countEl = document.getElementById('hteao-history-count');
+  if (!body) return;
+  const history = (_payrollData && _payrollData.hteaoHistory) || [];
+  if (countEl) countEl.textContent = history.length;
+  if (!history.length) {
+    body.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">No runs yet — process some files to see them here.</div>';
+    return;
+  }
+  body.innerHTML = history.map(run => {
+    const dt = new Date(run.runAt).toLocaleString();
+    const totalEmps = (run.stores||[]).reduce((s, x) => s + (Number(x.employees)||0), 0);
+    const totalTips = (run.stores||[]).reduce((s, x) => s + (Number(x.tips)||0), 0);
+    const storeRows = (run.stores||[]).map(s => `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 14px;border-top:1px solid var(--border);font-size:11px;">
+        <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:50px;">#${s.store||''}</span>
+        <span style="color:var(--text);">${s.outName||''}</span>
+        <span style="margin-left:auto;color:var(--muted);">${s.employees||0} emp · $${(Number(s.tips)||0).toFixed(2)}</span>
+      </div>`).join('');
+    return `<div style="border-bottom:1px solid var(--border);">
+      <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;background:var(--card);">
+        <span style="font-size:12px;font-weight:600;color:var(--text);">${dt}</span>
+        <span style="font-size:11px;color:var(--muted);">by ${run.runBy||'Unknown'}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted);">${(run.stores||[]).length} store${(run.stores||[]).length===1?'':'s'} · ${totalEmps} emp · $${totalTips.toFixed(2)}</span>
+      </div>
+      ${storeRows}
+    </div>`;
+  }).join('');
+}
+
+// ── Store Setup (collapsible) ────────────────────────────────────
+function hteaoToggleStores() {
+  const body = document.getElementById('hteao-stores-body');
+  const arrow = document.getElementById('hteao-stores-arrow');
+  if (!body) return;
+  const open = body.style.display === 'none' || !body.style.display;
+  body.style.display = open ? '' : 'none';
+  if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
+  if (open) hteaoRenderStores();
+}
+
+function hteaoRenderStores() {
+  const body = document.getElementById('hteao-stores-body');
+  const countEl = document.getElementById('hteao-stores-count');
+  if (!body) return;
+  const cfgs = hteaoGetStoreConfigs();
+  const stores = Object.keys(cfgs).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+  if (countEl) countEl.textContent = stores.length;
+  const freqOpts = ['weekly','biweekly','semimonthly','monthly'];
+  const rowFor = (storeNum, cfg, isNew) => `
+    <div class="hteao-store-row" data-store="${storeNum}" style="display:grid;grid-template-columns:80px 1fr 1.2fr 110px 120px auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border);">
+      <input class="hs-store" placeholder="66" value="${isNew?'':storeNum}" ${isNew?'':'readonly'} style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:${isNew?'var(--surface)':'var(--card)'};color:var(--text);font-family:monospace;font-size:12px;">
+      <input class="hs-prefix" placeholder="OZ" value="${(cfg.prefix||'').replace(/"/g,'&quot;')}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+      <input class="hs-label" placeholder="Oz Tea" value="${(cfg.label||'').replace(/"/g,'&quot;')}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+      <select class="hs-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
+        ${freqOpts.map(o => `<option value="${o}" ${cfg.frequency===o?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">
+        <input type="checkbox" class="hs-tips" ${cfg.calculateTips!==false?'checked':''}> Calculate tips
+      </label>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-outline btn-sm" onclick="hteaoSaveStore(this)" style="font-size:11px;padding:5px 10px;">Save</button>
+        ${isNew ? '' : `<button class="btn btn-outline btn-sm" onclick="hteaoDeleteStore(this)" style="font-size:11px;padding:5px 8px;border-color:var(--red);color:var(--red);">✕</button>`}
+      </div>
+    </div>`;
+  let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">Per-Store Configuration</div>`;
+  html += `<div style="display:grid;grid-template-columns:80px 1fr 1.2fr 110px 120px auto;gap:8px;align-items:center;padding:6px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
+    <span>Store #</span><span>Prefix</span><span>Label</span><span>Frequency</span><span></span><span></span>
+  </div>`;
+  if (!stores.length) {
+    html += `<div style="padding:14px 0;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);">No stores configured yet — add one below.</div>`;
+  } else {
+    html += stores.map(s => rowFor(s, cfgs[s], false)).join('');
+  }
+  // Add-new row at the bottom
+  html += `<div style="border-top:2px solid var(--border);margin-top:6px;padding-top:4px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:6px 0;">Add a store</div>
+    ${rowFor('', { prefix:'', label:'', frequency:'weekly', calculateTips:true }, true)}
+  </div>`;
+  body.innerHTML = html;
+}
+
+async function hteaoSaveStore(btn) {
+  const row = btn.closest('.hteao-store-row');
+  if (!row) return;
+  const store = (row.querySelector('.hs-store')?.value || '').trim();
+  if (!store) { alert('Store number is required.'); return; }
+  if (!/^\d+$/.test(store)) { alert('Store number must be digits only.'); return; }
+  const payload = {
+    store,
+    prefix: (row.querySelector('.hs-prefix')?.value || '').trim(),
+    label: (row.querySelector('.hs-label')?.value || '').trim(),
+    frequency: row.querySelector('.hs-freq')?.value || 'weekly',
+    calculateTips: !!row.querySelector('.hs-tips')?.checked,
+  };
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const resp = await fetch(`${API}/payroll/admin/hteao-store`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    const slug = document.getElementById('import-client').value;
+    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    hteaoRenderStores();
+    if (_hteaoFiles.length) hteaoRender(); // refresh staging output names
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+async function hteaoDeleteStore(btn) {
+  const row = btn.closest('.hteao-store-row');
+  if (!row) return;
+  const store = (row.querySelector('.hs-store')?.value || '').trim();
+  if (!store) return;
+  if (!confirm(`Remove store #${store} configuration?`)) return;
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${API}/payroll/admin/hteao-store/${encodeURIComponent(store)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${_token}` },
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    const slug = document.getElementById('import-client').value;
+    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    hteaoRenderStores();
+    if (_hteaoFiles.length) hteaoRender();
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
+    btn.disabled = false;
   }
 }
 
