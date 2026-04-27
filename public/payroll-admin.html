@@ -307,15 +307,78 @@
   </div>
 </div>
 
-<!-- HTeaO Store Setup Modal -->
+<!-- HTeaO Store Setup — List Modal -->
 <div id="modal-hteao-stores" class="modal-overlay hidden" onclick="if(event.target===this)hteaoCloseStoresModal()">
-  <div class="modal" style="width:780px;">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
+  <div class="modal" style="width:720px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
       <h3 style="margin:0;">⚙ HTeaO Store Setup</h3>
       <button class="btn btn-outline btn-sm" onclick="hteaoCloseStoresModal()" style="font-size:11px;">Close</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Configure how each store's output file is generated. Add new stores at the bottom.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Configure how each store's output file is generated. Click a row to edit.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Configured stores</div>
+      <button class="btn btn-primary btn-sm" onclick="hteaoOpenEditStore(null)" style="font-size:11px;">+ Add Store</button>
+    </div>
     <div id="hteao-stores-body"></div>
+  </div>
+</div>
+
+<!-- HTeaO Store Setup — Edit Modal -->
+<div id="modal-hteao-store-edit" class="modal-overlay hidden" onclick="if(event.target===this)hteaoCloseEditStore()">
+  <div class="modal" style="width:560px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <h3 id="hteao-store-edit-title" style="margin:0;">Edit Store</h3>
+      <button class="btn btn-outline btn-sm" onclick="hteaoCloseEditStore()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Store number, output filename, pay period, and tip handling.</div>
+
+    <div class="edit-row">
+      <div>
+        <label>Store # <span style="color:var(--red);">*</span></label>
+        <input id="hteao-edit-store" placeholder="66" style="font-family:monospace;">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Digits only — extracted from the Revel filename's <code>tx-NNN-…</code> segment.</div>
+      </div>
+      <div>
+        <label>Display Name</label>
+        <input id="hteao-edit-label" placeholder="Oz Tea">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Friendly name shown in the staging list and Processed history.</div>
+      </div>
+    </div>
+
+    <div class="edit-row">
+      <div>
+        <label>Filename Prefix</label>
+        <input id="hteao-edit-prefix" placeholder="OZ" style="font-family:monospace;">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Output is <code>&lt;prefix&gt;&lt;store&gt; (date).csv</code> — e.g. <code>OZ66 (4.20-4.27).csv</code>.</div>
+      </div>
+      <div>
+        <label>Pay Frequency</label>
+        <select id="hteao-edit-frequency">
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-Weekly</option>
+          <option value="semimonthly">Semi-Monthly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Informational for now; period dates are read from the filename.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--text);">
+        <input type="checkbox" id="hteao-edit-tips" checked>
+        Calculate tips from Sales Summary CSV
+      </label>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;margin-left:24px;">Sums <strong>Tips Total</strong> + <strong>Liabilities Tips Total</strong> + <strong>Declared Tips</strong> across the period. Uncheck for stores that don't take tips — no tips file needed and the Tips column will be $0.</div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:8px;">
+      <button class="btn btn-outline btn-sm" id="hteao-edit-delete-btn" onclick="hteaoDeleteEditStore()" style="border-color:var(--red);color:var(--red);font-size:11px;display:none;">Delete Store</button>
+      <div style="display:flex;gap:8px;margin-left:auto;">
+        <button class="btn btn-outline" onclick="hteaoCloseEditStore()">Cancel</button>
+        <button class="btn btn-primary" onclick="hteaoSaveEditStore()">Save</button>
+      </div>
+    </div>
+    <div id="hteao-edit-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
   </div>
 </div>
 
@@ -1193,6 +1256,10 @@ function hteaoCloseStoresModal() {
   if (m) m.classList.add('hidden');
 }
 
+// Renders the list view inside the Store Setup modal — one row per
+// configured store, click anywhere on the row (or the Edit pill) to open
+// the per-store edit modal. Mirrors the QBO Center HTeaO Store Setup
+// layout for consistency.
 function hteaoRenderStores() {
   const body = document.getElementById('hteao-stores-body');
   const countEl = document.getElementById('hteao-stores-count');
@@ -1200,54 +1267,78 @@ function hteaoRenderStores() {
   const cfgs = hteaoGetStoreConfigs();
   const stores = Object.keys(cfgs).sort((a,b) => parseInt(a,10) - parseInt(b,10));
   if (countEl) countEl.textContent = stores.length;
-  const freqOpts = ['weekly','biweekly','semimonthly','monthly'];
-  const rowFor = (storeNum, cfg, isNew) => `
-    <div class="hteao-store-row" data-store="${storeNum}" style="display:grid;grid-template-columns:80px 1fr 1.2fr 110px 120px auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border);">
-      <input class="hs-store" placeholder="66" value="${isNew?'':storeNum}" ${isNew?'':'readonly'} style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:${isNew?'var(--surface)':'var(--card)'};color:var(--text);font-family:monospace;font-size:12px;">
-      <input class="hs-prefix" placeholder="OZ" value="${(cfg.prefix||'').replace(/"/g,'&quot;')}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-      <input class="hs-label" placeholder="Oz Tea" value="${(cfg.label||'').replace(/"/g,'&quot;')}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-      <select class="hs-freq" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;">
-        ${freqOpts.map(o => `<option value="${o}" ${cfg.frequency===o?'selected':''}>${o}</option>`).join('')}
-      </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">
-        <input type="checkbox" class="hs-tips" ${cfg.calculateTips!==false?'checked':''}> Calculate tips
-      </label>
-      <div style="display:flex;gap:4px;">
-        <button class="btn btn-outline btn-sm" onclick="hteaoSaveStore(this)" style="font-size:11px;padding:5px 10px;">Save</button>
-        ${isNew ? '' : `<button class="btn btn-outline btn-sm" onclick="hteaoDeleteStore(this)" style="font-size:11px;padding:5px 8px;border-color:var(--red);color:var(--red);">✕</button>`}
-      </div>
-    </div>`;
-  let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">Per-Store Configuration</div>`;
-  html += `<div style="display:grid;grid-template-columns:80px 1fr 1.2fr 110px 120px auto;gap:8px;align-items:center;padding:6px 0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
-    <span>Store #</span><span>Prefix</span><span>Label</span><span>Frequency</span><span></span><span></span>
-  </div>`;
   if (!stores.length) {
-    html += `<div style="padding:14px 0;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);">No stores configured yet — add one below.</div>`;
-  } else {
-    html += stores.map(s => rowFor(s, cfgs[s], false)).join('');
+    body.innerHTML = `<div style="padding:24px 12px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--border);border-radius:8px;">
+      <div style="font-size:24px;margin-bottom:6px;">⚙</div>
+      <div><strong style="color:var(--text);">No stores configured yet.</strong></div>
+      <div style="margin-top:4px;">Click <strong>+ Add Store</strong> above to map your first one.</div>
+    </div>`;
+    return;
   }
-  // Add-new row at the bottom
-  html += `<div style="border-top:2px solid var(--border);margin-top:6px;padding-top:4px;">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:6px 0;">Add a store</div>
-    ${rowFor('', { prefix:'', label:'', frequency:'weekly', calculateTips:true }, true)}
-  </div>`;
-  body.innerHTML = html;
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const rows = stores.map(s => {
+    const cfg = cfgs[s];
+    const tipsBadge = cfg.calculateTips !== false
+      ? `<span style="color:var(--green);font-weight:600;font-size:11px;">✓ tips</span>`
+      : `<span style="color:var(--muted);font-size:11px;">— no tips</span>`;
+    const freqLabel = ({ weekly:'Weekly', biweekly:'Bi-Weekly', semimonthly:'Semi-Monthly', monthly:'Monthly' })[cfg.frequency] || cfg.frequency || 'Weekly';
+    return `<div onclick="hteaoOpenEditStore('${esc(s)}')" style="display:grid;grid-template-columns:60px 1fr 80px 110px 80px auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer;transition:border-color .15s,background .15s;font-size:12px;margin-bottom:6px;"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--card)'">
+      <span style="font-family:monospace;font-weight:700;color:var(--accent);">#${esc(s)}</span>
+      <span style="font-weight:600;color:var(--text);">${cfg.label ? esc(cfg.label) : '<span style="color:var(--muted);font-style:italic;font-weight:400;">(no name)</span>'}</span>
+      <span style="font-family:monospace;color:var(--muted);">${cfg.prefix ? esc(cfg.prefix) : '—'}</span>
+      <span style="color:var(--muted);">${esc(freqLabel)}</span>
+      ${tipsBadge}
+      <button onclick="event.stopPropagation();hteaoOpenEditStore('${esc(s)}')" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 10px;">Edit</button>
+    </div>`;
+  }).join('');
+  body.innerHTML = `<div style="display:grid;grid-template-columns:60px 1fr 80px 110px 80px auto;gap:10px;padding:0 12px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
+    <span>Store #</span><span>Display Name</span><span>Prefix</span><span>Frequency</span><span>Tips</span><span></span>
+  </div>` + rows;
 }
 
-async function hteaoSaveStore(btn) {
-  const row = btn.closest('.hteao-store-row');
-  if (!row) return;
-  const store = (row.querySelector('.hs-store')?.value || '').trim();
-  if (!store) { alert('Store number is required.'); return; }
-  if (!/^\d+$/.test(store)) { alert('Store number must be digits only.'); return; }
+// ── Store Setup — Edit modal ─────────────────────────────────────
+let _hteaoEditingStore = null; // null when adding a new store
+
+function hteaoOpenEditStore(storeNum) {
+  const cfgs = hteaoGetStoreConfigs();
+  const cfg = (storeNum && cfgs[storeNum]) ? cfgs[storeNum] : { prefix:'', label:'', frequency:'weekly', calculateTips:true };
+  _hteaoEditingStore = storeNum || null;
+  const isNew = !storeNum;
+  document.getElementById('hteao-store-edit-title').textContent = isNew ? '+ Add HTeaO Store' : `Edit Store #${storeNum}`;
+  const storeInput = document.getElementById('hteao-edit-store');
+  storeInput.value = storeNum || '';
+  storeInput.readOnly = !isNew;
+  storeInput.style.background = isNew ? '' : 'var(--card)';
+  document.getElementById('hteao-edit-label').value = cfg.label || '';
+  document.getElementById('hteao-edit-prefix').value = cfg.prefix || '';
+  document.getElementById('hteao-edit-frequency').value = cfg.frequency || 'weekly';
+  document.getElementById('hteao-edit-tips').checked = cfg.calculateTips !== false;
+  document.getElementById('hteao-edit-delete-btn').style.display = isNew ? 'none' : '';
+  document.getElementById('hteao-edit-status').textContent = '';
+  document.getElementById('modal-hteao-store-edit').classList.remove('hidden');
+  setTimeout(() => storeInput.focus(), 50);
+}
+
+function hteaoCloseEditStore() {
+  document.getElementById('modal-hteao-store-edit').classList.add('hidden');
+  _hteaoEditingStore = null;
+}
+
+async function hteaoSaveEditStore() {
+  const status = document.getElementById('hteao-edit-status');
+  const store = (document.getElementById('hteao-edit-store').value || '').trim();
+  if (!store) { status.innerHTML = '<span style="color:var(--red);">Store number is required.</span>'; return; }
+  if (!/^\d+$/.test(store)) { status.innerHTML = '<span style="color:var(--red);">Store number must be digits only.</span>'; return; }
   const payload = {
     store,
-    prefix: (row.querySelector('.hs-prefix')?.value || '').trim(),
-    label: (row.querySelector('.hs-label')?.value || '').trim(),
-    frequency: row.querySelector('.hs-freq')?.value || 'weekly',
-    calculateTips: !!row.querySelector('.hs-tips')?.checked,
+    prefix: (document.getElementById('hteao-edit-prefix').value || '').trim(),
+    label: (document.getElementById('hteao-edit-label').value || '').trim(),
+    frequency: document.getElementById('hteao-edit-frequency').value || 'weekly',
+    calculateTips: !!document.getElementById('hteao-edit-tips').checked,
   };
-  btn.disabled = true; btn.textContent = '…';
+  status.innerHTML = '<span style="color:var(--muted);">Saving…</span>';
   try {
     const resp = await fetch(`${API}/payroll/admin/hteao-store`, {
       method: 'POST',
@@ -1257,36 +1348,38 @@ async function hteaoSaveStore(btn) {
     if (!resp.ok) throw new Error(await resp.text());
     const data = await resp.json();
     const slug = document.getElementById('import-client').value;
-    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    if (_payrollData && _payrollData.clients && _payrollData.clients[slug]) {
+      _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    }
     hteaoRenderStores();
     if (_hteaoFiles.length) hteaoRender(); // refresh staging output names
+    hteaoCloseEditStore();
   } catch (e) {
-    alert('Save failed: ' + e.message);
-    btn.disabled = false; btn.textContent = 'Save';
+    status.innerHTML = `<span style="color:var(--red);">Save failed: ${e.message}</span>`;
   }
 }
 
-async function hteaoDeleteStore(btn) {
-  const row = btn.closest('.hteao-store-row');
-  if (!row) return;
-  const store = (row.querySelector('.hs-store')?.value || '').trim();
-  if (!store) return;
-  if (!confirm(`Remove store #${store} configuration?`)) return;
-  btn.disabled = true;
+async function hteaoDeleteEditStore() {
+  if (!_hteaoEditingStore) return;
+  if (!confirm(`Remove store #${_hteaoEditingStore} configuration?`)) return;
+  const status = document.getElementById('hteao-edit-status');
+  status.innerHTML = '<span style="color:var(--muted);">Deleting…</span>';
   try {
-    const resp = await fetch(`${API}/payroll/admin/hteao-store/${encodeURIComponent(store)}`, {
+    const resp = await fetch(`${API}/payroll/admin/hteao-store/${encodeURIComponent(_hteaoEditingStore)}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${_token}` },
     });
     if (!resp.ok) throw new Error(await resp.text());
     const data = await resp.json();
     const slug = document.getElementById('import-client').value;
-    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    if (_payrollData && _payrollData.clients && _payrollData.clients[slug]) {
+      _payrollData.clients[slug].storeConfigs = data.storeConfigs || {};
+    }
     hteaoRenderStores();
     if (_hteaoFiles.length) hteaoRender();
+    hteaoCloseEditStore();
   } catch (e) {
-    alert('Delete failed: ' + e.message);
-    btn.disabled = false;
+    status.innerHTML = `<span style="color:var(--red);">Delete failed: ${e.message}</span>`;
   }
 }
 
