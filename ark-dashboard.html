@@ -8472,7 +8472,17 @@ function fax(num, label){
   return `<a href="tel:+1${digits}" style="color:inherit;text-decoration:none;white-space:nowrap;" title="Dial fax ${num}">🖷 ${display}</a>`;
 }
 
-function fmtDate(d){ return d ? new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'; }
+function fmtDate(d){
+  if (!d) return '—';
+  // Plain YYYY-MM-DD strings (from <input type="date">) should be treated as
+  // a local calendar date, not a UTC instant — otherwise "2023-12-01" parses
+  // as midnight UTC and displays as "Nov 30, 2023" in any negative-UTC zone.
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  }
+  return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
 function initials(n){ return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 function avatarColor(s){ let h=0;for(let c of s)h=(h*31+c.charCodeAt(0))%AVATAR_COLORS.length;return AVATAR_COLORS[h]; }
 function logAct(desc, clientId=null, amId=null){
