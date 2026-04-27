@@ -29804,6 +29804,25 @@ function tdParseCSV(){
     return 'medium'; // default
   }
 
+  // Infer ARK category from the Todoist section name a task lives under.
+  // Maps the common shapes seen in real exports (PAYROLL, BANK/CREDIT CARD,
+  // BOOKS/ENTRIES, etc.) to the matching dashboard category. Falls back to
+  // 'Other' so badges still render when the section isn't recognized.
+  function tdInferCategory(sectionName) {
+    if (!sectionName) return 'Other';
+    const s = String(sectionName).toLowerCase();
+    if (s.includes('payroll'))                                       return 'Payroll';
+    if (s.includes('bank') || s.includes('credit'))                  return 'Banking';
+    if (s.includes('sales tax') || s.includes('sales-tax'))          return 'Sales Tax';
+    if (s.includes('compliance'))                                    return 'Compliance';
+    if (s.includes('advisory'))                                      return 'Advisory';
+    if (s.includes('onboard'))                                       return 'Onboarding';
+    if (s.includes('close') || s.includes('month'))                  return 'Monthly Close';
+    if (s.includes('tax'))                                           return 'Tax';
+    if (s.includes('book') || s.includes('entry') || s.includes('entries')) return 'Bookkeeping';
+    return 'Other';
+  }
+
   // Parse date — Todoist uses formats like "Jun 15 2025", "2025-06-15", or
   // year-less "Apr 29". For year-less input, default to current year and roll
   // to next year if the date has already passed.
@@ -29890,7 +29909,9 @@ function tdParseCSV(){
       clientId:   defaultClientId,
       clientName: defaultClientName,
       amId:       defaultAM,
-      category:   defaultCat,
+      // Inferred from each task's section so a multi-section import lands
+      // with sensible per-task categories instead of a single applied-to-all.
+      category:   tdInferCategory(sectionName),
       recurring:  recurParsed ? true : false,
       recurFreq:  recurParsed ? recurParsed.recurFreq : null,
       // Structured anchors so "every friday" stays Friday, "every 28th" stays the 28th, etc.
@@ -52264,12 +52285,15 @@ function htAttachAccountPickers(accounts){
             <label style="font-size:11px;font-weight:600;color:var(--text-m);display:block;margin-bottom:5px;">Assigned To <span style="font-weight:400;color:var(--text-d);">— used unless the CSV row has a Responsible</span></label>
             <select id="td-am-sel" class="field-input" style="margin:0;"></select>
           </div>
-          <div style="flex:1;">
-            <label style="font-size:11px;font-weight:600;color:var(--text-m);display:block;margin-bottom:5px;">Category <span style="font-weight:400;color:var(--text-d);">— Todoist has no category, this applies to all rows</span></label>
+          <div style="flex:1;display:none;">
+            <!-- Category dropdown removed: a single category doesn't fit a
+                 multi-section import (PAYROLL + BOOKS + BANK in one file).
+                 Each task's category is now inferred from its section name
+                 at import time (see tdInferCategory below). The hidden
+                 select stays in the DOM so legacy reads of td-cat-sel.value
+                 don't crash; it always returns 'Other'. -->
             <select id="td-cat-sel" class="field-input" style="margin:0;">
-              <option>Bookkeeping</option><option>Monthly Close</option><option>Banking</option><option>Payroll</option>
-              <option>Tax</option><option>Sales Tax</option><option>Compliance</option>
-              <option>Advisory</option><option>Onboarding</option><option value="Other" selected>Other</option>
+              <option value="Other" selected>Other</option>
             </select>
           </div>
         </div>
