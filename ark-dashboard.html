@@ -3378,8 +3378,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="tcRender()">
         <option value="">All Team</option>
       </select>
-      <select id="tc-group-by" class="field-input" style="width:140px;" onchange="tcRender()">
+      <select id="tc-group-by" class="field-input" style="width:140px;" onchange="this.dataset.userPicked='1';tcRender()">
         <option value="due">Group by Due Date</option>
+        <option value="section">Group by Section</option>
         <option value="client">Group by Client</option>
         <option value="am">Group by AM</option>
         <option value="category">Group by Category</option>
@@ -26543,6 +26544,11 @@ function tcOpenNew(){
   document.getElementById('tc-modal-title').textContent = 'New Task';
   document.getElementById('tc-name').value = '';
   document.getElementById('tc-notes').value = '';
+  // Pre-fill the section field for new tasks if we're inside a project view —
+  // e.g. user clicked "+ New Task" from Haines's BANK/CREDIT CARD section.
+  // Most of the time empty, defaulted by tcOpenNewInSection() if applicable.
+  const secEl = document.getElementById('tc-section');
+  if (secEl) secEl.value = '';
   document.getElementById('tc-due').value = new Date().toISOString().slice(0,10);
   document.getElementById('tc-category').value = 'Bookkeeping';
   document.getElementById('tc-recurring').checked = false;
@@ -26574,6 +26580,9 @@ function tcEditTask(id){
   document.getElementById('tc-modal-title').textContent = 'Edit Task';
   document.getElementById('tc-name').value = t.name||'';
   document.getElementById('tc-notes').value = t.notes||'';
+  const secEl = document.getElementById('tc-section');
+  if (secEl) secEl.value = t.section || '';
+  tcPopulateSectionSuggestions(t.clientId || '');
   document.getElementById('tc-due').value = t.dueDate||'';
   document.getElementById('tc-category').value = t.category||'Bookkeeping';
   document.getElementById('tc-recurring').checked = !!t.recurring;
@@ -26692,6 +26701,7 @@ function tcSaveTask(){
       recurBmDay2:  recurring && recurFreq==='bimonthly' ? recurBmDay2 : null,
       showDaysAdvance: parseInt(document.getElementById('tc-show-days').value)||3,
       priority,
+      section:      (document.getElementById('tc-section')?.value || '').trim(),
       notes:        document.getElementById('tc-notes').value.trim(),
       bankUrl,
       status:       existing?.status || 'open',
@@ -27372,6 +27382,40 @@ function tcRecurLabel(freq, n, d1, d2){
 }
 
 // ── Init / render ────────────────────────────────────────────────
+// One-time migration: the Todoist importer stuffed the section name into
+// task.notes as a ` · [SECTION] · ` segment. Pull that out into the canonical
+// task.section field so grouping works without re-importing. Idempotent.
+function tcMigrateSections() {
+  for (const t of (DB.tasks || [])) {
+    if (t.section || !t.notes) continue;
+    const parts = String(t.notes).split(' · ');
+    for (const p of parts) {
+      const m = p.match(/^\[([^\]]+)\]$/);
+      if (m && !m[1].startsWith('Todoist:')) {
+        t.section = m[1];
+        break;
+      }
+    }
+  }
+}
+
+// Build the <datalist> of section suggestions for the section input — pulls
+// existing sections (de-duped, sorted) for the given client, plus any sections
+// from other clients as a secondary group so users can re-use familiar names.
+function tcPopulateSectionSuggestions(clientId) {
+  const dl = document.getElementById('tc-section-suggestions');
+  if (!dl) return;
+  const clientSecs = new Set();
+  const otherSecs  = new Set();
+  for (const t of (DB.tasks || [])) {
+    if (t._deleted || !t.section) continue;
+    if (clientId && t.clientId === clientId) clientSecs.add(t.section);
+    else otherSecs.add(t.section);
+  }
+  const ordered = [...clientSecs].sort().concat([...otherSecs].filter(s => !clientSecs.has(s)).sort());
+  dl.innerHTML = ordered.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
+}
+
 async function tcRender(){
   await tcPopulateFilters();
 
@@ -27379,6 +27423,19 @@ async function tcRender(){
   (DB.tasks || []).forEach(t => {
     if (!t.type) t.type = t.dueDate ? 'task' : 'note';
   });
+
+  // Migrate sections embedded in legacy Todoist-imported notes (e.g. "desc · [PAYROLL] · [Todoist: every fri]")
+  // into the t.section field. Idempotent — skips tasks that already have one.
+  tcMigrateSections();
+
+  // Project view auto-defaults to grouping by section (Todoist-style),
+  // but only if the user hasn't explicitly picked a different grouping
+  // since entering this view. The dropdown stays user-overridable.
+  const isProjectView = (typeof _tcActiveView === 'string') && _tcActiveView.startsWith('project:');
+  const groupSel = document.getElementById('tc-group-by');
+  if (isProjectView && groupSel && !groupSel.dataset.userPicked) {
+    groupSel.value = 'section';
+  }
 
   const tasks  = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
@@ -27457,6 +27514,10 @@ async function tcRender(){
       key = name && name !== '—' ? name : 'Unassigned';
     } else if(groupBy === 'category'){
       key = t.category || 'Other';
+    } else if(groupBy === 'section'){
+      // Sections are per-project Todoist-style buckets (BANK/CREDIT CARD,
+      // PAYROLL, etc.). Empty section = uncategorized — shown last.
+      key = t.section ? t.section : '📌 Uncategorized';
     } else if(groupBy === 'due'){
       if(t.status==='completed') key = '✓ Completed';
       else if(!t.dueDate) key = '📌 No Due Date';
@@ -27634,6 +27695,10 @@ let _tcActiveView = 'upcoming'; // 'upcoming' | 'today' | 'overdue' | 'notes' | 
 
 function tcSelectView(view) {
   _tcActiveView = view;
+  // Reset the user's group-by override so each new view picks its sensible
+  // default again (project view → section, others → due date).
+  const grpEl = document.getElementById('tc-group-by');
+  if (grpEl) delete grpEl.dataset.userPicked;
 
   // Always start clean — show tasks panel, hide notes panel
   document.getElementById('tc-tasks-panel').style.display = '';
@@ -51102,6 +51167,18 @@ function htAttachAccountPickers(accounts){
           </div>
           <div id="tc-recur-preview" style="font-size:11px;color:var(--text-d);font-style:italic;margin-top:6px;min-height:14px;"></div>
         </div>
+      </div>
+
+      <!-- Section — groups tasks within a project (Todoist-style). Optional;
+           empty means "Uncategorized". Datalist offers existing sections for
+           the selected client so spelling stays consistent. -->
+      <div>
+        <label>
+          Section
+          <span style="font-size:11px;color:var(--text-d);font-weight:400;">— optional, groups tasks in the project view (e.g. PAYROLL, BANK/CREDIT CARD)</span>
+        </label>
+        <input id="tc-section" class="field-input" placeholder="e.g. PAYROLL" list="tc-section-suggestions" autocomplete="off">
+        <datalist id="tc-section-suggestions"></datalist>
       </div>
 
       <!-- Notes -->
