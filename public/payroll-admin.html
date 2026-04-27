@@ -1155,7 +1155,7 @@ function hteaoReset() {
   if (st) st.innerHTML = '';
 }
 
-function hteaoOnFiles(fileList) {
+async function hteaoOnFiles(fileList) {
   if (!fileList || !fileList.length) return;
   for (const file of fileList) {
     const lower = file.name.toLowerCase();
@@ -1172,7 +1172,35 @@ function hteaoOnFiles(fileList) {
     _hteaoFiles = _hteaoFiles.filter(f => !(f.kind === kind && f.store === info.store));
     _hteaoFiles.push({ kind, store: info.store, file, dateRange: info.dateRange, name: file.name });
   }
+  hteaoRender(); // initial render — file pairings appear immediately
+
+  // Async-parse newly-added xlsx files in parallel and cache the result on the
+  // file entry so processing can reuse it. After parsing, re-render to surface
+  // the lifecycle notices (new vs missing employees).
+  const toParse = _hteaoFiles.filter(f => f.kind === 'payroll' && !f.parsedEmployees && !f.parseError);
+  if (!toParse.length) return;
+  await Promise.all(toParse.map(async f => {
+    try { f.parsedEmployees = await hteaoParseRevel(f.file); }
+    catch (e) { f.parseError = e.message || String(e); }
+  }));
   hteaoRender();
+}
+
+// Convert Revel's "Last, First" employee field to the standard {fname, lname}
+// shape used everywhere else (rosters, comparisons, etc.).
+function hteaoSplitRevelName(name) {
+  const m = String(name||'').match(/^([^,]+),\s*(.+)$/);
+  if (!m) return { fname: '', lname: String(name||'').trim() };
+  return { fname: m[2].trim(), lname: m[1].trim() };
+}
+function hteaoEmpKey(fname, lname) {
+  return `${(lname||'').toLowerCase().trim()}|${(fname||'').toLowerCase().trim()}`;
+}
+function hteaoGetLastRoster(storeNum) {
+  const slug = document.getElementById('import-client').value;
+  const rosters = _payrollData?.clients?.[slug]?.lastRosters;
+  if (rosters && Array.isArray(rosters[String(storeNum)])) return rosters[String(storeNum)];
+  return [];
 }
 
 // Pull store number and YYYY-MM-DD_YYYY-MM-DD date range out of either
@@ -1209,6 +1237,7 @@ function hteaoRender() {
   const stores = Object.keys(byStore).sort((a,b) => parseInt(a,10) - parseInt(b,10));
   let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Detected ${stores.length} store${stores.length===1?'':'s'}</div>`;
   html += `<div style="display:flex;flex-direction:column;gap:6px;">`;
+  const escAttr = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   for (const s of stores) {
     const g = byStore[s];
     const cfg = hteaoStoreCfg(s);
@@ -1221,12 +1250,47 @@ function hteaoRender() {
     if (!wantTips) tipNote = '<span style="color:var(--muted);">tips disabled</span>';
     else if (tipOk) tipNote = '✓ tips';
     else tipNote = '<span style="color:var(--gold);">no tips file → $0</span>';
-    const labelHtml = cfg.label ? ` <span style="color:var(--muted);font-size:11px;">${cfg.label}</span>` : '';
-    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px;">
-      <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:60px;">#${s}</span>${labelHtml}
-      <span style="color:${payOk?'var(--green)':'var(--red)'};">${payOk?'✓ payroll':'✗ payroll missing'}</span>
-      <span style="color:${tipOk||!wantTips?'var(--green)':'var(--gold)'};">${tipNote}</span>
-      <span style="margin-left:auto;color:var(--muted);font-size:11px;">→ ${outName}</span>
+    const labelHtml = cfg.label ? ` <span style="color:var(--muted);font-size:11px;">${escAttr(cfg.label)}</span>` : '';
+    // Lifecycle notice — compute once the xlsx has been parsed (cached on the
+    // file entry by hteaoOnFiles). Skipped silently if the parse hasn't landed
+    // yet or there's no previous roster for this store.
+    let lifecycle = '';
+    if (g.payroll && Array.isArray(g.payroll.parsedEmployees)) {
+      const lastRoster = hteaoGetLastRoster(s);
+      if (lastRoster.length) {
+        const currentSet = new Set();
+        const currentEmps = [];
+        for (const r of g.payroll.parsedEmployees) {
+          const sp = hteaoSplitRevelName(r.employee);
+          const k = hteaoEmpKey(sp.fname, sp.lname);
+          if (currentSet.has(k)) continue;
+          currentSet.add(k);
+          currentEmps.push(sp);
+        }
+        const rosterSet = new Set(lastRoster.map(e => hteaoEmpKey(e.fname, e.lname)));
+        const newOnes = currentEmps.filter(e => !rosterSet.has(hteaoEmpKey(e.fname, e.lname)));
+        const missing = lastRoster.filter(e => !currentSet.has(hteaoEmpKey(e.fname, e.lname)));
+        const blocks = [];
+        const fmtName = (e) => `${escAttr(e.fname)} ${escAttr(e.lname)}`;
+        if (newOnes.length) blocks.push(`<span style="color:var(--green);"><strong>🆕 New:</strong> ${newOnes.map(fmtName).join(', ')}</span>`);
+        if (missing.length) blocks.push(`<span style="color:var(--gold);"><strong>⚠ Not this period:</strong> ${missing.map(fmtName).join(', ')}</span>`);
+        if (blocks.length) {
+          lifecycle = `<div style="padding:0 10px 6px;font-size:10.5px;display:flex;flex-direction:column;gap:2px;">${blocks.join('')}</div>`;
+        }
+      }
+    } else if (g.payroll && !g.payroll.parseError) {
+      lifecycle = `<div style="padding:0 10px 6px;font-size:10.5px;color:var(--muted);">Parsing employees…</div>`;
+    } else if (g.payroll && g.payroll.parseError) {
+      lifecycle = `<div style="padding:0 10px 6px;font-size:10.5px;color:var(--red);">⚠ Parse error: ${escAttr(g.payroll.parseError)}</div>`;
+    }
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:12px;">
+        <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:60px;">#${s}</span>${labelHtml}
+        <span style="color:${payOk?'var(--green)':'var(--red)'};">${payOk?'✓ payroll':'✗ payroll missing'}</span>
+        <span style="color:${tipOk||!wantTips?'var(--green)':'var(--gold)'};">${tipNote}</span>
+        <span style="margin-left:auto;color:var(--muted);font-size:11px;">→ ${outName}</span>
+      </div>
+      ${lifecycle}
     </div>`;
   }
   if (orphans.length) {
@@ -1269,7 +1333,11 @@ async function hteaoProcessAll() {
     for (const s of stores) {
       const g = byStore[s];
       const cfg = hteaoStoreCfg(s);
-      const rows = await hteaoParseRevel(g.payroll.file);
+      // Reuse the staging-time cached parse if present, else parse fresh
+      const rows = (g.payroll.parsedEmployees && g.payroll.parsedEmployees.length)
+        ? g.payroll.parsedEmployees
+        : await hteaoParseRevel(g.payroll.file);
+      if (!g.payroll.parsedEmployees) g.payroll.parsedEmployees = rows; // cache for roster save below
       if (!rows.length) throw new Error(`Store #${s}: no employee rows found in ${g.payroll.name}`);
       // calculateTips=false skips the Sales Summary lookup entirely (tips=$0)
       const wantTips = cfg.calculateTips !== false;
@@ -1309,6 +1377,35 @@ async function hteaoProcessAll() {
         const data = await resp.json();
         if (_payrollData) _payrollData.hteaoHistory = data.history || [];
         hteaoRenderHistory();
+      }
+    } catch(_) {}
+    // Update per-store rosters so the next run's lifecycle notices are accurate
+    try {
+      const storeRosters = {};
+      for (const s of stores) {
+        const g = byStore[s];
+        const rows = g.payroll && g.payroll.parsedEmployees;
+        if (!Array.isArray(rows)) continue;
+        const seenK = new Set();
+        const list = [];
+        for (const r of rows) {
+          const sp = hteaoSplitRevelName(r.employee);
+          const k = hteaoEmpKey(sp.fname, sp.lname);
+          if (seenK.has(k)) continue;
+          seenK.add(k);
+          list.push(sp);
+        }
+        storeRosters[s] = list;
+      }
+      const resp = await fetch(`${API}/payroll/admin/hteao-roster`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ storeRosters }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const slug = document.getElementById('import-client').value;
+        if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].lastRosters = data.lastRosters || {};
       }
     } catch(_) {}
   } catch (err) {
@@ -2238,34 +2335,38 @@ function hainesCloseDeductionsModal() {
   if (_hainesParsed) hainesRender();
 }
 
-// Build the editable list. Combines (a) employees in the latest parsed CSV,
-// (b) manual employees, and (c) anyone already in the deductions map. So
-// users can edit deductions even when no CSV is loaded yet, and CSV employees
-// always appear so deductions can be set up before running payroll.
+// Build the editable list. Tool deductions are for CSV employees only —
+// manual employees (Marilynn etc.) intentionally excluded. Sources merged in
+// priority order:
+//   (1) Employees in the latest parsed CSV — primary use case
+//   (2) Employees from the previous successful run's roster — keeps deductions
+//       editable across periods even when someone has no hours this week
+//   (3) Anyone already in the deductions map (legacy / manually-typed)
 function hainesRenderDeductionsList() {
   const body = document.getElementById('haines-deductions-list');
   if (!body) return;
   const dedMap = hainesGetDeductions();
+  const manualKeys = new Set(hainesGetManualList().map(m => hainesEmpKey(m.fname, m.lname)));
   const seen = new Map(); // key → { fname, lname, amount, source }
   if (_hainesParsed && _hainesParsed.employees) {
     for (const e of _hainesParsed.employees) {
       const k = hainesEmpKey(e.fname, e.lname);
+      if (manualKeys.has(k)) continue;
       seen.set(k, { fname: e.fname, lname: e.lname, amount: dedMap[k] || 0, source: 'csv' });
     }
   }
-  for (const m of hainesGetManualList()) {
-    const k = hainesEmpKey(m.fname, m.lname);
-    if (!seen.has(k)) seen.set(k, { fname: m.fname, lname: m.lname, amount: dedMap[k] || 0, source: 'manual' });
+  for (const r of hainesGetLastRoster()) {
+    const k = hainesEmpKey(r.fname, r.lname);
+    if (manualKeys.has(k) || seen.has(k)) continue;
+    seen.set(k, { fname: r.fname, lname: r.lname, amount: dedMap[k] || 0, source: 'previous' });
   }
-  // Anyone with an existing deduction who isn't in the lists above
   for (const [k, amt] of Object.entries(dedMap)) {
-    if (!seen.has(k)) {
-      const [lname, fname] = k.split('|');
-      seen.set(k, { fname, lname, amount: amt, source: 'legacy' });
-    }
+    if (manualKeys.has(k) || seen.has(k)) continue;
+    const [lname, fname] = k.split('|');
+    seen.set(k, { fname, lname, amount: amt, source: 'legacy' });
   }
   if (!seen.size) {
-    body.innerHTML = '<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:12px;">Drop a timesheet CSV first, or add manual employees, to see the list here.</div>';
+    body.innerHTML = '<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:12px;">Drop a timesheet CSV to see employees here.</div>';
     return;
   }
   const rows = [...seen.values()].sort((a,b) => (a.lname||'').localeCompare(b.lname||'') || (a.fname||'').localeCompare(b.fname||''));
@@ -2274,7 +2375,7 @@ function hainesRenderDeductionsList() {
     <span>Employee</span><span style="text-align:right;">Per Paycheck</span>
   </div>` + rows.map(r => `
     <div class="haines-ded-row" data-key="${esc(hainesEmpKey(r.fname, r.lname))}" style="display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;padding:6px;border-bottom:1px solid var(--border);font-size:12px;">
-      <span><strong style="color:var(--text);">${esc(r.lname)}, ${esc(r.fname)}</strong>${r.source==='manual' ? ' <span style="font-size:10px;color:var(--muted);">(manual)</span>':''}</span>
+      <span><strong style="color:var(--text);">${esc(r.lname)}, ${esc(r.fname)}</strong>${r.source!=='csv' ? ' <span style="font-size:10px;color:var(--muted);">('+r.source+')</span>':''}</span>
       <div style="position:relative;">
         <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;">$</span>
         <input class="hd-amt" type="number" min="0" step="1" value="${r.amount || ''}" placeholder="0" style="width:100%;text-align:right;font-size:12px;padding:5px 8px 5px 18px;">

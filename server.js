@@ -2994,6 +2994,28 @@ app.get('/payroll/admin/data', requireAuth, (req, res) => {
   res.json(safe);
 });
 
+// Save per-store HTeaO employee rosters from the most recent successful run.
+// Merges into clients.hteao.lastRosters keyed by storeNum so each store keeps
+// its own roster. Used to flag new vs. missing employees in staging.
+app.post('/payroll/admin/hteao-roster', requireAuth, (req, res) => {
+  const { storeRosters } = req.body || {};
+  if (!storeRosters || typeof storeRosters !== 'object') {
+    return res.status(400).json({ error: 'storeRosters object required' });
+  }
+  if (!payrollData.clients) payrollData.clients = {};
+  if (!payrollData.clients.hteao) payrollData.clients.hteao = { name: 'HTeaO', mode: 'hteao-revel' };
+  if (!payrollData.clients.hteao.lastRosters) payrollData.clients.hteao.lastRosters = {};
+  for (const [storeId, employees] of Object.entries(storeRosters)) {
+    if (!Array.isArray(employees)) continue;
+    payrollData.clients.hteao.lastRosters[String(storeId)] = employees
+      .filter(e => e && (e.fname || e.lname))
+      .map(e => ({ fname: String(e.fname || '').trim(), lname: String(e.lname || '').trim() }));
+  }
+  payrollData.clients.hteao.lastRostersAt = new Date().toISOString();
+  savePayrollData();
+  res.json({ success: true, lastRosters: payrollData.clients.hteao.lastRosters });
+});
+
 // Save the Haines employee roster from the most recent successful run. Used
 // next time a CSV is dropped to flag new vs. missing employees so the user
 // can spot hires/leavers at a glance.
