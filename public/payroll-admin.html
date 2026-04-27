@@ -260,9 +260,14 @@
          pairs are matched by store number from filename. One CSV out per pair. -->
     <div id="hteao-card" style="display:none;">
       <div class="card" style="margin-bottom:12px;padding:16px 18px;">
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
-          <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">HTeaO Payroll</h3>
-          <span style="font-size:11px;color:var(--muted);">Revel timecards + Sales Summary tips → downloadable CSV per store</span>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">HTeaO Payroll</h3>
+            <span style="font-size:11px;color:var(--muted);">Revel timecards + Sales Summary tips → downloadable CSV per store</span>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="hteaoOpenStoresModal()" style="font-size:11px;white-space:nowrap;">
+            ⚙ Store Setup <span id="hteao-stores-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;margin-left:4px;">0</span>
+          </button>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Drop any combination of <strong style="color:var(--text);">Payroll_*.xlsx</strong> and <strong style="color:var(--text);">Sales_Summary_*.csv</strong> files. Files pair automatically by store number — multiple stores in one go.</div>
 
@@ -297,19 +302,20 @@
           <div id="hteao-history-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);"></div>
         </div>
 
-        <!-- Collapsible: Store Setup (per-store config) -->
-        <div style="margin-top:8px;">
-          <button onclick="hteaoToggleStores()" id="hteao-stores-toggle"
-                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
-                  onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
-                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-            ⚙ Store Setup <span id="hteao-stores-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
-            <span id="hteao-stores-arrow" style="transition:transform .2s;">▼</span>
-          </button>
-          <div id="hteao-stores-body" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:10px 12px;"></div>
-        </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- HTeaO Store Setup Modal -->
+<div id="modal-hteao-stores" class="modal-overlay hidden" onclick="if(event.target===this)hteaoCloseStoresModal()">
+  <div class="modal" style="width:780px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
+      <h3 style="margin:0;">⚙ HTeaO Store Setup</h3>
+      <button class="btn btn-outline btn-sm" onclick="hteaoCloseStoresModal()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Configure how each store's output file is generated. Add new stores at the bottom.</div>
+    <div id="hteao-stores-body"></div>
   </div>
 </div>
 
@@ -1135,10 +1141,12 @@ function hteaoToggleHistory() {
   const body = document.getElementById('hteao-history-body');
   const arrow = document.getElementById('hteao-history-arrow');
   if (!body) return;
-  const open = body.style.display === 'none' || !body.style.display;
-  body.style.display = open ? '' : 'none';
-  if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
-  if (open) hteaoRenderHistory();
+  // Use explicit 'block'/'none' rather than ''/none — '' resolves to falsy
+  // and the second click would re-open instead of closing.
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+  if (!isOpen) hteaoRenderHistory();
 }
 
 function hteaoRenderHistory() {
@@ -1172,15 +1180,17 @@ function hteaoRenderHistory() {
   }).join('');
 }
 
-// ── Store Setup (collapsible) ────────────────────────────────────
-function hteaoToggleStores() {
-  const body = document.getElementById('hteao-stores-body');
-  const arrow = document.getElementById('hteao-stores-arrow');
-  if (!body) return;
-  const open = body.style.display === 'none' || !body.style.display;
-  body.style.display = open ? '' : 'none';
-  if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
-  if (open) hteaoRenderStores();
+// ── Store Setup (modal) ──────────────────────────────────────────
+function hteaoOpenStoresModal() {
+  const m = document.getElementById('modal-hteao-stores');
+  if (!m) return;
+  m.classList.remove('hidden');
+  hteaoRenderStores();
+}
+
+function hteaoCloseStoresModal() {
+  const m = document.getElementById('modal-hteao-stores');
+  if (m) m.classList.add('hidden');
 }
 
 function hteaoRenderStores() {
