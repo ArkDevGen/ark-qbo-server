@@ -27632,6 +27632,13 @@ async function tcRender(){
   if (isProjectView && groupSel && !groupSel.dataset.userPicked) {
     groupSel.value = 'section';
   }
+  // The "This Week" filter is intrinsically a weekday-by-weekday view, so
+  // force grouping to due-date even if the user is in a project view that
+  // would otherwise default to section. They asked for days-of-the-week.
+  const fStatNow = document.getElementById('tc-filter-status')?.value;
+  if (fStatNow === 'upcoming' && groupSel && !groupSel.dataset.userPicked) {
+    groupSel.value = 'due';
+  }
 
   const tasks  = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
@@ -27681,7 +27688,11 @@ async function tcRender(){
     }
     if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate && t.dueDate < todayStr;
     if(fStat === 'due-today') return t.status !== 'completed' && t.dueDate === todayStr;
-    if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate > todayStr && t.dueDate <= weekStr;
+    // "This Week" shows today through 7 days out, grouped by weekday — so
+    // today's tasks land under "Due Today" and each upcoming day gets its
+    // own column/section. Including today means users see the whole week
+    // at a glance instead of having to switch between Today and Upcoming.
+    if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate >= todayStr && t.dueDate <= weekStr;
     if(fStat === 'completed') return t.status === 'completed';
     return true; // 'all'
   });
@@ -28071,12 +28082,16 @@ function tcSelectView(view) {
     if (clientSel) clientSel.value = clientId === '_noClient' ? '_noClient' : clientId;
     tcRender();
   } else {
-    // Standard views: upcoming, today, overdue
+    // Standard views: upcoming, today, overdue. The "This Week" KPI used to
+    // route through 'open' here, which masked the 7-day window — fix to use
+    // the dedicated 'upcoming' status filter so users see today + 6 days
+    // grouped by weekday (per user request).
     const statusSel = document.getElementById('tc-filter-status');
     const clientSel = document.getElementById('tc-filter-client');
-    if (view === 'today') { if (statusSel) statusSel.value = 'due-today'; if (clientSel) clientSel.value = ''; }
-    else if (view === 'overdue') { if (statusSel) statusSel.value = 'overdue'; if (clientSel) clientSel.value = ''; }
-    else { if (statusSel) statusSel.value = 'open'; if (clientSel) clientSel.value = ''; }
+    if      (view === 'today')    { if (statusSel) statusSel.value = 'due-today'; if (clientSel) clientSel.value = ''; }
+    else if (view === 'overdue')  { if (statusSel) statusSel.value = 'overdue';   if (clientSel) clientSel.value = ''; }
+    else if (view === 'upcoming') { if (statusSel) statusSel.value = 'upcoming';  if (clientSel) clientSel.value = ''; }
+    else                          { if (statusSel) statusSel.value = 'open';      if (clientSel) clientSel.value = ''; }
     tcRender();
   }
 
@@ -29708,7 +29723,39 @@ function tdParseCSV(){
   // Parse CSV — handle quoted fields, semicolon OR comma separator
   const sep = raw.indexOf(';') > 0 && raw.indexOf(';') < (raw.indexOf(',') || 9999) ? ';' : ',';
 
+  // Full-CSV reader that respects quoted fields containing newlines AND
+  // commas. The previous line-by-line approach broke any task whose
+  // description spanned multiple lines (e.g. Haines's Bank Updates with
+  // multi-line login info), shifting every later column out of place — so
+  // DATE read as empty and recurrence detection silently failed.
+  function parseCSV(text) {
+    const rows = [];
+    let row = [], cell = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (text[i+1] === '"') { cell += '"'; i++; }   // escaped quote
+          else                    inQ = false;
+        } else {
+          cell += ch;
+        }
+      } else {
+        if      (ch === '"')      inQ = true;
+        else if (ch === sep)     { row.push(cell); cell = ''; }
+        else if (ch === '\r')     { /* drop */ }
+        else if (ch === '\n')    { row.push(cell); rows.push(row); row = []; cell = ''; }
+        else                      cell += ch;
+      }
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows
+      .filter(r => r.some(c => c.trim() !== ''))
+      .map(r => r.map(v => v.trim()));
+  }
+
   function parseCSVRow(line){
+    // Backwards-compatible single-row helper for non-multiline contexts.
     const result = [];
     let cur = '', inQ = false;
     for(let i=0;i<line.length;i++){
@@ -29721,10 +29768,12 @@ function tdParseCSV(){
     return result.map(v=>v.trim());
   }
 
-  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
-  if(!lines.length){ alert('No data found.'); return; }
+  // Use the proper multi-line aware parser. The downstream loop reads
+  // columns directly from each parsed row instead of re-splitting strings.
+  const allRows = parseCSV(raw);
+  if(!allRows.length){ alert('No data found.'); return; }
 
-  const headers = parseCSVRow(lines[0]).map(h=>h.toUpperCase().trim());
+  const headers = (allRows[0] || []).map(h => (h||'').toUpperCase().trim());
   // Todoist export headers: TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT,AUTHOR,RESPONSIBLE,DATE,DATE_LANG,TIMEZONE,DURATION,DURATION_UNIT,DEADLINE,DEADLINE_LANG
   const idx = h => headers.indexOf(h);
   const iType  = idx('TYPE');
@@ -29755,11 +29804,30 @@ function tdParseCSV(){
     return 'medium'; // default
   }
 
-  // Parse date — Todoist uses formats like "Jun 15 2025" or "2025-06-15"
+  // Parse date — Todoist uses formats like "Jun 15 2025", "2025-06-15", or
+  // year-less "Apr 29". For year-less input, default to current year and roll
+  // to next year if the date has already passed.
   function parseDate(raw){
     if(!raw || raw.trim()==='') return '';
-    const d = new Date(raw.trim());
-    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+    const s = raw.trim();
+    // ISO YYYY-MM-DD (or full ISO timestamp) — parse straight through.
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const d = new Date(s + (s.length === 10 ? 'T12:00:00' : ''));
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+    }
+    // Try as-is. If JS picks year 1900s/2000s as a default for "Apr 29",
+    // the result will be way in the past — force re-parse with current year.
+    const today = new Date(); today.setHours(0,0,0,0);
+    const minYear = today.getFullYear() - 1;
+    const asIs = new Date(s);
+    if (!isNaN(asIs.getTime()) && asIs.getFullYear() >= minYear) {
+      return asIs.toISOString().slice(0,10);
+    }
+    const withYear = new Date(s + ' ' + today.getFullYear());
+    if (!isNaN(withYear.getTime())) {
+      if (withYear < today) withYear.setFullYear(withYear.getFullYear() + 1);
+      return withYear.toISOString().slice(0,10);
+    }
     return '';
   }
 
@@ -29768,8 +29836,8 @@ function tdParseCSV(){
   let sectionName = '';
   let lastIndent1Id2 = null; // tracks most recent indent=1 task for subtask linking
 
-  for(let i=1; i<lines.length; i++){
-    const cols = parseCSVRow(lines[i]);
+  for(let i=1; i<allRows.length; i++){
+    const cols = allRows[i];
     const type = iType>=0 ? (cols[iType]||'').toLowerCase().trim() : 'task';
 
     if(type === 'section'){
