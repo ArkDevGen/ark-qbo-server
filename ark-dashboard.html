@@ -30318,19 +30318,30 @@ function twfRenderHistory(t){
   const el = document.getElementById('twf-history'); if(!el) return;
   const log = t.noteLog || [];
   if(!log.length){
-    el.innerHTML = '<div style="color:var(--text-d);font-size:12px;font-style:italic;padding:10px 0;">No notes yet.</div>';
+    el.innerHTML = '<div style="color:var(--text-d);font-size:12px;font-style:italic;padding:10px 0;">No comments yet — be the first to add one above.</div>';
     return;
   }
   el.innerHTML = log.map(entry=>{
     const d = new Date(entry.at);
     const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    const isCmpl = entry.type === 'completion';
-    return `<div style="padding:9px 12px;background:${isCmpl?'#0a140a':'var(--surface2)'};border:1px solid ${isCmpl?'#1a3a1a':'var(--border)'};border-radius:var(--radius);margin-bottom:6px;">
+    const type = entry.type || 'note';
+    // System events (completion, review, acknowledgement) render muted so the
+    // back-and-forth comments stand out.
+    const isSystem = type !== 'note';
+    const cmplColor = type === 'completion';
+    const reviewColor = type === 'review';
+    const ackColor = type === 'acknowledgement';
+    let bg = 'var(--surface2)', border = 'var(--border)', authorColor = 'var(--navy)';
+    if (cmplColor)       { bg = '#0a140a'; border = '#1a3a1a'; authorColor = 'var(--green)'; }
+    else if (reviewColor){ bg = '#0e1a2e'; border = '#1a2e4a'; authorColor = '#6ea8fe'; }
+    else if (ackColor)   { bg = '#1a1a0a'; border = '#3a3a1a'; authorColor = 'var(--gold)'; }
+    const opacity = isSystem ? 'opacity:.85;' : '';
+    return `<div style="padding:9px 12px;background:${bg};border:1px solid ${border};border-radius:var(--radius);margin-bottom:6px;${opacity}">
       <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-        <span style="font-size:12px;font-weight:600;color:${isCmpl?'var(--green)':'var(--navy)'};">${entry.author||'—'}</span>
+        <span style="font-size:12px;font-weight:600;color:${authorColor};">${entry.author||'—'}</span>
         <span style="font-size:10px;color:var(--text-d);">${dateStr}</span>
       </div>
-      <div style="font-size:12px;color:var(--text);">${entry.text}</div>
+      <div style="font-size:12px;color:var(--text);${isSystem?'font-style:italic;':''}">${entry.text}</div>
     </div>`;
   }).join('');
 }
@@ -52113,22 +52124,22 @@ function htAttachAccountPickers(accounts){
       <!-- ── WORKFLOW SECTION — changes by category ── -->
       <div id="twf-workflow" style="margin-bottom:16px;"></div>
 
-      <!-- ── NOTES ── -->
+      <!-- ── COMMENTS / ACTIVITY ── (Todoist-style thread; timestamped, by user) -->
       <div style="margin-bottom:12px;">
         <div id="twf-review-info"></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;">Add Note / Update</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;">💬 Add Comment</div>
         <div style="display:flex;gap:8px;">
           <textarea id="twf-note-input" class="field-input" rows="2"
-            placeholder="Enter a note or status update…"
+            placeholder="Comment, status update, or context…"
             style="flex:1;resize:none;font-family:inherit;margin:0;"></textarea>
-          <button class="btn btn-primary btn-sm" onclick="twfAddNote()" style="align-self:flex-end;white-space:nowrap;">+ Note</button>
+          <button class="btn btn-primary btn-sm" onclick="twfAddNote()" style="align-self:flex-end;white-space:nowrap;">+ Comment</button>
         </div>
       </div>
 
-      <!-- ── HISTORY ── -->
+      <!-- ── ACTIVITY THREAD ── -->
       <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;" id="twf-history-label">History</div>
-        <div id="twf-history" style="max-height:200px;overflow-y:auto;"></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);margin-bottom:8px;" id="twf-history-label">Activity</div>
+        <div id="twf-history" style="max-height:380px;overflow-y:auto;"></div>
       </div>
 
     </div>
