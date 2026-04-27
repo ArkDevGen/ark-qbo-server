@@ -26480,6 +26480,36 @@ function tcParseTodoistRecurrence(raw) {
   return null;
 }
 
+// Project a sensible first due date from a parsed recurrence pattern. Used at
+// import time when the Todoist DATE column is the recurrence rule itself
+// (e.g. "every friday") rather than a concrete date — pick the next calendar
+// occurrence so the task lands on someone's board today rather than years out.
+function tcFirstDueFromPattern(parsed) {
+  if (!parsed) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  let d = new Date(today);
+  if (parsed.recurFreq === 'weekly' || parsed.recurFreq === 'biweekly') {
+    if (typeof parsed.recurWeekday === 'number') {
+      // Next occurrence of that weekday (today inclusive)
+      let safety = 8;
+      while (d.getDay() !== parsed.recurWeekday && safety-- > 0) d.setDate(d.getDate() + 1);
+    }
+    // For biweekly, the FIRST instance is just the next occurrence — auto-roll
+    // handles subsequent +14d steps.
+  } else if (parsed.recurFreq === 'monthly' && typeof parsed.recurDayOfMonth === 'number') {
+    const cand = new Date(d.getFullYear(), d.getMonth(), parsed.recurDayOfMonth);
+    d = cand >= today ? cand : new Date(d.getFullYear(), d.getMonth() + 1, parsed.recurDayOfMonth);
+  } else if (parsed.recurFreq === 'annually' && typeof parsed.recurMonthOfYear === 'number' && typeof parsed.recurDayOfMonth === 'number') {
+    const cand = new Date(d.getFullYear(), parsed.recurMonthOfYear - 1, parsed.recurDayOfMonth);
+    d = cand >= today ? cand : new Date(d.getFullYear() + 1, parsed.recurMonthOfYear - 1, parsed.recurDayOfMonth);
+  } else if (parsed.recurFreq === 'monthly') {
+    d.setMonth(d.getMonth() + 1);
+  } else if (parsed.recurFreq === 'annually') {
+    d.setFullYear(d.getFullYear() + 1);
+  }
+  return d.toISOString().slice(0,10);
+}
+
 // Walk every task and, for any unstructured recurring task whose notes still
 // contain a "[Todoist: …]" hint, populate the structured recurrence fields so
 // auto-roll lands on the correct weekday / day-of-month / month.
@@ -29736,7 +29766,13 @@ function tdParseCSV(){
     const priority = iPri>=0  ? mapPriority(cols[iPri]) : 'medium';
     const dateRaw  = iDate>=0 ? cols[iDate] : '';
     const deadRaw  = iDeadline>=0 ? cols[iDeadline] : '';
-    const dueDate  = parseDate(dateRaw) || parseDate(deadRaw);
+    // The Todoist DATE column may be either a concrete date ("2026-04-29")
+    // OR a recurrence rule itself ("every friday"). Detect the rule first;
+    // if matched, set up structured recurrence fields and project a first
+    // due date — otherwise fall back to plain date parsing.
+    const recurParsed = dateRaw ? tcParseTodoistRecurrence(dateRaw) : null;
+    const explicitDue = parseDate(dateRaw) || parseDate(deadRaw);
+    const dueDate = explicitDue || (recurParsed ? tcFirstDueFromPattern(recurParsed) : '');
 
     if(!dueDate) warnings.push(`Row ${i+1}: "${name}" — no due date, will use today's date`);
 
@@ -29753,15 +29789,21 @@ function tdParseCSV(){
       _project: project,
       id:        taskId,
       name:      name.trim(),
-      notes:     [desc, sectionName ? `[Section: ${sectionName}]` : ''].filter(Boolean).join(' · '),
+      // Stash the raw Todoist recurrence string so users can see the original
+      // pattern; the structured fields below are what the auto-roll honors.
+      notes:     [desc, sectionName ? `[Section: ${sectionName}]` : '', recurParsed ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
       priority,
       dueDate:   dueDate || new Date().toISOString().slice(0,10),
       clientId:   defaultClientId,
       clientName: defaultClientName,
       amId:       defaultAM,
       category:   defaultCat,
-      recurring:  false,
-      recurFreq:  null,
+      recurring:  recurParsed ? true : false,
+      recurFreq:  recurParsed ? recurParsed.recurFreq : null,
+      // Structured anchors so "every friday" stays Friday, "every 28th" stays the 28th, etc.
+      ...(recurParsed && typeof recurParsed.recurWeekday    === 'number' ? { recurWeekday:    recurParsed.recurWeekday    } : {}),
+      ...(recurParsed && typeof recurParsed.recurDayOfMonth === 'number' ? { recurDayOfMonth: recurParsed.recurDayOfMonth } : {}),
+      ...(recurParsed && typeof recurParsed.recurMonthOfYear=== 'number' ? { recurMonthOfYear:recurParsed.recurMonthOfYear} : {}),
       showDaysAdvance: 3,
       status:    'open',
       parentId:  parentId,
