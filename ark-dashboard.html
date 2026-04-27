@@ -5379,6 +5379,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <span id="scoots-pl-status" style="font-size:12px;color:#999;font-weight:500;padding-bottom:4px;"></span>
             </div>
 
+            <!-- In-report company switcher -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 14px;background:#fafafa;border:1px solid #eee;border-radius:8px;">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#888;">Company</span>
+              <select id="scoots-pl-company-select" onchange="scootsPLSwitchCompany()" style="flex:1;font-size:12px;font-weight:600;background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;color:#1a1a1a;cursor:pointer;font-family:'DM Mono',monospace;">
+                <option value="">— Connect QBO to populate —</option>
+              </select>
+              <span id="scoots-pl-company-status" style="font-size:11px;color:#999;font-style:italic;"></span>
+            </div>
+
             <!-- Controls — one clean row -->
             <div style="display:flex;align-items:center;gap:16px;padding-bottom:28px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:6px;">
@@ -5396,7 +5405,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               </div>
               <div style="display:flex;align-items:center;gap:12px;margin-left:4px;">
                 <label style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
-                  <input type="checkbox" id="scoots-pl-pct" style="accent-color:#C8102E;"> % of Income
+                  <input type="checkbox" id="scoots-pl-pct" checked style="accent-color:#C8102E;"> % of Income
                 </label>
                 <label id="scoots-pl-class-lbl" style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
                   <input type="checkbox" id="scoots-pl-class" style="accent-color:#C8102E;"> By Class
@@ -5414,6 +5423,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 </div>
               </div>
               <button onclick="scootsPLRun()" style="font-size:12px;font-weight:600;padding:8px 24px;background:#C8102E;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;margin-left:auto;" onmouseenter="this.style.background='#a00d24'" onmouseleave="this.style.background='#C8102E'">Run Report</button>
+              <button onclick="scootsPLDownload()" id="scoots-pl-download-btn" style="display:none;font-size:12px;font-weight:600;padding:8px 20px;background:#1a1a1a;color:#fff;border:1px solid #1a1a1a;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;" onmouseenter="this.style.background='#333';this.style.borderColor='#333'" onmouseleave="this.style.background='#1a1a1a';this.style.borderColor='#1a1a1a'">📥 Download PDF</button>
               <button onclick="scootsPLPrint()" id="scoots-pl-print-btn" style="display:none;font-size:12px;font-weight:600;padding:8px 20px;background:#fff;color:#333;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:all .2s;letter-spacing:.02em;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'">Print / PDF</button>
             </div>
           </div>
@@ -36865,9 +36875,11 @@ async function scootsPLRun() {
       headerEl.style.display = '';
     }
 
-    // Show print button
+    // Show print + download buttons
     const printBtn = document.getElementById('scoots-pl-print-btn');
     if (printBtn) printBtn.style.display = '';
+    const dlBtn = document.getElementById('scoots-pl-download-btn');
+    if (dlBtn) dlBtn.style.display = '';
 
     // Render KPIs
     scootsPLRenderKPIs({
@@ -36994,6 +37006,166 @@ function scootsPLRenderReport(report, container, showPct, byClass) {
   }
   html += '</div>';
   container.innerHTML = html;
+}
+
+// Populate the in-report company picker from qboAllCompanies and sync to qboActiveRealmId
+function scootsPLPopulateCompanySelect() {
+  const sel = document.getElementById('scoots-pl-company-select');
+  const status = document.getElementById('scoots-pl-company-status');
+  if (!sel) return;
+  const companies = (typeof qboAllCompanies === 'object' && qboAllCompanies) ? qboAllCompanies : {};
+  const realmIds = Object.keys(companies).filter(rid => companies[rid].connected !== false);
+  if (!realmIds.length) {
+    sel.innerHTML = '<option value="">— Connect QBO to populate —</option>';
+    if (status) status.textContent = 'No companies connected';
+    return;
+  }
+  // Sort by company name
+  realmIds.sort((a, b) => {
+    const an = (companies[a].companyName || a).toLowerCase();
+    const bn = (companies[b].companyName || b).toLowerCase();
+    return an.localeCompare(bn);
+  });
+  sel.innerHTML = realmIds.map(rid => {
+    const info = companies[rid];
+    const name = info.companyName || 'Unnamed Company';
+    const fmtId = String(rid).replace(/(\d{4})(?=\d)/g, '$1 ');
+    return `<option value="${rid}">${name} — ${fmtId}</option>`;
+  }).join('');
+  if (qboActiveRealmId && realmIds.includes(qboActiveRealmId)) {
+    sel.value = qboActiveRealmId;
+  }
+  if (status) status.textContent = '';
+}
+
+// Switch active QBO company from the report header. Mirrors the General-tab
+// switcher and auto-reruns the report so the user sees the new company's P&L.
+async function scootsPLSwitchCompany() {
+  const sel = document.getElementById('scoots-pl-company-select');
+  const status = document.getElementById('scoots-pl-company-status');
+  const newRealmId = sel?.value;
+  if (!newRealmId || newRealmId === qboActiveRealmId) return;
+
+  // Mirror selection to global picker so qboSwitchCompany() picks it up
+  const globalSel = document.getElementById('qbo-company-select');
+  if (globalSel) globalSel.value = newRealmId;
+
+  if (status) status.textContent = 'Switching…';
+  try {
+    await qboSwitchCompany();
+    if (status) status.textContent = '';
+  } catch (e) {
+    if (status) status.textContent = 'Switch failed: ' + (e?.message || e);
+    return;
+  }
+
+  // Auto-rerun the report if we already have dates filled in
+  const start = document.getElementById('scoots-pl-start')?.value;
+  const end = document.getElementById('scoots-pl-end')?.value;
+  if (start && end) {
+    scootsPLRun();
+  }
+}
+
+// Download the rendered P&L report directly as a PDF (no print dialog).
+async function scootsPLDownload() {
+  const reportOutput = document.getElementById('scoots-pl-output');
+  if (!reportOutput || !reportOutput.innerHTML.trim() || reportOutput.innerHTML.includes('Select a date range')) {
+    showToast('Run a report first', 'error');
+    return;
+  }
+
+  const dlBtn = document.getElementById('scoots-pl-download-btn');
+  const origLabel = dlBtn ? dlBtn.textContent : '';
+  if (dlBtn) { dlBtn.disabled = true; dlBtn.textContent = '⏳ Generating…'; }
+
+  // Lazy-load html2canvas + jsPDF from CDN
+  try {
+    if (typeof html2canvas === 'undefined') {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    if (typeof window.jsPDF === 'undefined' && typeof window.jspdf === 'undefined') {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+  } catch (e) {
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = origLabel; }
+    showToast('Failed to load PDF library: ' + e.message, 'error');
+    return;
+  }
+  const jsPDFCtor = window.jsPDF?.jsPDF || window.jspdf?.jsPDF || window.jsPDF;
+
+  // Build an off-screen white container holding the report
+  const header = document.getElementById('scoots-pl-header');
+  const kpis   = document.getElementById('scoots-pl-kpis');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:1100px;background:#fff;color:#1a1a1a;padding:48px 56px;font-family:DM Sans,Arial,sans-serif;z-index:-1;';
+  if (header && header.style.display !== 'none') {
+    const hClone = header.cloneNode(true);
+    hClone.style.padding = '0 0 16px 0';
+    wrap.appendChild(hClone);
+  }
+  if (kpis && kpis.style.display !== 'none') {
+    const kClone = kpis.cloneNode(true);
+    kClone.style.padding = '0 0 16px 0';
+    wrap.appendChild(kClone);
+  }
+  const rClone = reportOutput.cloneNode(true);
+  rClone.style.padding = '0';
+  wrap.appendChild(rClone);
+  document.body.appendChild(wrap);
+
+  try {
+    const canvas = await html2canvas(wrap, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+      windowWidth: 1100,
+    });
+
+    const pdf = new jsPDFCtor({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const usableW = pageW - margin * 2;
+    const ratio = canvas.width / usableW;       // px per pt
+    const usablePxH = (pageH - margin * 2) * ratio;
+
+    let yPx = 0, pageNum = 0;
+    while (yPx < canvas.height) {
+      if (pageNum > 0) pdf.addPage();
+      const sliceH = Math.min(usablePxH, canvas.height - yPx);
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = sliceH;
+      const ctx = slice.getContext('2d');
+      ctx.drawImage(canvas, 0, yPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, usableW, sliceH / ratio);
+      yPx += usablePxH;
+      pageNum++;
+    }
+
+    const start = document.getElementById('scoots-pl-start').value || 'period';
+    const end   = document.getElementById('scoots-pl-end').value   || 'period';
+    const safeName = (qboCurrentCompany?.name || 'P_L_Report').replace(/[^a-z0-9]/gi, '_').substring(0, 40);
+    pdf.save(`${safeName}_PnL_${start}_to_${end}.pdf`);
+    showToast('✓ PDF downloaded');
+  } catch (e) {
+    showToast('PDF generation failed: ' + e.message, 'error');
+  } finally {
+    document.body.removeChild(wrap);
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.textContent = origLabel; }
+  }
 }
 
 function scootsPLPrint() {
@@ -44647,7 +44819,16 @@ function sjeMode(mode) {
       b.style.fontWeight = '';
     }
   }
-  if (mode === 'review') {
+  if (mode === 'pl') {
+    // Populate the in-report company switcher each time we open the panel
+    if (typeof scootsPLPopulateCompanySelect === 'function') scootsPLPopulateCompanySelect();
+    // First-entry defaults: last month + % of Income (checkbox HTML default already)
+    const startEl = document.getElementById('scoots-pl-start');
+    const endEl   = document.getElementById('scoots-pl-end');
+    if (startEl && endEl && !startEl.value && !endEl.value) {
+      scootsPLQuick('last-month');
+    }
+  } else if (mode === 'review') {
     plPopulateClients(true); // filter client picker to Scooters clients
   } else if (mode === 'fleet') {
     const pi = document.getElementById('fleet-period-input');
