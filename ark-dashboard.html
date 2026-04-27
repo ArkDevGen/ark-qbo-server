@@ -30877,8 +30877,10 @@ function betaDaysFrom(dateStr){
   return Math.round((d-today)/86400000);
 }
 function betaAmName(amId){
-  const a = (DB.accountManagers||[]).find(x=>x.id===amId);
-  return a ? a.fname+' '+(a.lname||'') : '—';
+  // Use the canonical resolveAM() pipeline so server users, DB.users, AND
+  // the legacy DB.accountManagers all match. Otherwise non-legacy AMs (the
+  // common case) show as "—" in Client 360.
+  return typeof getAMName === 'function' ? getAMName(amId) : '—';
 }
 
 // ══════════════════════════════════════════════════════════════════
