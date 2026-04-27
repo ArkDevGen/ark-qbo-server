@@ -3388,6 +3388,27 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </select>
     </div>
 
+    <!-- Pinned project info — Todoist-style project_note. Always visible at
+         the top of a client's board view; reference info like Jeremy's contact,
+         sales tax ID, withholding ID, etc. Stored on client.productionNotes. -->
+    <div id="tc-pinned-info" style="display:none;margin-bottom:14px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:12px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--gold);">📌 Pinned Info</span>
+          <button onclick="tcTogglePinnedCollapse()" id="tc-pinned-collapse-btn" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:12px;padding:0 4px;" title="Collapse / expand">▾</button>
+        </div>
+        <button onclick="tcEditPinnedInfo()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 10px;">✎ Edit</button>
+      </div>
+      <div id="tc-pinned-info-view" style="font-size:12.5px;color:var(--text);line-height:1.55;white-space:pre-wrap;word-break:break-word;"></div>
+      <div id="tc-pinned-info-edit" style="display:none;">
+        <textarea id="tc-pinned-info-textarea" rows="6" class="field-input" style="width:100%;font-size:12.5px;line-height:1.55;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="Reference info for this client — contact details, addresses, withholding/sales-tax IDs, anything you want pinned at the top of every project view."></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
+          <button onclick="tcCancelPinnedInfo()" class="btn btn-ghost btn-sm" style="font-size:11px;">Cancel</button>
+          <button onclick="tcSavePinnedInfo()" class="btn btn-primary btn-sm" style="font-size:11px;">Save</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Project sub-tabs (shown when a project is selected) -->
     <div id="tc-project-tabs" style="display:none;margin-bottom:14px;">
       <div style="display:flex;gap:0;">
@@ -24945,11 +24966,15 @@ function propDelete(id){
   propRender();
 }
 
-function propBuildAMSelect(selectedId){
+async function propBuildAMSelect(selectedId){
   const sel = document.getElementById('prop-am');
   if(!sel) return;
+  if (!(_cachedServerUsers||[]).length && typeof refreshServerUsersCache === 'function') {
+    try { await refreshServerUsersCache(); } catch(_){}
+  }
+  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
   sel.innerHTML = '<option value="">— Select AM —</option>' +
-    (DB.accountManagers||[]).map(a=>`<option value="${a.id}" ${a.id===selectedId?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+    list.map(a=>`<option value="${a.id}" ${a.id===selectedId?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
 
 function propBuildServicesGrid(selected){
@@ -27717,6 +27742,91 @@ function tcToggleCollapse(id){
   if (typeof tcRender === 'function') tcRender();
 }
 
+// ── Pinned project info (slice 3) ────────────────────────────────
+// Renders client.productionNotes at the top of a project view. Plain
+// text with URLs/emails auto-linkified and newlines preserved.
+let _tcPinnedClientId = '';
+
+function tcCurrentProjectClientId() {
+  if (typeof _tcActiveView !== 'string' || !_tcActiveView.startsWith('project:')) return '';
+  const id = _tcActiveView.slice(8);
+  return id === '_noClient' ? '' : id;
+}
+
+function tcLinkify(text) {
+  if (!text) return '';
+  const esc = String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // URLs first, then emails (the URL pattern doesn't match emails)
+  const withUrls = esc.replace(/\b(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?])/g,
+    '<a href="$1" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">$1</a>');
+  return withUrls.replace(/\b([\w.+-]+@[\w-]+\.[\w.-]+)\b/g,
+    '<a href="mailto:$1" style="color:var(--accent);text-decoration:none;">$1</a>');
+}
+
+function tcRenderPinnedInfo() {
+  const wrap = document.getElementById('tc-pinned-info');
+  if (!wrap) return;
+  const clientId = tcCurrentProjectClientId();
+  // Only show in single-client project view (skip "_noClient" and other views)
+  if (!clientId) { wrap.style.display = 'none'; return; }
+  _tcPinnedClientId = clientId;
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  // Always start in view mode (collapse to hide entirely if empty + no edit)
+  document.getElementById('tc-pinned-info-edit').style.display = 'none';
+  document.getElementById('tc-pinned-info-view').style.display = '';
+  const view = document.getElementById('tc-pinned-info-view');
+  const text = (c.productionNotes || '').trim();
+  if (text) {
+    view.innerHTML = tcLinkify(text);
+  } else {
+    view.innerHTML = '<span style="color:var(--text-d);font-style:italic;">No pinned info yet — click Edit to add reference details (contact, address, sales-tax ID, etc.).</span>';
+  }
+}
+
+function tcTogglePinnedCollapse() {
+  const view = document.getElementById('tc-pinned-info-view');
+  const btn  = document.getElementById('tc-pinned-collapse-btn');
+  if (!view || !btn) return;
+  const open = view.style.display !== 'none';
+  view.style.display = open ? 'none' : '';
+  btn.textContent = open ? '▸' : '▾';
+}
+
+function tcEditPinnedInfo() {
+  const clientId = _tcPinnedClientId || tcCurrentProjectClientId();
+  if (!clientId) return;
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) return;
+  document.getElementById('tc-pinned-info-view').style.display = 'none';
+  const editWrap = document.getElementById('tc-pinned-info-edit');
+  editWrap.style.display = '';
+  const ta = document.getElementById('tc-pinned-info-textarea');
+  ta.value = c.productionNotes || '';
+  setTimeout(() => ta.focus(), 30);
+}
+
+function tcCancelPinnedInfo() {
+  document.getElementById('tc-pinned-info-edit').style.display = 'none';
+  document.getElementById('tc-pinned-info-view').style.display = '';
+}
+
+function tcSavePinnedInfo() {
+  const clientId = _tcPinnedClientId || tcCurrentProjectClientId();
+  if (!clientId) return;
+  const c = (DB.clients || []).find(x => x.id === clientId);
+  if (!c) return;
+  const text = (document.getElementById('tc-pinned-info-textarea').value || '').trim();
+  if ((c.productionNotes || '') !== text) {
+    c.productionNotes = text;
+    c._updatedAt = new Date().toISOString();
+    c._updatedBy = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
+    if (typeof saveDB === 'function') saveDB();
+  }
+  tcRenderPinnedInfo();
+}
+
 function tcRenderHistory(t){
   const container = document.getElementById('tcd-history');
   if(!container) return;
@@ -27816,6 +27926,9 @@ function tcSelectView(view) {
 
   // Update sidebar active state
   document.querySelectorAll('.tc-proj-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+
+  // Slice 3: pinned project info — only visible inside a single-client view
+  if (typeof tcRenderPinnedInfo === 'function') tcRenderPinnedInfo();
 }
 
 function tcBuildProjectSidebar() {
@@ -31912,11 +32025,18 @@ function lcRenderKanban(){
 }
 
 // ── ALL LEADS LIST ───────────────────────────────────────────────
-function lcPopulateAMFilter(){
+async function lcPopulateAMFilter(){
   const sel = document.getElementById('lc-filter-am'); if(!sel) return;
+  // Pull from server users (canonical) when available, fall back to the
+  // legacy DB.accountManagers. Was previously DB.accountManagers-only, which
+  // is empty for accounts that only have server-side user records.
+  if (!(_cachedServerUsers||[]).length && typeof refreshServerUsersCache === 'function') {
+    try { await refreshServerUsersCache(); } catch(_){}
+  }
   const cur = sel.value;
+  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
   sel.innerHTML = '<option value="">All Team</option>' +
-    (DB.accountManagers||[]).map(a=>`<option value="${a.id}" ${a.id===cur?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+    list.map(a=>`<option value="${a.id}" ${a.id===cur?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
 
 function lcRenderList(){
@@ -32027,11 +32147,15 @@ function lcEditLead(id){
   openModal('modal-lead');
 }
 
-function lcPopulateAMSelectModal(selectedId){
+async function lcPopulateAMSelectModal(selectedId){
   const sel = document.getElementById('lc-am'); if(!sel) return;
+  if (!(_cachedServerUsers||[]).length && typeof refreshServerUsersCache === 'function') {
+    try { await refreshServerUsersCache(); } catch(_){}
+  }
   const def = selectedId || (currentUser&&currentUser.role!=='admin'?currentUser.id:'');
+  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
   sel.innerHTML = '<option value="">— Unassigned —</option>' +
-    (DB.accountManagers||[]).map(a=>`<option value="${a.id}" ${a.id===def?'selected':''}>${a.fname} ${a.lname}</option>`).join('');
+    list.map(a=>`<option value="${a.id}" ${a.id===def?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
 
 function lcStageHint(){
