@@ -780,7 +780,11 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .tc-proj-item .count{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;flex-shrink:0;}
 .tc-proj-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);padding:16px 16px 6px;opacity:.6;}
 .tc-proj-divider{border-top:1px solid var(--border);margin:8px 16px;}
-.tc-content{flex:1;min-width:0;padding:0 0 0 20px;overflow-x:auto;}
+/* No overflow-x here on purpose — the inner .tc-board has its own
+   overflow-x:auto so the day columns scroll within their container.
+   Adding overflow on tc-content also broke position:sticky for the
+   KPI/filter bar because it created a weird scroll context. */
+.tc-content{flex:1;min-width:0;padding:0 0 0 20px;}
 
 /* ── Production View Toggle ── */
 .tc-vtoggle{padding:7px 16px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text-d);cursor:pointer;transition:all .15s;}
