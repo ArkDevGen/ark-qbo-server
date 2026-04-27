@@ -10307,8 +10307,19 @@ function nav(page){
 // ══════════════════════════════════════════════
 function badgeStatus(s){ const m={Active:'b-active',Inactive:'b-inactive',Prospect:'b-prospect',Lead:'b-lead',Declined:'b-declined'};return`<span class="badge ${m[s]||'b-inactive'}">${s}</span>`; }
 function badgeEntity(e){ const m={LLC:'b-llc','S-Corp':'b-scorp','C-Corp':'b-ccorp','Non-Profit':'b-np',Partnership:'b-part','Sole Proprietor':'b-sole'};return e?`<span class="badge ${m[e]||''}">${e}</span>`:'—'; }
-function badgeSvc(s){ const m={Bookkeeping:'b-bk',Payroll:'b-pay',Advisory:'b-adv'};return`<span class="badge ${m[s]||''}">${s}</span>`; }
-function svcChips(svcs){ return (svcs||[]).map(s=>badgeSvc(s)).join(' ')||'—'; }
+function badgeSvc(s, c){
+  const m={Bookkeeping:'b-bk',Payroll:'b-pay',Advisory:'b-adv'};
+  // Hover-tooltip the Payroll chip with the configured platform so account
+  // managers can spot Patriot vs. SurePayroll vs. Other at a glance.
+  let attrs = '';
+  if (s === 'Payroll' && c) {
+    const p = String(c.prPlatform || '').trim();
+    const tip = p ? `Platform: ${p}` : 'Platform: not set';
+    attrs = ` title="${tip.replace(/"/g,'&quot;')}" style="cursor:help;"`;
+  }
+  return `<span class="badge ${m[s]||''}"${attrs}>${s}</span>`;
+}
+function svcChips(svcs, c){ return (svcs||[]).map(s=>badgeSvc(s, c)).join(' ')||'—'; }
 // Cache server users for getAMName (avoids async in sync contexts)
 let _cachedServerUsers = [];
 async function refreshServerUsersCache() {
@@ -11478,7 +11489,7 @@ function renderClients(q=''){
     <tr>
       <td><div class="av-row" style="cursor:pointer" onclick="openEditClient('${c.id}')"><div class="av" style="background:${avatarColor(c.biz)}">${initials(c.biz)}</div><div><div style="font-weight:600;display:flex;align-items:center;gap:6px;">${c.biz}${(c.qboRealmId||(c.franchises||[]).some(f=>f.qboRealmId))?'<span title="QBO Linked" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:14px;background:var(--qbo-green);border-radius:3px;font-size:7px;font-weight:700;color:#fff;letter-spacing:-.02em;flex-shrink:0;">QB</span>':''}</div><div style="font-size:11px;color:var(--text-d)">${(c.owners&&c.owners[0])?c.owners[0].fname+' '+c.owners[0].lname:(c.email?mailLink(c.email,{style:'font-size:11px;color:var(--text-d)'}):'')}${(()=>{const lm=typeof mtgLastMeetingDate==='function'?mtgLastMeetingDate(c.id):null;return lm?' <span style="color:var(--text-d);font-size:10px;opacity:.7;">· mtg '+new Date(lm).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</span>':'';})()}</div></div></div></td>
       <td>${badgeEntity(c.entity)}</td>
-      <td><div class="chip-row">${svcChips(c.services)}</div></td>
+      <td><div class="chip-row">${svcChips(c.services, c)}</div></td>
       <td>${badgeStatus(c.status)}</td>
       <td style="font-size:12px;color:var(--text-m)">${getAMName(c.am)}</td>
       <td>${obProgressBadge(c)}</td>
@@ -11820,7 +11831,7 @@ function renderRptSummary(q){
     <tr>
       <td><strong>${c.biz}</strong></td>
       <td>${badgeEntity(c.entity)}</td>
-      <td><div class="chip-row">${svcChips(c.services)}</div></td>
+      <td><div class="chip-row">${svcChips(c.services, c)}</div></td>
       <td>${badgeStatus(c.status)}</td>
       <td style="font-size:12px;color:var(--text-m)">${c.state||'—'}</td>
       <td style="font-size:12px;color:var(--text-m)">${getAMName(c.am)}</td>
@@ -16022,7 +16033,7 @@ function openDetail(id){
       <div class="detail-box"><h4>Engagement</h4>
         <div class="drow"><span class="dk">Status</span><span class="dv">${badgeStatus(c.status)}</span></div>
         <div class="drow"><span class="dk">Account Manager</span><span class="dv">${am?am.fname+' '+am.lname:'—'}</span></div>
-        <div class="drow"><span class="dk">Services</span><span class="dv"><div class="chip-row" style="justify-content:flex-end">${svcChips(c.services)}</div></span></div>
+        <div class="drow"><span class="dk">Services</span><span class="dv"><div class="chip-row" style="justify-content:flex-end">${svcChips(c.services, c)}</div></span></div>
       </div>
       ${c.biennialId||c.biennialCycle?`
       <div class="detail-box"><h4>Biennial Report</h4>
