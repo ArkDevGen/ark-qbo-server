@@ -3303,8 +3303,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ TASK CENTER VIEW ════ -->
   <div class="view content" id="view-tasks" style="padding:28px 32px;">
 
-    <!-- Header -->
-    <div class="page-header" style="margin-bottom:14px;position:relative;z-index:100;">
+    <!-- Header — sticky so Import / + Project / + New Task stay visible
+         while the user scrolls the board horizontally or vertically. -->
+    <div class="page-header" style="margin-bottom:14px;position:sticky;top:0;z-index:100;background:var(--bg);padding:8px 0;">
       <div class="page-header-left">
         <div class="page-title">🏭 Production</div>
         <div class="page-subtitle" id="tc-subtitle"></div>
@@ -3335,8 +3336,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- Tasks panel (default) -->
     <div id="tc-tasks-panel">
 
+    <!-- KPI cards + filter toolbar — sticky so they stay on screen while the
+         board scrolls horizontally and/or vertically. top offset clears the
+         page-header (~72px). -->
+    <div style="position:sticky;top:72px;z-index:40;background:var(--bg);padding-top:6px;margin-bottom:8px;">
     <!-- KPI strip -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
       <div class="sum-card" style="--card-accent:var(--red);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('overdue')">
         <div class="label" style="font-size:var(--text-xs);">Overdue</div>
         <div class="value" id="tc-kpi-overdue" style="color:var(--red);font-size:var(--text-2xl);">0</div>
@@ -3387,6 +3392,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <option value="none">No Grouping</option>
       </select>
     </div>
+    </div><!-- /sticky KPI+toolbar wrapper -->
 
     <!-- Pinned project info — Todoist-style project_note. Always visible at
          the top of a client's board view; reference info like Jeremy's contact,
