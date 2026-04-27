@@ -2994,6 +2994,26 @@ app.get('/payroll/admin/data', requireAuth, (req, res) => {
   res.json(safe);
 });
 
+// Replace the Haines tool-deduction map (keyed by "lastname|firstname"
+// lowercased; value is the dollar amount per paycheck). Whole-map replace so
+// the client can submit the latest snapshot without diffing.
+app.post('/payroll/admin/haines-deductions', requireAuth, (req, res) => {
+  const { deductions } = req.body || {};
+  if (!deductions || typeof deductions !== 'object') {
+    return res.status(400).json({ error: 'deductions object required' });
+  }
+  if (!payrollData.clients) payrollData.clients = {};
+  if (!payrollData.clients.haines) payrollData.clients.haines = { name: 'Haines', mode: 'haines-buddypunch' };
+  const out = {};
+  for (const [k, v] of Object.entries(deductions)) {
+    const amt = Number(v) || 0;
+    if (amt > 0) out[String(k)] = amt; // drop zeros so the map stays minimal
+  }
+  payrollData.clients.haines.toolDeductions = out;
+  savePayrollData();
+  res.json({ success: true, deductions: out });
+});
+
 // Replace the Haines manual-employee list (people who don't appear in the
 // timesheet CSV but still need to show up on the output, e.g. Marilynn Haines).
 app.post('/payroll/admin/haines-manual', requireAuth, (req, res) => {

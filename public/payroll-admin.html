@@ -320,9 +320,23 @@
             <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">Haines</h3>
             <span style="font-size:11px;color:var(--muted);">Buddy Punch / QB Time timesheet CSV → downloadable payroll CSV</span>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="hainesOpenManualModal()" style="font-size:11px;white-space:nowrap;">
-            👤 Manual Employees <span id="haines-manual-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;margin-left:4px;">0</span>
-          </button>
+          <div style="position:relative;">
+            <button class="btn btn-outline btn-sm" onclick="hainesToggleSetupMenu(event)" style="font-size:11px;white-space:nowrap;" id="haines-setup-btn">
+              ⚙ Setup ▾
+            </button>
+            <div id="haines-setup-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--border);border-radius:8px;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:20;overflow:hidden;">
+              <button onclick="hainesCloseSetupMenu();hainesOpenManualModal()" style="display:flex;align-items:center;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:12px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);"
+                      onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='none'">
+                <span>👤 Manual Employees</span>
+                <span id="haines-manual-count" style="margin-left:auto;background:var(--surface);padding:1px 7px;border-radius:10px;font-size:10px;">0</span>
+              </button>
+              <button onclick="hainesCloseSetupMenu();hainesOpenDeductionsModal()" style="display:flex;align-items:center;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:12px;color:var(--text);cursor:pointer;"
+                      onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='none'">
+                <span>🔧 Tool Deductions</span>
+                <span id="haines-deductions-count" style="margin-left:auto;background:var(--surface);padding:1px 7px;border-radius:10px;font-size:10px;">0</span>
+              </button>
+            </div>
+          </div>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Drop the <strong style="color:var(--text);">timesheet_report_*.csv</strong> from Buddy Punch / QuickBooks Time. Per-week OT, OT@$80, and OC@$25 are extracted automatically — no typing.</div>
 
@@ -383,6 +397,23 @@
       <button class="btn btn-primary btn-sm" onclick="hainesAddManual()" style="font-size:11px;">+ Add</button>
     </div>
     <div id="haines-manual-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+  </div>
+</div>
+
+<!-- Haines Tool Deductions Modal -->
+<div id="modal-haines-deductions" class="modal-overlay hidden" onclick="if(event.target===this)hainesCloseDeductionsModal()">
+  <div class="modal" style="width:580px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <h3 style="margin:0;">🔧 Tool Deductions</h3>
+      <button class="btn btn-outline btn-sm" onclick="hainesCloseDeductionsModal()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Per-paycheck dollar amount deducted for the tool account. Set 0 (or leave blank) for employees with no deduction. Changes apply on the next Process &amp; Download.</div>
+    <div id="haines-deductions-list" style="margin-bottom:14px;max-height:50vh;overflow-y:auto;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border);">
+      <button class="btn btn-outline" onclick="hainesCloseDeductionsModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="hainesSaveDeductions()">Save</button>
+    </div>
+    <div id="haines-deductions-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
   </div>
 </div>
 
@@ -1073,6 +1104,7 @@ function importClientChange() {
     hainesReset();
     hainesRenderHistory();
     hainesRenderManualCount();
+    hainesRenderDeductionsCount();
   }
   // If the Manage Employees section is open, sync its detail panel to
   // the newly-selected client so users don't have to pick again.
@@ -1676,6 +1708,40 @@ function hainesRenderManualCount() {
   if (el) el.textContent = hainesGetManualList().length;
 }
 
+// Tool deductions are persisted as a map keyed by "lastname|firstname"
+// (lowercased). Returns a fresh object so callers can mutate without
+// touching the underlying _payrollData copy.
+function hainesEmpKey(fname, lname) {
+  return `${(lname||'').toLowerCase().trim()}|${(fname||'').toLowerCase().trim()}`;
+}
+function hainesGetDeductions() {
+  const slug = document.getElementById('import-client').value;
+  const obj = _payrollData?.clients?.[slug]?.toolDeductions;
+  return (obj && typeof obj === 'object') ? { ...obj } : {};
+}
+function hainesRenderDeductionsCount() {
+  const el = document.getElementById('haines-deductions-count');
+  if (el) el.textContent = Object.keys(hainesGetDeductions()).length;
+}
+
+// ── Setup dropdown menu ──────────────────────────────────────────
+function hainesToggleSetupMenu(evt) {
+  if (evt) evt.stopPropagation();
+  const menu = document.getElementById('haines-setup-menu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    // Close on next outside click
+    setTimeout(() => document.addEventListener('click', hainesCloseSetupMenuOnce, { once: true }), 0);
+  }
+}
+function hainesCloseSetupMenu() {
+  const menu = document.getElementById('haines-setup-menu');
+  if (menu) menu.style.display = 'none';
+}
+function hainesCloseSetupMenuOnce() { hainesCloseSetupMenu(); }
+
 // Parse the timesheet CSV's filename for the YYYY-MM-DD_thru_YYYY-MM-DD range
 // (e.g., timesheet_report_2026-03-29_thru_2026-04-11.csv). Falls back to scanning
 // the data rows for min/max local_date if the filename doesn't match.
@@ -1914,23 +1980,46 @@ function hainesCollectManualEntries() {
 // straight into Patriot.
 function hainesMakePDF(employees, dateRange) {
   const fmt = (n) => (Math.round((Number(n)||0)*100)/100).toFixed(2);
-  let T = { reg:0, ot:0, vac:0, hol:0, sick:0, ot80:0, oc:0, total:0 };
+  const dedMap = hainesGetDeductions();
+  let T = { reg:0, ot:0, vac:0, hol:0, sick:0, ot80:0, oc:0, total:0, ded:0 };
   const body = employees.map(e => {
     const total = (Number(e.reg)||0) + (Number(e.ot)||0) + (Number(e.vac)||0) + (Number(e.hol)||0) + (Number(e.sick)||0) + (Number(e.ot80)||0);
+    const ded = dedMap[hainesEmpKey(e.fname, e.lname)] || 0;
     T.reg += e.reg; T.ot += e.ot; T.vac += e.vac; T.hol += e.hol;
-    T.sick += e.sick; T.ot80 += e.ot80; T.oc += e.oc; T.total += total;
+    T.sick += e.sick; T.ot80 += e.ot80; T.oc += e.oc; T.total += total; T.ded += ded;
     return [
       e.fname || '', e.lname || '',
       fmt(e.reg), fmt(e.ot), fmt(e.vac), fmt(e.hol), fmt(e.sick), fmt(e.ot80),
       e.oc > 0 ? '$' + (e.oc * 25) : '—',
       fmt(total),
+      ded > 0 ? '$' + ded : '—',
     ];
   });
   const ocTotalDisplay = T.oc > 0 ? '$' + (T.oc * 25) : '—';
+  const dedTotalDisplay = T.ded > 0 ? '$' + T.ded : '—';
+  // Cell-level styling so the footer reads like a clean summary:
+  //  • TOTALS row — label spans First+Last columns; every value cell bordered
+  //  • PATRIOT REG / PATRIOT TOTAL — label spans First+Last; only the value
+  //    cell is bordered; the trailing 8 columns are a single borderless,
+  //    fill-less spacer so blank space stays blank.
+  const labelStyle = (color) => ({ halign: 'left', textColor: color || [26, 36, 64] });
+  const valueClipRight = { halign: 'right', lineWidth: { top: 0.75, bottom: 0.75, left: 0.75, right: 0 } };
+  const blankSpacer = { content: '', colSpan: 8, styles: { lineWidth: 0, fillColor: false } };
   const foot = [
-    ['TOTALS', '', fmt(T.reg), fmt(T.ot), fmt(T.vac), fmt(T.hol), fmt(T.sick), fmt(T.ot80), ocTotalDisplay, fmt(T.total)],
-    ['PATRIOT REG', '', fmt(T.reg + T.ot80), '', '', '', '', '', '', ''],
-    ['PATRIOT TOTAL', '', fmt(T.total), '', '', '', '', '', '', ''],
+    [
+      { content: 'TOTALS', colSpan: 2, styles: labelStyle() },
+      fmt(T.reg), fmt(T.ot), fmt(T.vac), fmt(T.hol), fmt(T.sick), fmt(T.ot80), ocTotalDisplay, fmt(T.total), dedTotalDisplay,
+    ],
+    [
+      { content: 'PATRIOT REG', colSpan: 2, styles: labelStyle([184, 146, 42]) },
+      { content: fmt(T.reg + T.ot80), styles: valueClipRight },
+      blankSpacer,
+    ],
+    [
+      { content: 'PATRIOT TOTAL', colSpan: 2, styles: labelStyle([184, 146, 42]) },
+      { content: fmt(T.total), styles: valueClipRight },
+      blankSpacer,
+    ],
   ];
 
   const { jsPDF } = window.jspdf;
@@ -1954,7 +2043,7 @@ function hainesMakePDF(employees, dateRange) {
 
   doc.autoTable({
     startY: 78,
-    head: [['First Name','Last Name','Regular','OT','Vacation','Holiday','Sick','OT @ $80','OC @ $25','Total']],
+    head: [['First Name','Last Name','Regular','OT','Vacation','Holiday','Sick','OT @ $80','OC @ $25','Total','Tool Ded']],
     body,
     foot,
     theme: 'grid',
@@ -1988,20 +2077,8 @@ function hainesMakePDF(employees, dateRange) {
     columnStyles: {
       0: { halign: 'left', fontStyle: 'bold' },
       1: { halign: 'left', fontStyle: 'bold' },
-      9: { fontStyle: 'bold' },
-    },
-    didParseCell: (data) => {
-      // Highlight Patriot summary rows in gold; left-justify their labels
-      if (data.section === 'foot' && data.row.index >= 1) {
-        if (data.column.index === 0) {
-          data.cell.styles.halign = 'left';
-          data.cell.styles.textColor = [184, 146, 42]; // gold
-        }
-      }
-      // Left-justify the TOTALS label too
-      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) {
-        data.cell.styles.halign = 'left';
-      }
+      9: { fontStyle: 'bold' },     // Total column
+      10:{ fontStyle: 'bold' },     // Tool Ded column
     },
     margin: { top: 78, left: 28, right: 28, bottom: 36 },
   });
@@ -2088,6 +2165,92 @@ function hainesRenderHistory() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Tool Deductions (modal) ──────────────────────────────────────
+function hainesOpenDeductionsModal() {
+  document.getElementById('modal-haines-deductions').classList.remove('hidden');
+  hainesRenderDeductionsList();
+  const status = document.getElementById('haines-deductions-status');
+  if (status) status.innerHTML = '';
+}
+
+function hainesCloseDeductionsModal() {
+  document.getElementById('modal-haines-deductions').classList.add('hidden');
+  hainesRenderDeductionsCount();
+  // Refresh staging so any deduction changes flow into the preview totals
+  if (_hainesParsed) hainesRender();
+}
+
+// Build the editable list. Combines (a) employees in the latest parsed CSV,
+// (b) manual employees, and (c) anyone already in the deductions map. So
+// users can edit deductions even when no CSV is loaded yet, and CSV employees
+// always appear so deductions can be set up before running payroll.
+function hainesRenderDeductionsList() {
+  const body = document.getElementById('haines-deductions-list');
+  if (!body) return;
+  const dedMap = hainesGetDeductions();
+  const seen = new Map(); // key → { fname, lname, amount, source }
+  if (_hainesParsed && _hainesParsed.employees) {
+    for (const e of _hainesParsed.employees) {
+      const k = hainesEmpKey(e.fname, e.lname);
+      seen.set(k, { fname: e.fname, lname: e.lname, amount: dedMap[k] || 0, source: 'csv' });
+    }
+  }
+  for (const m of hainesGetManualList()) {
+    const k = hainesEmpKey(m.fname, m.lname);
+    if (!seen.has(k)) seen.set(k, { fname: m.fname, lname: m.lname, amount: dedMap[k] || 0, source: 'manual' });
+  }
+  // Anyone with an existing deduction who isn't in the lists above
+  for (const [k, amt] of Object.entries(dedMap)) {
+    if (!seen.has(k)) {
+      const [lname, fname] = k.split('|');
+      seen.set(k, { fname, lname, amount: amt, source: 'legacy' });
+    }
+  }
+  if (!seen.size) {
+    body.innerHTML = '<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:12px;">Drop a timesheet CSV first, or add manual employees, to see the list here.</div>';
+    return;
+  }
+  const rows = [...seen.values()].sort((a,b) => (a.lname||'').localeCompare(b.lname||'') || (a.fname||'').localeCompare(b.fname||''));
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  body.innerHTML = `<div style="display:grid;grid-template-columns:1fr 110px;gap:8px;padding:0 6px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
+    <span>Employee</span><span style="text-align:right;">Per Paycheck</span>
+  </div>` + rows.map(r => `
+    <div class="haines-ded-row" data-key="${esc(hainesEmpKey(r.fname, r.lname))}" style="display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;padding:6px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span><strong style="color:var(--text);">${esc(r.lname)}, ${esc(r.fname)}</strong>${r.source==='manual' ? ' <span style="font-size:10px;color:var(--muted);">(manual)</span>':''}</span>
+      <div style="position:relative;">
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;">$</span>
+        <input class="hd-amt" type="number" min="0" step="1" value="${r.amount || ''}" placeholder="0" style="width:100%;text-align:right;font-size:12px;padding:5px 8px 5px 18px;">
+      </div>
+    </div>`).join('');
+}
+
+async function hainesSaveDeductions() {
+  const status = document.getElementById('haines-deductions-status');
+  const rows = document.querySelectorAll('.haines-ded-row');
+  const out = {};
+  rows.forEach(row => {
+    const key = row.dataset.key;
+    const amt = parseFloat(row.querySelector('.hd-amt')?.value) || 0;
+    if (key && amt > 0) out[key] = amt;
+  });
+  status.innerHTML = '<span style="color:var(--muted);">Saving…</span>';
+  try {
+    const resp = await fetch(`${API}/payroll/admin/haines-deductions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify({ deductions: out }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    const slug = document.getElementById('import-client').value;
+    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].toolDeductions = data.deductions || {};
+    status.innerHTML = '<span style="color:var(--green);">✓ Saved</span>';
+    setTimeout(() => hainesCloseDeductionsModal(), 600);
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--red);">Save failed: ${e.message}</span>`;
+  }
 }
 
 // ── Manual Employees (modal) ─────────────────────────────────────
