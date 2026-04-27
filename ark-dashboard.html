@@ -3329,6 +3329,63 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
 
+    <!-- KPI cards + filter toolbar — pulled OUT of tc-content so they're
+         outside the board's horizontal-scroll context. Sticky to the top so
+         they're frozen on screen no matter how the user scrolls the board. -->
+    <div style="position:sticky;top:72px;z-index:40;background:var(--bg);padding-top:6px;margin-bottom:12px;">
+      <!-- KPI strip -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+        <div class="sum-card" style="--card-accent:var(--red);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('overdue')">
+          <div class="label" style="font-size:var(--text-xs);">Overdue</div>
+          <div class="value" id="tc-kpi-overdue" style="color:var(--red);font-size:var(--text-2xl);">0</div>
+        </div>
+        <div class="sum-card" style="--card-accent:var(--gold);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('today')">
+          <div class="label" style="font-size:var(--text-xs);">Due Today</div>
+          <div class="value" id="tc-kpi-today" style="color:var(--gold);font-size:var(--text-2xl);">0</div>
+        </div>
+        <div class="sum-card" style="--card-accent:var(--blue);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
+          <div class="label" style="font-size:var(--text-xs);">This Week</div>
+          <div class="value blue" id="tc-kpi-week" style="font-size:var(--text-2xl);">0</div>
+        </div>
+        <div class="sum-card" style="cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
+          <div class="label" style="font-size:var(--text-xs);">Open Tasks</div>
+          <div class="value" id="tc-kpi-open" style="font-size:var(--text-2xl);">0</div>
+        </div>
+        <div class="sum-card" style="--card-accent:var(--green);cursor:pointer;padding:10px 12px;" onclick="tcSetFilter('completed')">
+          <div class="label" style="font-size:var(--text-xs);">Done This Month</div>
+          <div class="value green" id="tc-kpi-done" style="font-size:var(--text-2xl);">0</div>
+        </div>
+      </div>
+      <!-- Toolbar: search + filter + group -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="search-wrap" style="flex:1;min-width:200px;">
+          <input id="tc-search" class="field-input" placeholder="Search tasks…" oninput="tcRender()">
+        </div>
+        <select id="tc-filter-status" class="field-input" style="width:120px;" onchange="tcRender()">
+          <option value="open">Open</option>
+          <option value="overdue">Overdue</option>
+          <option value="due-today">Due Today</option>
+          <option value="upcoming">This Week</option>
+          <option value="completed">Completed</option>
+          <option value="all">All Tasks</option>
+        </select>
+        <select id="tc-filter-client" class="field-input" style="width:160px;" onchange="tcRender()">
+          <option value="">All Clients</option>
+        </select>
+        <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="tcRender()">
+          <option value="">All Team</option>
+        </select>
+        <select id="tc-group-by" class="field-input" style="width:140px;" onchange="this.dataset.userPicked='1';tcRender()">
+          <option value="due">Group by Due Date</option>
+          <option value="section">Group by Section</option>
+          <option value="client">Group by Client</option>
+          <option value="am">Group by AM</option>
+          <option value="category">Group by Category</option>
+          <option value="none">No Grouping</option>
+        </select>
+      </div>
+    </div>
+
     <div class="tc-prod-layout">
 
     <!-- Project Sidebar -->
@@ -3340,63 +3397,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <!-- Tasks panel (default) -->
     <div id="tc-tasks-panel">
 
-    <!-- KPI cards + filter toolbar — sticky so they stay on screen while the
-         board scrolls horizontally and/or vertically. top offset clears the
-         page-header (~72px). -->
-    <div style="position:sticky;top:72px;z-index:40;background:var(--bg);padding-top:6px;margin-bottom:8px;">
-    <!-- KPI strip -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
-      <div class="sum-card" style="--card-accent:var(--red);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('overdue')">
-        <div class="label" style="font-size:var(--text-xs);">Overdue</div>
-        <div class="value" id="tc-kpi-overdue" style="color:var(--red);font-size:var(--text-2xl);">0</div>
-      </div>
-      <div class="sum-card" style="--card-accent:var(--gold);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('today')">
-        <div class="label" style="font-size:var(--text-xs);">Due Today</div>
-        <div class="value" id="tc-kpi-today" style="color:var(--gold);font-size:var(--text-2xl);">0</div>
-      </div>
-      <div class="sum-card" style="--card-accent:var(--blue);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
-        <div class="label" style="font-size:var(--text-xs);">This Week</div>
-        <div class="value blue" id="tc-kpi-week" style="font-size:var(--text-2xl);">0</div>
-      </div>
-      <div class="sum-card" style="cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
-        <div class="label" style="font-size:var(--text-xs);">Open Tasks</div>
-        <div class="value" id="tc-kpi-open" style="font-size:var(--text-2xl);">0</div>
-      </div>
-      <div class="sum-card" style="--card-accent:var(--green);cursor:pointer;padding:10px 12px;" onclick="tcSetFilter('completed')">
-        <div class="label" style="font-size:var(--text-xs);">Done This Month</div>
-        <div class="value green" id="tc-kpi-done" style="font-size:var(--text-2xl);">0</div>
-      </div>
-    </div>
-
-    <!-- Toolbar: filter + group + search -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-      <div class="search-wrap" style="flex:1;min-width:200px;">
-        <input id="tc-search" class="field-input" placeholder="Search tasks…" oninput="tcRender()">
-      </div>
-      <select id="tc-filter-status" class="field-input" style="width:120px;" onchange="tcRender()">
-        <option value="open">Open</option>
-        <option value="overdue">Overdue</option>
-        <option value="due-today">Due Today</option>
-        <option value="upcoming">This Week</option>
-        <option value="completed">Completed</option>
-        <option value="all">All Tasks</option>
-      </select>
-      <select id="tc-filter-client" class="field-input" style="width:160px;" onchange="tcRender()">
-        <option value="">All Clients</option>
-      </select>
-      <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="tcRender()">
-        <option value="">All Team</option>
-      </select>
-      <select id="tc-group-by" class="field-input" style="width:140px;" onchange="this.dataset.userPicked='1';tcRender()">
-        <option value="due">Group by Due Date</option>
-        <option value="section">Group by Section</option>
-        <option value="client">Group by Client</option>
-        <option value="am">Group by AM</option>
-        <option value="category">Group by Category</option>
-        <option value="none">No Grouping</option>
-      </select>
-    </div>
-    </div><!-- /sticky KPI+toolbar wrapper -->
+    <!-- (KPI cards + filter toolbar moved above tc-prod-layout so they sit
+         outside the board's scroll context. They live near the top of view-
+         tasks and are sticky-pinned to the viewport.) -->
 
     <!-- Pinned project info — Todoist-style project_note. Always visible at
          the top of a client's board view; reference info like Jeremy's contact,
