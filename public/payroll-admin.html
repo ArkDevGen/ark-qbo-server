@@ -152,25 +152,25 @@
             <option value="">— Select —</option>
           </select>
         </div>
-        <div style="flex:0 0 120px;">
+        <div class="portal-only" style="flex:0 0 120px;">
           <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Period Start</label>
           <input type="date" id="import-period-start" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
         </div>
-        <div style="flex:0 0 120px;">
+        <div class="portal-only" style="flex:0 0 120px;">
           <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Period End</label>
           <input type="date" id="import-period-end" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
         </div>
-        <div style="flex:0 0 120px;">
+        <div class="portal-only" style="flex:0 0 120px;">
           <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Pay Date</label>
           <input type="date" id="import-pay-date" style="width:100%;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;">
         </div>
-        <button class="btn btn-outline btn-sm" onclick="clearFromClientPortal()" title="Clear all data from client portal" style="border-color:var(--red);color:var(--red);padding:7px 8px;font-size:14px;line-height:1;">🗑</button>
+        <button class="portal-only btn btn-outline btn-sm" onclick="clearFromClientPortal()" title="Clear all data from client portal" style="border-color:var(--red);color:var(--red);padding:7px 8px;font-size:14px;line-height:1;">🗑</button>
       </div>
       <div id="import-push-status" style="font-size:11px;margin-top:6px;min-height:14px;"></div>
     </div>
 
     <!-- Tabbed card: Upload | Submissions -->
-    <div class="card" style="margin-bottom:12px;overflow:visible;" id="main-tabs-card">
+    <div class="portal-only card" style="margin-bottom:12px;overflow:visible;" id="main-tabs-card">
       <!-- Tab bar -->
       <div style="display:flex;border-bottom:2px solid var(--border);margin:-0px -0px 0 -0px;">
         <div id="tab-upload" onclick="switchMainTab('upload')" style="padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--gold);margin-bottom:-2px;color:var(--gold);transition:all .15s;">📤 Upload</div>
@@ -222,7 +222,7 @@
     </div>
 
     <!-- Bottom row: Change Log + Manage Employees side by side -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+    <div class="portal-only" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
       <!-- Change Log -->
       <div>
         <button onclick="toggleChangeLog()" id="changelog-toggle" style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
@@ -237,7 +237,7 @@
         </button>
       </div>
     </div>
-    <div id="emp-section" style="display:none;">
+    <div id="emp-section" class="portal-only" style="display:none;">
       <!-- Hidden client-list + search kept for legacy JS references; client is
            now driven by the top selector via importClientChange(). -->
       <div style="display:none;">
@@ -253,6 +253,39 @@
         </div>
       </div>
     </div><!-- /emp-section -->
+
+    <!-- ════ HTeaO PAYROLL (Revel timecards + Sales Summary tips) ════ -->
+    <!-- Shown only when the selected client's mode === 'hteao-revel'.
+         Bulk-drop multiple Payroll_*.xlsx and Sales_Summary_*.csv files;
+         pairs are matched by store number from filename. One CSV out per pair. -->
+    <div id="hteao-card" style="display:none;">
+      <div class="card" style="margin-bottom:12px;padding:16px 18px;">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+          <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">HTeaO Payroll</h3>
+          <span style="font-size:11px;color:var(--muted);">Revel timecards + Sales Summary tips → downloadable CSV per store</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Drop any combination of <strong style="color:var(--text);">Payroll_*.xlsx</strong> and <strong style="color:var(--text);">Sales_Summary_*.csv</strong> files. Files pair automatically by store number — multiple stores in one go.</div>
+
+        <div id="hteao-drop" onclick="document.getElementById('hteao-file-input').click()"
+             style="border:2px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:28px;margin-bottom:6px;">📂</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">Drop files here or click to browse</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Multiple stores at once OK</div>
+        </div>
+        <input type="file" id="hteao-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none;" onchange="hteaoOnFiles(this.files)">
+
+        <div id="hteao-staging" style="margin-top:14px;display:none;"></div>
+
+        <div id="hteao-actions" style="display:none;margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-outline btn-sm" onclick="hteaoReset()" style="font-size:11px;">Clear</button>
+          <button class="btn btn-primary" id="hteao-process-btn" onclick="hteaoProcessAll()" style="display:flex;align-items:center;gap:8px;">
+            ⬇ Process &amp; Download
+          </button>
+        </div>
+        <div id="hteao-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -842,13 +875,342 @@ let _importTips = null;     // { [storeNum]: tipTotal }
 
 function importClientChange() {
   updatePushBtn();
+  // Switch between client-portal mode (iHC etc.) and HTeaO bulk-CSV mode
+  // based on the selected client's `mode` flag in payroll-data.json.
+  const slug = document.getElementById('import-client').value;
+  const cfg = slug ? _payrollData?.clients?.[slug] : null;
+  const mode = cfg?.mode || 'portal';
+  const isHteao = mode === 'hteao-revel';
+  document.querySelectorAll('.portal-only').forEach(el => {
+    // Preserve the original display value (most are 'block' / inline). Use ''
+    // to fall back to the stylesheet default rather than forcing 'block'.
+    el.style.display = isHteao ? 'none' : '';
+  });
+  const hteaoCard = document.getElementById('hteao-card');
+  if (hteaoCard) hteaoCard.style.display = isHteao ? '' : 'none';
+  if (isHteao) hteaoReset();
   // If the Manage Employees section is open, sync its detail panel to
   // the newly-selected client so users don't have to pick again.
   const empSection = document.getElementById('emp-section');
-  if(empSection && empSection.style.display !== 'none'){
+  if(!isHteao && empSection && empSection.style.display !== 'none'){
     syncEmpSectionToTopClient();
   }
 }
+
+// ════════════════════════════════════════════════════════════════
+// HTeaO PAYROLL — Revel timecards + Sales Summary tips
+// Mirrors Revel Hours & Tips.py: parse Payroll xlsx (sheet 'Payroll',
+// fixed col positions), sum Tips Total + Liabilities Tips Total + Declared
+// Tips across the period, distribute pro-rata by hours with cent-accurate
+// rounding, write CSV with summary footer.
+// ════════════════════════════════════════════════════════════════
+let _hteaoFiles = []; // [{ kind:'payroll'|'tips', store, file, dateRange, name }]
+
+function hteaoReset() {
+  _hteaoFiles = [];
+  const inp = document.getElementById('hteao-file-input');
+  if (inp) inp.value = '';
+  hteaoRender();
+  const st = document.getElementById('hteao-status');
+  if (st) st.innerHTML = '';
+}
+
+function hteaoOnFiles(fileList) {
+  if (!fileList || !fileList.length) return;
+  for (const file of fileList) {
+    const lower = file.name.toLowerCase();
+    let kind = null;
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) kind = 'payroll';
+    else if (lower.endsWith('.csv')) kind = 'tips';
+    else continue;
+    const info = hteaoParseFilename(file.name);
+    if (!info.store) {
+      _hteaoFiles.push({ kind, store: null, file, dateRange: info.dateRange, name: file.name, error: 'Could not extract store number' });
+      continue;
+    }
+    // Replace any existing entry for the same kind+store so re-drops don't duplicate
+    _hteaoFiles = _hteaoFiles.filter(f => !(f.kind === kind && f.store === info.store));
+    _hteaoFiles.push({ kind, store: info.store, file, dateRange: info.dateRange, name: file.name });
+  }
+  hteaoRender();
+}
+
+// Pull store number and YYYY-MM-DD_YYYY-MM-DD date range out of either
+// `Payroll_tbevco_34-tx-66-tyler-tx_2026-04-20_2026-04-27.xlsx` or
+// `Sales_Summary_tx-67-tyler-old-jacksonvill_2026-04-20_00-00_2026-04-27_00-00.csv`.
+function hteaoParseFilename(filename) {
+  const base = filename.replace(/\.[^.]+$/, '');
+  const storeM = base.match(/tx-(\d+)-/);
+  const dateM = base.match(/(\d{4}-\d{2}-\d{2})(?:_\d{2}-\d{2})?_(\d{4}-\d{2}-\d{2})/);
+  let dateRange = '';
+  if (dateM) {
+    const [, s, e] = dateM;
+    dateRange = `${parseInt(s.slice(5,7),10)}.${parseInt(s.slice(8,10),10)}-${parseInt(e.slice(5,7),10)}.${parseInt(e.slice(8,10),10)}`;
+  }
+  return { store: storeM ? storeM[1] : null, dateRange };
+}
+
+function hteaoRender() {
+  const stage = document.getElementById('hteao-staging');
+  const actions = document.getElementById('hteao-actions');
+  if (!stage || !actions) return;
+  if (!_hteaoFiles.length) { stage.style.display = 'none'; actions.style.display = 'none'; return; }
+  stage.style.display = '';
+  actions.style.display = 'flex';
+  // Group by store, separating the unidentifiable ones into their own row
+  const byStore = {};
+  const orphans = [];
+  for (const f of _hteaoFiles) {
+    if (!f.store) { orphans.push(f); continue; }
+    if (!byStore[f.store]) byStore[f.store] = { payroll: null, tips: null, dateRange: '' };
+    byStore[f.store][f.kind] = f;
+    if (f.dateRange) byStore[f.store].dateRange = f.dateRange;
+  }
+  const slug = document.getElementById('import-client').value;
+  const prefixes = (_payrollData?.clients?.[slug]?.storePrefixes) || {};
+  const stores = Object.keys(byStore).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+  let html = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">Detected ${stores.length} store${stores.length===1?'':'s'}</div>`;
+  html += `<div style="display:flex;flex-direction:column;gap:6px;">`;
+  for (const s of stores) {
+    const g = byStore[s];
+    const prefix = prefixes[s] || `Store ${s}`;
+    const outName = g.dateRange ? `${prefix}${s} (${g.dateRange}).csv` : `${prefix}${s}.csv`;
+    const payOk = !!g.payroll;
+    const tipOk = !!g.tips;
+    const tipNote = tipOk ? '✓ tips' : '<span style="color:var(--gold);">no tips file → $0</span>';
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px;">
+      <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:60px;">#${s}</span>
+      <span style="color:${payOk?'var(--green)':'var(--red)'};">${payOk?'✓ payroll':'✗ payroll missing'}</span>
+      <span style="color:${tipOk?'var(--green)':'var(--gold)'};">${tipNote}</span>
+      <span style="margin-left:auto;color:var(--muted);font-size:11px;">→ ${outName}</span>
+    </div>`;
+  }
+  if (orphans.length) {
+    html += `<div style="margin-top:6px;font-size:11px;color:var(--red);">⚠ ${orphans.length} file${orphans.length===1?'':'s'} skipped (could not extract store number): ${orphans.map(o=>o.name).join(', ')}</div>`;
+  }
+  html += `</div>`;
+  stage.innerHTML = html;
+}
+
+function hteaoSetStatus(msg, color) {
+  const el = document.getElementById('hteao-status');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.color = color || '';
+}
+
+async function hteaoProcessAll() {
+  const btn = document.getElementById('hteao-process-btn');
+  const byStore = {};
+  for (const f of _hteaoFiles) {
+    if (!f.store) continue;
+    if (!byStore[f.store]) byStore[f.store] = { payroll: null, tips: null, dateRange: '' };
+    byStore[f.store][f.kind] = f;
+    if (f.dateRange) byStore[f.store].dateRange = f.dateRange;
+  }
+  const stores = Object.keys(byStore).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+  if (!stores.length) { hteaoSetStatus('No valid files to process','var(--red)'); return; }
+  const missingPayroll = stores.filter(s => !byStore[s].payroll);
+  if (missingPayroll.length) {
+    hteaoSetStatus(`Missing payroll xlsx for: #${missingPayroll.join(', #')}. Add the file or remove the tips CSV.`, 'var(--red)');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing…';
+  hteaoSetStatus('Processing…','var(--muted)');
+
+  const slug = document.getElementById('import-client').value;
+  const prefixes = (_payrollData?.clients?.[slug]?.storePrefixes) || {};
+  const results = [];
+  try {
+    for (const s of stores) {
+      const g = byStore[s];
+      const rows = await hteaoParseRevel(g.payroll.file);
+      if (!rows.length) throw new Error(`Store #${s}: no employee rows found in ${g.payroll.name}`);
+      const totalTips = g.tips ? await hteaoParseSalesSummary(g.tips.file) : 0;
+      const distributed = hteaoDistributeTips(rows, totalTips);
+      const csv = hteaoMakeCSV(distributed, totalTips);
+      const prefix = prefixes[s] || `Store ${s}`;
+      const outName = g.dateRange ? `${prefix}${s} (${g.dateRange}).csv` : `${prefix}${s}.csv`;
+      results.push({ name: outName, csv, store: s, tips: totalTips, employees: rows.length });
+    }
+    // Trigger one download per file. Browsers prompt once for permission then
+    // allow the rest. No zipping needed for the small file counts here.
+    for (const r of results) {
+      const blob = new Blob([r.csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    const summary = results.map(r => `#${r.store} (${r.employees} emp, $${r.tips.toFixed(2)} tips)`).join(', ');
+    hteaoSetStatus(`✓ Downloaded ${results.length} file${results.length===1?'':'s'}: ${summary}`, 'var(--green)');
+  } catch (err) {
+    hteaoSetStatus(`✗ ${err.message}`, 'var(--red)');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⬇ Process &amp; Download';
+  }
+}
+
+// Parse Revel Payroll xlsx — sheet 'Payroll', fixed col positions
+// (0=name, 1=role, 5=hourly rate, 12=hours). Same heuristic as Python:
+// find the first row whose col 0 looks like "Last, First".
+function hteaoParseRevel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const sheet = wb.Sheets['Payroll'] || wb.Sheets[wb.SheetNames[0]];
+        if (!sheet) return reject(new Error("Sheet 'Payroll' not found"));
+        const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+        let startRow = -1;
+        for (let i = 0; i < Math.min(30, aoa.length); i++) {
+          const v = String((aoa[i] && aoa[i][0]) || '').trim();
+          if (v.includes(',') && v.length > 5 && !v.includes('Employee') && !v.includes('Totals')) {
+            startRow = i; break;
+          }
+        }
+        if (startRow < 0) return reject(new Error('No employee names found (looking for "Last, First")'));
+        const out = [];
+        for (let i = startRow; i < aoa.length; i++) {
+          const r = aoa[i] || [];
+          const name = String(r[0] || '').trim();
+          if (!name.includes(',')) continue;
+          const rate = parseFloat(r[5]);
+          const hours = parseFloat(r[12]);
+          if (!isFinite(rate) || rate <= 0) continue;
+          if (!isFinite(hours) || hours <= 0) continue;
+          out.push({
+            employee: name,
+            role: String(r[1] || '').trim(),
+            hours: Math.round(hours * 100) / 100,
+            rate: rate,
+          });
+        }
+        out.sort((a, b) => a.employee.localeCompare(b.employee) || a.role.localeCompare(b.role));
+        resolve(out);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Failed to read xlsx'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Parse Sales Summary CSV — sum Tips Total + Liabilities Tips Total + Declared
+// Tips across every data row. Matches the manual entry the Python script asks
+// for (the user types these three numbers and they're summed).
+function hteaoParseSalesSummary(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+        if (lines.length < 2) return resolve(0);
+        const headers = parseCSVLine(lines[0]).map(h => h.trim());
+        const findCol = (name) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        const tipsIdx     = findCol('Tips Total');
+        const liaIdx      = findCol('Liabilities Tips Total');
+        const declaredIdx = findCol('Declared Tips');
+        if (tipsIdx < 0 && liaIdx < 0 && declaredIdx < 0) {
+          return reject(new Error('CSV missing Tips Total / Liabilities Tips Total / Declared Tips columns'));
+        }
+        let total = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (tipsIdx     >= 0) total += parseFloat(String(cols[tipsIdx]    || '0').replace(/[$,]/g,'')) || 0;
+          if (liaIdx      >= 0) total += parseFloat(String(cols[liaIdx]     || '0').replace(/[$,]/g,'')) || 0;
+          if (declaredIdx >= 0) total += parseFloat(String(cols[declaredIdx]|| '0').replace(/[$,]/g,'')) || 0;
+        }
+        resolve(Math.round(total * 100) / 100);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Failed to read CSV'));
+    reader.readAsText(file);
+  });
+}
+
+// Distribute total tips by hours, then nudge cents to fully reconcile to
+// total_tips. Mirrors the Python: largest fractional remainders get the
+// extra/missing cents.
+function hteaoDistributeTips(rows, totalTips) {
+  const out = rows.map(r => ({ ...r, tips: 0 }));
+  if (totalTips <= 0) return out;
+  const totalHours = rows.reduce((s, r) => s + r.hours, 0);
+  if (totalHours <= 0) return out;
+  const exact = rows.map(r => r.hours * (totalTips / totalHours));
+  const rounded = exact.map(v => Math.round(v * 100) / 100);
+  const currentSum = rounded.reduce((s, v) => s + v, 0);
+  const diff = Math.round((totalTips - currentSum) * 100) / 100;
+  if (Math.abs(diff) > 0.001) {
+    let cents = Math.round(diff * 100);
+    const order = exact
+      .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+      .sort((a, b) => b.frac - a.frac);
+    for (const { i } of order) {
+      if (cents === 0) break;
+      if (cents > 0) { rounded[i] = Math.round((rounded[i] + 0.01) * 100) / 100; cents--; }
+      else           { rounded[i] = Math.round((rounded[i] - 0.01) * 100) / 100; cents++; }
+    }
+  }
+  for (let i = 0; i < out.length; i++) out[i].tips = rounded[i];
+  return out;
+}
+
+// Build the final report CSV — matches the Python output column order and the
+// three summary footer rows (Total Hours / Total Tips Distributed / Total Gross).
+function hteaoMakeCSV(rows, totalTips) {
+  const fmt = (v) => `$${v.toFixed(2)}`;
+  const esc = (v) => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const headers = ['Employee','Role','Hours','Hourly Rate','Tips','Gross Pay (pre-tips)'];
+  const lines = [headers.join(',')];
+  let totalHours = 0;
+  let totalGross = 0;
+  for (const r of rows) {
+    const gross = Math.round(r.hours * r.rate * 100) / 100;
+    totalHours += r.hours;
+    totalGross += gross;
+    lines.push([
+      esc(r.employee),
+      esc(r.role),
+      r.hours.toFixed(2),
+      r.rate.toFixed(2),
+      fmt(r.tips),
+      esc(fmt(gross)),
+    ].join(','));
+  }
+  totalHours = Math.round(totalHours * 100) / 100;
+  totalGross = Math.round(totalGross * 100) / 100;
+  lines.push(['Total Hours Worked','',totalHours.toFixed(2),'','',''].join(','));
+  lines.push(['Total Tips Distributed','','','',fmt(totalTips),''].join(','));
+  lines.push(['Total Gross Wages','','','','',esc(' ' + fmt(totalGross) + ' ')].join(','));
+  return lines.join('\n') + '\n';
+}
+
+// Drag-and-drop on the HTeaO drop zone (in addition to click-to-browse)
+(function wireHteaoDropZone(){
+  const zone = document.getElementById('hteao-drop');
+  if (!zone) return;
+  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'rgba(77,255,160,.04)';
+  }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = 'var(--border)';
+    zone.style.background = '';
+  }));
+  zone.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files) hteaoOnFiles(e.dataTransfer.files);
+  });
+})();
 
 function parseCSVLine(line) {
   const result = []; let current = ''; let inQuotes = false;

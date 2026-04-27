@@ -1821,6 +1821,15 @@
       },
       "_sessionToken": null,
       "_notifications": []
+    },
+    "hteao": {
+      "name": "HTeaO Payroll",
+      "mode": "hteao-revel",
+      "storePrefixes": {
+        "66":  "OZ",
+        "67":  "COB",
+        "346": "OV"
+      }
     }
   },
   "submissions": [],
