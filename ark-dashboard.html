@@ -27746,29 +27746,50 @@ async function tcRender(){
   const emptyHtml = '<div style="text-align:center;padding:48px 0;color:var(--text-d);font-size:13px;">No tasks match this filter. <a href="#" onclick="tcSetFilter(\'all\');return false;" style="color:var(--gold);">Show all →</a></div>';
 
   if (viewMode === 'board') {
-    // Board always groups by due-date status — that's the Kanban mental model
-    // (Overdue / Today / This Week / Later / No Date / Completed). The list
-    // view's group-by setting (Section, Client, AM, etc.) does NOT apply to
-    // the board, otherwise an overdue task could be hidden inside a section
-    // column with no visible urgency cue.
     const boardGroups = {};
-    for (const t of list) {
-      let key;
-      if (t.status === 'completed')         key = '✓ Completed';
-      else if (!t.dueDate)                  key = '📌 No Due Date';
-      else if (t.dueDate < todayStr)        key = '🔴 Overdue';
-      else if (t.dueDate === todayStr)      key = '🟡 Due Today';
-      else if (t.dueDate <= weekStr)        key = '📅 This Week';
-      else                                   key = '📅 Later';
-      if (!boardGroups[key]) boardGroups[key] = [];
-      boardGroups[key].push(t);
+    let ordered = {};
+    if (fStat === 'upcoming') {
+      // Todoist-style "Upcoming" — one column per day for the next 7 days,
+      // even if a day is empty. Each header reads "Apr 28 · Tomorrow",
+      // "Apr 29 · Wednesday", etc. so users can scan the week at a glance.
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const dStr = d.toISOString().slice(0,10);
+        const monthDay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+        const weekday  = d.toLocaleDateString('en-US', { weekday:'long' });
+        let label;
+        if (i === 0)      label = `${monthDay} · Today`;
+        else if (i === 1) label = `${monthDay} · Tomorrow`;
+        else              label = `${monthDay} · ${weekday}`;
+        ordered[label] = list.filter(t => t.dueDate === dStr && t.status !== 'completed');
+      }
+    } else {
+      // Default: group by due-date status (Overdue / Today / This Week /
+      // Later / No Date / Completed). List view's group-by setting does NOT
+      // apply to the board so urgent tasks always have a dedicated column.
+      for (const t of list) {
+        let key;
+        if (t.status === 'completed')         key = '✓ Completed';
+        else if (!t.dueDate)                  key = '📌 No Due Date';
+        else if (t.dueDate < todayStr)        key = '🔴 Overdue';
+        else if (t.dueDate === todayStr)      key = '🟡 Due Today';
+        else if (t.dueDate <= weekStr)        key = '📅 This Week';
+        else                                   key = '📅 Later';
+        if (!boardGroups[key]) boardGroups[key] = [];
+        boardGroups[key].push(t);
+      }
+      const colOrder = ['🔴 Overdue','🟡 Due Today','📅 This Week','📅 Later','📌 No Due Date','✓ Completed'];
+      for (const k of colOrder) if (boardGroups[k]) ordered[k] = boardGroups[k];
     }
-    // Stable column order — empty buckets simply don't render.
-    const colOrder = ['🔴 Overdue','🟡 Due Today','📅 This Week','📅 Later','📌 No Due Date','✓ Completed'];
-    const ordered = {};
-    for (const k of colOrder) if (boardGroups[k]) ordered[k] = boardGroups[k];
     const el = document.getElementById('tc-view-board');
-    if (el) el.innerHTML = list.length ? tcRenderBoard(list, ordered, today, todayStr) : emptyHtml;
+    if (el) {
+      // For upcoming, always render the 7 day columns — even if every day is
+      // empty — so the week structure is always visible. For other filters,
+      // fall back to the standard "no tasks match" message.
+      const hasContent = fStat === 'upcoming' || list.length;
+      el.innerHTML = hasContent ? tcRenderBoard(list, ordered, today, todayStr) : emptyHtml;
+    }
   } else if (viewMode === 'calendar') {
     const el = document.getElementById('tc-view-calendar');
     if (el) tcRenderCalendar(el, list, today, todayStr);
@@ -28090,7 +28111,21 @@ function tcSelectView(view) {
     const clientSel = document.getElementById('tc-filter-client');
     if      (view === 'today')    { if (statusSel) statusSel.value = 'due-today'; if (clientSel) clientSel.value = ''; }
     else if (view === 'overdue')  { if (statusSel) statusSel.value = 'overdue';   if (clientSel) clientSel.value = ''; }
-    else if (view === 'upcoming') { if (statusSel) statusSel.value = 'upcoming';  if (clientSel) clientSel.value = ''; }
+    else if (view === 'upcoming') {
+      if (statusSel) statusSel.value = 'upcoming';
+      if (clientSel) clientSel.value = '';
+      // Todoist-style: switch to board so each day is its own column. User
+      // can still flip back to list with the toggle if they prefer vertical.
+      sessionStorage.setItem('tc_view_mode', 'board');
+      document.querySelectorAll('.tc-vtoggle[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === 'board'));
+      // The visibility toggle ran at the top of this function with the OLD
+      // saved view — re-apply now that we've forced 'board' so the right
+      // container is visible before tcRender paints into it.
+      ['list','board','calendar'].forEach(v => {
+        const el = document.getElementById('tc-view-' + v);
+        if (el) el.style.display = (v === 'board') ? '' : 'none';
+      });
+    }
     else                          { if (statusSel) statusSel.value = 'open';      if (clientSel) clientSel.value = ''; }
     tcRender();
   }
