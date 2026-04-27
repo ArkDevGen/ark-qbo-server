@@ -304,6 +304,83 @@
 
       </div>
     </div>
+
+    <!-- ════ HAINES PAYROLL (Buddy Punch / QuickBooks Time timesheet CSV) ════ -->
+    <!-- Shown only when the selected client's mode === 'haines-buddypunch'.
+         Drop a single timesheet_report_*.csv. Per-week REG/OT calculated from
+         the daily shifts, Vacation/Sick from the Vacation/Sick jobcodes, and
+         OT@$80 + OC@$25 are parsed from the per-row notes column.  Manual
+         employees (e.g. Marilynn Haines) are typed in by hand in staging. -->
+    <div id="haines-card" style="display:none;">
+      <div class="card" style="margin-bottom:12px;padding:16px 18px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">Haines</h3>
+            <span style="font-size:11px;color:var(--muted);">Buddy Punch / QB Time timesheet CSV → downloadable payroll CSV</span>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="hainesOpenManualModal()" style="font-size:11px;white-space:nowrap;">
+            👤 Manual Employees <span id="haines-manual-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;margin-left:4px;">0</span>
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Drop the <strong style="color:var(--text);">timesheet_report_*.csv</strong> from Buddy Punch / QuickBooks Time. Per-week OT, OT@$80, and OC@$25 are extracted automatically — no typing.</div>
+
+        <div id="haines-drop" onclick="document.getElementById('haines-file-input').click()"
+             style="border:2px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:28px;margin-bottom:6px;">📂</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">Drop file here or click to browse</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">One timesheet CSV at a time</div>
+        </div>
+        <input type="file" id="haines-file-input" accept=".csv" style="display:none;" onchange="hainesOnFile(this.files && this.files[0])">
+
+        <div id="haines-staging" style="margin-top:14px;display:none;"></div>
+
+        <div id="haines-actions" style="display:none;margin-top:14px;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-outline btn-sm" onclick="hainesReset()" style="font-size:11px;">Clear</button>
+          <button class="btn btn-primary" id="haines-process-btn" onclick="hainesProcessAll()" style="display:flex;align-items:center;gap:8px;">
+            ⬇ Process &amp; Download
+          </button>
+        </div>
+        <div id="haines-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+
+        <!-- Collapsible: Processed (run history) -->
+        <div style="margin-top:14px;">
+          <button onclick="hainesToggleHistory()" id="haines-history-toggle"
+                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            📁 Processed <span id="haines-history-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
+            <span id="haines-history-arrow" style="transition:transform .2s;">▼</span>
+          </button>
+          <div id="haines-history-body" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Haines Manual Employees Modal -->
+<div id="modal-haines-manual" class="modal-overlay hidden" onclick="if(event.target===this)hainesCloseManualModal()">
+  <div class="modal" style="width:540px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <h3 style="margin:0;">👤 Manual Employees</h3>
+      <button class="btn btn-outline btn-sm" onclick="hainesCloseManualModal()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">People who don't show up in the timesheet CSV but still need to appear on the payroll output (e.g. Marilynn Haines). You'll fill in their hours per pay period in the staging area before downloading.</div>
+    <div id="haines-manual-list" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;align-items:end;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="flex:1;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">First Name</label>
+        <input id="haines-manual-first" placeholder="Marilynn" style="width:100%;">
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Last Name</label>
+        <input id="haines-manual-last" placeholder="Haines" style="width:100%;">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="hainesAddManual()" style="font-size:11px;">+ Add</button>
+    </div>
+    <div id="haines-manual-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
   </div>
 </div>
 
@@ -968,28 +1045,37 @@ let _importTips = null;     // { [storeNum]: tipTotal }
 
 function importClientChange() {
   updatePushBtn();
-  // Switch between client-portal mode (iHC etc.) and HTeaO bulk-CSV mode
-  // based on the selected client's `mode` flag in payroll-data.json.
+  // Switch between client-portal mode (iHC etc.), HTeaO bulk-CSV mode, and
+  // Haines single-CSV mode based on the selected client's `mode` flag.
   const slug = document.getElementById('import-client').value;
   const cfg = slug ? _payrollData?.clients?.[slug] : null;
   const mode = cfg?.mode || 'portal';
-  const isHteao = mode === 'hteao-revel';
+  const isHteao  = mode === 'hteao-revel';
+  const isHaines = mode === 'haines-buddypunch';
+  const isPortal = !isHteao && !isHaines;
   document.querySelectorAll('.portal-only').forEach(el => {
     // Preserve the original display value (most are 'block' / inline). Use ''
     // to fall back to the stylesheet default rather than forcing 'block'.
-    el.style.display = isHteao ? 'none' : '';
+    el.style.display = isPortal ? '' : 'none';
   });
-  const hteaoCard = document.getElementById('hteao-card');
-  if (hteaoCard) hteaoCard.style.display = isHteao ? '' : 'none';
+  const hteaoCard  = document.getElementById('hteao-card');
+  const hainesCard = document.getElementById('haines-card');
+  if (hteaoCard)  hteaoCard.style.display  = isHteao  ? '' : 'none';
+  if (hainesCard) hainesCard.style.display = isHaines ? '' : 'none';
   if (isHteao) {
     hteaoReset();
     hteaoRenderHistory();
     hteaoRenderStores();
   }
+  if (isHaines) {
+    hainesReset();
+    hainesRenderHistory();
+    hainesRenderManualCount();
+  }
   // If the Manage Employees section is open, sync its detail panel to
   // the newly-selected client so users don't have to pick again.
   const empSection = document.getElementById('emp-section');
-  if(!isHteao && empSection && empSection.style.display !== 'none'){
+  if(isPortal && empSection && empSection.style.display !== 'none'){
     syncEmpSectionToTopClient();
   }
 }
@@ -1547,6 +1633,483 @@ function hteaoMakeCSV(rows, totalTips) {
   }));
   zone.addEventListener('drop', (e) => {
     if (e.dataTransfer && e.dataTransfer.files) hteaoOnFiles(e.dataTransfer.files);
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════
+// HAINES PAYROLL — Buddy Punch / QuickBooks Time timesheet CSV
+// One file in, one CSV out. Per-week REG/OT computed from daily shifts
+// (Sun-Sat workweek inferred from filename's period start). Vacation /
+// Sick / Holiday from jobcode column. OT@$80 + OC@$25 parsed from the
+// per-row notes field. Manual employees (Marilynn Haines) come from the
+// server-side haines.manualEmployees list and are typed in by hand in
+// the staging area before download.
+// ════════════════════════════════════════════════════════════════
+let _hainesParsed = null; // { employees: [...], periodStart, periodEnd, dateRange, fileName }
+
+function hainesReset() {
+  _hainesParsed = null;
+  const inp = document.getElementById('haines-file-input');
+  if (inp) inp.value = '';
+  const status = document.getElementById('haines-status');
+  if (status) status.innerHTML = '';
+  hainesRender();
+}
+
+function hainesSetStatus(msg, color) {
+  const el = document.getElementById('haines-status');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.color = color || '';
+}
+
+function hainesGetManualList() {
+  const slug = document.getElementById('import-client').value;
+  const arr = _payrollData?.clients?.[slug]?.manualEmployees;
+  return Array.isArray(arr) ? arr : [];
+}
+
+function hainesRenderManualCount() {
+  const el = document.getElementById('haines-manual-count');
+  if (el) el.textContent = hainesGetManualList().length;
+}
+
+// Parse the timesheet CSV's filename for the YYYY-MM-DD_thru_YYYY-MM-DD range
+// (e.g., timesheet_report_2026-03-29_thru_2026-04-11.csv). Falls back to scanning
+// the data rows for min/max local_date if the filename doesn't match.
+function hainesParseFilenamePeriod(filename) {
+  const m = (filename || '').match(/(\d{4}-\d{2}-\d{2})_thru_(\d{4}-\d{2}-\d{2})/);
+  if (m) return { start: m[1], end: m[2] };
+  return { start: '', end: '' };
+}
+
+function hainesFormatDateRange(startIso, endIso) {
+  if (!startIso || !endIso) return '';
+  const [, sm, sd] = startIso.split('-');
+  const [, em, ed] = endIso.split('-');
+  return `${parseInt(sm,10)}.${parseInt(sd,10)}-${parseInt(em,10)}.${parseInt(ed,10)}`;
+}
+
+function hainesOnFile(file) {
+  if (!file) return;
+  hainesSetStatus('Reading file…','var(--muted)');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = hainesParseTimesheet(e.target.result, file.name);
+      _hainesParsed = parsed;
+      hainesRender();
+      hainesSetStatus(`✓ Loaded ${parsed.employees.length} employee${parsed.employees.length===1?'':'s'} for ${parsed.dateRange || '(period unknown)'}`,'var(--green)');
+    } catch (err) {
+      hainesSetStatus(`✗ ${err.message}`,'var(--red)');
+    }
+  };
+  reader.onerror = () => hainesSetStatus('✗ Failed to read file','var(--red)');
+  reader.readAsText(file);
+}
+
+// Group every shift row by employee (lower-cased "first|last" key), bucket each
+// row into Week 1 or Week 2 by date offset from the period start, and tally
+// REG / OT / Vacation / Sick / Holiday plus OT@$80 hours and OC@$25 events
+// from the notes column. OT is per-week (anything over 40 of worked hours).
+function hainesParseTimesheet(text, filename) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  if (lines.length < 2) throw new Error('Empty CSV');
+  const headers = parseCSVLine(lines[0]).map(h => h.trim());
+  const idx = (n) => headers.findIndex(h => h.toLowerCase() === n.toLowerCase());
+  const I = {
+    fname: idx('fname'), lname: idx('lname'),
+    date:  idx('local_date'), hours: idx('hours'),
+    job:   idx('jobcode'),    notes: idx('notes'),
+  };
+  if (I.fname < 0 || I.lname < 0 || I.hours < 0 || I.job < 0) {
+    throw new Error('CSV missing required columns (fname, lname, hours, jobcode)');
+  }
+  // Period start drives the week boundaries. Prefer filename, fall back to
+  // the earliest local_date in the data.
+  const fnPeriod = hainesParseFilenamePeriod(filename || '');
+  let periodStart = fnPeriod.start;
+  let periodEnd   = fnPeriod.end;
+  if (!periodStart || !periodEnd) {
+    const dates = [];
+    for (let i = 1; i < lines.length; i++) {
+      const c = parseCSVLine(lines[i]);
+      const d = (c[I.date] || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.push(d);
+    }
+    if (dates.length) {
+      dates.sort();
+      periodStart = periodStart || dates[0];
+      periodEnd   = periodEnd   || dates[dates.length - 1];
+    }
+  }
+  if (!periodStart) throw new Error('Could not determine period start (filename should look like timesheet_report_YYYY-MM-DD_thru_YYYY-MM-DD.csv)');
+  const startMs = Date.UTC(...periodStart.split('-').map((v,i) => i===1 ? parseInt(v,10)-1 : parseInt(v,10)));
+  // Map: "first|last" → record
+  const byEmp = new Map();
+  const ot80Re = /(\d+(?:\.\d+)?)\s*hrs?\s*@\s*\$?\s*80\b/i;
+  const ocRe   = /\bon[\s-]?call\b/i;
+  for (let i = 1; i < lines.length; i++) {
+    const c = parseLine(lines[i], I);
+    const fname = (c[I.fname]||'').trim();
+    const lname = (c[I.lname]||'').trim();
+    if (!fname && !lname) continue;
+    const hours = parseFloat(c[I.hours]) || 0;
+    if (hours <= 0) continue;
+    const job   = (c[I.job]||'').trim().toLowerCase();
+    const note  = (c[I.notes]||'').trim();
+    const date  = (c[I.date]||'').trim();
+    const key = `${fname.toLowerCase()}|${lname.toLowerCase()}`;
+    if (!byEmp.has(key)) {
+      byEmp.set(key, { fname, lname, weeks: [0, 0], vac: 0, sick: 0, hol: 0, ot80: 0, oc: 0 });
+    }
+    const e = byEmp.get(key);
+    if (job === 'vacation')      e.vac  += hours;
+    else if (job === 'sick')     e.sick += hours;
+    else if (job === 'holiday')  e.hol  += hours;
+    else {
+      // Worked hours — bucket into Week 1 or Week 2 by date offset
+      let wk = 0;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const ms = Date.UTC(...date.split('-').map((v,i) => i===1 ? parseInt(v,10)-1 : parseInt(v,10)));
+        wk = Math.floor((ms - startMs) / (7*24*60*60*1000));
+        if (wk < 0) wk = 0;
+        if (wk > 1) wk = 1; // cap at week 2 (period is bi-weekly)
+      }
+      e.weeks[wk] = (e.weeks[wk] || 0) + hours;
+    }
+    if (note) {
+      if (ocRe.test(note)) e.oc += 1;
+      const m = note.match(ot80Re);
+      if (m) e.ot80 += parseFloat(m[1]) || 0;
+    }
+  }
+  // Compute REG / OT per employee — anything over 40 worked hours per week is OT.
+  const employees = [];
+  for (const e of byEmp.values()) {
+    let reg = 0, ot = 0;
+    for (const w of e.weeks) {
+      const wk = Number(w) || 0;
+      if (wk > 40) { reg += 40; ot += wk - 40; }
+      else         { reg += wk; }
+    }
+    // OT@$80 hours come OUT of the regular OT bucket (they're already in there;
+    // we're moving them into the premium-rate bucket).
+    const otNet = Math.max(0, ot - e.ot80);
+    employees.push({
+      fname: e.fname,
+      lname: e.lname,
+      reg:   Math.round(reg     * 100) / 100,
+      ot:    Math.round(otNet   * 100) / 100,
+      vac:   Math.round(e.vac   * 100) / 100,
+      hol:   Math.round(e.hol   * 100) / 100,
+      sick:  Math.round(e.sick  * 100) / 100,
+      ot80:  Math.round(e.ot80  * 100) / 100,
+      oc:    e.oc,
+    });
+  }
+  employees.sort((a,b) => (a.lname||'').localeCompare(b.lname||'') || (a.fname||'').localeCompare(b.fname||''));
+  return {
+    employees,
+    periodStart, periodEnd,
+    dateRange: hainesFormatDateRange(periodStart, periodEnd),
+    fileName: filename || '',
+  };
+}
+
+// Tiny shim so we can use parseCSVLine inside this file even if the function
+// in scope is renamed later. Keeps the parseTimesheet call shape stable.
+function parseLine(line) { return parseCSVLine(line); }
+
+function hainesRender() {
+  const stage = document.getElementById('haines-staging');
+  const actions = document.getElementById('haines-actions');
+  if (!stage || !actions) return;
+  if (!_hainesParsed) {
+    stage.style.display = 'none';
+    actions.style.display = 'none';
+    return;
+  }
+  stage.style.display = '';
+  actions.style.display = 'flex';
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = (n) => (Math.round((Number(n)||0)*100)/100).toFixed(2);
+  // Auto employee summary
+  let totals = { reg:0, ot:0, vac:0, hol:0, sick:0, ot80:0, oc:0 };
+  for (const e of _hainesParsed.employees) {
+    totals.reg += e.reg; totals.ot += e.ot; totals.vac += e.vac; totals.hol += e.hol;
+    totals.sick += e.sick; totals.ot80 += e.ot80; totals.oc += e.oc;
+  }
+  const empRows = _hainesParsed.employees.map(e => `
+    <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;align-items:center;">
+      <span><strong style="color:var(--text);">${esc(e.lname)}, ${esc(e.fname)}</strong></span>
+      <span style="text-align:right;">${fmt(e.reg)}</span>
+      <span style="text-align:right;">${fmt(e.ot)}</span>
+      <span style="text-align:right;color:${e.vac>0?'var(--text)':'var(--muted)'};">${fmt(e.vac)}</span>
+      <span style="text-align:right;color:${e.hol>0?'var(--text)':'var(--muted)'};">${fmt(e.hol)}</span>
+      <span style="text-align:right;color:${e.sick>0?'var(--text)':'var(--muted)'};">${fmt(e.sick)}</span>
+      <span style="text-align:right;color:${e.ot80>0?'var(--gold)':'var(--muted)'};font-weight:${e.ot80>0?'600':'400'};">${fmt(e.ot80)}</span>
+      <span style="text-align:right;color:${e.oc>0?'var(--gold)':'var(--muted)'};font-weight:${e.oc>0?'600':'400'};">${e.oc>0?'$'+(e.oc*25):'—'}</span>
+    </div>`).join('');
+  // Manual employees — editable inputs
+  const manualList = hainesGetManualList();
+  let manualHtml = '';
+  if (manualList.length) {
+    manualHtml = `
+      <div style="margin-top:14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">👤 Manual Employees — type in this period's hours</div>
+        <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:0 8px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
+          <span>Name</span><span style="text-align:right;">REG</span><span style="text-align:right;">OT</span><span style="text-align:right;">Vac</span><span style="text-align:right;">Hol</span><span style="text-align:right;">Sick</span><span style="text-align:right;">OT@$80</span><span style="text-align:right;">OC@$25 #</span>
+        </div>
+        ${manualList.map((m, i) => `
+          <div class="haines-manual-row" data-idx="${i}" style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;align-items:center;">
+            <span><strong style="color:var(--text);">${esc(m.lname)}, ${esc(m.fname)}</strong></span>
+            <input class="hm-reg"  type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-ot"   type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-vac"  type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-hol"  type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-sick" type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-ot80" type="number" min="0" step="0.25" value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+            <input class="hm-oc"   type="number" min="0" step="1"    value="0" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+          </div>`).join('')}
+      </div>`;
+  }
+  stage.innerHTML = `
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">${_hainesParsed.employees.length} employees from CSV · ${_hainesParsed.dateRange || 'period ?'}</div>
+    <div style="border:1px solid var(--border);border-radius:6px;background:var(--card);">
+      <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface);border-bottom:1px solid var(--border);">
+        <span>Name</span><span style="text-align:right;">REG</span><span style="text-align:right;">OT</span><span style="text-align:right;">Vac</span><span style="text-align:right;">Hol</span><span style="text-align:right;">Sick</span><span style="text-align:right;">OT@$80</span><span style="text-align:right;">OC@$25</span>
+      </div>
+      ${empRows}
+    </div>
+    ${manualHtml}`;
+}
+
+function hainesCollectManualEntries() {
+  // Read whatever the user typed into the manual-employee rows
+  const list = hainesGetManualList();
+  const rows = document.querySelectorAll('.haines-manual-row');
+  const out = [];
+  rows.forEach(row => {
+    const i = parseInt(row.dataset.idx, 10);
+    const m = list[i];
+    if (!m) return;
+    const num = (cls) => parseFloat(row.querySelector('.'+cls)?.value) || 0;
+    out.push({
+      fname: m.fname, lname: m.lname,
+      reg:  num('hm-reg'),  ot:   num('hm-ot'),
+      vac:  num('hm-vac'),  hol:  num('hm-hol'),
+      sick: num('hm-sick'), ot80: num('hm-ot80'),
+      oc:   num('hm-oc'),
+    });
+  });
+  return out;
+}
+
+// Build the output CSV. Mirrors the user's "Current Payroll" sheet column
+// order, with summary rows (TOTALS, PATRIOT REG, PATRIOT TOTAL) at the bottom.
+function hainesMakeCSV(employees) {
+  const fmt = (n) => (Math.round((Number(n)||0)*100)/100).toFixed(2);
+  const esc = (v) => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const headers = ['First Name','Last Name','Regular','Overtime','Vacation','Holiday','Sick','OT @ $80','OC @ $25','Total Hours'];
+  const lines = [headers.join(',')];
+  let T = { reg:0, ot:0, vac:0, hol:0, sick:0, ot80:0, oc:0, total:0 };
+  for (const e of employees) {
+    const total = (Number(e.reg)||0) + (Number(e.ot)||0) + (Number(e.vac)||0) + (Number(e.hol)||0) + (Number(e.sick)||0) + (Number(e.ot80)||0);
+    T.reg += e.reg; T.ot += e.ot; T.vac += e.vac; T.hol += e.hol;
+    T.sick += e.sick; T.ot80 += e.ot80; T.oc += e.oc; T.total += total;
+    lines.push([
+      esc(e.fname), esc(e.lname),
+      fmt(e.reg), fmt(e.ot), fmt(e.vac), fmt(e.hol), fmt(e.sick), fmt(e.ot80),
+      e.oc > 0 ? esc('$' + (e.oc * 25)) : '',
+      fmt(total),
+    ].join(','));
+  }
+  // Summary rows
+  lines.push('');
+  lines.push(['TOTALS','', fmt(T.reg), fmt(T.ot), fmt(T.vac), fmt(T.hol), fmt(T.sick), fmt(T.ot80), esc('$'+(T.oc*25)), fmt(T.total)].join(','));
+  // Patriot REG = Regular + OT@$80 (premium hours go in at the regular rate slot
+  // in Patriot, with the differential booked separately).
+  lines.push(['PATRIOT REG','', fmt(T.reg + T.ot80), '', '', '', '', '', '', ''].join(','));
+  lines.push(['PATRIOT TOTAL','', fmt(T.total), '', '', '', '', '', '', ''].join(','));
+  return { csv: lines.join('\n') + '\n', totals: { ...T, oc25: T.oc * 25 } };
+}
+
+async function hainesProcessAll() {
+  const btn = document.getElementById('haines-process-btn');
+  if (!_hainesParsed) { hainesSetStatus('No file loaded','var(--red)'); return; }
+  const all = [..._hainesParsed.employees, ...hainesCollectManualEntries()];
+  if (!all.length) { hainesSetStatus('No employees to process','var(--red)'); return; }
+  btn.disabled = true; btn.textContent = '⏳ Processing…';
+  hainesSetStatus('Generating CSV…','var(--muted)');
+  try {
+    const { csv, totals } = hainesMakeCSV(all);
+    const outName = _hainesParsed.dateRange ? `Haines (${_hainesParsed.dateRange}).csv` : 'Haines.csv';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = outName; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    hainesSetStatus(`✓ Downloaded ${outName} — ${all.length} employees, ${(Math.round(totals.total*100)/100).toFixed(2)} total hours`,'var(--green)');
+    // Best-effort history record
+    try {
+      const runBy = _currentUser ? (`${_currentUser.fname||''} ${_currentUser.lname||''}`.trim() || _currentUser.username || 'Unknown') : 'Unknown';
+      const resp = await fetch(`${API}/payroll/admin/haines-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({
+          runBy, outName, employees: all.length,
+          totals: {
+            reg: totals.reg, ot: totals.ot, vac: totals.vac, hol: totals.hol,
+            sick: totals.sick, ot80: totals.ot80, oc25: totals.oc25, total: totals.total,
+          },
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (_payrollData) _payrollData.hainesHistory = data.history || [];
+        hainesRenderHistory();
+      }
+    } catch(_) {}
+  } catch (err) {
+    hainesSetStatus(`✗ ${err.message}`,'var(--red)');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '⬇ Process &amp; Download';
+  }
+}
+
+// ── Processed history (collapsible) ──────────────────────────────
+function hainesToggleHistory() {
+  const body = document.getElementById('haines-history-body');
+  const arrow = document.getElementById('haines-history-arrow');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+  if (!isOpen) hainesRenderHistory();
+}
+
+function hainesRenderHistory() {
+  const body = document.getElementById('haines-history-body');
+  const countEl = document.getElementById('haines-history-count');
+  if (!body) return;
+  const history = (_payrollData && _payrollData.hainesHistory) || [];
+  if (countEl) countEl.textContent = history.length;
+  if (!history.length) {
+    body.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">No runs yet — process a file to see them here.</div>';
+    return;
+  }
+  const fmt = (n) => (Math.round((Number(n)||0)*100)/100).toFixed(2);
+  body.innerHTML = history.map(run => {
+    const dt = new Date(run.runAt).toLocaleString();
+    const t = run.totals || {};
+    return `<div style="border-bottom:1px solid var(--border);padding:8px 12px;font-size:11px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="font-weight:600;color:var(--text);font-size:12px;">${dt}</span>
+        <span style="color:var(--muted);">by ${run.runBy||'Unknown'}</span>
+        <span style="margin-left:auto;color:var(--text);font-weight:600;">${run.outName||''}</span>
+      </div>
+      <div style="color:var(--muted);">
+        ${run.employees||0} emp · REG ${fmt(t.reg)} · OT ${fmt(t.ot)} · Vac ${fmt(t.vac)} · Sick ${fmt(t.sick)} · OT@$80 ${fmt(t.ot80)} · OC $${fmt(t.oc25)} · <strong style="color:var(--text);">Total ${fmt(t.total)}</strong>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Manual Employees (modal) ─────────────────────────────────────
+function hainesOpenManualModal() {
+  document.getElementById('modal-haines-manual').classList.remove('hidden');
+  hainesRenderManualList();
+  const status = document.getElementById('haines-manual-status');
+  if (status) status.innerHTML = '';
+}
+
+function hainesCloseManualModal() {
+  document.getElementById('modal-haines-manual').classList.add('hidden');
+  // Refresh staging in case the manual list changed while open
+  if (_hainesParsed) hainesRender();
+  hainesRenderManualCount();
+}
+
+function hainesRenderManualList() {
+  const body = document.getElementById('haines-manual-list');
+  if (!body) return;
+  const list = hainesGetManualList();
+  if (!list.length) {
+    body.innerHTML = '<div style="padding:14px 0;text-align:center;color:var(--muted);font-size:12px;">No manual employees yet — add one below.</div>';
+    return;
+  }
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  body.innerHTML = list.map((m, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);margin-bottom:6px;font-size:12px;">
+      <span style="font-weight:600;color:var(--text);flex:1;">${esc(m.fname)} ${esc(m.lname)}</span>
+      <button class="btn btn-outline btn-sm" onclick="hainesDeleteManual(${i})" style="font-size:11px;padding:4px 8px;border-color:var(--red);color:var(--red);">Remove</button>
+    </div>`).join('');
+}
+
+async function hainesAddManual() {
+  const status = document.getElementById('haines-manual-status');
+  const first = (document.getElementById('haines-manual-first').value || '').trim();
+  const last  = (document.getElementById('haines-manual-last').value  || '').trim();
+  if (!first || !last) { status.innerHTML = '<span style="color:var(--red);">First and last name required.</span>'; return; }
+  const list = [...hainesGetManualList(), { fname: first, lname: last }];
+  await hainesSaveManualList(list, status);
+  if (status.innerHTML.includes('var(--red)')) return;
+  document.getElementById('haines-manual-first').value = '';
+  document.getElementById('haines-manual-last').value = '';
+  hainesRenderManualList();
+  hainesRenderManualCount();
+}
+
+async function hainesDeleteManual(idx) {
+  const list = hainesGetManualList();
+  const m = list[idx];
+  if (!m) return;
+  if (!confirm(`Remove ${m.fname} ${m.lname} from the manual list?`)) return;
+  const next = list.filter((_, i) => i !== idx);
+  const status = document.getElementById('haines-manual-status');
+  await hainesSaveManualList(next, status);
+  hainesRenderManualList();
+  hainesRenderManualCount();
+}
+
+async function hainesSaveManualList(list, statusEl) {
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--muted);">Saving…</span>';
+  try {
+    const resp = await fetch(`${API}/payroll/admin/haines-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+      body: JSON.stringify({ employees: list }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    const slug = document.getElementById('import-client').value;
+    if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].manualEmployees = data.employees || [];
+    if (statusEl) statusEl.innerHTML = '';
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red);">Save failed: ${e.message}</span>`;
+  }
+}
+
+// Drag-and-drop on the Haines drop zone
+(function wireHainesDropZone(){
+  const zone = document.getElementById('haines-drop');
+  if (!zone) return;
+  ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'rgba(77,255,160,.04)';
+  }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    zone.style.borderColor = 'var(--border)';
+    zone.style.background = '';
+  }));
+  zone.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) hainesOnFile(e.dataTransfer.files[0]);
   });
 })();
 

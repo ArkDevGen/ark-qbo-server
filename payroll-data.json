@@ -1823,13 +1823,17 @@
       "_notifications": []
     },
     "hteao": {
-      "name": "HTeaO Payroll",
+      "name": "HTeaO",
       "mode": "hteao-revel",
       "storeConfigs": {
         "66":  { "prefix": "OZ",  "label": "Oz Tea",        "frequency": "weekly",   "calculateTips": true },
         "67":  { "prefix": "COB", "label": "Clark on Brew", "frequency": "weekly",   "calculateTips": true },
         "346": { "prefix": "OV",  "label": "Opal Vault",    "frequency": "weekly",   "calculateTips": true }
       }
+    },
+    "haines": {
+      "name": "Haines",
+      "mode": "haines-buddypunch"
     }
   },
   "submissions": [],

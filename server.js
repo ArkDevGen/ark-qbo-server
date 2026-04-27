@@ -2982,12 +2982,58 @@ app.get('/payroll-admin', (req, res) => {
 // Get all payroll data (admin only — requires valid CRM session)
 app.get('/payroll/admin/data', requireAuth, (req, res) => {
   // Strip sensitive fields like passwords and session tokens before sending
-  const safe = { clients: {}, hteaoHistory: payrollData.hteaoHistory || [] };
+  const safe = {
+    clients: {},
+    hteaoHistory:  payrollData.hteaoHistory  || [],
+    hainesHistory: payrollData.hainesHistory || [],
+  };
   for (const [slug, client] of Object.entries(payrollData.clients || {})) {
     const { _sessionToken, ...rest } = client;
     safe.clients[slug] = rest;
   }
   res.json(safe);
+});
+
+// Replace the Haines manual-employee list (people who don't appear in the
+// timesheet CSV but still need to show up on the output, e.g. Marilynn Haines).
+app.post('/payroll/admin/haines-manual', requireAuth, (req, res) => {
+  const { employees } = req.body || {};
+  if (!Array.isArray(employees)) return res.status(400).json({ error: 'employees array required' });
+  if (!payrollData.clients) payrollData.clients = {};
+  if (!payrollData.clients.haines) payrollData.clients.haines = { name: 'Haines', mode: 'haines-buddypunch' };
+  payrollData.clients.haines.manualEmployees = employees
+    .filter(e => e && (e.fname || e.lname))
+    .map(e => ({ fname: String(e.fname || '').trim(), lname: String(e.lname || '').trim() }));
+  savePayrollData();
+  res.json({ success: true, employees: payrollData.clients.haines.manualEmployees });
+});
+
+// Append a Haines payroll run to history. Capped at 200 runs.
+app.post('/payroll/admin/haines-history', requireAuth, (req, res) => {
+  const { runBy, outName, employees, totals } = req.body || {};
+  if (!outName) return res.status(400).json({ error: 'outName required' });
+  if (!Array.isArray(payrollData.hainesHistory)) payrollData.hainesHistory = [];
+  const entry = {
+    id: crypto.randomUUID(),
+    runAt: new Date().toISOString(),
+    runBy: String(runBy || 'Unknown'),
+    outName: String(outName),
+    employees: Number(employees) || 0,
+    totals: totals && typeof totals === 'object' ? {
+      reg:    Number(totals.reg)    || 0,
+      ot:     Number(totals.ot)     || 0,
+      vac:    Number(totals.vac)    || 0,
+      hol:    Number(totals.hol)    || 0,
+      sick:   Number(totals.sick)   || 0,
+      ot80:   Number(totals.ot80)   || 0,
+      oc25:   Number(totals.oc25)   || 0,
+      total:  Number(totals.total)  || 0,
+    } : null,
+  };
+  payrollData.hainesHistory.unshift(entry);
+  if (payrollData.hainesHistory.length > 200) payrollData.hainesHistory.length = 200;
+  savePayrollData();
+  res.json({ success: true, entry, history: payrollData.hainesHistory });
 });
 
 // Upsert a HTeaO store config. Body: { store, prefix, label, frequency, calculateTips }
