@@ -1724,6 +1724,14 @@ function hainesRenderDeductionsCount() {
   if (el) el.textContent = Object.keys(hainesGetDeductions()).length;
 }
 
+// Last successful run's employee roster — used to flag new vs missing
+// employees in the staging notice. Empty array on first ever run (notice hidden).
+function hainesGetLastRoster() {
+  const slug = document.getElementById('import-client').value;
+  const arr = _payrollData?.clients?.[slug]?.lastRoster;
+  return Array.isArray(arr) ? arr : [];
+}
+
 // ── Setup dropdown menu ──────────────────────────────────────────
 function hainesToggleSetupMenu(evt) {
   if (evt) evt.stopPropagation();
@@ -1942,7 +1950,40 @@ function hainesRender() {
           </div>`).join('')}
       </div>`;
   }
+  // Lifecycle notices — compare this CSV's employees against the roster
+  // saved on the previous successful run. Hidden on first ever run.
+  let lifecycleHtml = '';
+  const lastRoster = hainesGetLastRoster();
+  if (lastRoster.length) {
+    const currentSet = new Set(_hainesParsed.employees.map(e => hainesEmpKey(e.fname, e.lname)));
+    const rosterSet  = new Set(lastRoster.map(e => hainesEmpKey(e.fname, e.lname)));
+    // Manual employees are intentionally persistent — exclude them from "new" flagging
+    const manualSet  = new Set(hainesGetManualList().map(m => hainesEmpKey(m.fname, m.lname)));
+    const newOnes = _hainesParsed.employees.filter(e => {
+      const k = hainesEmpKey(e.fname, e.lname);
+      return !rosterSet.has(k) && !manualSet.has(k);
+    });
+    const missing = lastRoster.filter(e => !currentSet.has(hainesEmpKey(e.fname, e.lname)));
+    const fmtName = (e) => `${esc(e.fname)} ${esc(e.lname)}`;
+    const blocks = [];
+    if (newOnes.length) {
+      blocks.push(`<div style="padding:8px 10px;background:rgba(46,125,94,.10);border:1px solid var(--green);border-radius:6px;font-size:11px;color:var(--text);">
+        <strong style="color:var(--green);">🆕 New this period (${newOnes.length}):</strong> ${newOnes.map(fmtName).join(', ')}
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Set up tool deductions for them in <strong>⚙ Setup → 🔧 Tool Deductions</strong> if needed.</div>
+      </div>`);
+    }
+    if (missing.length) {
+      blocks.push(`<div style="padding:8px 10px;background:rgba(184,146,42,.10);border:1px solid var(--gold);border-radius:6px;font-size:11px;color:var(--text);">
+        <strong style="color:var(--gold);">⚠ Not in this period (${missing.length}):</strong> ${missing.map(fmtName).join(', ')}
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">Was on payroll last time but no hours this period — they may have left, taken full PTO, or are simply between shifts.</div>
+      </div>`);
+    }
+    if (blocks.length) {
+      lifecycleHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">${blocks.join('')}</div>`;
+    }
+  }
   stage.innerHTML = `
+    ${lifecycleHtml}
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">${_hainesParsed.employees.length} employees from CSV · ${_hainesParsed.dateRange || 'period ?'}</div>
     <div style="border:1px solid var(--border);border-radius:6px;background:var(--card);">
       <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface);border-bottom:1px solid var(--border);">
@@ -2120,6 +2161,21 @@ async function hainesProcessAll() {
         const data = await resp.json();
         if (_payrollData) _payrollData.hainesHistory = data.history || [];
         hainesRenderHistory();
+      }
+    } catch(_) {}
+    // Update last-seen roster so the next CSV's lifecycle notices are accurate.
+    // CSV-only — manual employees are explicit and not part of the roster.
+    try {
+      const roster = (_hainesParsed?.employees || []).map(e => ({ fname: e.fname, lname: e.lname }));
+      const resp = await fetch(`${API}/payroll/admin/haines-roster`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_token}` },
+        body: JSON.stringify({ employees: roster }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const slug = document.getElementById('import-client').value;
+        if (_payrollData?.clients?.[slug]) _payrollData.clients[slug].lastRoster = data.employees || [];
       }
     } catch(_) {}
   } catch (err) {

@@ -2994,6 +2994,22 @@ app.get('/payroll/admin/data', requireAuth, (req, res) => {
   res.json(safe);
 });
 
+// Save the Haines employee roster from the most recent successful run. Used
+// next time a CSV is dropped to flag new vs. missing employees so the user
+// can spot hires/leavers at a glance.
+app.post('/payroll/admin/haines-roster', requireAuth, (req, res) => {
+  const { employees } = req.body || {};
+  if (!Array.isArray(employees)) return res.status(400).json({ error: 'employees array required' });
+  if (!payrollData.clients) payrollData.clients = {};
+  if (!payrollData.clients.haines) payrollData.clients.haines = { name: 'Haines', mode: 'haines-buddypunch' };
+  payrollData.clients.haines.lastRoster = employees
+    .filter(e => e && (e.fname || e.lname))
+    .map(e => ({ fname: String(e.fname || '').trim(), lname: String(e.lname || '').trim() }));
+  payrollData.clients.haines.lastRosterAt = new Date().toISOString();
+  savePayrollData();
+  res.json({ success: true, employees: payrollData.clients.haines.lastRoster });
+});
+
 // Replace the Haines tool-deduction map (keyed by "lastname|firstname"
 // lowercased; value is the dollar amount per paycheck). Whole-map replace so
 // the client can submit the latest snapshot without diffing.
