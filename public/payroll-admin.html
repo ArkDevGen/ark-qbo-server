@@ -151,7 +151,7 @@
         <div style="flex:1;min-width:160px;">
           <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Client</label>
           <select id="import-client" onchange="importClientChange()" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;">
-            <option value="">— Select —</option>
+            <option value="">🏠 Home Page</option>
           </select>
         </div>
         <div class="portal-only" style="flex:0 0 120px;">
@@ -1192,11 +1192,13 @@ function importClientChange() {
     syncEmpSectionToTopClient();
   }
   // Render this client's opt-in widgets (Transfer Breakdown, etc.) — shown
-  // regardless of mode. Hidden when nothing's selected.
+  // regardless of mode. When no client is selected (Home Page), render the
+  // bank under a special __home__ slug so the same widgets work standalone
+  // (state lives in localStorage under that slug, isolated from clients).
   const widgetsHost = document.getElementById('client-widgets');
   if (widgetsHost) {
-    if (slug) { widgetsHost.style.display = ''; cwRender(slug); }
-    else { widgetsHost.style.display = 'none'; widgetsHost.innerHTML = ''; }
+    widgetsHost.style.display = '';
+    cwRender(slug || '__home__');
   }
 }
 
@@ -2782,7 +2784,7 @@ function populateImportClientSelect() {
   const sel = document.getElementById('import-client');
   if (!sel || !_payrollData?.clients) return;
   const clients = Object.entries(_payrollData.clients);
-  sel.innerHTML = '<option value="">— Select —</option>';
+  sel.innerHTML = '<option value="">🏠 Home Page</option>';
   clients.forEach(([slug, c]) => {
     sel.innerHTML += `<option value="${slug}">${c.name || slug}</option>`;
   });
@@ -3703,18 +3705,25 @@ function cwRender(slug) {
   if (!slug) return;
   const host = document.getElementById('client-widgets');
   if (!host) return;
+  // The home page shares the widget bank UI but uses different copy —
+  // "Tools" instead of "Client Widgets" and a generic empty-state message.
+  const isHome = slug === '__home__';
+  const sectionLabel = isHome ? 'Tools' : 'Client Widgets';
+  const emptyMsg = isHome
+    ? 'No tools enabled yet. Click + Widget to use Tip Pool Calculator, Transfer Breakdown, etc. without picking a client.'
+    : 'No add-on widgets enabled for this client.';
   const enabled = cwGetWidgets(slug);
   if (!enabled.length) {
     host.innerHTML = `
       <div style="padding:10px 14px;border:1px dashed var(--border);border-radius:8px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:12px;">
-        <div style="font-size:11px;color:var(--muted);">No add-on widgets enabled for this client.</div>
+        <div style="font-size:11px;color:var(--muted);">${emptyMsg}</div>
         <button class="btn btn-outline btn-sm" onclick="cwOpenAddModal('${slug}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">+ Widget</button>
       </div>`;
     return;
   }
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Client Widgets</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">${sectionLabel}</div>
       <button class="btn btn-outline btn-sm" onclick="cwOpenAddModal('${slug}')" style="font-size:11px;">🧩 Manage Widgets</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;align-items:start;">`;
