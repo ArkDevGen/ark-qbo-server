@@ -5019,6 +5019,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <div class="card-header" style="padding:12px 16px;">
               <div class="card-title" style="font-size:13px;">Profit & Loss Report</div>
             </div>
+            <!-- Inline company picker (mirrors Scooter's P&L pattern). Lets the user
+                 swap companies without leaving the workspace and re-running. -->
+            <div style="padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);background:var(--surface2);">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-d);">Company</span>
+              <select id="qbo-pl-rpt-company" onchange="qboPLRptSwitchCompany()" style="flex:1;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:'DM Mono',monospace;">
+                <option value="">— Connect QBO to populate —</option>
+              </select>
+              <span id="qbo-pl-rpt-company-status" style="font-size:11px;color:var(--text-d);font-style:italic;"></span>
+            </div>
             <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid var(--border);">
               <label style="font-size:11px;color:var(--text-d);">From:</label>
               <input type="date" id="qbo-pl-rpt-start" class="input" style="font-size:12px;width:140px;">
@@ -5033,7 +5042,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <button class="btn btn-sm" onclick="qboPLRptQuick('last-year')" style="font-size:10px;padding:4px 8px;">Last Yr</button>
               </div>
               <label style="font-size:11px;color:var(--text-d);margin-left:6px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                <input type="checkbox" id="qbo-pl-rpt-pct"> % of Income
+                <input type="checkbox" id="qbo-pl-rpt-pct" checked> % of Income
               </label>
               <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input type="checkbox" id="qbo-pl-rpt-class"> By Class
@@ -5509,6 +5518,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <label id="scoots-pl-class-lbl" style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;">
                   <input type="checkbox" id="scoots-pl-class" style="accent-color:#C8102E;"> By Class
                 </label>
+                <label id="scoots-pl-variance-lbl" style="font-size:11px;color:#888;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:500;user-select:none;" title="Show Prior / Current / Δ$ / Δ% columns vs prior month">
+                  <input type="checkbox" id="scoots-pl-variance" style="accent-color:#C8102E;" onchange="scootsPLOnVarianceChange()"> % Variance
+                </label>
+                <button type="button" id="scoots-pl-whole-btn" onclick="scootsPLToggleWholeFranchise()" style="font-size:11px;color:#888;background:#f5f5f5;border:1px solid #ddd;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;" title="Aggregate all connected companies into one Whole Franchise total">📦 Whole Franchise</button>
                 <div style="position:relative;">
                   <button type="button" id="scoots-pl-compare-btn" onclick="scootsPLToggleCompare()" style="font-size:11px;color:#888;background:#f5f5f5;border:1px solid #ddd;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:600;">🏢 Compare Stores <span id="scoots-pl-compare-count" style="color:#C8102E;"></span></button>
                   <div id="scoots-pl-compare-popover" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:100;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:var(--shadow-dd);padding:12px;min-width:280px;max-width:360px;">
@@ -37464,6 +37477,7 @@ function qboOpenTool(tool) {
   } else if (tool === 'plreport') {
     document.getElementById('qbo-ws-plreport').style.display = '';
     qboPLRptQuick('last-month');
+    qboPLRptPopulateCompanies();
   } else if (tool === 'expense') {
     document.getElementById('qbo-expense-workspace').style.display = '';
     // Repopulate vendor and account dropdowns with live data
@@ -37813,6 +37827,60 @@ function qboFmtMoney(val) {
 
 // ── P&L Report Workspace ───────────────────────────────────────────
 
+// Populate the in-workspace company picker from qboAllCompanies. Mirrors the
+// Scooter's pattern so users can swap companies without leaving the report.
+function qboPLRptPopulateCompanies() {
+  const sel = document.getElementById('qbo-pl-rpt-company');
+  const status = document.getElementById('qbo-pl-rpt-company-status');
+  if (!sel) return;
+  const companies = (typeof qboAllCompanies === 'object' && qboAllCompanies) ? qboAllCompanies : {};
+  const realmIds = Object.keys(companies).filter(rid => companies[rid].connected !== false);
+  if (!realmIds.length) {
+    sel.innerHTML = '<option value="">— Connect QBO to populate —</option>';
+    if (status) status.textContent = 'No companies connected';
+    return;
+  }
+  realmIds.sort((a, b) => {
+    const an = (companies[a].companyName || a).toLowerCase();
+    const bn = (companies[b].companyName || b).toLowerCase();
+    return an.localeCompare(bn);
+  });
+  sel.innerHTML = realmIds.map(rid => {
+    const info = companies[rid];
+    const name = info.companyName || 'Unnamed Company';
+    const fmtId = String(rid).replace(/(\d{4})(?=\d)/g, '$1 ');
+    return `<option value="${rid}">${name} — ${fmtId}</option>`;
+  }).join('');
+  if (qboActiveRealmId && realmIds.includes(qboActiveRealmId)) {
+    sel.value = qboActiveRealmId;
+  }
+  if (status) status.textContent = '';
+}
+
+// Switch active company from inside the P&L Report workspace. Mirrors the
+// global picker and auto-reruns if the user already has dates filled.
+async function qboPLRptSwitchCompany() {
+  const sel = document.getElementById('qbo-pl-rpt-company');
+  const status = document.getElementById('qbo-pl-rpt-company-status');
+  const newRealmId = sel?.value;
+  if (!newRealmId || newRealmId === qboActiveRealmId) return;
+  // Mirror selection to the global picker so qboSwitchCompany() picks it up
+  const globalSel = document.getElementById('qbo-company-select');
+  if (globalSel) globalSel.value = newRealmId;
+  if (status) status.textContent = 'Switching…';
+  try {
+    await qboSwitchCompany();
+    if (status) status.textContent = '';
+  } catch (e) {
+    if (status) status.textContent = 'Switch failed: ' + (e?.message || e);
+    return;
+  }
+  // Auto-rerun if dates are filled in
+  const start = document.getElementById('qbo-pl-rpt-start')?.value;
+  const end = document.getElementById('qbo-pl-rpt-end')?.value;
+  if (start && end) qboPLRptRun();
+}
+
 function qboPLRptQuick(preset) {
   const today = new Date();
   let s, e;
@@ -38157,6 +38225,8 @@ function scootsPLUpdateCompareUI() {
   const btn = document.getElementById('scoots-pl-compare-btn');
   const classCb = document.getElementById('scoots-pl-class');
   const classLbl = document.getElementById('scoots-pl-class-lbl');
+  const varCb = document.getElementById('scoots-pl-variance');
+  const varLbl = document.getElementById('scoots-pl-variance-lbl');
   const n = scootsPLCompareRealms.length;
   if (countEl) countEl.textContent = n ? `(${n})` : '';
   if (btn) {
@@ -38172,6 +38242,25 @@ function scootsPLUpdateCompareUI() {
     classLbl.style.opacity = compareOn ? '0.4' : '1';
     classLbl.style.cursor = compareOn ? 'not-allowed' : 'pointer';
     classLbl.title = compareOn ? 'Unavailable in Compare mode' : '';
+  }
+  // Disable "% Variance" in compare mode (single-company only for v1)
+  if (varCb && varLbl) {
+    const compareOn = n >= 2;
+    varCb.disabled = compareOn;
+    if (compareOn) varCb.checked = false;
+    varLbl.style.opacity = compareOn ? '0.4' : '1';
+    varLbl.style.cursor = compareOn ? 'not-allowed' : 'pointer';
+    varLbl.title = compareOn ? 'Unavailable in Compare/Whole Franchise mode' : 'Show Prior / Current / Δ$ / Δ% columns vs prior month';
+  }
+  // Reset whole-franchise pill if compare list was cleared from elsewhere
+  if (n === 0 && _scootsWholeFranchise) {
+    _scootsWholeFranchise = false;
+    const whBtn = document.getElementById('scoots-pl-whole-btn');
+    if (whBtn) {
+      whBtn.style.background = '#f5f5f5';
+      whBtn.style.color = '#888';
+      whBtn.style.borderColor = '#ddd';
+    }
   }
 }
 
@@ -38311,6 +38400,165 @@ function scootsPLBuildMergedReport(perRealmReports) {
   };
 }
 
+// ── Whole Franchise mode ────────────────────────────────────────────
+// Aggregates every connected QBO company into ONE total column (no per-store
+// columns). Reuses scootsPLBuildMergedReport's TOTAL column by stripping the
+// per-realm columns out of the result.
+let _scootsWholeFranchise = false;
+
+function scootsPLToggleWholeFranchise() {
+  _scootsWholeFranchise = !_scootsWholeFranchise;
+  const btn = document.getElementById('scoots-pl-whole-btn');
+  if (btn) {
+    btn.style.background = _scootsWholeFranchise ? '#C8102E' : '#f5f5f5';
+    btn.style.color = _scootsWholeFranchise ? '#fff' : '#888';
+    btn.style.borderColor = _scootsWholeFranchise ? '#C8102E' : '#ddd';
+  }
+  if (_scootsWholeFranchise) {
+    // Auto-fill compare list with every connected company. Compare-mode logic
+    // does the merge; we'll collapse to TOTAL only inside scootsPLRun.
+    scootsPLCompareRealms = Object.keys(qboAllCompanies || {})
+      .filter(rid => qboAllCompanies[rid]?.connected !== false);
+    // Variance is incompatible with whole franchise (multi-company already)
+    const vCb = document.getElementById('scoots-pl-variance');
+    if (vCb) vCb.checked = false;
+  } else {
+    scootsPLCompareRealms = [];
+  }
+  scootsPLUpdateCompareUI();
+  // If popover is open, refresh it
+  const pop = document.getElementById('scoots-pl-compare-popover');
+  if (pop && pop.style.display === 'block') scootsPLRenderCompanyPicker();
+}
+
+// Strip per-realm columns from a merged report, leaving Account + TOTAL only.
+// "Whole Franchise" output: one combined column representing every company.
+function scootsPLCollapseToTotal(mergedReport) {
+  if (!mergedReport) return mergedReport;
+  const cols = mergedReport.Columns?.Column || [];
+  if (cols.length < 3) return mergedReport; // already minimal
+  const totalIdx = cols.length - 1; // TOTAL is last column
+  const keepIdx = [0, totalIdx];
+
+  const pickCols = (arr) => keepIdx.map(i => arr[i]);
+  const walk = (rows) => {
+    if (!rows) return rows;
+    return rows.map(r => {
+      const out = { ...r };
+      if (r.ColData) out.ColData = pickCols(r.ColData);
+      if (r.Header?.ColData) out.Header = { ...r.Header, ColData: pickCols(r.Header.ColData) };
+      if (r.Summary?.ColData) out.Summary = { ...r.Summary, ColData: pickCols(r.Summary.ColData) };
+      if (r.Rows?.Row) out.Rows = { ...r.Rows, Row: walk(r.Rows.Row) };
+      return out;
+    });
+  };
+
+  return {
+    ...mergedReport,
+    Header: { ...(mergedReport.Header || {}), CompanyName: 'Whole Franchise · Combined' },
+    Columns: { Column: [cols[0], { ...cols[totalIdx], ColTitle: 'Whole Franchise' }] },
+    Rows: { Row: walk(mergedReport.Rows?.Row || []) },
+  };
+}
+
+// ── % Variance mode ────────────────────────────────────────────────
+// Builds a synthetic 4-column report (Prior / Current / Δ$ / Δ%) by walking
+// the current report and matching prior-period values by account name at each
+// nesting level. Works only in single-company mode (compareMode disabled).
+
+function scootsPLOnVarianceChange() {
+  const v = document.getElementById('scoots-pl-variance')?.checked;
+  if (v) {
+    // Variance is single-company. Force off compare + whole franchise.
+    if (scootsPLCompareRealms.length) scootsPLClearCompare();
+    if (_scootsWholeFranchise) scootsPLToggleWholeFranchise();
+  }
+}
+
+function scootsPLBuildVarianceReport(currentReport, prevReport) {
+  const cols = [
+    { ColTitle: '', ColType: 'Account' },
+    { ColTitle: 'Prior Period', ColType: 'Money' },
+    { ColTitle: 'Current Period', ColType: 'Money' },
+    { ColTitle: 'Δ $', ColType: 'Money' },
+    { ColTitle: 'Δ %', ColType: 'Money' },
+  ];
+
+  // Helper: lookup table for prev rows at any sibling level, keyed by ColData[0] value
+  const indexBy = (rows) => {
+    const m = new Map();
+    if (!rows) return m;
+    for (const r of rows) {
+      const name = r.ColData?.[0]?.value || r.Header?.ColData?.[0]?.value || '';
+      if (name) m.set(name, r);
+    }
+    return m;
+  };
+
+  const numAt = (cd, idx) => {
+    const v = parseFloat(cd?.[idx]?.value);
+    return isFinite(v) ? v : 0;
+  };
+
+  const buildRow = (name, prev, cur) => {
+    const d = cur - prev;
+    const dPct = prev !== 0 ? (d / Math.abs(prev) * 100) : (cur !== 0 ? 100 : 0);
+    return [
+      { value: name },
+      { value: prev.toFixed(2) },
+      { value: cur.toFixed(2) },
+      { value: d.toFixed(2) },
+      { value: dPct.toFixed(1) + '%' },
+    ];
+  };
+
+  const walk = (curRows, prevRows) => {
+    const out = [];
+    if (!curRows) return out;
+    const prevIdx = indexBy(prevRows);
+    for (const row of curRows) {
+      if (row.type === 'Data' && row.ColData) {
+        const name = row.ColData[0]?.value || '';
+        const cur = numAt(row.ColData, 1);
+        const prevRow = prevIdx.get(name);
+        const prev = prevRow ? numAt(prevRow.ColData, 1) : 0;
+        out.push({ ...row, ColData: buildRow(name, prev, cur) });
+      } else if (row.Header) {
+        const sectionName = row.Header.ColData?.[0]?.value || '';
+        const prevSection = prevIdx.get(sectionName);
+        const newRow = {
+          ...row,
+          Header: { ...row.Header, ColData: [
+            { value: sectionName }, { value: '' }, { value: '' }, { value: '' }, { value: '' },
+          ]},
+          Rows: { Row: walk(row.Rows?.Row || [], prevSection?.Rows?.Row || []) },
+        };
+        if (row.Summary?.ColData) {
+          const sumLabel = row.Summary.ColData[0]?.value || '';
+          const cur = numAt(row.Summary.ColData, 1);
+          const prev = prevSection?.Summary ? numAt(prevSection.Summary.ColData, 1) : 0;
+          newRow.Summary = { ColData: buildRow(sumLabel, prev, cur) };
+        }
+        out.push(newRow);
+      } else if (row.Summary?.ColData) {
+        // Grand summary (Net Income, etc.)
+        const sumLabel = row.Summary.ColData[0]?.value || '';
+        const prevGrand = (prevRows || []).find(r => (r.Summary?.ColData?.[0]?.value || '') === sumLabel);
+        const cur = numAt(row.Summary.ColData, 1);
+        const prev = prevGrand?.Summary ? numAt(prevGrand.Summary.ColData, 1) : 0;
+        out.push({ ...row, Summary: { ColData: buildRow(sumLabel, prev, cur) } });
+      }
+    }
+    return out;
+  };
+
+  return {
+    Header: { ...(currentReport?.Header || {}), CompanyName: (currentReport?.Header?.CompanyName || '') + ' · Variance vs Prior Period' },
+    Columns: { Column: cols },
+    Rows: { Row: walk(currentReport?.Rows?.Row || [], prevReport?.Rows?.Row || []) },
+  };
+}
+
 async function scootsPLRun() {
   const startDate = document.getElementById('scoots-pl-start').value;
   const endDate = document.getElementById('scoots-pl-end').value;
@@ -38345,6 +38593,8 @@ async function scootsPLRun() {
     const yoyEndFinal = yoyEnd > yoyEndClamped ? yoyEndClamped : yoyEnd;
 
     const compareMode = scootsPLCompareRealms.length >= 2;
+    const wholeFranchise = _scootsWholeFranchise && compareMode;
+    const varianceMode = !!document.getElementById('scoots-pl-variance')?.checked && !compareMode;
 
     let currentReport, prevReport, yoyReport;
     let compareCompanyNames = [];
@@ -38440,8 +38690,20 @@ async function scootsPLRun() {
     });
     kpiBox.style.display = '';
 
-    // Render P&L report — in compare mode, treat as byClass so per-column %-of-income works
-    scootsPLRenderReport(currentReport, output, showPct, byClass || compareMode);
+    // Render P&L report — three render paths:
+    //   1. Whole Franchise: collapse merged report to one TOTAL column.
+    //   2. Variance:        build prior/current/Δ$/Δ% report (single-company only).
+    //   3. Default:         current report as-is (or merged if compareMode).
+    let renderReport = currentReport;
+    let renderMultiCol = byClass || compareMode;
+    if (wholeFranchise) {
+      renderReport = scootsPLCollapseToTotal(currentReport);
+      renderMultiCol = true; // 2nd column needs to render
+    } else if (varianceMode && prevReport) {
+      renderReport = scootsPLBuildVarianceReport(currentReport, prevReport);
+      renderMultiCol = true; // 4 numeric columns
+    }
+    scootsPLRenderReport(renderReport, output, showPct, renderMultiCol);
 
     const storesMsg = compareMode ? `${compareCompanyNames.length} stores · ` : '';
     statusEl.textContent = storesMsg + startDate + ' → ' + endDate;
@@ -45711,7 +45973,10 @@ async function sjePushAll() {
   }
 
   // Save batch to push history log
-  if(_sjePushResults.length) sjeSaveBatch('sales', _sjePushResults);
+  if(_sjePushResults.length) {
+    sjeSaveBatch('sales', _sjePushResults);
+    sjeAutoCheckCloseChecklist('sales', _sjePushResults);
+  }
 
   // Show confirmation
   sjeShowConfirm();
@@ -46538,6 +46803,86 @@ function sjeMappingOpenDetail(franchiseKey){
 
 // ── Push History Logging ─────────────────────────────────────────
 // Logs every push batch (Sales or COGS) so we can review them later
+// ── Auto-check P&L Review close-checklist after a successful JE push ─────
+// When sales/COGS JEs land in QBO, mark the matching task's "Sales JE posted"
+// or "COGS JE posted" item as done automatically so the AM doesn't have to
+// remember. Matching is by qboRealmId + month-of-entry. No-op if there's no
+// matching task (e.g. push for a non-Scooter's client).
+function sjeAutoCheckCloseChecklist(type, results) {
+  if (!Array.isArray(results) || !results.length) return;
+  const itemId = type === 'sales' ? 'salesJE' : type === 'cogs' ? 'cogsJE' : null;
+  if (!itemId) return;
+  if (!Array.isArray(DB.tasks)) return;
+
+  // Build a label → realmId lookup from whichever push session is active.
+  // Sales push results carry `franchise` (label); COGS push results carry `store`.
+  const labelToRealm = new Map();
+  const sources = [_sjeData?.franchises, _cogsData?.franchises].filter(Array.isArray);
+  for (const list of sources) {
+    for (const f of list) {
+      if (f.label && f.realmId) labelToRealm.set(f.label, f.realmId);
+    }
+  }
+
+  // Group successful pushes by realmId + month (YYYY-MM)
+  const groups = new Map(); // key = realmId|monthKey
+  for (const r of results) {
+    if (r.status !== 'success') continue;
+    const label = r.franchise || r.store;
+    const realmId = r.realmId || labelToRealm.get(label);
+    if (!realmId || !r.date) continue;
+    let monthKey = '';
+    const isoMatch = String(r.date).match(/^(\d{4})-(\d{2})/);
+    const usMatch  = String(r.date).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (isoMatch) monthKey = `${isoMatch[1]}-${isoMatch[2]}`;
+    else if (usMatch) monthKey = `${usMatch[3]}-${usMatch[1]}`;
+    if (!monthKey) continue;
+    const key = `${realmId}|${monthKey}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  if (!groups.size) return;
+
+  const now = new Date().toISOString();
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : 'System';
+  let updated = 0;
+
+  for (const key of groups.keys()) {
+    const [realmId, monthKey] = key.split('|');
+    const task = DB.tasks.find(t =>
+      !t._deleted &&
+      t.qboRealmId === realmId &&
+      t.name && String(t.name).startsWith('P&L Review') &&
+      t.dueDate && String(t.dueDate).startsWith(monthKey) &&
+      Array.isArray(t.closeChecklist)
+    );
+    if (!task) continue;
+    const item = task.closeChecklist.find(it => it.id === itemId);
+    if (!item || item.checked) continue;
+    item.checked = true;
+    item.checkedBy = who;
+    item.checkedAt = now;
+    task.updatedAt = now;
+    updated++;
+    if (Array.isArray(task.noteLog)) {
+      task.noteLog.unshift({
+        id: typeof uid === 'function' ? uid() : String(Date.now()),
+        text: `✓ Auto-checked "${item.label}" — ${type === 'sales' ? 'Sales JE' : 'COGS JE'} push completed`,
+        author: who,
+        at: now,
+        type: 'note',
+      });
+    }
+  }
+
+  if (updated) {
+    try { saveDB(); } catch(_) {}
+    if (typeof showToast === 'function') {
+      showToast(`✓ Auto-checked close-checklist on ${updated} task${updated > 1 ? 's' : ''}`);
+    }
+  }
+}
+
 function sjeSaveBatch(type, results){
   if(!DB.sjePushLog) DB.sjePushLog = [];
   const who = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown';
@@ -47129,7 +47474,10 @@ async function cogsPushAll() {
   }
 
   // Save batch to push history log
-  if(_cogsPushResults.length) sjeSaveBatch('cogs', _cogsPushResults);
+  if(_cogsPushResults.length) {
+    sjeSaveBatch('cogs', _cogsPushResults);
+    sjeAutoCheckCloseChecklist('cogs', _cogsPushResults);
+  }
 
   // Show confirmation
   const success = _cogsPushResults.filter(r => r.status === 'success').length;
