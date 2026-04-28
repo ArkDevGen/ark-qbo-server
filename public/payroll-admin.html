@@ -1370,6 +1370,7 @@ async function hteaoProcessAll() {
           stores: results.map(r => ({
             store: r.store, prefix: r.prefix, dateRange: r.dateRange || '',
             outName: r.name, employees: r.employees, tips: r.tips,
+            csv: r.csv, // server persists this so the row gets a re-download button
           })),
         }),
       });
@@ -1443,12 +1444,22 @@ function hteaoRenderHistory() {
     const dt = new Date(run.runAt).toLocaleString();
     const totalEmps = (run.stores||[]).reduce((s, x) => s + (Number(x.employees)||0), 0);
     const totalTips = (run.stores||[]).reduce((s, x) => s + (Number(x.tips)||0), 0);
-    const storeRows = (run.stores||[]).map(s => `
+    const storeRows = (run.stores||[]).map((s, idx) => {
+      // Older entries pre-date server-side CSV storage and have no csvFile —
+      // show the filename as plain text in that case.
+      const dlHref = s.csvFile
+        ? `${API}/payroll/admin/hteao-history/${encodeURIComponent(run.id)}/${idx}/download?token=${encodeURIComponent(_token||'')}`
+        : '';
+      const nameCell = dlHref
+        ? `<a href="${dlHref}" style="color:var(--accent);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Download CSV">⬇ ${s.outName||''}</a>`
+        : `<span style="color:var(--text);">${s.outName||''}</span>`;
+      return `
       <div style="display:flex;align-items:center;gap:10px;padding:6px 14px;border-top:1px solid var(--border);font-size:11px;">
         <span style="font-family:monospace;font-weight:700;color:var(--accent);min-width:50px;">#${s.store||''}</span>
-        <span style="color:var(--text);">${s.outName||''}</span>
+        ${nameCell}
         <span style="margin-left:auto;color:var(--muted);">${s.employees||0} emp · $${(Number(s.tips)||0).toFixed(2)}</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `<div style="border-bottom:1px solid var(--border);">
       <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;background:var(--card);">
         <span style="font-size:12px;font-weight:600;color:var(--text);">${dt}</span>

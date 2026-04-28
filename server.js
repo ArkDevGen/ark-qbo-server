@@ -2647,6 +2647,11 @@ app.get('/files/roots', requireAuth, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 const PAYROLL_FILE = path.join(DATA_DIR, 'payroll-data.json');
 
+// One subdir per processed run (id is a UUID), each holding the generated
+// CSV(s). History entries reference files here so the JSON index stays small.
+const PAYROLL_RUNS_DIR = path.join(DATA_DIR, 'payroll-runs');
+try { fs.mkdirSync(PAYROLL_RUNS_DIR, { recursive: true }); } catch(_) {}
+
 // Load payroll data from persistent disk, or seed from repo copy if first deploy
 let payrollData = { clients: {}, submissions: [] };
 if (fs.existsSync(PAYROLL_FILE)) {
@@ -3125,29 +3130,82 @@ app.delete('/payroll/admin/hteao-store/:store', requireAuth, (req, res) => {
 
 // Append a HTeaO payroll run to history. One entry per Process & Download
 // click — covers however many stores were in that batch. Capped at 200 runs.
+// If the client also sends `csv` per store, the file is persisted under
+// PAYROLL_RUNS_DIR/<runId>/<outName> so the row gets a download button later.
 app.post('/payroll/admin/hteao-history', requireAuth, (req, res) => {
   const { runBy, stores } = req.body || {};
   if (!Array.isArray(stores) || !stores.length) {
     return res.status(400).json({ error: 'stores array required' });
   }
   if (!Array.isArray(payrollData.hteaoHistory)) payrollData.hteaoHistory = [];
+  const runId = crypto.randomUUID();
+  const runDir = path.join(PAYROLL_RUNS_DIR, runId);
+  let runDirCreated = false;
   const entry = {
-    id: crypto.randomUUID(),
+    id: runId,
     runAt: new Date().toISOString(),
     runBy: String(runBy || 'Unknown'),
-    stores: stores.map(s => ({
-      store:     String(s.store || ''),
-      prefix:    String(s.prefix || ''),
-      dateRange: String(s.dateRange || ''),
-      outName:   String(s.outName || ''),
-      employees: Number(s.employees) || 0,
-      tips:      Number(s.tips) || 0,
-    })),
+    stores: stores.map(s => {
+      const outName = String(s.outName || '');
+      // path.basename strips any path traversal — outName comes from client
+      const safeName = path.basename(outName) || `store-${s.store || 'unknown'}.csv`;
+      let csvFile = '';
+      if (typeof s.csv === 'string' && s.csv.length) {
+        if (!runDirCreated) {
+          try { fs.mkdirSync(runDir, { recursive: true }); runDirCreated = true; }
+          catch(e) { console.warn('Could not create payroll run dir:', e.message); }
+        }
+        if (runDirCreated) {
+          try {
+            fs.writeFileSync(path.join(runDir, safeName), s.csv, 'utf8');
+            csvFile = safeName;
+          } catch(e) {
+            console.warn('Could not write payroll run CSV:', e.message);
+          }
+        }
+      }
+      return {
+        store:     String(s.store || ''),
+        prefix:    String(s.prefix || ''),
+        dateRange: String(s.dateRange || ''),
+        outName,
+        employees: Number(s.employees) || 0,
+        tips:      Number(s.tips) || 0,
+        csvFile,
+      };
+    }),
   };
   payrollData.hteaoHistory.unshift(entry);
-  if (payrollData.hteaoHistory.length > 200) payrollData.hteaoHistory.length = 200;
+  // Trim history past 200 — but also delete the run dirs of trimmed entries
+  // so disk usage doesn't grow forever.
+  if (payrollData.hteaoHistory.length > 200) {
+    const dropped = payrollData.hteaoHistory.splice(200);
+    for (const old of dropped) {
+      try { fs.rmSync(path.join(PAYROLL_RUNS_DIR, old.id), { recursive: true, force: true }); }
+      catch(_) {}
+    }
+  }
   savePayrollData();
   res.json({ success: true, entry, history: payrollData.hteaoHistory });
+});
+
+// Stream a single CSV from a past HTeaO run. The token can be in either
+// the Authorization header (XHR) or the ?token= query string (plain <a> link).
+app.get('/payroll/admin/hteao-history/:runId/:storeIdx/download', requireAuth, (req, res) => {
+  const { runId, storeIdx } = req.params;
+  const idx = Number(storeIdx);
+  if (!Number.isInteger(idx) || idx < 0) return res.status(400).json({ error: 'bad storeIdx' });
+  const run = (payrollData.hteaoHistory || []).find(r => r.id === runId);
+  if (!run) return res.status(404).json({ error: 'run not found' });
+  const store = (run.stores || [])[idx];
+  if (!store || !store.csvFile) return res.status(404).json({ error: 'csv not stored for this row' });
+  // Re-basename in case of any tampering with the stored value
+  const safeName = path.basename(store.csvFile);
+  const filePath = path.join(PAYROLL_RUNS_DIR, runId, safeName);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'csv file missing on disk' });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName.replace(/"/g, '')}"`);
+  fs.createReadStream(filePath).pipe(res);
 });
 
 // ── Employee Change Log helper ───────────────────────────────────
