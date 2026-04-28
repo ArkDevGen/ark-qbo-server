@@ -13724,14 +13724,18 @@ async function populateAMSelect(selId=''){
     const resp = await authFetch(ARK_SERVER + '/users/team');
     if(!resp.ok) throw new Error('users/team ' + resp.status);
     const data = await resp.json();
-    const users = (data.users || data).filter(u => !u.status || u.status.toLowerCase() === 'active');
+    const users = (data.users || data)
+      .filter(u => !u.status || u.status.toLowerCase() === 'active')
+      .sort((a,b) => `${a.fname||''} ${a.lname||''}`.localeCompare(`${b.fname||''} ${b.lname||''}`));
     sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>{
       const uid = u._id || u.id;
       return `<option value="${uid}" ${uid===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`;
     }).join('');
   } catch(e) {
     // Fallback to local users if server unreachable
-    const users = (loadUsers() || []).filter(u => !u.status || u.status.toLowerCase() === 'active');
+    const users = (loadUsers() || [])
+      .filter(u => !u.status || u.status.toLowerCase() === 'active')
+      .sort((a,b) => `${a.fname||''} ${a.lname||''}`.localeCompare(`${b.fname||''} ${b.lname||''}`));
     sel.innerHTML=`<option value="">— Unassigned —</option>`+users.map(u=>`<option value="${u.id}" ${u.id===selId?'selected':''}>${u.fname} ${u.lname||''}</option>`).join('');
   }
 }
@@ -15763,8 +15767,10 @@ window.onload = () => { window.print(); };
 function buildAMClientDD(selectedIds=[]){
   const menu=document.getElementById('dd-am-menu');
   const hidden=document.getElementById('mam-clients');
-  hidden.innerHTML=DB.clients.map(c=>`<option value="${c.id}" ${selectedIds.includes(c.id)?'selected':''}>${c.biz}</option>`).join('');
-  menu.innerHTML=DB.clients.length?DB.clients.map(c=>`
+  // Sort alphabetically by business name so the picker is predictable
+  const sortedClients = (DB.clients||[]).slice().sort((a,b) => (a.biz||'').localeCompare(b.biz||''));
+  hidden.innerHTML=sortedClients.map(c=>`<option value="${c.id}" ${selectedIds.includes(c.id)?'selected':''}>${c.biz}</option>`).join('');
+  menu.innerHTML=sortedClients.length?sortedClients.map(c=>`
     <label class="dd-opt">
       <input type="checkbox" value="${c.id}" ${selectedIds.includes(c.id)?'checked':''} onchange="syncAMDD()">
       <span>${c.biz}</span>
@@ -25070,7 +25076,9 @@ async function propBuildAMSelect(selectedId){
   if (!(_cachedServerUsers||[]).length && typeof refreshServerUsersCache === 'function') {
     try { await refreshServerUsersCache(); } catch(_){}
   }
-  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const list = ((_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]))
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   sel.innerHTML = '<option value="">— Select AM —</option>' +
     list.map(a=>`<option value="${a.id}" ${a.id===selectedId?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
@@ -26696,6 +26704,8 @@ function tcPopulateAMSelect(selectedId){
 
 function tcRenderAmDropdown(teamList){
   if(!teamList) teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  // Sort alphabetically by full name so the picker is predictable
+  teamList = teamList.slice().sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   const dd = document.getElementById('tc-am-dropdown'); if(!dd) return;
   dd.innerHTML = teamList.map(a => {
     const name = `${a.fname||a.userName||''} ${a.lname||''}`.trim();
@@ -32949,7 +32959,9 @@ async function lcPopulateAMFilter(){
     try { await refreshServerUsersCache(); } catch(_){}
   }
   const cur = sel.value;
-  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const list = ((_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]))
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   sel.innerHTML = '<option value="">All Team</option>' +
     list.map(a=>`<option value="${a.id}" ${a.id===cur?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
@@ -33068,7 +33080,9 @@ async function lcPopulateAMSelectModal(selectedId){
     try { await refreshServerUsersCache(); } catch(_){}
   }
   const def = selectedId || (currentUser&&currentUser.role!=='admin'?currentUser.id:'');
-  const list = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const list = ((_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]))
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   sel.innerHTML = '<option value="">— Unassigned —</option>' +
     list.map(a=>`<option value="${a.id}" ${a.id===def?'selected':''}>${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
