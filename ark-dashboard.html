@@ -10885,7 +10885,7 @@ function wgRenderWidget(w, data){
       const clickAttr = a.fn?` onclick="${a.fn}"`:'';
       return `<${tag} class="wg-qa-btn"${hrefAttr}${clickAttr}>${iconLabelHtml}</${tag}>`;
     }).join('');
-    return `<div class="wg-widget" style="--wg-accent:var(--navy);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};overflow:visible;" data-wid="${w.id}" draggable="false">
+    return `<div class="wg-widget" style="--wg-accent:var(--navy);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};overflow:visible;z-index:5;" data-wid="${w.id}" draggable="false">
       <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${w.isDefault?'':editBtns}</div>
       <div class="wg-body" style="padding:0 20px 16px;"><div class="wg-qa-row">${btns}</div></div>
     </div>`;
