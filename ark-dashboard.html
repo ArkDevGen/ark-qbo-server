@@ -1487,6 +1487,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <option value="computed:clockedIn">Clocked In Now</option>
                 <option value="computed:activeAMs">Active Account Managers</option>
                 <option value="computed:onboarding">Incomplete Onboarding</option>
+                <option value="computed:productionTasks">My Production Tasks (overdue + today)</option>
               </optgroup>
             </select>
           </div>
@@ -10532,6 +10533,7 @@ const DEFAULT_WIDGETS = [
   {id:'dw9',type:'kpi',title:'Unfiled NH Reports',source:{type:'collection',collection:'employees'},display:{metric:'count',subtitle:'need to be filed',accentColor:'var(--red)'},filters:[{field:'reportPrinted',op:'eq',value:false}],grid:{col:11,row:2,colSpan:2,rowSpan:1}},
   {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:2},locked:true},
   {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:5,colSpan:12,rowSpan:4},locked:true},
+  {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:9,colSpan:4,rowSpan:2},onClick:'tasks'},
 ];
 
 // ── Computed widget handlers ──
@@ -10592,6 +10594,59 @@ const WIDGET_COMPUTED = {
   onboarding(){
     const incomplete=(DB.clients||[]).filter(c=>{const p=obGetProgress(c);return p.total>0&&p.done<p.total;}).length;
     return {value:incomplete,sub:incomplete===1?'client needs attention':'clients need attention',valueColor:incomplete>0?'#2c7be5':'var(--green)'};
+  },
+  // My production tasks — overdue + today's, with a click-through list.
+  // Filters to currentUser.id so each viewer sees their own slate.
+  productionTasks(){
+    if(!currentUser?.id) return {value:'—',sub:'Not logged in'};
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().slice(0,10);
+    const isHidden = (typeof _taskHiddenForMe === 'function') ? _taskHiddenForMe : (() => false);
+    const mine = (DB.tasks||[]).filter(t =>
+      !t._deleted && !isHidden(t) &&
+      t.amId === currentUser.id &&
+      t.status !== 'completed' &&
+      t.type !== 'note' &&
+      t.dueDate
+    );
+    const overdue  = mine.filter(t => t.dueDate < todayStr).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+    const dueToday = mine.filter(t => t.dueDate === todayStr);
+    const total = overdue.length + dueToday.length;
+
+    if(!total){
+      return { value: 0, sub: 'all caught up', valueColor: 'var(--green)' };
+    }
+    // Inline list — overdue first (red dot), then today (gold). Cap at 8 to
+    // keep the widget compact; rest collapses to "+N more".
+    const all = [...overdue, ...dueToday];
+    const shown = all.slice(0, 8);
+    const rows = shown.map(t => {
+      const client = (DB.clients||[]).find(c => c.id === t.clientId);
+      const isOver = t.dueDate < todayStr;
+      const dot = isOver ? '🔴' : '🟡';
+      const days = isOver ? Math.round((today - new Date(t.dueDate+'T12:00:00'))/86400000) : 0;
+      const dueLabel = isOver ? `${days}d late` : 'today';
+      const dueColor = isOver ? 'var(--red)' : 'var(--gold)';
+      const safeName = String(t.name||'').replace(/"/g,'&quot;');
+      return `<div onclick="event.stopPropagation();nav('tasks');setTimeout(()=>twfOpen('${t.id}'),200);" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" title="${safeName}">
+        <span style="font-size:10px;flex-shrink:0;">${dot}</span>
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.name||'(no name)'}</div>
+          ${client ? `<div style="font-size:10px;color:var(--text-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${client.biz}</div>` : ''}
+        </div>
+        <span style="font-size:10px;font-weight:600;color:${dueColor};white-space:nowrap;flex-shrink:0;">${dueLabel}</span>
+      </div>`;
+    }).join('');
+    const more = all.length > shown.length
+      ? `<div style="font-size:11px;color:var(--text-d);text-align:center;padding:8px 0 0;cursor:pointer;" onclick="event.stopPropagation();nav('tasks');">+${all.length - shown.length} more →</div>`
+      : '';
+    const extraHtml = `<div style="margin-top:10px;max-height:240px;overflow-y:auto;">${rows}${more}</div>`;
+    return {
+      value:      total,
+      sub:        `${overdue.length} overdue · ${dueToday.length} today`,
+      valueColor: overdue.length > 0 ? 'var(--red)' : 'var(--gold)',
+      extraHtml,
+    };
   },
 };
 
@@ -10907,6 +10962,14 @@ function wgLoadWidgets(){
       w.grid.rowSpan = def.grid.rowSpan;
     }
   });
+
+  // Append any default widgets the user doesn't have yet — e.g. when a new
+  // default ships, existing users still see it instead of having to know
+  // about the widget builder. _wgPackLayout below resolves placement.
+  const haveIds = new Set(_userWidgets.map(w => w.id));
+  for (const def of DEFAULT_WIDGETS) {
+    if (!haveIds.has(def.id)) _userWidgets.push(JSON.parse(JSON.stringify(def)));
+  }
 
   // Pack once to resolve any overlaps from legacy saved layouts
   _wgPackLayout(_userWidgets);
