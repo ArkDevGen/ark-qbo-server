@@ -171,6 +171,57 @@
       <div id="import-push-status" style="font-size:11px;margin-top:6px;min-height:14px;"></div>
     </div>
 
+    <!-- Welcome card — shown when no client is picked. Mode legend + roadmap
+         so the page doesn't look blank on first open. Toggled by
+         importClientChange (hidden as soon as any client is selected). -->
+    <div id="welcome-card" class="card" style="margin-bottom:12px;padding:24px 28px;display:none;">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+        <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;margin:0;">Welcome to Payroll Center</h3>
+        <span style="font-size:12px;color:var(--muted);">Pick a client above to get started</span>
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;">Available payroll modes</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+          <div style="padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+            <div style="font-size:18px;margin-bottom:4px;">📤</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Client Portal</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.4;">Upload Timecards CSV + Tips XLSX, then push to the client portal.</div>
+          </div>
+          <div style="padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+            <div style="font-size:18px;margin-bottom:4px;">🍵</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">HTeaO Revel</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.4;">Bulk-drop Payroll + Sales Summary files — one CSV per store.</div>
+          </div>
+          <div style="padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+            <div style="font-size:18px;margin-bottom:4px;">🎯</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;">Haines BuddyPunch</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.4;">Single CSV with manual count + deductions adjustments.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;">Coming soon</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border-radius:8px;border:1px dashed var(--border);">
+            <div style="font-size:22px;">🔍</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;">Payroll Auditor</div>
+              <div style="font-size:11px;color:var(--muted);">In development.</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border-radius:8px;border:1px dashed var(--border);">
+            <div style="font-size:22px;">📒</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;">Payroll JE Creator</div>
+              <div style="font-size:11px;color:var(--muted);">In development.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabbed card: Upload | Submissions -->
     <div class="portal-only card" style="margin-bottom:12px;overflow:visible;" id="main-tabs-card">
       <!-- Tab bar -->
@@ -1096,8 +1147,10 @@ function importClientChange() {
   });
   const hteaoCard  = document.getElementById('hteao-card');
   const hainesCard = document.getElementById('haines-card');
+  const welcomeCard = document.getElementById('welcome-card');
   if (hteaoCard)  hteaoCard.style.display  = isHteao  ? '' : 'none';
   if (hainesCard) hainesCard.style.display = isHaines ? '' : 'none';
+  if (welcomeCard) welcomeCard.style.display = cfg ? 'none' : '';
   if (isHteao) {
     hteaoReset();
     hteaoRenderHistory();
