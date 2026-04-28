@@ -424,6 +424,115 @@
 
       </div>
     </div>
+
+    <!-- ════ CLIENT WIDGETS — opt-in per-client add-on cards (Transfer Breakdown,
+         Tip Calculator, etc.). Container is shown whenever any client is
+         selected. Enabled widget IDs are stored in localStorage per slug. ════ -->
+    <div id="client-widgets" style="display:none;margin-bottom:14px;"></div>
+
+    <!-- ════ TRANSFER BREAKDOWN (Paylocity Payroll Details → per-store cost split) ════ -->
+    <!-- Always visible. Reads a PayrollDetails CSV (iHeartCoffee / Paylocity format), -->
+    <!-- detects stores from "<digits> Hours" columns, and allocates Net Pay /         -->
+    <!-- Employee Tax / Employer Tax / Tips by store-hours ratio. Employees with no   -->
+    <!-- store hours (salaried admin) are split evenly across all stores.             -->
+    <div id="tb-card">
+      <div class="card" style="margin-bottom:12px;padding:16px 18px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">Transfer Breakdown</h3>
+            <span style="font-size:11px;color:var(--muted);">Paylocity Payroll Details CSV → per-store labor cost for inter-store transfers</span>
+          </div>
+          <div id="tb-actions" style="display:none;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="tbReset()" style="font-size:11px;">Clear</button>
+            <button class="btn btn-outline btn-sm" onclick="tbDownloadCSV()" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="tbDownloadMarkdown()" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ Markdown</button>
+            <button class="btn btn-primary btn-sm" onclick="tbCopyTable()" style="font-size:11px;">📋 Copy Table</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+          Drop a <strong style="color:var(--text);">PayrollDetails-*.csv</strong> exported from Paylocity. Stores are auto-detected from the <code>NNN Hours</code> columns. Multi-store employees are allocated by hours ratio; employees with no store hours (salaried admin) are split evenly across all stores.
+        </div>
+
+        <div id="tb-drop" onclick="document.getElementById('tb-file-input').click()"
+             style="border:2px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;"
+             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
+             ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
+             ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+             ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';tbOnFiles(event.dataTransfer.files)">
+          <div style="font-size:28px;margin-bottom:6px;">💸</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">Drop PayrollDetails CSV here or click to browse</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">One CSV at a time</div>
+        </div>
+        <input type="file" id="tb-file-input" accept=".csv" style="display:none;" onchange="tbOnFiles(this.files)">
+
+        <div id="tb-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+
+        <!-- Results -->
+        <div id="tb-results" style="display:none;margin-top:14px;">
+          <!-- Source meta -->
+          <div id="tb-meta" style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;"></div>
+
+          <!-- Per-store totals -->
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;">Per-Store Totals</div>
+          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
+            <table id="tb-store-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="background:var(--surface);">
+                  <th style="text-align:left;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Store</th>
+                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Net Pay</th>
+                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employee Tax</th>
+                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employer Tax</th>
+                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Tips</th>
+                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Total Cost</th>
+                </tr>
+              </thead>
+              <tbody id="tb-store-body"></tbody>
+            </table>
+          </div>
+
+          <!-- Verification -->
+          <div id="tb-verify" style="font-size:11px;margin-bottom:14px;padding:10px 14px;border-radius:6px;"></div>
+
+          <!-- Multi-store allocations (collapsible) -->
+          <button onclick="tbToggleAlloc()" id="tb-alloc-toggle"
+                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+            👥 Multi-Store Employees <span id="tb-alloc-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
+            <span id="tb-alloc-arrow" style="transition:transform .2s;">▼</span>
+          </button>
+          <div id="tb-alloc-body" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;"></div>
+
+          <!-- Methodology (collapsible) -->
+          <div style="margin-top:10px;">
+            <button onclick="tbToggleMethod()" id="tb-method-toggle"
+                    style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
+                    onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                    onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+              📖 Methodology <span id="tb-method-arrow" style="transition:transform .2s;">▼</span>
+            </button>
+            <div id="tb-method-body" style="display:none;margin-top:8px;padding:14px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:11px;color:var(--muted);line-height:1.55;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Client Widgets — Add/Manage Modal -->
+<div id="modal-cw-add" class="modal-overlay hidden" onclick="if(event.target===this)cwCloseAddModal()">
+  <div class="modal" style="width:520px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <h3 style="margin:0;">🧩 Manage Widgets</h3>
+      <button class="btn btn-outline btn-sm" onclick="cwCloseAddModal()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Pick the optional add-on cards to enable for this client. Toggles are saved per-client and persist across sessions.</div>
+    <input type="hidden" id="cw-add-slug">
+    <div id="cw-add-list" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--border);">
+      <button class="btn btn-outline" onclick="cwCloseAddModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="cwSaveAdd()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -1167,6 +1276,13 @@ function importClientChange() {
   const empSection = document.getElementById('emp-section');
   if(isPortal && empSection && empSection.style.display !== 'none'){
     syncEmpSectionToTopClient();
+  }
+  // Render this client's opt-in widgets (Transfer Breakdown, etc.) — shown
+  // regardless of mode. Hidden when nothing's selected.
+  const widgetsHost = document.getElementById('client-widgets');
+  if (widgetsHost) {
+    if (slug) { widgetsHost.style.display = ''; cwRender(slug); }
+    else { widgetsHost.style.display = 'none'; widgetsHost.innerHTML = ''; }
   }
 }
 
@@ -3058,6 +3174,680 @@ doLogin = async function() {
   await _origDoLogin();
   if (_token) { populateImportClientSelect(); loadSubmissions(); }
 };
+
+// ════════════════════════════════════════════════════════════════
+// ════ TRANSFER BREAKDOWN — Paylocity payroll details → per-store
+// ════ allocation by hours ratio. Mirrors payroll_breakdown.py.
+// ════ All functions are prefix-aware so the same logic powers both
+// ════ the always-visible card (prefix='tb') and per-client widget
+// ════ instances (prefix='tb-w-<slug>').
+// ════════════════════════════════════════════════════════════════
+const TB_STATE = new Map(); // prefix -> result
+
+function tbCleanNum(s) {
+  if (s == null) return 0;
+  const t = String(s).trim().replace(/[$,]/g, '');
+  if (!t) return 0;
+  const n = parseFloat(t);
+  return isFinite(n) ? n : 0;
+}
+
+function tbFindHeader(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || [];
+    if (r[0] && String(r[0]).trim() === 'Employee Last Name') return i;
+  }
+  return -1;
+}
+
+function tbExtractMeta(rows, headerIdx, fileName) {
+  const meta = { fileName: fileName || '' };
+  for (let i = 0; i < headerIdx; i++) {
+    const r = rows[i] || [];
+    let key = '', val = '';
+    const c0 = (r[0] || '').trim();
+    // Two formats observed: "Key: Value" in a single cell, or split across cells
+    if (r.length >= 2 && r[1] != null && String(r[1]).trim()) {
+      key = c0.replace(/:$/, '').trim();
+      val = String(r[1]).trim();
+    } else if (c0.includes(':')) {
+      const idx = c0.indexOf(':');
+      key = c0.slice(0, idx).trim();
+      val = c0.slice(idx + 1).trim();
+    }
+    if (!key) continue;
+    if (key === 'Company Name')      meta.company     = val;
+    else if (key === 'Company ID')   meta.companyId   = val;
+    else if (key === 'Report Start Date') meta.periodStart = val;
+    else if (key === 'Report End Date')   meta.periodEnd   = val;
+    else if (key === 'Current Date') meta.reportDate  = val;
+    else if (key === 'Source File')  meta.sourceFile  = val;
+  }
+  return meta;
+}
+
+function tbDetectStores(header) {
+  const stores = [];
+  for (const h of header) {
+    const m = String(h || '').trim().match(/^(\d+)\s+Hours$/i);
+    if (m) stores.push(m[1]);
+  }
+  return stores;
+}
+
+function tbIsEmployeeTaxCol(name) {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  if (/^Employer\b/i.test(n)) return false;
+  if (n === 'Federal Income Tax') return true;
+  if (/State Tax$/i.test(n)) return true;        // e.g. "Kentucky State Tax"
+  if (/-\s*OLF$/i.test(n)) return true;          // e.g. "Hillview - OLF"
+  if (n === 'Medicare') return true;
+  if (n === 'Additional Medicare') return true;
+  if (n === 'Social Security') return true;
+  return false;
+}
+
+function tbIsEmployerTaxCol(name) {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  if (/^Employer\b/i.test(n)) return true;       // Employer Medicare/SS
+  if (n === 'Federal Unemployment Tax' || n === 'FUTA') return true;
+  if (/Unemployment.*\(SUTA\)/i.test(n)) return true;
+  if (/\bSUTA\b/i.test(n)) return true;
+  return false;
+}
+
+function tbDetectColumns(header) {
+  const eeTax = [], erTax = [];
+  let netPayIdx = -1, tipsIdx = -1;
+  header.forEach((h, i) => {
+    const name = String(h || '').trim();
+    if (name === 'Net Pay') netPayIdx = i;
+    else if (/^Tips\s*-\s*Owed/i.test(name)) tipsIdx = i;
+    else if (tbIsEmployeeTaxCol(name)) eeTax.push(i);
+    else if (tbIsEmployerTaxCol(name)) erTax.push(i);
+  });
+  return { eeTax, erTax, netPayIdx, tipsIdx };
+}
+
+function tbProcess(text, fileName) {
+  const lines = text.split(/\r?\n/);
+  const rows = lines.map(l => parseCSVLine(l));
+  const headerIdx = tbFindHeader(rows);
+  if (headerIdx < 0) throw new Error('Could not find "Employee Last Name" header row');
+
+  const header = rows[headerIdx].map(c => String(c || '').trim());
+  const stores = tbDetectStores(header);
+  if (!stores.length) throw new Error('No store-hour columns found (looked for "<digits> Hours")');
+
+  const cols = tbDetectColumns(header);
+  if (cols.netPayIdx < 0) throw new Error('No "Net Pay" column found');
+
+  const storeHourIdx = {};
+  for (const s of stores) storeHourIdx[s] = header.findIndex(h => h === s + ' Hours');
+
+  const meta = tbExtractMeta(rows, headerIdx, fileName);
+  const data = rows.slice(headerIdx + 1);
+
+  const storeNet  = {}, storeEE   = {}, storeER   = {}, storeTips = {};
+  for (const s of stores) { storeNet[s] = 0; storeEE[s] = 0; storeER[s] = 0; storeTips[s] = 0; }
+
+  let totalNet = 0, totalEE = 0, totalER = 0, totalTips = 0;
+  const multiStore = [];
+  const evenSplit  = [];
+
+  for (const row of data) {
+    if (!row || !row[0] || !String(row[0]).trim()) continue;
+    const last = String(row[0]).trim();
+    const first = String(row[1] || '').trim();
+    const name = `${last}, ${first}`;
+
+    const storeHours = {};
+    let totalStoreHours = 0;
+    for (const s of stores) {
+      const h = tbCleanNum(row[storeHourIdx[s]]);
+      storeHours[s] = h;
+      totalStoreHours += h;
+    }
+
+    const net   = tbCleanNum(row[cols.netPayIdx]);
+    const eeTax = cols.eeTax.reduce((sum, i) => sum + tbCleanNum(row[i]), 0);
+    const erTax = cols.erTax.reduce((sum, i) => sum + tbCleanNum(row[i]), 0);
+    const tips  = cols.tipsIdx >= 0 ? tbCleanNum(row[cols.tipsIdx]) : 0;
+
+    totalNet += net; totalEE += eeTax; totalER += erTax; totalTips += tips;
+
+    let weights = {};
+    if (totalStoreHours === 0) {
+      const w = 1 / stores.length;
+      for (const s of stores) weights[s] = w;
+      evenSplit.push({ name });
+    } else {
+      for (const s of stores) weights[s] = storeHours[s] / totalStoreHours;
+      const nonzero = stores.filter(s => storeHours[s] > 0);
+      if (nonzero.length > 1) {
+        multiStore.push({ name, hours: { ...storeHours }, weights: { ...weights } });
+      }
+    }
+
+    for (const s of stores) {
+      const w = weights[s];
+      storeNet[s]  += net   * w;
+      storeEE[s]   += eeTax * w;
+      storeER[s]   += erTax * w;
+      storeTips[s] += tips  * w;
+    }
+  }
+
+  const storeRows = stores.map(s => ({
+    id: s,
+    net: storeNet[s], eeTax: storeEE[s], erTax: storeER[s], tips: storeTips[s],
+    total: storeNet[s] + storeEE[s] + storeER[s],
+  }));
+
+  const totals = storeRows.reduce((a, r) => ({
+    net:   a.net   + r.net,
+    eeTax: a.eeTax + r.eeTax,
+    erTax: a.erTax + r.erTax,
+    tips:  a.tips  + r.tips,
+    total: a.total + r.total,
+  }), { net:0, eeTax:0, erTax:0, tips:0, total:0 });
+
+  return {
+    meta, stores, storeRows, totals,
+    csvTotals: { net: totalNet, eeTax: totalEE, erTax: totalER, tips: totalTips },
+    multiStore, evenSplit,
+  };
+}
+
+function tbFmtMoney(n) {
+  return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function tbRender(prefix, result) {
+  TB_STATE.set(prefix, result);
+
+  const drop    = document.getElementById(prefix + '-drop');
+  const results = document.getElementById(prefix + '-results');
+  const actions = document.getElementById(prefix + '-actions');
+  if (drop)    drop.style.display    = 'none';
+  if (results) results.style.display = 'block';
+  if (actions) actions.style.display = 'flex';
+
+  // Meta line
+  const metaEl = document.getElementById(prefix + '-meta');
+  if (metaEl) {
+    const m = result.meta, bits = [];
+    if (m.company)     bits.push(`<strong style="color:var(--text);">${m.company}</strong>`);
+    if (m.companyId)   bits.push(`Company ID: ${m.companyId}`);
+    if (m.periodStart && m.periodEnd) bits.push(`Pay Period: ${m.periodStart} – ${m.periodEnd}`);
+    else if (m.periodStart) bits.push(`Pay Period: ${m.periodStart}`);
+    if (m.reportDate)  bits.push(`Report Date: ${m.reportDate}`);
+    if (m.fileName)    bits.push(`<span style="font-family:monospace;">${m.fileName}</span>`);
+    metaEl.innerHTML = bits.join(' &nbsp;·&nbsp; ');
+  }
+
+  // Per-store table
+  const body = document.getElementById(prefix + '-store-body');
+  if (body) {
+    const cell = 'padding:9px 12px;border-bottom:1px solid var(--border);';
+    let html = '';
+    for (const r of result.storeRows) {
+      html += `<tr>
+        <td style="${cell}font-family:monospace;font-weight:600;">${r.id}</td>
+        <td style="${cell}text-align:right;">${tbFmtMoney(r.net)}</td>
+        <td style="${cell}text-align:right;">${tbFmtMoney(r.eeTax)}</td>
+        <td style="${cell}text-align:right;">${tbFmtMoney(r.erTax)}</td>
+        <td style="${cell}text-align:right;">${tbFmtMoney(r.tips)}</td>
+        <td style="${cell}text-align:right;font-weight:700;">${tbFmtMoney(r.total)}</td>
+      </tr>`;
+    }
+    const t = result.totals;
+    html += `<tr style="background:var(--surface);font-weight:700;">
+      <td style="${cell}font-weight:700;">TOTAL</td>
+      <td style="${cell}text-align:right;">${tbFmtMoney(t.net)}</td>
+      <td style="${cell}text-align:right;">${tbFmtMoney(t.eeTax)}</td>
+      <td style="${cell}text-align:right;">${tbFmtMoney(t.erTax)}</td>
+      <td style="${cell}text-align:right;">${tbFmtMoney(t.tips)}</td>
+      <td style="${cell}text-align:right;">${tbFmtMoney(t.total)}</td>
+    </tr>`;
+    body.innerHTML = html;
+  }
+
+  // Verification
+  const v = document.getElementById(prefix + '-verify');
+  if (v) {
+    const c = result.csvTotals, t = result.totals;
+    const dN = t.net - c.net, dE = t.eeTax - c.eeTax, dR = t.erTax - c.erTax, dT = t.tips - c.tips;
+    const ok = Math.abs(dN) < 0.05 && Math.abs(dE) < 0.05 && Math.abs(dR) < 0.05 && Math.abs(dT) < 0.05;
+    if (ok) {
+      v.style.background = 'var(--green-bg)';
+      v.style.border = '1px solid rgba(46,125,94,.2)';
+      v.style.color  = 'var(--green)';
+      v.innerHTML    = '✓ All control totals tie out to the penny.';
+    } else {
+      v.style.background = 'var(--red-bg)';
+      v.style.border = '1px solid rgba(176,58,58,.2)';
+      v.style.color  = 'var(--red)';
+      v.innerHTML    = `⚠ Allocation drift — Net ${dN.toFixed(2)} · EE ${dE.toFixed(2)} · ER ${dR.toFixed(2)} · Tips ${dT.toFixed(2)}`;
+    }
+  }
+
+  // Multi-store allocations
+  const allocBody  = document.getElementById(prefix + '-alloc-body');
+  const allocCount = document.getElementById(prefix + '-alloc-count');
+  const totalCount = (result.multiStore?.length || 0) + (result.evenSplit?.length || 0);
+  if (allocCount) allocCount.textContent = String(totalCount);
+  if (allocBody) {
+    if (!totalCount) {
+      allocBody.innerHTML = `<div style="padding:14px 18px;font-size:12px;color:var(--muted);text-align:center;">No multi-store employees in this CSV.</div>`;
+    } else {
+      const th = 'text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);';
+      const td = 'padding:7px 12px;border-bottom:1px solid var(--border);';
+      let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;background:var(--card);">
+        <thead><tr style="background:var(--surface);">
+          <th style="${th}">Employee</th>
+          <th style="${th}">Store</th>
+          <th style="${th}text-align:right;">Hours</th>
+          <th style="${th}text-align:right;">Share</th>
+        </tr></thead><tbody>`;
+      for (const e of result.multiStore) {
+        const ss = result.stores.filter(s => e.hours[s] > 0);
+        ss.forEach((s, i) => {
+          html += `<tr>
+            <td style="${td}">${i === 0 ? e.name : ''}</td>
+            <td style="${td}font-family:monospace;">${s}</td>
+            <td style="${td}text-align:right;">${e.hours[s].toFixed(2)}</td>
+            <td style="${td}text-align:right;">${(e.weights[s] * 100).toFixed(1)}%</td>
+          </tr>`;
+        });
+      }
+      for (const e of result.evenSplit) {
+        const pct = (100 / result.stores.length).toFixed(1);
+        html += `<tr>
+          <td style="${td}" colspan="2"><em>${e.name} — split evenly across all ${result.stores.length} stores</em></td>
+          <td style="${td}text-align:right;">—</td>
+          <td style="${td}text-align:right;">${pct}% each</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
+      allocBody.innerHTML = html;
+    }
+  }
+
+  // Methodology
+  const methodBody = document.getElementById(prefix + '-method-body');
+  if (methodBody) {
+    methodBody.innerHTML = `
+      <ul style="padding-left:18px;margin:0;">
+        <li><strong>Single-store employees:</strong> 100% of net pay / taxes / tips assigned to their store.</li>
+        <li><strong>Multi-store employees:</strong> allocated by store-hours ratio.</li>
+        <li><strong>No-store-hours employees</strong> (e.g. salaried admin): split evenly across all ${result.stores.length} stores.</li>
+        <li><strong>Employee Tax includes:</strong> Federal Income Tax, State Tax, all local OLFs, Medicare, Social Security.</li>
+        <li><strong>Employee Tax excludes:</strong> voluntary deductions (Critical Illness, EE Term Life, Accident, Medical Pretax) and Tax Levy.</li>
+        <li><strong>Employer Tax includes:</strong> Employer Medicare, Employer Social Security, FUTA, State Unemployment (SUTA).</li>
+        <li><strong>Tips:</strong> sourced from the "Tips - Owed" column; allocated by hours ratio for multi-store employees.</li>
+      </ul>`;
+  }
+
+  const status = document.getElementById(prefix + '-status');
+  if (status) {
+    status.style.color = 'var(--green)';
+    status.textContent = `✓ Processed — ${result.stores.length} stores, ${tbFmtMoney(result.totals.total)} total cost`;
+  }
+}
+
+function tbReset(prefix = 'tb') {
+  TB_STATE.delete(prefix);
+  const drop    = document.getElementById(prefix + '-drop');
+  const results = document.getElementById(prefix + '-results');
+  const actions = document.getElementById(prefix + '-actions');
+  const status  = document.getElementById(prefix + '-status');
+  const fi      = document.getElementById(prefix + '-file-input');
+  if (drop)    drop.style.display    = '';
+  if (results) results.style.display = 'none';
+  if (actions) actions.style.display = 'none';
+  if (status)  { status.textContent = ''; status.style.color = ''; }
+  if (fi)      fi.value = '';
+}
+
+async function tbOnFiles(files, prefix = 'tb') {
+  if (!files || !files.length) return;
+  const file = files[0];
+  const status = document.getElementById(prefix + '-status');
+  if (!/\.csv$/i.test(file.name)) {
+    if (status) { status.style.color = 'var(--red)'; status.textContent = 'Please upload a .csv file'; }
+    return;
+  }
+  if (status) { status.style.color = 'var(--muted)'; status.textContent = 'Processing…'; }
+  try {
+    const text = await file.text();
+    const result = tbProcess(text, file.name);
+    tbRender(prefix, result);
+  } catch (e) {
+    if (status) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + e.message; }
+  }
+}
+
+function tbToggleAlloc(prefix = 'tb') {
+  const body  = document.getElementById(prefix + '-alloc-body');
+  const arrow = document.getElementById(prefix + '-alloc-arrow');
+  if (!body) return;
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function tbToggleMethod(prefix = 'tb') {
+  const body  = document.getElementById(prefix + '-method-body');
+  const arrow = document.getElementById(prefix + '-method-arrow');
+  if (!body) return;
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function tbResultCSV(result) {
+  const m = result.meta, lines = [];
+  if (m.company)     lines.push(`Company Name:,${m.company}`);
+  if (m.companyId)   lines.push(`Company ID:,${m.companyId}`);
+  if (m.periodStart) lines.push(`Report Start Date:,${m.periodStart}`);
+  if (m.periodEnd)   lines.push(`Report End Date:,${m.periodEnd}`);
+  if (m.sourceFile)  lines.push(`Source File:,${m.sourceFile}`);
+  else if (m.fileName) lines.push(`Source File:,${m.fileName}`);
+  lines.push('');
+  lines.push('Store,Net Pay,Employee Tax,Employer Tax,Tips,Total Cost');
+  const fmt = n => '$' + n.toFixed(2);
+  for (const r of result.storeRows) lines.push(`${r.id},${fmt(r.net)},${fmt(r.eeTax)},${fmt(r.erTax)},${fmt(r.tips)},${fmt(r.total)}`);
+  const t = result.totals;
+  lines.push(`TOTAL,${fmt(t.net)},${fmt(t.eeTax)},${fmt(t.erTax)},${fmt(t.tips)},${fmt(t.total)}`);
+  lines.push('');
+  lines.push('Methodology');
+  lines.push('Single-store employees:,100% of net pay/taxes/tips assigned to their store.');
+  lines.push(`Multi-store employees (${result.multiStore.length}):,"Allocated by store-hours ratio."`);
+  for (const e of result.evenSplit) {
+    const pct = (100 / result.stores.length).toFixed(1);
+    lines.push(`${e.name} (no store hours):,"Split evenly (${pct}%) across all ${result.stores.length} stores."`);
+  }
+  lines.push('Employee Tax includes:,"Federal Income Tax, State Tax, OLFs, Medicare, Social Security."');
+  lines.push('Employee Tax excludes:,"Voluntary deductions and Tax Levy."');
+  lines.push('Employer Tax includes:,"Employer Medicare, Employer Social Security, FUTA, State Unemployment (SUTA)."');
+  lines.push('Tips source:,"Tips - Owed column; allocated by hours ratio for multi-store employees."');
+  if (result.multiStore.length) {
+    lines.push('');
+    lines.push('Multi-Store Employee Allocations');
+    lines.push('Employee,Store,Hours,Share');
+    for (const e of result.multiStore) {
+      for (const s of result.stores) {
+        if (e.hours[s] > 0) lines.push(`"${e.name}",${s},${e.hours[s].toFixed(2)},${(e.weights[s] * 100).toFixed(1)}%`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+function tbResultMarkdown(result) {
+  const m = result.meta, lines = [];
+  lines.push('# Payroll Breakdown by Store');
+  lines.push('');
+  if (m.sourceFile || m.fileName) lines.push(`**Source:** ${m.sourceFile || m.fileName}  `);
+  if (m.company)     lines.push(`**Company:** ${m.company}${m.companyId ? ` (${m.companyId})` : ''}  `);
+  if (m.periodStart && m.periodEnd) lines.push(`**Pay Period:** ${m.periodStart} – ${m.periodEnd}  `);
+  if (m.reportDate)  lines.push(`**Report Date:** ${m.reportDate}`);
+  lines.push('');
+  lines.push('## Per-Store Totals');
+  lines.push('');
+  lines.push('| Store | Net Pay | Employee Tax | Employer Tax | Tips | Total Cost |');
+  lines.push('|-------|---------|--------------|--------------|------|------------|');
+  const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  for (const r of result.storeRows) lines.push(`| ${r.id} | ${fmt(r.net)} | ${fmt(r.eeTax)} | ${fmt(r.erTax)} | ${fmt(r.tips)} | ${fmt(r.total)} |`);
+  const t = result.totals;
+  lines.push(`| **TOTAL** | **${fmt(t.net)}** | **${fmt(t.eeTax)}** | **${fmt(t.erTax)}** | **${fmt(t.tips)}** | **${fmt(t.total)}** |`);
+  lines.push('');
+  lines.push('## Methodology');
+  lines.push('');
+  lines.push('- **Single-store employees:** 100% of net pay/taxes/tips assigned to their store.');
+  lines.push(`- **Multi-store employees (${result.multiStore.length}):** allocated by store-hours ratio.`);
+  for (const e of result.evenSplit) {
+    const pct = (100 / result.stores.length).toFixed(1);
+    lines.push(`- **${e.name}** (no store hours): split evenly (${pct}%) across all ${result.stores.length} stores.`);
+  }
+  lines.push('- **Employee Tax includes:** Federal Income Tax, State Tax, all local OLFs, Medicare, Social Security.');
+  lines.push('- **Employee Tax excludes:** voluntary deductions and Tax Levy.');
+  lines.push('- **Employer Tax includes:** Employer Medicare, Employer Social Security, FUTA, State Unemployment (SUTA).');
+  lines.push('- **Tips:** sourced from the "Tips - Owed" column; allocated by hours ratio for multi-store employees.');
+  if (result.multiStore.length) {
+    lines.push('');
+    lines.push('## Multi-Store Employee Allocations');
+    lines.push('');
+    lines.push('| Employee | Store | Hours | Share |');
+    lines.push('|----------|-------|-------|-------|');
+    for (const e of result.multiStore) {
+      for (const s of result.stores) {
+        if (e.hours[s] > 0) lines.push(`| ${e.name} | ${s} | ${e.hours[s].toFixed(2)} | ${(e.weights[s] * 100).toFixed(1)}% |`);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+function tbDownloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function tbBaseName(prefix = 'tb') {
+  const r = TB_STATE.get(prefix);
+  if (!r) return 'PayrollBreakdown-ByStore';
+  const fn = (r.meta?.fileName || '').replace(/\.csv$/i, '');
+  if (fn) return fn.replace(/^PayrollDetails/i, 'PayrollBreakdown-ByStore');
+  return 'PayrollBreakdown-ByStore';
+}
+
+function tbDownloadCSV(prefix = 'tb') {
+  const r = TB_STATE.get(prefix); if (!r) return;
+  tbDownloadFile(tbBaseName(prefix) + '.csv', tbResultCSV(r), 'text/csv');
+}
+
+function tbDownloadMarkdown(prefix = 'tb') {
+  const r = TB_STATE.get(prefix); if (!r) return;
+  const name = tbBaseName(prefix).replace('-ByStore', '-Summary') + '.md';
+  tbDownloadFile(name, tbResultMarkdown(r), 'text/markdown');
+}
+
+function tbCopyTable(prefix = 'tb') {
+  const r = TB_STATE.get(prefix); if (!r) return;
+  const fmt = n => n.toFixed(2);
+  const lines = [['Store','Net Pay','Employee Tax','Employer Tax','Tips','Total Cost'].join('\t')];
+  for (const row of r.storeRows) lines.push([row.id, fmt(row.net), fmt(row.eeTax), fmt(row.erTax), fmt(row.tips), fmt(row.total)].join('\t'));
+  const t = r.totals;
+  lines.push(['TOTAL', fmt(t.net), fmt(t.eeTax), fmt(t.erTax), fmt(t.tips), fmt(t.total)].join('\t'));
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const status = document.getElementById(prefix + '-status');
+    if (status) { status.style.color = 'var(--green)'; status.textContent = '✓ Copied to clipboard'; }
+  }).catch(() => {});
+}
+
+// ════════════════════════════════════════════════════════════════
+// ════ CLIENT WIDGETS — opt-in per-client add-on cards            ═
+// ════════════════════════════════════════════════════════════════
+// Registry pattern: every entry in WIDGETS becomes available as an
+// opt-in card. Add a new widget by registering one entry here — no
+// other glue needed. State is stored in localStorage per-slug.
+
+const WIDGETS = {
+  'transfer-breakdown': {
+    id: 'transfer-breakdown',
+    label: 'Transfer Breakdown',
+    icon: '💸',
+    description: 'Drop a Paylocity Payroll Details CSV — get per-store cost allocation by hours ratio for inter-store transfers.',
+    render: (container, ctx) => {
+      const prefix = `tb-w-${ctx.slug}`;
+      container.innerHTML = tbWidgetCardHTML(prefix, ctx);
+    },
+  },
+  // Future widgets (e.g. tip calculator) register here.
+};
+
+function tbWidgetCardHTML(prefix, ctx) {
+  const slug = ctx.slug;
+  return `<div class="card" style="margin-bottom:12px;padding:16px 18px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">💸 Transfer Breakdown</h3>
+        <span style="font-size:11px;color:var(--muted);">Paylocity payroll details → per-store breakdown</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div id="${prefix}-actions" style="display:none;gap:8px;">
+          <button class="btn btn-outline btn-sm" onclick="tbReset('${prefix}')" style="font-size:11px;">Clear</button>
+          <button class="btn btn-outline btn-sm" onclick="tbDownloadCSV('${prefix}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ CSV</button>
+          <button class="btn btn-outline btn-sm" onclick="tbDownloadMarkdown('${prefix}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ MD</button>
+          <button class="btn btn-primary btn-sm" onclick="tbCopyTable('${prefix}')" style="font-size:11px;">📋</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="cwRemoveWidget('${slug}','transfer-breakdown')" title="Remove widget" style="font-size:11px;border-color:rgba(176,58,58,.3);color:var(--red);padding:4px 8px;">✕</button>
+      </div>
+    </div>
+    <div id="${prefix}-drop" onclick="document.getElementById('${prefix}-file-input').click()"
+         style="border:2px dashed var(--border);border-radius:8px;padding:24px 18px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-top:10px;"
+         onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
+         ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
+         ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+         ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';tbOnFiles(event.dataTransfer.files,'${prefix}')">
+      <div style="font-size:24px;margin-bottom:4px;">💸</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);">Drop PayrollDetails CSV or click</div>
+    </div>
+    <input type="file" id="${prefix}-file-input" accept=".csv" style="display:none;" onchange="tbOnFiles(this.files,'${prefix}')">
+    <div id="${prefix}-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
+    <div id="${prefix}-results" style="display:none;margin-top:12px;">
+      <div id="${prefix}-meta" style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;"></div>
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:var(--surface);">
+            <th style="text-align:left;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Store</th>
+            <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Net Pay</th>
+            <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employee Tax</th>
+            <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employer Tax</th>
+            <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Tips</th>
+            <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Total Cost</th>
+          </tr></thead>
+          <tbody id="${prefix}-store-body"></tbody>
+        </table>
+      </div>
+      <div id="${prefix}-verify" style="font-size:11px;margin-bottom:12px;padding:9px 12px;border-radius:6px;"></div>
+      <button onclick="tbToggleAlloc('${prefix}')" id="${prefix}-alloc-toggle"
+              style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;">
+        👥 Multi-Store Employees <span id="${prefix}-alloc-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
+        <span id="${prefix}-alloc-arrow" style="transition:transform .2s;">▼</span>
+      </button>
+      <div id="${prefix}-alloc-body" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;"></div>
+      <div style="margin-top:8px;">
+        <button onclick="tbToggleMethod('${prefix}')" id="${prefix}-method-toggle"
+                style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;">
+          📖 Methodology <span id="${prefix}-method-arrow" style="transition:transform .2s;">▼</span>
+        </button>
+        <div id="${prefix}-method-body" style="display:none;margin-top:8px;padding:14px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:11px;color:var(--muted);line-height:1.55;"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── Per-client widget config (localStorage) ────────────────────
+function cwGetWidgets(slug) {
+  if (!slug) return [];
+  try { return JSON.parse(localStorage.getItem('cw_widgets_' + slug) || '[]'); }
+  catch { return []; }
+}
+
+function cwSetWidgets(slug, ids) {
+  if (!slug) return;
+  localStorage.setItem('cw_widgets_' + slug, JSON.stringify(ids));
+}
+
+function cwRemoveWidget(slug, id) {
+  if (!confirm('Remove this widget? You can add it back from the Widgets menu.')) return;
+  cwSetWidgets(slug, cwGetWidgets(slug).filter(w => w !== id));
+  cwRender(slug);
+}
+
+function cwRender(slug) {
+  if (!slug) return;
+  const host = document.getElementById('client-widgets');
+  if (!host) return;
+  const enabled = cwGetWidgets(slug);
+  if (!enabled.length) {
+    host.innerHTML = `
+      <div style="padding:10px 14px;border:1px dashed var(--border);border-radius:8px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <div style="font-size:11px;color:var(--muted);">No add-on widgets enabled for this client.</div>
+        <button class="btn btn-outline btn-sm" onclick="cwOpenAddModal('${slug}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">+ Widget</button>
+      </div>`;
+    return;
+  }
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Client Widgets</div>
+      <button class="btn btn-outline btn-sm" onclick="cwOpenAddModal('${slug}')" style="font-size:11px;">🧩 Manage Widgets</button>
+    </div>`;
+  for (const id of enabled) {
+    if (!WIDGETS[id]) continue;
+    html += `<div id="cw-mount-${slug}-${id}"></div>`;
+  }
+  host.innerHTML = html;
+  // Mount each widget after the host's innerHTML is committed
+  for (const id of enabled) {
+    const w = WIDGETS[id]; if (!w) continue;
+    const mount = document.getElementById(`cw-mount-${slug}-${id}`);
+    if (mount) w.render(mount, { slug });
+  }
+}
+
+function cwOpenAddModal(slug) {
+  const m = document.getElementById('modal-cw-add');
+  if (!m) return;
+  document.getElementById('cw-add-slug').value = slug;
+  cwRenderAddList(slug);
+  m.classList.remove('hidden');
+}
+
+function cwCloseAddModal() {
+  document.getElementById('modal-cw-add')?.classList.add('hidden');
+}
+
+function cwRenderAddList(slug) {
+  const enabled = new Set(cwGetWidgets(slug));
+  const body = document.getElementById('cw-add-list');
+  if (!body) return;
+  const widgets = Object.values(WIDGETS);
+  if (!widgets.length) {
+    body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--muted);font-size:12px;">No widgets registered yet.</div>`;
+    return;
+  }
+  body.innerHTML = widgets.map(w => `
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--card);transition:border-color .15s;"
+           onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <input type="checkbox" data-widget-id="${w.id}" ${enabled.has(w.id) ? 'checked' : ''} style="margin-top:3px;width:auto;">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${w.icon} ${w.label}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;">${w.description}</div>
+      </div>
+    </label>`).join('');
+}
+
+function cwSaveAdd() {
+  const slug = document.getElementById('cw-add-slug').value;
+  if (!slug) return;
+  const ids = [];
+  document.querySelectorAll('#cw-add-list input[data-widget-id]').forEach(c => {
+    if (c.checked) ids.push(c.dataset.widgetId);
+  });
+  cwSetWidgets(slug, ids);
+  cwRender(slug);
+  cwCloseAddModal();
+}
 </script>
 </body>
 </html>
