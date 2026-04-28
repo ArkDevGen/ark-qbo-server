@@ -1137,6 +1137,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
 }
 .wg-qa-dd a:last-child{border-bottom:none;}
 .wg-qa-dd a:hover{background:var(--surface2);}
+/* Small "soon"-style badge that sits in the top-right of a quick action
+   button. Used for actions that point at a future integration so the
+   button is still discoverable but visually flagged. */
+.wg-qa-badge{
+  position:absolute;top:4px;right:4px;
+  background:var(--gold);color:#fff;font-size:9px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;
+  padding:2px 6px;border-radius:8px;line-height:1;
+  box-shadow:0 1px 2px rgba(0,0,0,.15);
+}
 
 /* Widget chart containers */
 .wg-chart-wrap{width:100%;height:100%;min-height:120px;}
@@ -10864,14 +10874,15 @@ function wgRenderWidget(w, data){
       {label:'Add New Hire',icon:'📋',bg:'var(--green)',fn:'openAddEmp()'},
       {label:'QuickBooks',  icon:'💼',bg:'#2ca01c',href:'https://qbo.intuit.com'},
       {label:'Payroll ▾',   icon:'💰',bg:'#0070c0',dropdown:payrollPlatforms},
-      {label:'Outlook',     icon:'📧',bg:'#0078d4',href:'https://outlook.office.com/mail/'},
+      {label:'Outlook',     icon:'📧',bg:'#0078d4',href:'https://outlook.office.com/mail/',badge:'Soon'},
       {label:'Add Client',  icon:'👤',bg:'var(--navy)',fn:'openAddClient()'},
       {label:'Add Postage', icon:'📬',bg:'#6b3fa0',fn:'openPostage()'},
       {label:'Add 1099',    icon:'📋',bg:'#2e7d5e',fn:'open1099Modal()'},
     ];
     const btns = actions.map((a, idx)=>{
       const subHtml = a.sub?`<div class="wg-qa-sublabel">${a.sub}</div>`:'';
-      const iconLabelHtml = `<div class="wg-qa-icon" style="background:${a.bg};">${a.icon}</div><div class="wg-qa-label">${a.label}</div>${subHtml}`;
+      const badgeHtml = a.badge?`<span class="wg-qa-badge">${a.badge}</span>`:'';
+      const iconLabelHtml = `${badgeHtml}<div class="wg-qa-icon" style="background:${a.bg};">${a.icon}</div><div class="wg-qa-label">${a.label}</div>${subHtml}`;
       if (a.dropdown) {
         const ddId = `wg-qa-dd-${w.id}-${idx}`;
         const items = a.dropdown.map(d => `<a href="${d.href}" target="_blank" rel="noopener">${d.label}</a>`).join('');
