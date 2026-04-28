@@ -430,92 +430,6 @@
          selected. Enabled widget IDs are stored in localStorage per slug. ════ -->
     <div id="client-widgets" style="display:none;margin-bottom:14px;"></div>
 
-    <!-- ════ TRANSFER BREAKDOWN (Paylocity Payroll Details → per-store cost split) ════ -->
-    <!-- Always visible. Reads a PayrollDetails CSV (iHeartCoffee / Paylocity format), -->
-    <!-- detects stores from "<digits> Hours" columns, and allocates Net Pay /         -->
-    <!-- Employee Tax / Employer Tax / Tips by store-hours ratio. Employees with no   -->
-    <!-- store hours (salaried admin) are split evenly across all stores.             -->
-    <div id="tb-card">
-      <div class="card" style="margin-bottom:12px;padding:16px 18px;">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
-          <div style="display:flex;align-items:baseline;gap:8px;">
-            <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">Transfer Breakdown</h3>
-            <span style="font-size:11px;color:var(--muted);">Paylocity Payroll Details CSV → per-store labor cost for inter-store transfers</span>
-          </div>
-          <div id="tb-actions" style="display:none;gap:8px;">
-            <button class="btn btn-outline btn-sm" onclick="tbReset()" style="font-size:11px;">Clear</button>
-            <button class="btn btn-outline btn-sm" onclick="tbDownloadCSV()" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ CSV</button>
-            <button class="btn btn-outline btn-sm" onclick="tbDownloadMarkdown()" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ Markdown</button>
-            <button class="btn btn-primary btn-sm" onclick="tbCopyTable()" style="font-size:11px;">📋 Copy Table</button>
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">
-          Drop a <strong style="color:var(--text);">PayrollDetails-*.csv</strong> exported from Paylocity. Stores are auto-detected from the <code>NNN Hours</code> columns. Multi-store employees are allocated by hours ratio; employees with no store hours (salaried admin) are split evenly across all stores.
-        </div>
-
-        <div id="tb-drop" onclick="document.getElementById('tb-file-input').click()"
-             style="border:2px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;"
-             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
-             ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
-             ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
-             ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';tbOnFiles(event.dataTransfer.files)">
-          <div style="font-size:28px;margin-bottom:6px;">💸</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);">Drop PayrollDetails CSV here or click to browse</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px;">One CSV at a time</div>
-        </div>
-        <input type="file" id="tb-file-input" accept=".csv" style="display:none;" onchange="tbOnFiles(this.files)">
-
-        <div id="tb-status" style="font-size:11px;margin-top:8px;min-height:14px;"></div>
-
-        <!-- Results -->
-        <div id="tb-results" style="display:none;margin-top:14px;">
-          <!-- Source meta -->
-          <div id="tb-meta" style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;"></div>
-
-          <!-- Per-store totals -->
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;">Per-Store Totals</div>
-          <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
-            <table id="tb-store-table" style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="background:var(--surface);">
-                  <th style="text-align:left;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Store</th>
-                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Net Pay</th>
-                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employee Tax</th>
-                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employer Tax</th>
-                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Tips</th>
-                  <th style="text-align:right;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Total Cost</th>
-                </tr>
-              </thead>
-              <tbody id="tb-store-body"></tbody>
-            </table>
-          </div>
-
-          <!-- Verification -->
-          <div id="tb-verify" style="font-size:11px;margin-bottom:14px;padding:10px 14px;border-radius:6px;"></div>
-
-          <!-- Multi-store allocations (collapsible) -->
-          <button onclick="tbToggleAlloc()" id="tb-alloc-toggle"
-                  style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
-                  onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
-                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-            👥 Multi-Store Employees <span id="tb-alloc-count" style="background:var(--surface);padding:1px 6px;border-radius:10px;font-size:10px;">0</span>
-            <span id="tb-alloc-arrow" style="transition:transform .2s;">▼</span>
-          </button>
-          <div id="tb-alloc-body" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;"></div>
-
-          <!-- Methodology (collapsible) -->
-          <div style="margin-top:10px;">
-            <button onclick="tbToggleMethod()" id="tb-method-toggle"
-                    style="width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;"
-                    onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-                    onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-              📖 Methodology <span id="tb-method-arrow" style="transition:transform .2s;">▼</span>
-            </button>
-            <div id="tb-method-body" style="display:none;margin-top:8px;padding:14px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:11px;color:var(--muted);line-height:1.55;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -3691,7 +3605,18 @@ const WIDGETS = {
       container.innerHTML = tbWidgetCardHTML(prefix, ctx);
     },
   },
-  // Future widgets (e.g. tip calculator) register here.
+  'tip-calculator': {
+    id: 'tip-calculator',
+    label: 'Tip Pool Calculator',
+    icon: '🪙',
+    description: 'Split a tip pool across employees by hours. Cent-accurate (line items always sum to the pool exactly).',
+    render: (container, ctx) => {
+      const prefix = `tc-w-${ctx.slug}`;
+      container.innerHTML = tcWidgetCardHTML(prefix, ctx);
+      tcRestore(prefix, ctx.slug);
+      tcRecalc(prefix);
+    },
+  },
 };
 
 function tbWidgetCardHTML(prefix, ctx) {
@@ -3791,11 +3716,13 @@ function cwRender(slug) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Client Widgets</div>
       <button class="btn btn-outline btn-sm" onclick="cwOpenAddModal('${slug}')" style="font-size:11px;">🧩 Manage Widgets</button>
-    </div>`;
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;align-items:start;">`;
   for (const id of enabled) {
     if (!WIDGETS[id]) continue;
     html += `<div id="cw-mount-${slug}-${id}"></div>`;
   }
+  html += `</div>`;
   host.innerHTML = html;
   // Mount each widget after the host's innerHTML is committed
   for (const id of enabled) {
@@ -3847,6 +3774,260 @@ function cwSaveAdd() {
   cwSetWidgets(slug, ids);
   cwRender(slug);
   cwCloseAddModal();
+}
+
+// ════════════════════════════════════════════════════════════════
+// ════ TIP POOL CALCULATOR widget                                ═
+// ════════════════════════════════════════════════════════════════
+// Split a dollar tip pool across an editable list of employees by
+// their hours. Distribution is cent-accurate (largest-remainder
+// method), so line items always sum to the input pool exactly.
+// State persists per client slug in localStorage so the widget
+// remembers the pool and roster between sessions.
+
+const TC_STATE = new Map(); // prefix -> { slug, pool, rows:[{name,hours}] }
+
+function tcKey(slug) { return 'tc_state_' + slug; }
+
+function tcDefaultRows() {
+  return [
+    { name: '', hours: 0 },
+    { name: '', hours: 0 },
+    { name: '', hours: 0 },
+  ];
+}
+
+function tcRestore(prefix, slug) {
+  let state = { slug, pool: 0, rows: tcDefaultRows() };
+  try {
+    const raw = localStorage.getItem(tcKey(slug));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.rows)) state = { slug, pool: Number(parsed.pool) || 0, rows: parsed.rows };
+    }
+  } catch {}
+  TC_STATE.set(prefix, state);
+  // Reflect into inputs
+  const poolEl = document.getElementById(prefix + '-pool');
+  if (poolEl) poolEl.value = state.pool ? state.pool.toFixed(2) : '';
+  tcRenderRows(prefix);
+}
+
+function tcPersist(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  try { localStorage.setItem(tcKey(s.slug), JSON.stringify({ pool: s.pool, rows: s.rows })); } catch {}
+}
+
+function tcRenderRows(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  const body = document.getElementById(prefix + '-rows');
+  if (!body) return;
+  const td = 'padding:6px 8px;border-bottom:1px solid var(--border);';
+  const inp = 'width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:12px;';
+  let html = '';
+  s.rows.forEach((r, i) => {
+    const safeName = String(r.name || '').replace(/"/g, '&quot;');
+    const hVal = r.hours ? r.hours : '';
+    html += `<tr>
+      <td style="${td}"><input type="text" value="${safeName}" placeholder="Employee" oninput="tcUpdateRow('${prefix}',${i},'name',this.value)" style="${inp}"></td>
+      <td style="${td}width:90px;"><input type="number" step="0.01" min="0" value="${hVal}" placeholder="0.00" oninput="tcUpdateRow('${prefix}',${i},'hours',this.value)" style="${inp}text-align:right;"></td>
+      <td style="${td}width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);" id="${prefix}-pct-${i}">—</td>
+      <td style="${td}width:90px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:var(--green);" id="${prefix}-amt-${i}">$0.00</td>
+      <td style="${td}width:24px;text-align:center;"><button onclick="tcDeleteRow('${prefix}',${i})" title="Remove" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 4px;">✕</button></td>
+    </tr>`;
+  });
+  body.innerHTML = html;
+}
+
+function tcUpdateRow(prefix, idx, field, value) {
+  const s = TC_STATE.get(prefix);
+  if (!s || !s.rows[idx]) return;
+  if (field === 'hours') {
+    const n = parseFloat(value);
+    s.rows[idx].hours = isFinite(n) && n >= 0 ? n : 0;
+  } else {
+    s.rows[idx].name = value;
+  }
+  tcRecalc(prefix);
+  tcPersist(prefix);
+}
+
+function tcAddRow(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  s.rows.push({ name: '', hours: 0 });
+  tcRenderRows(prefix);
+  tcRecalc(prefix);
+  tcPersist(prefix);
+}
+
+function tcDeleteRow(prefix, idx) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  s.rows.splice(idx, 1);
+  if (!s.rows.length) s.rows = tcDefaultRows();
+  tcRenderRows(prefix);
+  tcRecalc(prefix);
+  tcPersist(prefix);
+}
+
+function tcSetPool(prefix, value) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  const n = parseFloat(String(value || '').replace(/[$,]/g, ''));
+  s.pool = isFinite(n) && n >= 0 ? n : 0;
+  tcRecalc(prefix);
+  tcPersist(prefix);
+}
+
+// Largest-remainder allocation: returns array of cents (integers) summing
+// exactly to round(pool * 100). Each employee's share is proportional to
+// their hours; leftover cents go to the highest fractional remainders.
+function tcAllocate(rows, pool) {
+  const totalHours = rows.reduce((a, r) => a + (r.hours || 0), 0);
+  const totalCents = Math.round((pool || 0) * 100);
+  if (totalHours <= 0 || totalCents <= 0) return rows.map(() => 0);
+  const raw = rows.map(r => totalCents * (r.hours || 0) / totalHours);
+  const floors = raw.map(x => Math.floor(x));
+  let remainder = totalCents - floors.reduce((a, b) => a + b, 0);
+  const fracs = raw.map((x, i) => ({ i, frac: x - Math.floor(x) }));
+  fracs.sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder && k < fracs.length; k++) floors[fracs[k].i] += 1;
+  return floors;
+}
+
+function tcRecalc(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  const cents = tcAllocate(s.rows, s.pool);
+  const totalHours = s.rows.reduce((a, r) => a + (r.hours || 0), 0);
+  s.rows.forEach((r, i) => {
+    const pctEl = document.getElementById(prefix + '-pct-' + i);
+    const amtEl = document.getElementById(prefix + '-amt-' + i);
+    const pct = totalHours > 0 ? (r.hours || 0) / totalHours * 100 : 0;
+    if (pctEl) pctEl.textContent = totalHours > 0 ? pct.toFixed(1) + '%' : '—';
+    if (amtEl) amtEl.textContent = '$' + (cents[i] / 100).toFixed(2);
+  });
+  const totH = document.getElementById(prefix + '-total-hours');
+  const totA = document.getElementById(prefix + '-total-amount');
+  if (totH) totH.textContent = totalHours.toFixed(2);
+  if (totA) totA.textContent = '$' + ((s.pool || 0).toFixed(2));
+  // Validation: warn if pool is set but no hours, or vice versa
+  const warn = document.getElementById(prefix + '-warn');
+  if (warn) {
+    if (s.pool > 0 && totalHours <= 0) {
+      warn.style.color = 'var(--red)';
+      warn.textContent = 'Add employee hours to allocate the pool.';
+    } else if (s.pool <= 0 && totalHours > 0) {
+      warn.style.color = 'var(--muted)';
+      warn.textContent = 'Enter a tip pool to calculate amounts.';
+    } else {
+      warn.textContent = '';
+    }
+  }
+}
+
+function tcReset(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  if (!confirm('Clear pool and all rows?')) return;
+  s.pool = 0;
+  s.rows = tcDefaultRows();
+  const poolEl = document.getElementById(prefix + '-pool');
+  if (poolEl) poolEl.value = '';
+  tcRenderRows(prefix);
+  tcRecalc(prefix);
+  tcPersist(prefix);
+}
+
+function tcCopyTable(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  const cents = tcAllocate(s.rows, s.pool);
+  const totalHours = s.rows.reduce((a, r) => a + (r.hours || 0), 0);
+  const lines = [['Employee', 'Hours', 'Share', 'Amount'].join('\t')];
+  s.rows.forEach((r, i) => {
+    const pct = totalHours > 0 ? ((r.hours || 0) / totalHours * 100).toFixed(1) + '%' : '';
+    lines.push([r.name || '', (r.hours || 0).toFixed(2), pct, (cents[i] / 100).toFixed(2)].join('\t'));
+  });
+  lines.push(['TOTAL', totalHours.toFixed(2), '', (s.pool || 0).toFixed(2)].join('\t'));
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const status = document.getElementById(prefix + '-status');
+    if (status) { status.style.color = 'var(--green)'; status.textContent = '✓ Copied'; setTimeout(() => { if (status.textContent === '✓ Copied') status.textContent = ''; }, 2000); }
+  }).catch(() => {});
+}
+
+function tcDownloadCSV(prefix) {
+  const s = TC_STATE.get(prefix);
+  if (!s) return;
+  const cents = tcAllocate(s.rows, s.pool);
+  const totalHours = s.rows.reduce((a, r) => a + (r.hours || 0), 0);
+  const lines = ['Employee,Hours,Share,Amount'];
+  s.rows.forEach((r, i) => {
+    const pct = totalHours > 0 ? ((r.hours || 0) / totalHours * 100).toFixed(1) + '%' : '';
+    const safeName = `"${(r.name || '').replace(/"/g, '""')}"`;
+    lines.push([safeName, (r.hours || 0).toFixed(2), pct, (cents[i] / 100).toFixed(2)].join(','));
+  });
+  lines.push(`TOTAL,${totalHours.toFixed(2)},,${(s.pool || 0).toFixed(2)}`);
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url; a.download = `TipPool-${s.slug}-${date}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function tcWidgetCardHTML(prefix, ctx) {
+  const slug = ctx.slug;
+  const inp = 'width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:13px;';
+  return `<div class="card" style="padding:16px 18px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <h3 style="color:var(--accent);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;margin:0;">🪙 Tip Pool Calculator</h3>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-outline btn-sm" onclick="tcReset('${prefix}')" style="font-size:11px;">Clear</button>
+        <button class="btn btn-outline btn-sm" onclick="tcDownloadCSV('${prefix}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">⬇ CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="tcCopyTable('${prefix}')" style="font-size:11px;">📋</button>
+        <button class="btn btn-outline btn-sm" onclick="cwRemoveWidget('${slug}','tip-calculator')" title="Remove widget" style="font-size:11px;border-color:rgba(176,58,58,.3);color:var(--red);padding:4px 8px;">✕</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Split a tip pool across employees by hours. Cent-accurate — line items always sum to the pool.</div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px;">Tip Pool ($)</label>
+      <input id="${prefix}-pool" type="number" step="0.01" min="0" placeholder="0.00" oninput="tcSetPool('${prefix}',this.value)" style="${inp}">
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:var(--surface);">
+          <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);">Employee</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);width:90px;">Hours</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);width:60px;">Share</th>
+          <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border);width:90px;">Amount</th>
+          <th style="border-bottom:1px solid var(--border);width:24px;"></th>
+        </tr></thead>
+        <tbody id="${prefix}-rows"></tbody>
+        <tfoot><tr style="background:var(--surface);">
+          <td style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text);">TOTAL</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;" id="${prefix}-total-hours">0.00</td>
+          <td></td>
+          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);" id="${prefix}-total-amount">$0.00</td>
+          <td></td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+      <div id="${prefix}-warn" style="font-size:11px;min-height:14px;"></div>
+      <button class="btn btn-outline btn-sm" onclick="tcAddRow('${prefix}')" style="font-size:11px;border-color:var(--accent);color:var(--accent);">+ Row</button>
+    </div>
+    <div id="${prefix}-status" style="font-size:11px;margin-top:4px;min-height:14px;text-align:right;"></div>
+  </div>`;
 }
 </script>
 </body>
