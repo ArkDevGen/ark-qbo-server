@@ -27630,19 +27630,18 @@ function tcOccurrencesInRange(task, startStr, endStr){
   const result = [];
   let cursor = task.dueDate;
   let safety = 400; // bound on iterations — covers ~7yr of weekly tasks
-  // Walk forward until we're at or past startStr
+  // tcNextDue already returns a YYYY-MM-DD string, so no .toISOString() here
+  // (and definitely no calling it like a Date — that's how this function
+  // crashed tcRender entirely before).
   while (cursor < startStr && safety-- > 0) {
-    const next = tcNextDue(task, cursor);
-    const nextStr = next.toISOString().slice(0,10);
-    if (nextStr <= cursor) return result; // tcNextDue didn't advance — give up
+    const nextStr = tcNextDue(task, cursor);
+    if (!nextStr || nextStr <= cursor) return result; // didn't advance — give up
     cursor = nextStr;
   }
-  // Collect occurrences within [startStr, endStr]
   while (cursor <= endStr && safety-- > 0) {
     if (cursor >= startStr) result.push(cursor);
-    const next = tcNextDue(task, cursor);
-    const nextStr = next.toISOString().slice(0,10);
-    if (nextStr <= cursor) break;
+    const nextStr = tcNextDue(task, cursor);
+    if (!nextStr || nextStr <= cursor) break;
     cursor = nextStr;
   }
   return result;
