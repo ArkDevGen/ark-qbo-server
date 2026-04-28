@@ -27734,9 +27734,15 @@ async function tcRender(){
   s('tc-kpi-done', kpiDone);
 
   // Filter (exclude no-date tasks — those go to Notes)
+  // Project view (drilled into a specific client) is the exception: it shows
+  // ALL the project's open tasks — undated AND far-future included — like
+  // Todoist's project page. Notes still route to the Notes tab via t.type.
+  const inProjectView = isProjectView && !!fClient;
   let list = tasks.filter(t => {
-    if(!t.dueDate && t.status !== 'completed') return false; // no-date tasks go to Notes panel
     if(t.parentId) return false; // subtasks render under their parent, not in main list
+    if(!inProjectView){
+      if(!t.dueDate && t.status !== 'completed') return false; // no-date → Notes panel (not in project view)
+    }
     if(t.type === 'note') return false; // notes go to project Notes tab
     if(fClient === '_noClient' && t.clientId) return false; // "No Client" filter
     if(fClient && fClient !== '_noClient' && t.clientId !== fClient) return false;
@@ -27744,6 +27750,7 @@ async function tcRender(){
     if(search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
     if(fStat === 'open'){
       if(t.status === 'completed') return false;
+      if(inProjectView) return true; // project view: show all open project tasks, ignoring the date window
       const adv = t.showDaysAdvance != null ? t.showDaysAdvance : 3;
       const showDate = new Date(today); showDate.setDate(today.getDate() + adv);
       return t.dueDate <= showDate.toISOString().slice(0,10) || t.status === 'review' || t.isReviewTask || t.isNotifyTask;
