@@ -3343,7 +3343,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
          they're frozen on screen no matter how the user scrolls the board. -->
     <div style="position:sticky;top:72px;z-index:40;background:var(--bg);padding-top:6px;margin-bottom:12px;">
       <!-- KPI strip -->
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
         <div class="sum-card" style="--card-accent:var(--red);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('overdue')">
           <div class="label" style="font-size:var(--text-xs);">Overdue</div>
           <div class="value" id="tc-kpi-overdue" style="color:var(--red);font-size:var(--text-2xl);">0</div>
@@ -3355,10 +3355,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <div class="sum-card" style="--card-accent:var(--blue);cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
           <div class="label" style="font-size:var(--text-xs);">This Week</div>
           <div class="value blue" id="tc-kpi-week" style="font-size:var(--text-2xl);">0</div>
-        </div>
-        <div class="sum-card" style="cursor:pointer;padding:10px 12px;" onclick="tcSelectView('upcoming')">
-          <div class="label" style="font-size:var(--text-xs);">Open Tasks</div>
-          <div class="value" id="tc-kpi-open" style="font-size:var(--text-2xl);">0</div>
         </div>
         <div class="sum-card" style="--card-accent:var(--green);cursor:pointer;padding:10px 12px;" onclick="tcSetFilter('completed')">
           <div class="label" style="font-size:var(--text-xs);">Done This Month</div>
@@ -27718,12 +27714,11 @@ async function tcRender(){
 
   // Pre-filter by AM for KPIs (exclude no-date tasks)
   const kpiSource = (fAM ? tasks.filter(t => t.amId === fAM) : tasks).filter(t => t.dueDate || t.status === 'completed');
-  let kpiOverdue=0, kpiToday=0, kpiWeek=0, kpiOpen=0, kpiDone=0;
+  let kpiOverdue=0, kpiToday=0, kpiWeek=0, kpiDone=0;
   kpiSource.forEach(t => {
     if(t.status==='completed'){
       if(t.completedAt && t.completedAt.slice(0,10) >= monthStart) kpiDone++;
     } else {
-      kpiOpen++;
       if(t.dueDate && t.dueDate < todayStr) kpiOverdue++;
       else if(t.dueDate === todayStr) kpiToday++;
       else if(t.dueDate && t.dueDate <= weekStr) kpiWeek++;
@@ -27731,8 +27726,7 @@ async function tcRender(){
   });
   const s = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   s('tc-kpi-overdue', kpiOverdue); s('tc-kpi-today', kpiToday);
-  s('tc-kpi-week', kpiWeek);       s('tc-kpi-open', kpiOpen);
-  s('tc-kpi-done', kpiDone);
+  s('tc-kpi-week', kpiWeek);       s('tc-kpi-done', kpiDone);
 
   // Filter (exclude no-date tasks — those go to Notes)
   // Project view (drilled into a specific client) is the exception: it shows
