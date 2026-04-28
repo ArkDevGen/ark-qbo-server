@@ -3436,11 +3436,19 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
 
     <!-- View toggle -->
-    <div id="tc-view-toggle" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div id="tc-view-toggle" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
       <div style="display:flex;gap:0;">
         <button class="tc-vtoggle active" data-view="list" onclick="tcSwitchView('list')">☰ List</button>
         <button class="tc-vtoggle" data-view="board" onclick="tcSwitchView('board')">▦ Board</button>
         <button class="tc-vtoggle" data-view="calendar" onclick="tcSwitchView('calendar')">📅 Calendar</button>
+      </div>
+      <!-- Calendar-week navigator. Visible when the active view is showing
+           a Mon-Sun week (Upcoming filter or any project view in Board mode).
+           Hidden by default — tcRender flips display based on context. -->
+      <div id="tc-week-nav" style="display:none;align-items:center;gap:6px;">
+        <button onclick="tcWeekPrev()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Previous week">◀</button>
+        <span id="tc-week-label" onclick="tcWeekToday()" style="font-size:12px;font-weight:600;color:var(--text);min-width:200px;text-align:center;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);" title="Click to jump to this week"></span>
+        <button onclick="tcWeekNext()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Next week">▶</button>
       </div>
       <div id="tc-smart-banner"></div>
     </div>
@@ -27727,8 +27735,18 @@ async function tcRender(){
 
   const today  = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
+  // KPI's "This Week" count: tasks due in the next rolling 7 days. Kept
+  // independent from the Mon-Sun calendar window below so the KPI tile
+  // doesn't change meaning when the user navigates the board to next week.
   const weekEnd  = new Date(today); weekEnd.setDate(today.getDate()+7);
   const weekStr  = weekEnd.toISOString().slice(0,10);
+  // Mon-Sun calendar window for the Upcoming filter and the board day-
+  // column layout. Driven by _tcWeekOffset so the navigator can step
+  // through future/past weeks.
+  const weekMonday = _tcMondayOfWeek(_tcWeekOffset);
+  const weekSunday = new Date(weekMonday); weekSunday.setDate(weekMonday.getDate()+6);
+  const weekMondayStr = weekMonday.toISOString().slice(0,10);
+  const weekSundayStr = weekSunday.toISOString().slice(0,10);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
 
   // Pre-filter by AM for KPIs (exclude no-date tasks)
@@ -27771,11 +27789,10 @@ async function tcRender(){
     }
     if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate && t.dueDate < todayStr;
     if(fStat === 'due-today') return t.status !== 'completed' && t.dueDate === todayStr;
-    // "This Week" shows today through 7 days out, grouped by weekday — so
-    // today's tasks land under "Due Today" and each upcoming day gets its
-    // own column/section. Including today means users see the whole week
-    // at a glance instead of having to switch between Today and Upcoming.
-    if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate >= todayStr && t.dueDate <= weekStr;
+    // "This Week" is now anchored to the Mon-Sun calendar window the user
+    // selected via the week navigator. Default offset (0) = current week's
+    // Monday through Sunday; clicking ▶ advances to next week, ◀ goes back.
+    if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate >= weekMondayStr && t.dueDate <= weekSundayStr;
     if(fStat === 'completed') return t.status === 'completed';
     return true; // 'all'
   });
@@ -27832,21 +27849,22 @@ async function tcRender(){
     const boardGroups = {};
     let ordered = {};
     if (fStat === 'upcoming' || inProjectView) {
-      // Todoist-style "Upcoming" — one column per day for the next 7 days,
-      // even if a day is empty. Each header reads "Apr 28 · Tomorrow",
-      // "Apr 29 · Wednesday", etc. so users can scan the week at a glance.
-      // Project view uses the same layout (user preference) — far-future and
-      // undated tasks are still visible in List view.
+      // Mon-Sun calendar week with one column per day. The week is driven
+      // by _tcWeekOffset (navigator buttons step it). "Today"/"Tomorrow"
+      // labels only appear when offset is 0 and the day actually matches.
+      // Project view uses the same layout (user preference) — far-future
+      // and undated tasks remain visible in the project's List view.
+      const tmrwStr = (() => { const d = new Date(today); d.setDate(today.getDate()+1); return d.toISOString().slice(0,10); })();
       for (let i = 0; i < 7; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
+        const d = new Date(weekMonday);
+        d.setDate(weekMonday.getDate() + i);
         const dStr = d.toISOString().slice(0,10);
         const monthDay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
         const weekday  = d.toLocaleDateString('en-US', { weekday:'long' });
         let label;
-        if (i === 0)      label = `${monthDay} · Today`;
-        else if (i === 1) label = `${monthDay} · Tomorrow`;
-        else              label = `${monthDay} · ${weekday}`;
+        if (dStr === todayStr)      label = `${monthDay} · Today`;
+        else if (dStr === tmrwStr)  label = `${monthDay} · Tomorrow`;
+        else                        label = `${monthDay} · ${weekday}`;
         ordered[label] = list.filter(t => t.dueDate === dStr && t.status !== 'completed');
       }
     } else {
@@ -27891,6 +27909,27 @@ async function tcRender(){
       }
     }
   }
+  // Week navigator visibility + label. Show only on board view where the
+  // 7-day Mon-Sun layout is actually rendering. Label shows the date range
+  // and a relative hint ("This Week" / "Next Week" / "Apr 27 – May 3").
+  const navEl = document.getElementById('tc-week-nav');
+  const navLabelEl = document.getElementById('tc-week-label');
+  if (navEl) {
+    const showNav = (viewMode === 'board') && (fStat === 'upcoming' || inProjectView);
+    navEl.style.display = showNav ? 'flex' : 'none';
+    if (showNav && navLabelEl) {
+      const fmt = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+      const range = `${fmt(weekMonday)} – ${fmt(weekSunday)}`;
+      let prefix = '';
+      if (_tcWeekOffset === 0)      prefix = 'This Week · ';
+      else if (_tcWeekOffset === 1) prefix = 'Next Week · ';
+      else if (_tcWeekOffset === -1) prefix = 'Last Week · ';
+      else if (_tcWeekOffset > 1)   prefix = `+${_tcWeekOffset} weeks · `;
+      else                          prefix = `${_tcWeekOffset} weeks · `;
+      navLabelEl.textContent = prefix + range;
+    }
+  }
+
   if(typeof tcRenderSmartBanner === 'function') tcRenderSmartBanner();
   if(typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
   if(typeof tcPopulateSendList === 'function') await tcPopulateSendList();
@@ -28125,8 +28164,32 @@ function tcRenderHistory(t){
 // ── Production Sidebar ──────────────────────────────────────────
 let _tcActiveView = 'upcoming'; // 'upcoming' | 'today' | 'overdue' | 'notes' | 'project:clientId' | 'project:_noClient'
 
+// Week offset for the Upcoming/board day-column layout. 0 = current
+// Mon-Sun calendar week, +1 = next week, -1 = previous, etc. The week
+// navigator (◀ / label / ▶) above the board steps this in either
+// direction. Always reset when leaving the relevant view.
+let _tcWeekOffset = 0;
+
+// Monday Date for the requested week offset (0 = this week's Monday).
+// Hours zeroed so toISOString().slice(0,10) yields a clean day key.
+function _tcMondayOfWeek(offset = 0){
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = d.getDay();                       // 0 = Sun, 1 = Mon, ... 6 = Sat
+  const daysFromMonday = (dow === 0) ? 6 : (dow - 1);
+  d.setDate(d.getDate() - daysFromMonday + offset * 7);
+  return d;
+}
+
+function tcWeekPrev(){ _tcWeekOffset--; tcRender(); }
+function tcWeekNext(){ _tcWeekOffset++; tcRender(); }
+function tcWeekToday(){ _tcWeekOffset = 0; tcRender(); }
+
 function tcSelectView(view) {
   _tcActiveView = view;
+  // Snap the calendar-week navigator back to the current week each time the
+  // user changes views — prevents a stale offset (e.g. they were viewing
+  // "+3 weeks") from carrying over and confusing them in the new view.
+  _tcWeekOffset = 0;
   // Reset the user's group-by override so each new view picks its sensible
   // default again (project view → section, others → due date).
   const grpEl = document.getElementById('tc-group-by');
