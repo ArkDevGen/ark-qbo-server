@@ -27818,10 +27818,12 @@ async function tcRender(){
   if (viewMode === 'board') {
     const boardGroups = {};
     let ordered = {};
-    if (fStat === 'upcoming') {
+    if (fStat === 'upcoming' || inProjectView) {
       // Todoist-style "Upcoming" — one column per day for the next 7 days,
       // even if a day is empty. Each header reads "Apr 28 · Tomorrow",
       // "Apr 29 · Wednesday", etc. so users can scan the week at a glance.
+      // Project view uses the same layout (user preference) — far-future and
+      // undated tasks are still visible in List view.
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
@@ -27857,7 +27859,7 @@ async function tcRender(){
       // For upcoming, always render the 7 day columns — even if every day is
       // empty — so the week structure is always visible. For other filters,
       // fall back to the standard "no tasks match" message.
-      const hasContent = fStat === 'upcoming' || list.length;
+      const hasContent = fStat === 'upcoming' || inProjectView || list.length;
       el.innerHTML = hasContent ? tcRenderBoard(list, ordered, today, todayStr) : emptyHtml;
     }
   } else if (viewMode === 'calendar') {
