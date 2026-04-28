@@ -3326,6 +3326,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="btn btn-ghost btn-sm" onclick="tdImportOpen()">📥 Import</button>
         <!-- TEMP: remove once Production redesign ships -->
         <button class="btn btn-ghost btn-sm" onclick="tcClearMyImported()" title="Hard-delete tasks imported from Todoist assigned to you. Temporary cleanup action." style="color:var(--red);">🧹 Clear My Imported</button>
+        <button class="btn btn-ghost btn-sm" onclick="tcManageTemplates()" title="Reusable project task lists you can stamp onto a client">📋 Templates</button>
         <button class="btn btn-ghost btn-sm" onclick="tcAddProject()">+ Project</button>
         <div style="position:relative;display:inline-block;">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New Task ▾</button>
@@ -28801,6 +28802,293 @@ function tcAssignToGroup() {
   document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
   tcManageGroups();
   tcBuildProjectSidebar();
+}
+
+// ── Project Templates ───────────────────────────────────────────
+// Reusable task lists. Apply = stamp fresh DB.tasks rows tied to a
+// chosen client. One-time stamp — no live link back to the template,
+// so editing the template later only affects future projects.
+//
+// Shape:
+//   DB.tcProjectTemplates = [{ id, name, description, tasks: [...], createdAt, updatedAt, _deleted }]
+//   each template task: { name, section, priority, dueOffsetDays, notes }
+//   dueOffsetDays is days from "today" at apply time. Blank = undated.
+
+let _tcTplEditing = null; // working copy of the template being edited
+let _tcTplOverlay = null; // current overlay element (manage / edit / apply)
+
+function _tcEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function tcCloseTplOverlay(){ if(_tcTplOverlay){ _tcTplOverlay.remove(); _tcTplOverlay = null; } }
+
+function tcManageTemplates(){
+  tcCloseTplOverlay();
+  const templates = (DB.tcProjectTemplates || []).filter(t => !t._deleted);
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) tcCloseTplOverlay(); };
+
+  const list = templates.map(t => {
+    const taskCount = (t.tasks || []).length;
+    const sectionCount = new Set((t.tasks || []).map(x => x.section).filter(Boolean)).size;
+    return `<div style="margin-bottom:10px;padding:14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text);">${_tcEsc(t.name||'Untitled')}</div>
+          ${t.description ? `<div style="font-size:11px;color:var(--text-d);margin-top:2px;">${_tcEsc(t.description)}</div>` : ''}
+          <div style="font-size:10px;color:var(--text-d);margin-top:6px;">${taskCount} task${taskCount===1?'':'s'}${sectionCount > 0 ? ' · ' + sectionCount + ' section' + (sectionCount===1?'':'s') : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button onclick="tcApplyTemplatePicker('${t.id}')" class="btn btn-primary btn-sm" style="font-size:11px;">Apply →</button>
+          <button onclick="tcEditTemplate('${t.id}')" class="btn btn-ghost btn-sm" style="font-size:11px;">Edit</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML = `<div class="card" onclick="event.stopPropagation()" style="width:640px;max-height:85vh;overflow-y:auto;padding:0;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">📋 Project Templates</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:2px;">Reusable task lists you can stamp onto a client</div>
+      </div>
+      <button onclick="tcCloseTplOverlay()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" onclick="tcEditTemplate(null)">+ New Template</button>
+      </div>
+      ${templates.length === 0
+        ? '<div style="text-align:center;padding:40px 20px;color:var(--text-d);font-size:13px;">No templates yet. Click "+ New Template" to design one.</div>'
+        : list}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  _tcTplOverlay = overlay;
+}
+
+function tcEditTemplate(id){
+  tcCloseTplOverlay();
+  const tpl = id ? (DB.tcProjectTemplates || []).find(t => t.id === id && !t._deleted) : null;
+  // Deep clone so Cancel doesn't dirty the saved record
+  _tcTplEditing = tpl
+    ? JSON.parse(JSON.stringify(tpl))
+    : { id: '', name: '', description: '', tasks: [] };
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) { tcSyncTemplateRows(); tcCloseTplOverlay(); tcManageTemplates(); } };
+  document.body.appendChild(overlay);
+  _tcTplOverlay = overlay;
+  tcRenderTemplateEditor(!tpl);
+}
+
+function tcRenderTemplateEditor(isNew){
+  if (!_tcTplOverlay) return;
+  const ed = _tcTplEditing;
+  const taskRows = ed.tasks.map((task, idx) => `
+    <div data-row="${idx}" style="display:grid;grid-template-columns:1fr 140px 70px 90px 28px;gap:6px;align-items:start;margin-bottom:6px;padding:8px;background:var(--surface);border-radius:6px;border:1px solid var(--border);">
+      <div>
+        <input data-f="name" type="text" placeholder="Task name" value="${_tcEsc(task.name||'')}" class="field-input" style="font-size:12px;padding:6px 8px;width:100%;">
+        <input data-f="notes" type="text" placeholder="Notes (optional)" value="${_tcEsc(task.notes||'')}" class="field-input" style="font-size:11px;padding:5px 8px;width:100%;margin-top:4px;color:var(--text-d);">
+      </div>
+      <input data-f="section" type="text" placeholder="Section" value="${_tcEsc(task.section||'')}" class="field-input" style="font-size:12px;padding:6px 8px;">
+      <select data-f="priority" class="field-input" style="font-size:12px;padding:6px 4px;">
+        <option value="">—</option>
+        <option value="1" ${task.priority==1?'selected':''}>P1</option>
+        <option value="2" ${task.priority==2?'selected':''}>P2</option>
+        <option value="3" ${task.priority==3?'selected':''}>P3</option>
+        <option value="4" ${task.priority==4?'selected':''}>P4</option>
+      </select>
+      <input data-f="dueOffsetDays" type="number" placeholder="+days" value="${task.dueOffsetDays!=null && task.dueOffsetDays!==''?task.dueOffsetDays:''}" class="field-input" style="font-size:12px;padding:6px 8px;" title="Days from project start. Blank = undated.">
+      <button onclick="tcRemoveTemplateTaskRow(${idx})" class="btn btn-ghost btn-sm" style="font-size:14px;padding:4px 6px;color:var(--red);" title="Remove">×</button>
+    </div>
+  `).join('');
+
+  _tcTplOverlay.innerHTML = `<div class="card" onclick="event.stopPropagation()" style="width:780px;max-height:85vh;display:flex;flex-direction:column;padding:0;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">${isNew ? '+ New Template' : 'Edit Template'}</div>
+      <button onclick="tcSyncTemplateRows();tcCloseTplOverlay();tcManageTemplates();" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
+    </div>
+    <div style="padding:16px 20px;overflow-y:auto;flex:1;">
+      <div style="margin-bottom:14px;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Template name</label>
+        <input id="tc-tpl-name" type="text" placeholder="Full Service Bookkeeping" value="${_tcEsc(ed.name)}" class="field-input" style="width:100%;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Description (optional)</label>
+        <input id="tc-tpl-desc" type="text" placeholder="What this template is for" value="${_tcEsc(ed.description||'')}" class="field-input" style="width:100%;">
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Tasks</div>
+          <button class="btn btn-ghost btn-sm" onclick="tcAddTemplateTaskRow()" style="font-size:11px;">+ Add Task</button>
+        </div>
+        ${ed.tasks.length === 0
+          ? '<div style="text-align:center;padding:24px 12px;color:var(--text-d);font-size:12px;">No tasks yet. Click "+ Add Task" to start.</div>'
+          : `<div style="display:grid;grid-template-columns:1fr 140px 70px 90px 28px;gap:6px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:0 8px 4px;">
+            <div>Name / notes</div>
+            <div>Section</div>
+            <div>Priority</div>
+            <div>Due (+days)</div>
+            <div></div>
+          </div>
+          <div id="tc-tpl-tasks">${taskRows}</div>`
+        }
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;">
+      <div>
+        ${!isNew && ed.id ? `<button class="btn btn-danger btn-sm" onclick="if(confirm('Delete this template?')){tcDeleteTemplate('${ed.id}');tcCloseTplOverlay();tcManageTemplates();}">Delete</button>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost" onclick="tcCloseTplOverlay();tcManageTemplates();">Cancel</button>
+        <button class="btn btn-primary" onclick="tcSaveTemplate()">Save Template</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Pull current input values back into _tcTplEditing so re-renders & saves
+// see the latest state. Called before any rerender or save.
+function tcSyncTemplateRows(){
+  if (!_tcTplOverlay || !_tcTplEditing) return;
+  const nm = _tcTplOverlay.querySelector('#tc-tpl-name'); if (nm) _tcTplEditing.name = nm.value;
+  const ds = _tcTplOverlay.querySelector('#tc-tpl-desc'); if (ds) _tcTplEditing.description = ds.value;
+  _tcTplOverlay.querySelectorAll('[data-row]').forEach(row => {
+    const idx = Number(row.dataset.row);
+    if (!_tcTplEditing.tasks[idx]) return;
+    row.querySelectorAll('[data-f]').forEach(input => {
+      _tcTplEditing.tasks[idx][input.dataset.f] = input.value;
+    });
+  });
+}
+
+function tcAddTemplateTaskRow(){
+  tcSyncTemplateRows();
+  _tcTplEditing.tasks.push({ name:'', section:'', priority:'', dueOffsetDays:'', notes:'' });
+  tcRenderTemplateEditor(!_tcTplEditing.id);
+}
+
+function tcRemoveTemplateTaskRow(idx){
+  tcSyncTemplateRows();
+  _tcTplEditing.tasks.splice(idx, 1);
+  tcRenderTemplateEditor(!_tcTplEditing.id);
+}
+
+function tcSaveTemplate(){
+  tcSyncTemplateRows();
+  if (!_tcTplEditing.name?.trim()){ alert('Template name is required'); return; }
+  if (!Array.isArray(DB.tcProjectTemplates)) DB.tcProjectTemplates = [];
+  // Drop empty-name task rows; coerce types so saved data stays clean
+  const tasks = _tcTplEditing.tasks
+    .filter(t => (t.name||'').trim())
+    .map(t => ({
+      name:          String(t.name||'').trim(),
+      section:       String(t.section||'').trim(),
+      priority:      t.priority ? Number(t.priority) : null,
+      dueOffsetDays: (t.dueOffsetDays === '' || t.dueOffsetDays == null) ? null : Number(t.dueOffsetDays),
+      notes:         String(t.notes||'').trim(),
+    }));
+  const stamp = new Date().toISOString();
+  if (_tcTplEditing.id){
+    const existing = DB.tcProjectTemplates.find(t => t.id === _tcTplEditing.id);
+    if (existing){
+      existing.name        = _tcTplEditing.name.trim();
+      existing.description = (_tcTplEditing.description || '').trim();
+      existing.tasks       = tasks;
+      existing.updatedAt   = stamp;
+    }
+  } else {
+    DB.tcProjectTemplates.push({
+      id:          uid(),
+      name:        _tcTplEditing.name.trim(),
+      description: (_tcTplEditing.description || '').trim(),
+      tasks,
+      createdAt:   stamp,
+      updatedAt:   stamp,
+    });
+  }
+  saveDB();
+  tcCloseTplOverlay();
+  tcManageTemplates();
+}
+
+function tcDeleteTemplate(id){
+  const tpl = (DB.tcProjectTemplates || []).find(t => t.id === id);
+  if (tpl){ tpl._deleted = true; tpl.updatedAt = new Date().toISOString(); saveDB(); }
+}
+
+function tcApplyTemplatePicker(templateId){
+  tcCloseTplOverlay();
+  const tpl = (DB.tcProjectTemplates || []).find(t => t.id === templateId && !t._deleted);
+  if (!tpl){ alert('Template not found.'); return; }
+  const clients = (DB.clients || []).slice().sort((a,b) => (a.biz||'').localeCompare(b.biz||''));
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.onclick = e => { if (e.target === overlay) tcCloseTplOverlay(); };
+  overlay.innerHTML = `<div class="card" onclick="event.stopPropagation()" style="width:480px;padding:0;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);">Apply Template</div>
+      <div style="font-size:11px;color:var(--text-d);margin-top:2px;">Stamp ${(tpl.tasks||[]).length} task${(tpl.tasks||[]).length===1?'':'s'} from "${_tcEsc(tpl.name)}" onto a client</div>
+    </div>
+    <div style="padding:16px 20px;">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px;">Client</label>
+      <select id="tc-tpl-apply-client" class="field-input" style="width:100%;">
+        <option value="">— Select a client —</option>
+        ${clients.map(c => `<option value="${_tcEsc(c.id)}">${_tcEsc(c.biz||'(unnamed)')}</option>`).join('')}
+      </select>
+      <div style="font-size:10px;color:var(--text-d);margin-top:8px;line-height:1.4;">Tasks are stamped with you as the assignee. Due dates calculated from today using each task's offset. Editing the template later won't change tasks already stamped.</div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:6px;">
+      <button class="btn btn-ghost" onclick="tcCloseTplOverlay();tcManageTemplates();">Cancel</button>
+      <button class="btn btn-primary" onclick="tcApplyTemplate('${tpl.id}', document.getElementById('tc-tpl-apply-client').value)">Apply →</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  _tcTplOverlay = overlay;
+}
+
+async function tcApplyTemplate(templateId, clientId){
+  const tpl = (DB.tcProjectTemplates || []).find(t => t.id === templateId && !t._deleted);
+  if (!tpl){ alert('Template not found.'); return; }
+  if (!clientId){ alert('Pick a client first.'); return; }
+  const client = (DB.clients || []).find(c => c.id === clientId);
+  if (!client){ alert('Client not found.'); return; }
+  const today = new Date(); today.setHours(0,0,0,0);
+  const stamp = new Date().toISOString();
+  if (!Array.isArray(DB.tasks)) DB.tasks = [];
+  let added = 0;
+  for (const tt of (tpl.tasks || [])){
+    let dueDate = '';
+    if (tt.dueOffsetDays != null && tt.dueOffsetDays !== ''){
+      const d = new Date(today); d.setDate(today.getDate() + Number(tt.dueOffsetDays));
+      dueDate = d.toISOString().slice(0,10);
+    }
+    DB.tasks.push({
+      id:          uid(),
+      name:        tt.name || 'Untitled',
+      clientId,
+      clientName:  client.biz || '',
+      section:     tt.section || '',
+      priority:    tt.priority || null,
+      dueDate,
+      notes:       tt.notes || '',
+      status:      'open',
+      type:        'task',
+      amId:        currentUser?.id || '',
+      _createdAt:  stamp,
+      _updatedAt:  stamp,
+    });
+    added++;
+  }
+  saveDB();
+  tcCloseTplOverlay();
+  if (typeof showToast === 'function') showToast(`✓ Applied "${tpl.name}" — ${added} task${added===1?'':'s'} for ${client.biz}`);
+  if (typeof tcSelectView === 'function') tcSelectView('project:' + clientId);
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
 }
 
 // ── Project Tabs (Tasks/Notes within a project) ─────────────────
