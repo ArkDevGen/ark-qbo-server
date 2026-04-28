@@ -119,6 +119,24 @@
 @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes numberPop{0%{transform:scale(.92);opacity:0;}60%{transform:scale(1.03);}100%{transform:scale(1);opacity:1;}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* ── Notification pop-ups ── */
+@keyframes nfpSlideIn{from{transform:translateX(110%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes nfpSlideOut{from{transform:translateX(0);opacity:1;}to{transform:translateX(110%);opacity:0;}}
+@keyframes nfpUrgentPulse{0%,100%{box-shadow:0 4px 20px rgba(0,0,0,.10), 0 0 0 0 rgba(229,62,62,.45);}50%{box-shadow:0 4px 20px rgba(0,0,0,.10), 0 0 0 6px rgba(229,62,62,0);}}
+@keyframes nfpProgress{from{width:100%;}to{width:0%;}}
+.nfp-card{
+  pointer-events:auto;
+  background:var(--surface);border:1px solid var(--border);border-left-width:4px;border-radius:var(--radius);
+  box-shadow:0 4px 20px rgba(0,0,0,.10);
+  padding:10px 12px 10px 14px;animation:nfpSlideIn .25s ease-out;
+  display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text);
+  position:relative;overflow:hidden;cursor:default;
+}
+.nfp-card.nfp-urgent{border-left-color:#e53e3e;animation:nfpSlideIn .25s ease-out, nfpUrgentPulse 2.2s ease-in-out infinite .25s;}
+.nfp-card.nfp-high{border-left-color:#b8922a;}
+.nfp-card.nfp-normal{border-left-color:var(--accent);}
+.nfp-card.nfp-out{animation:nfpSlideOut .22s ease-in forwards;}
+.nfp-card .nfp-progress{position:absolute;left:0;bottom:0;height:2px;background:currentColor;opacity:.45;}
 
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;font-size:14px;-webkit-font-smoothing:antialiased;}
 
@@ -1833,6 +1851,16 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
     </div>
   </header>
+
+  <!-- ══ NOTIFICATION POP-UPS ══
+       Stacking in-app cards that slide in when notifCreate fires for the
+       current user. Priority tiers control color + persistence:
+         · urgent — red border, pulsing, no auto-dismiss
+         · high   — gold border, 12s auto-dismiss with progress
+         · normal — neutral border, 6s auto-dismiss
+       Clicking a card routes via notifClickItem (same as bell dropdown).
+       Hidden when the bell dropdown is open to avoid duplicate noise. -->
+  <div id="notif-popup-stack" style="position:fixed;top:64px;right:18px;z-index:9000;display:flex;flex-direction:column;gap:10px;width:340px;max-width:calc(100vw - 36px);pointer-events:none;"></div>
 
   <!-- ══ DASHBOARD ══ -->
   <div class="view active content" id="view-dashboard">
@@ -35990,7 +36018,7 @@ function notifGetAll(){
 
 // Create a new notification
 function notifCreate(opts){
-  // opts: { type, targetAm, title, body, taskId, from, amName }
+  // opts: { type, targetAm, title, body, taskId, from, amName, priority }
   if(!DB.notifications) DB.notifications = [];
   const notif = {
     id:        uid(),
@@ -35999,7 +36027,9 @@ function notifCreate(opts){
     title:     opts.title   || 'Notification',
     body:      opts.body    || '',
     taskId:    opts.taskId  || null,
+    helpPostId: opts.helpPostId || null,
     from:      opts.from    || '',
+    priority:  opts.priority || notifDerivePriority(opts.type),
     sentBy:    currentUser?.id || null,
     read:      false,
     createdAt: new Date().toISOString(),
@@ -36015,6 +36045,7 @@ function notifCreate(opts){
   // Fire browser desktop notification if permitted and assigned to current user
   if(currentUser && notif.targetAm === currentUser.id){
     notifFireDesktop(notif);
+    notifShowPopup(notif);
   } else if(!currentUser) {
     // No one logged in yet — still fire desktop
     notifFireDesktop(notif);
@@ -36034,6 +36065,104 @@ function notifCreate(opts){
       console.warn('Notification push error:', e.message);
     });
   }
+}
+
+// ── In-app pop-up notifications ───────────────────────────────────
+// Stacking sliding cards rendered in #notif-popup-stack. Shows when a
+// notification is created/received for the current user. Skipped when
+// the bell dropdown is open (to avoid duplicate noise).
+const NOTIF_POPUP_MAX = 4;
+const NOTIF_POPUP_DURATION = { urgent: 0, high: 12000, normal: 6000 };
+const NOTIF_TYPE_PRIORITY = {
+  'review-rejected':   'high',
+  'sent-for-review':   'high',
+  'help-new-post':     'high',
+  'task-assigned':     'normal',
+  'task-completed':    'normal',
+  'review-approved':   'normal',
+  'help-reply':        'normal',
+  'task-acknowledged': 'normal',
+  'new-sms':           'normal',
+  'info':              'normal',
+  'alert':             'urgent',
+};
+
+function notifDerivePriority(type){
+  return NOTIF_TYPE_PRIORITY[type] || 'normal';
+}
+
+function notifPopupIcon(type){
+  const map = {
+    'task-assigned':'📋','task-completed':'✓','task-acknowledged':'✓',
+    'sent-for-review':'👀','review-approved':'✓','review-rejected':'⚠',
+    'help-new-post':'🙋','help-reply':'💬','new-sms':'💬',
+    'info':'ℹ','alert':'⚠',
+  };
+  return map[type] || '🔔';
+}
+
+function notifShowPopup(notif){
+  if(!notif) return;
+  const stack = document.getElementById('notif-popup-stack');
+  if(!stack) return;
+  // Skip if the bell dropdown is open — the user is already looking at the inbox
+  if(typeof _notifOpen !== 'undefined' && _notifOpen) return;
+  // De-dupe (in case create + SSE fire for the same id)
+  if(stack.querySelector(`[data-nfp-id="${notif.id}"]`)) return;
+
+  const priority = notif.priority || notifDerivePriority(notif.type);
+  const duration = NOTIF_POPUP_DURATION[priority] ?? 6000;
+  const icon = notifPopupIcon(notif.type);
+  const clickable = !!(notif.taskId || notif.helpPostId);
+
+  const card = document.createElement('div');
+  card.className = 'nfp-card nfp-' + priority;
+  card.dataset.nfpId = notif.id;
+  card.style.color = priority === 'urgent' ? '#e53e3e' : priority === 'high' ? '#b8922a' : 'var(--accent)';
+  // Body builds inline so we keep one card per notification with consistent layout
+  const safeTitle = String(notif.title || 'Notification').replace(/[<>]/g, '');
+  const safeBody  = String(notif.body  || '').replace(/[<>]/g, '');
+  card.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:9px;">
+      <div style="font-size:15px;line-height:1.2;flex-shrink:0;margin-top:1px;">${icon}</div>
+      <div style="flex:1;min-width:0;color:var(--text);">
+        <div style="font-weight:700;font-size:12.5px;line-height:1.25;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeTitle}</div>
+        ${safeBody ? `<div style="font-size:11.5px;color:var(--text-d);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${safeBody}</div>` : ''}
+        ${clickable ? `<div style="font-size:10px;color:var(--text-d);margin-top:4px;font-style:italic;">Click to open →</div>` : ''}
+      </div>
+      <button onclick="event.stopPropagation();notifDismissPopup('${notif.id}')" title="Dismiss"
+        style="background:none;border:none;color:var(--text-d);font-size:14px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">×</button>
+    </div>
+    ${duration > 0 ? `<div class="nfp-progress" style="animation:nfpProgress ${duration}ms linear forwards;"></div>` : ''}
+  `;
+  if(clickable){
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => {
+      try { notifClickItem(notif.id); } catch(_){}
+      notifDismissPopup(notif.id);
+    });
+  }
+
+  stack.appendChild(card);
+
+  // Cap the stack — drop oldest cards beyond the max
+  while(stack.children.length > NOTIF_POPUP_MAX){
+    stack.children[0].remove();
+  }
+
+  // Auto-dismiss for non-urgent
+  if(duration > 0){
+    setTimeout(() => notifDismissPopup(notif.id), duration);
+  }
+}
+
+function notifDismissPopup(id){
+  const stack = document.getElementById('notif-popup-stack');
+  if(!stack) return;
+  const card = stack.querySelector(`[data-nfp-id="${id}"]`);
+  if(!card) return;
+  card.classList.add('nfp-out');
+  setTimeout(() => { try { card.remove(); } catch(_){} }, 230);
 }
 
 // ── Badge count ───────────────────────────────────────────────────
@@ -36601,6 +36730,7 @@ function notifConnectSSE(){
         notifUpdateBadge();
         if(_notifOpen) notifRenderList();
         notifFireDesktop(notif);
+        notifShowPopup(notif);
         _notifRefreshDB();
       } catch(_){}
     };
