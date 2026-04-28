@@ -27417,6 +27417,38 @@ function tcMigrateRecurrence() {
   }
 }
 
+// Heal tasks that have a clientName but a missing/blank clientId by looking
+// up the matching client by exact (case-insensitive) biz name. Without this
+// the Production sidebar buckets these tasks under "Personal" because its
+// grouping key is t.clientId — even though the user clearly assigned a
+// client. Runs once per load and persists matches so the next render is
+// already correct.
+function tcMigrateClientIdFromName() {
+  if (!Array.isArray(DB.tasks) || !Array.isArray(DB.clients)) return 0;
+  // Build a lowercase biz → id index once
+  const bizIndex = new Map();
+  for (const c of DB.clients) {
+    if (!c || c._deleted) continue;
+    const name = (c.biz || '').trim().toLowerCase();
+    if (name && !bizIndex.has(name)) bizIndex.set(name, c.id);
+  }
+  if (!bizIndex.size) return 0;
+  let healed = 0;
+  for (const t of DB.tasks) {
+    if (!t || t._deleted) continue;
+    if (t.clientId) continue;            // already linked
+    const nm = (t.clientName || '').trim().toLowerCase();
+    if (!nm) continue;                   // genuinely no client → leave under Personal
+    const matchedId = bizIndex.get(nm);
+    if (!matchedId) continue;            // name doesn't match any current client → leave alone
+    t.clientId = matchedId;
+    t._updatedAt = new Date().toISOString();
+    healed++;
+  }
+  if (healed) { try { saveDB(); } catch(_){} }
+  return healed;
+}
+
 function tcRecurDays(task){
   const n = parseInt(task.recurCustomN)||1;
   switch(task.recurFreq){
@@ -28559,6 +28591,9 @@ async function tcRender(){
   // structured recurFreq + recurWeekday/recurDayOfMonth fields tcNextDue
   // honors, so existing imported tasks auto-roll correctly without re-import.
   tcMigrateRecurrence();
+  // Heal tasks that have clientName but missing clientId — otherwise the
+  // sidebar drops them under "Personal" even though they belong to a client.
+  tcMigrateClientIdFromName();
 
   // Project view auto-defaults to grouping by section (Todoist-style),
   // but only if the user hasn't explicitly picked a different grouping
