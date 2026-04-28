@@ -3447,12 +3447,19 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- Project notes container (hidden, shown when Notes tab active in project view) -->
     <div id="tc-project-notes" style="display:none;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-        <input type="text" id="tc-pnotes-search" class="field-input" placeholder="Search notes..." oninput="tcRenderProjectNotes()" style="flex:1;max-width:280px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <input type="text" id="tc-pnotes-search" class="field-input" placeholder="Search notes..." oninput="tcRenderProjectNotes()" style="flex:1;min-width:160px;max-width:280px;">
+        <select id="tc-pnotes-groupby" class="field-input" style="width:160px;font-size:12px;" onchange="tcRenderProjectNotes()">
+          <option value="">No grouping</option>
+          <option value="section">Group by section</option>
+          <option value="category">Group by category</option>
+        </select>
         <button class="btn btn-primary btn-sm" onclick="tcNewProjectNote()">+ New Note</button>
       </div>
       <div id="tc-pnotes-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
         <input type="text" id="tc-pnote-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;width:100%;box-sizing:border-box;">
+        <input type="text" id="tc-pnote-category" class="field-input" placeholder="Category (optional, e.g. Procedures, Contacts)" list="tc-pnote-categories" style="font-size:12px;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:6px 0;width:100%;box-sizing:border-box;color:var(--text-d);">
+        <datalist id="tc-pnote-categories"></datalist>
         <textarea id="tc-pnote-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;width:100%;box-sizing:border-box;"></textarea>
         <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <span id="tc-pnote-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
@@ -27611,12 +27618,19 @@ function tcRecurLabel(freq, n, d1, d2){
 // task.section field so grouping works without re-importing. Idempotent.
 function tcMigrateSections() {
   for (const t of (DB.tasks || [])) {
+    // Backfill: earlier migrations stored the raw "[Section: PAYROLL]" inner
+    // text, so the section ended up as "Section: PAYROLL" instead of just
+    // "PAYROLL". Strip the prefix in-place when we see it.
+    if (t.section && /^Section:\s*/i.test(t.section)) {
+      t.section = t.section.replace(/^Section:\s*/i, '').trim();
+    }
     if (t.section || !t.notes) continue;
     const parts = String(t.notes).split(' · ');
     for (const p of parts) {
       const m = p.match(/^\[([^\]]+)\]$/);
       if (m && !m[1].startsWith('Todoist:')) {
-        t.section = m[1];
+        // Strip "Section: " prefix so [Section: PAYROLL] → "PAYROLL".
+        t.section = m[1].replace(/^Section:\s*/i, '').trim();
         break;
       }
     }
@@ -29122,15 +29136,19 @@ function tcProjectTab(tab) {
 function tcRenderProjectNotes() {
   const container = document.getElementById('tc-pnotes-list');
   if (!container) return;
+  // Run section migration so notes pick up [Section: …] from their text
+  // and the section grouping below has clean values to bucket on.
+  if (typeof tcMigrateSections === 'function') tcMigrateSections();
   const search = (document.getElementById('tc-pnotes-search')?.value || '').toLowerCase();
   const fClient = document.getElementById('tc-filter-client')?.value || '';
   const fAM = document.getElementById('tc-filter-am')?.value || '';
+  const groupBy = document.getElementById('tc-pnotes-groupby')?.value || '';
 
   let notes = (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&t.type === 'note' && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
   if (fClient && fClient !== '_noClient') notes = notes.filter(t => t.clientId === fClient);
   else if (fClient === '_noClient') notes = notes.filter(t => !t.clientId);
-  if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''}`.toLowerCase().includes(search));
+  if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''} ${t.category || ''}`.toLowerCase().includes(search));
 
   notes.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
@@ -29139,20 +29157,51 @@ function tcRenderProjectNotes() {
     return;
   }
 
-  container.innerHTML = notes.map(t => {
+  // Render a single note card. Used both grouped and ungrouped.
+  const noteCard = t => {
     const client = t.clientId ? (DB.clients || []).find(c => c.id === t.clientId) : null;
     const preview = (t.notes || '').substring(0, 120).replace(/\n/g, ' ');
     const date = t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    // Treat the legacy default 'Other' as no category for display purposes.
+    const cat = t.category && t.category !== 'Other' ? t.category : '';
+    const sec = t.section || '';
     return `<div style="padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;background:var(--surface);cursor:pointer;transition:all .15s;" onclick="tcEditProjectNote('${t.id}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='var(--surface)'">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
         <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;">${t.name || 'Untitled'}</span>
         <span style="font-size:10px;color:var(--text-d);">${date}</span>
+        ${sec && groupBy !== 'section' ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--navy);font-weight:600;">§ ${sec}</span>` : ''}
+        ${cat && groupBy !== 'category' ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--gold-soft, var(--surface2));color:var(--gold);font-weight:600;">${cat}</span>` : ''}
         ${client ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text-d);">${client.biz}</span>` : ''}
         <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;opacity:.4;">×</button>
       </div>
       ${preview ? `<div style="font-size:12px;color:var(--text-d);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${preview}${(t.notes||'').length > 120 ? '…' : ''}</div>` : ''}
     </div>`;
-  }).join('');
+  };
+
+  if (groupBy === 'category' || groupBy === 'section') {
+    // Bucket by the chosen field. Empty values land in "Uncategorized" and sort last.
+    const isSection = groupBy === 'section';
+    const groups = {};
+    notes.forEach(t => {
+      const raw = isSection ? t.section : (t.category && t.category !== 'Other' ? t.category : '');
+      const k = raw ? raw : '📌 Uncategorized';
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(t);
+    });
+    const keys = Object.keys(groups).sort((a,b) => {
+      if (a.startsWith('📌')) return 1;
+      if (b.startsWith('📌')) return -1;
+      return a.localeCompare(b);
+    });
+    container.innerHTML = keys.map(k => `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">${k} <span style="font-weight:400;opacity:.6;">(${groups[k].length})</span></div>
+        ${groups[k].map(noteCard).join('')}
+      </div>
+    `).join('');
+  } else {
+    container.innerHTML = notes.map(noteCard).join('');
+  }
 }
 
 function tcNewProjectNote() {
@@ -29160,8 +29209,10 @@ function tcNewProjectNote() {
   const fClient = document.getElementById('tc-filter-client')?.value || '';
   if (fClient && fClient !== '_noClient') {
     // Client already selected from project view — open editor directly
+    tcPopulateNoteCategoryDatalist();
     document.getElementById('tc-pnote-id').value = '';
     document.getElementById('tc-pnote-title').value = '';
+    document.getElementById('tc-pnote-category').value = '';
     document.getElementById('tc-pnote-content').value = '';
     document.getElementById('tc-pnote-meta').textContent = '';
     document.getElementById('tc-pnotes-editor').style.display = '';
@@ -29296,8 +29347,15 @@ function tcSaveNewNote() {
 function tcEditProjectNote(id) {
   const task = (DB.tasks || []).find(t => t.id === id);
   if (!task) return;
+  // Refresh datalist suggestions before showing the editor so the user gets
+  // existing categories as autocomplete options.
+  tcPopulateNoteCategoryDatalist();
   document.getElementById('tc-pnote-id').value = id;
   document.getElementById('tc-pnote-title').value = task.name || '';
+  // Default 'Other' is the legacy seed value — show empty so the user can
+  // leave it blank if they don't want a category.
+  const cat = task.category && task.category !== 'Other' ? task.category : '';
+  document.getElementById('tc-pnote-category').value = cat;
   document.getElementById('tc-pnote-content').value = task.notes || '';
   const date = task.updatedAt ? new Date(task.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
   document.getElementById('tc-pnote-meta').textContent = date ? `Last edited ${date}${task.createdBy ? ' by ' + task.createdBy : ''}` : '';
@@ -29308,6 +29366,7 @@ function tcEditProjectNote(id) {
 function tcSaveProjectNote() {
   const title = document.getElementById('tc-pnote-title').value.trim();
   const content = document.getElementById('tc-pnote-content').value;
+  const category = (document.getElementById('tc-pnote-category')?.value || '').trim();
   if (!title) { alert('Title is required'); return; }
 
   const existingId = document.getElementById('tc-pnote-id').value;
@@ -29319,6 +29378,7 @@ function tcSaveProjectNote() {
     if (task) {
       task.name = title;
       task.notes = content;
+      task.category = category || 'Other';
       task.updatedAt = new Date().toISOString();
     }
   } else {
@@ -29327,7 +29387,7 @@ function tcSaveProjectNote() {
       id: uid(), name: title, notes: content, type: 'note',
       clientId: fClient && fClient !== '_noClient' ? fClient : '',
       clientName: fClient ? ((DB.clients || []).find(c => c.id === fClient)?.biz || '') : '',
-      amId: currentUser?.id || '', category: 'Other', dueDate: '', priority: 'medium',
+      amId: currentUser?.id || '', category: category || 'Other', dueDate: '', priority: 'medium',
       recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
       noteLog: [], parentId: null, parentTaskId: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: who,
@@ -29342,6 +29402,21 @@ function tcSaveProjectNote() {
 
 function tcCancelProjectNote() {
   document.getElementById('tc-pnotes-editor').style.display = 'none';
+  // Clear category so the next "+ New Note" doesn't carry over a stale value
+  const c = document.getElementById('tc-pnote-category'); if (c) c.value = '';
+}
+
+// Populate the note-category datalist with the union of categories on
+// existing notes (any client). Called before opening the editor so the
+// autocomplete list always reflects current data.
+function tcPopulateNoteCategoryDatalist(){
+  const dl = document.getElementById('tc-pnote-categories');
+  if (!dl) return;
+  const cats = new Set();
+  (DB.tasks || []).forEach(t => {
+    if (t.type === 'note' && t.category && t.category !== 'Other' && !t._deleted) cats.add(t.category);
+  });
+  dl.innerHTML = Array.from(cats).sort().map(c => `<option value="${c.replace(/"/g,'&quot;')}">`).join('');
 }
 
 // ── Subtask Support ─────────────────────────────────────────────
