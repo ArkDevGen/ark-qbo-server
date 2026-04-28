@@ -246,6 +246,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   font-size:var(--text-xl);font-weight:700;color:var(--navy);
   letter-spacing:-.015em;line-height:1;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  flex-shrink:0; /* never let the search bar squeeze the page title */
 }
 .topbar-right{
   display:flex;align-items:center;gap:8px;
@@ -1759,7 +1760,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="topbar-title" id="page-title">Dashboard</div>
       <!-- ── Master Search ── fuzzy global search across clients, tasks, ideas, etc.
            Ctrl+K to focus. Esc to close. Click outside to dismiss. -->
-      <div id="ms-wrap" style="position:relative;flex:1 1 220px;min-width:0;max-width:340px;margin-left:18px;">
+      <div id="ms-wrap" style="position:relative;flex:1 1 180px;min-width:140px;max-width:340px;margin-left:18px;">
         <div style="position:relative;">
           <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-d);pointer-events:none;">🔍</span>
           <input id="ms-input" type="text" placeholder="Search anything…"
