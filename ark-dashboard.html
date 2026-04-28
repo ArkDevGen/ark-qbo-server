@@ -30618,9 +30618,6 @@ function tdShowProjectMapping(projects) {
         <input type="hidden" id="td-proj-clientid-${i}" data-project="${p.replace(/"/g,'&quot;')}">
         <div id="td-proj-dd-${i}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:160px;overflow-y:auto;box-shadow:var(--shadow);"></div>
       </div>
-      <select id="td-proj-cat-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-cat" style="width:140px;font-size:12px;margin:0;">
-        ${catOpts}
-      </select>
       <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;white-space:nowrap;">
         <input type="checkbox" class="td-proj-skip" data-project="${p.replace(/"/g,'&quot;')}" style="accent-color:var(--navy);">
         Skip
@@ -30663,9 +30660,11 @@ function tdProjSelectClient(idx, id, name) {
 function tdApplyProjectMapping() {
   const defaultAM = document.getElementById('td-am-sel')?.value || '';
 
-  // Read mappings
+  // Read mappings — category dropdowns were removed because a single
+  // category doesn't fit a multi-section import. Per-task category is
+  // already inferred from each task's section name at parse time
+  // (see tdInferCategory inside tdParseCSV).
   const clientInputs = document.querySelectorAll('.td-proj-client');
-  const catSels = document.querySelectorAll('.td-proj-cat');
   const skipChecks = document.querySelectorAll('.td-proj-skip');
 
   const projectMap = {};
@@ -30679,14 +30678,15 @@ function tdApplyProjectMapping() {
       if (match) clientId = match.id;
     }
     const clientName = clientId ? ((DB.clients||[]).find(c=>c.id===clientId)?.biz||'') : (input.value.trim() || '');
-    const category = catSels[i]?.value || 'Other';
     const skip = skipChecks[i]?.checked || false;
-    projectMap[proj] = { clientId, clientName, category, skip };
+    projectMap[proj] = { clientId, clientName, skip };
   });
 
   const skipNoDate = document.getElementById('td-skip-no-date')?.checked || false;
 
-  // Apply mappings to parsed tasks
+  // Apply mappings to parsed tasks. Don't touch t.category — it's already
+  // inferred per-task from the section name at parse time, and the
+  // per-project category dropdown was removed.
   _tdParsed = _tdParsed.filter(t => {
     const mapping = projectMap[t._project];
     if (mapping?.skip) return false;
@@ -30695,7 +30695,6 @@ function tdApplyProjectMapping() {
     if (mapping) {
       t.clientId = mapping.clientId;
       t.clientName = mapping.clientName;
-      t.category = mapping.category;
     }
     t.amId = defaultAM;
     return true;
