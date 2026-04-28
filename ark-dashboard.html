@@ -1107,22 +1107,36 @@ input[type="checkbox"]{accent-color:var(--navy);}
 .wg-edit-mode{position:relative;}
 
 /* Widget quick actions row */
-.wg-qa-row{display:flex;gap:12px;flex-wrap:wrap;padding:10px 0;}
+.wg-qa-row{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0;}
 .wg-qa-btn{
-  display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:18px 20px;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius-lg);cursor:pointer;min-width:108px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:10px 12px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);cursor:pointer;min-width:84px;
   box-shadow:var(--shadow-sm);transition:var(--transition-fast);
-  text-decoration:none;color:inherit;
+  text-decoration:none;color:inherit;position:relative;
 }
-.wg-qa-btn:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--border2);}
+.wg-qa-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow);border-color:var(--border2);}
 .wg-qa-icon{
-  width:44px;height:44px;border-radius:var(--radius-lg);
+  width:32px;height:32px;border-radius:var(--radius-sm);
   display:flex;align-items:center;justify-content:center;
-  font-size:var(--text-xl);color:#fff;
+  font-size:var(--text-md);color:#fff;
 }
-.wg-qa-label{font-size:var(--text-md);font-weight:600;color:var(--navy);text-align:center;}
+.wg-qa-label{font-size:var(--text-sm);font-weight:600;color:var(--navy);text-align:center;}
 .wg-qa-sublabel{font-size:var(--text-xs);color:var(--text-d);text-align:center;}
+/* Quick-action dropdown menu — positioned below the host button */
+.wg-qa-dd{
+  position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);
+  display:none;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);min-width:160px;
+  z-index:50;overflow:hidden;
+}
+.wg-qa-dd.open{display:block;}
+.wg-qa-dd a{
+  display:block;padding:8px 14px;font-size:12px;color:var(--text);
+  text-decoration:none;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+.wg-qa-dd a:last-child{border-bottom:none;}
+.wg-qa-dd a:hover{background:var(--surface2);}
 
 /* Widget chart containers */
 .wg-chart-wrap{width:100%;height:100%;min-height:120px;}
@@ -1430,7 +1444,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="modal-body" style="overflow-y:auto;flex:1;">
       <!-- Step 1: Choose Type -->
       <div class="wg-step active" id="wgb-step-1">
-        <div style="font-size:13px;color:var(--text-m);margin-bottom:4px;">What kind of widget?</div>
+        <!-- Library section — shows default widgets the user currently doesn't
+             have on their dashboard, for one-click re-add after a delete.
+             Hidden when the user already has every default. -->
+        <div id="wgb-library-section" style="display:none;margin-bottom:18px;">
+          <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px;">📚 From the Library</div>
+          <div style="font-size:11px;color:var(--text-d);margin-bottom:10px;">Pre-built widgets — click to add back to your dashboard.</div>
+          <div class="wg-type-grid" id="wgb-library"></div>
+        </div>
+        <div style="font-size:13px;color:var(--text-m);margin-bottom:4px;">Or build something custom:</div>
         <div class="wg-type-grid" id="wgb-type-grid">
           <div class="wg-type-card" data-type="kpi" onclick="wgbSelectType(this)">
             <div class="wg-type-icon">🔢</div>
@@ -1488,6 +1510,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
                 <option value="computed:activeAMs">Active Account Managers</option>
                 <option value="computed:onboarding">Incomplete Onboarding</option>
                 <option value="computed:productionTasks">My Production Tasks (overdue + today)</option>
+                <option value="computed:payrollTasks">My Payroll Tasks (this week)</option>
               </optgroup>
             </select>
           </div>
@@ -10531,9 +10554,10 @@ const DEFAULT_WIDGETS = [
   {id:'dw7',type:'kpi',title:'Vendor Library',source:{type:'collection',collection:'vendors'},display:{metric:'count',subtitle:'w-9s on file',accentColor:'var(--gold)'},filters:[],grid:{col:6,row:2,colSpan:2,rowSpan:1}},
   {id:'dw8',type:'kpi',title:'Incomplete Onboarding',source:{type:'computed',compute:'onboarding'},display:{metric:'custom',subtitle:'clients need attention',accentColor:'#2c7be5',valueColor:'#2c7be5'},filters:[],onClick:'clients',grid:{col:8,row:2,colSpan:2,rowSpan:1}},
   {id:'dw9',type:'kpi',title:'Unfiled NH Reports',source:{type:'collection',collection:'employees'},display:{metric:'count',subtitle:'need to be filed',accentColor:'var(--red)'},filters:[{field:'reportPrinted',op:'eq',value:false}],grid:{col:11,row:2,colSpan:2,rowSpan:1}},
-  {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:2},locked:true},
-  {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:5,colSpan:12,rowSpan:4},locked:true},
-  {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:9,colSpan:4,rowSpan:2},onClick:'tasks'},
+  {id:'dw10',type:'quickActions',title:'Quick Actions',source:{type:'static'},display:{},filters:[],grid:{col:1,row:3,colSpan:12,rowSpan:1},locked:true},
+  {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:4},locked:true},
+  {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
+  {id:'dw13',type:'kpi',title:'My Payroll Tasks',source:{type:'computed',compute:'payrollTasks'},display:{metric:'custom',accentColor:'#0070c0'},filters:[],grid:{col:5,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
 ];
 
 // ── Computed widget handlers ──
@@ -10648,6 +10672,82 @@ const WIDGET_COMPUTED = {
       extraHtml,
     };
   },
+  // My payroll tasks for this week (Mon-Sun). Same shape as productionTasks
+  // but filtered to category === 'Payroll' so payroll-specific work stays
+  // visible without opening Production. Driven by the same Mon-Sun helper
+  // as the production board so "this week" matches consistently.
+  payrollTasks(){
+    if(!currentUser?.id) return {value:'—',sub:'Not logged in'};
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().slice(0,10);
+    // Use the production helper if it's loaded; otherwise inline the same logic.
+    const monday = (typeof _tcMondayOfWeek === 'function') ? _tcMondayOfWeek(0) : (() => {
+      const d = new Date(today);
+      const dow = d.getDay();
+      d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+      return d;
+    })();
+    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+    const mondayStr = monday.toISOString().slice(0,10);
+    const sundayStr = sunday.toISOString().slice(0,10);
+    const isHidden = (typeof _taskHiddenForMe === 'function') ? _taskHiddenForMe : (() => false);
+    const mine = (DB.tasks||[]).filter(t =>
+      !t._deleted && !isHidden(t) &&
+      t.amId === currentUser.id &&
+      t.status !== 'completed' &&
+      t.type !== 'note' &&
+      t.dueDate && t.dueDate >= mondayStr && t.dueDate <= sundayStr &&
+      t.category === 'Payroll'
+    ).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+    const total = mine.length;
+    if(!total){
+      return { value: 0, sub: 'no payroll tasks this week', valueColor: 'var(--green)' };
+    }
+    const overdueCount = mine.filter(t => t.dueDate < todayStr).length;
+    const todayCount   = mine.filter(t => t.dueDate === todayStr).length;
+    const shown = mine.slice(0, 8);
+    const rows = shown.map(t => {
+      const client = (DB.clients||[]).find(c => c.id === t.clientId);
+      const isOver = t.dueDate < todayStr;
+      const isToday = t.dueDate === todayStr;
+      const dot = isOver ? '🔴' : isToday ? '🟡' : '📅';
+      let dueLabel, dueColor;
+      if (isOver) {
+        const days = Math.round((today - new Date(t.dueDate+'T12:00:00'))/86400000);
+        dueLabel = `${days}d late`; dueColor = 'var(--red)';
+      } else if (isToday) {
+        dueLabel = 'today'; dueColor = 'var(--gold)';
+      } else {
+        const d = new Date(t.dueDate+'T12:00:00');
+        dueLabel = d.toLocaleDateString('en-US',{weekday:'short'});
+        dueColor = 'var(--text-d)';
+      }
+      const safeName = String(t.name||'').replace(/"/g,'&quot;');
+      return `<div onclick="event.stopPropagation();nav('tasks');setTimeout(()=>twfOpen('${t.id}'),200);" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" title="${safeName}">
+        <span style="font-size:10px;flex-shrink:0;">${dot}</span>
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.name||'(no name)'}</div>
+          ${client ? `<div style="font-size:10px;color:var(--text-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${client.biz}</div>` : ''}
+        </div>
+        <span style="font-size:10px;font-weight:600;color:${dueColor};white-space:nowrap;flex-shrink:0;">${dueLabel}</span>
+      </div>`;
+    }).join('');
+    const more = total > shown.length
+      ? `<div style="font-size:11px;color:var(--text-d);text-align:center;padding:8px 0 0;cursor:pointer;" onclick="event.stopPropagation();nav('tasks');">+${total - shown.length} more →</div>`
+      : '';
+    const extraHtml = `<div style="margin-top:10px;max-height:240px;overflow-y:auto;">${rows}${more}</div>`;
+    // Sub line varies based on what's most urgent
+    let sub;
+    if (overdueCount > 0) sub = `${overdueCount} overdue · ${todayCount} today · ${total} this week`;
+    else if (todayCount > 0) sub = `${todayCount} today · ${total} this week`;
+    else sub = `${total} this week`;
+    return {
+      value:      total,
+      sub,
+      valueColor: overdueCount > 0 ? 'var(--red)' : todayCount > 0 ? 'var(--gold)' : '#0070c0',
+      extraHtml,
+    };
+  },
 };
 
 // ── Resolve dynamic filter values ──
@@ -10752,22 +10852,38 @@ function wgRenderWidget(w, data){
   }
 
   if(w.type==='quickActions'){
+    // Payroll platforms grouped into one dropdown so the row stays compact.
+    // Easy to add new platforms — just append to this array.
+    const payrollPlatforms = [
+      {label:'SurePayroll', href:'https://secure.surepayroll.com/SPF/Login/AccountantAuth1.aspx'},
+      {label:'Patriot',     href:'https://www.patriotsoftware.com/'},
+      {label:'Homebase',    href:'https://app.joinhomebase.com/'},
+      {label:'7Shifts',     href:'https://app.7shifts.com/'},
+    ];
     const actions = [
       {label:'Add New Hire',icon:'📋',bg:'var(--green)',fn:'openAddEmp()'},
-      {label:'QuickBooks',icon:'💼',bg:'#2ca01c',href:'https://qbo.intuit.com'},
-      {label:'SurePayroll',icon:'💰',bg:'#0070c0',href:'https://secure.surepayroll.com/SPF/Login/AccountantAuth1.aspx'},
-      {label:'Patriot',icon:'🦅',bg:'#c0392b',href:'https://www.patriotsoftware.com/'},
-      {label:'My Time Punch',icon:'💵',bg:'var(--gold)',href:'https://id.mypatriot.com/#/',sub:'Log in with Identity'},
-      {label:'Add Client',icon:'👤',bg:'var(--navy)',fn:'openAddClient()'},
-      {label:'Add Postage',icon:'📬',bg:'#6b3fa0',fn:'openPostage()'},
-      {label:'Add 1099',icon:'📋',bg:'#2e7d5e',fn:'open1099Modal()'},
+      {label:'QuickBooks',  icon:'💼',bg:'#2ca01c',href:'https://qbo.intuit.com'},
+      {label:'Payroll ▾',   icon:'💰',bg:'#0070c0',dropdown:payrollPlatforms},
+      {label:'Outlook',     icon:'📧',bg:'#0078d4',href:'https://outlook.office.com/mail/'},
+      {label:'Add Client',  icon:'👤',bg:'var(--navy)',fn:'openAddClient()'},
+      {label:'Add Postage', icon:'📬',bg:'#6b3fa0',fn:'openPostage()'},
+      {label:'Add 1099',    icon:'📋',bg:'#2e7d5e',fn:'open1099Modal()'},
     ];
-    const btns = actions.map(a=>{
+    const btns = actions.map((a, idx)=>{
+      const subHtml = a.sub?`<div class="wg-qa-sublabel">${a.sub}</div>`:'';
+      const iconLabelHtml = `<div class="wg-qa-icon" style="background:${a.bg};">${a.icon}</div><div class="wg-qa-label">${a.label}</div>${subHtml}`;
+      if (a.dropdown) {
+        const ddId = `wg-qa-dd-${w.id}-${idx}`;
+        const items = a.dropdown.map(d => `<a href="${d.href}" target="_blank" rel="noopener">${d.label}</a>`).join('');
+        return `<div class="wg-qa-btn" onclick="event.stopPropagation();document.querySelectorAll('.wg-qa-dd.open').forEach(el=>{if(el.id!=='${ddId}')el.classList.remove('open');});document.getElementById('${ddId}').classList.toggle('open');">
+          ${iconLabelHtml}
+          <div id="${ddId}" class="wg-qa-dd">${items}</div>
+        </div>`;
+      }
       const tag = a.href?'a':'div';
       const hrefAttr = a.href?` href="${a.href}" target="_blank"`:'';
       const clickAttr = a.fn?` onclick="${a.fn}"`:'';
-      const subHtml = a.sub?`<div class="wg-qa-sublabel">${a.sub}</div>`:'';
-      return `<${tag} class="wg-qa-btn"${hrefAttr}${clickAttr}><div class="wg-qa-icon" style="background:${a.bg};">${a.icon}</div><div class="wg-qa-label">${a.label}</div>${subHtml}</${tag}>`;
+      return `<${tag} class="wg-qa-btn"${hrefAttr}${clickAttr}>${iconLabelHtml}</${tag}>`;
     }).join('');
     return `<div class="wg-widget" style="--wg-accent:var(--navy);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};overflow:visible;" data-wid="${w.id}" draggable="false">
       <div class="wg-header"><div style="display:flex;align-items:center;">${dragHandle}<div class="wg-title">${w.title}</div></div>${w.isDefault?'':editBtns}</div>
@@ -10966,9 +11082,30 @@ function wgLoadWidgets(){
   // Append any default widgets the user doesn't have yet — e.g. when a new
   // default ships, existing users still see it instead of having to know
   // about the widget builder. _wgPackLayout below resolves placement.
+  // Defaults that the user explicitly deleted (tracked in
+  // currentUser.prefs.dismissedDefaultWidgets, mirrored to localStorage so
+  // F5 doesn't resurrect them — sessionStorage only caches the user object
+  // at login and isn't refreshed after subsequent prefs mutations) are
+  // skipped so deletes actually stick. The library re-adds.
+  let dismissedList = currentUser?.prefs?.dismissedDefaultWidgets || [];
+  if (currentUser){
+    try {
+      const cached = localStorage.getItem('ark_widgets_dismissed_'+currentUser.id);
+      if (cached){
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) dismissedList = parsed;
+      }
+    } catch(_){}
+    // Mirror back to currentUser.prefs so the rest of the code path sees the same list
+    currentUser.prefs = currentUser.prefs || {};
+    currentUser.prefs.dismissedDefaultWidgets = dismissedList;
+  }
+  const dismissed = new Set(dismissedList);
   const haveIds = new Set(_userWidgets.map(w => w.id));
   for (const def of DEFAULT_WIDGETS) {
-    if (!haveIds.has(def.id)) _userWidgets.push(JSON.parse(JSON.stringify(def)));
+    if (!haveIds.has(def.id) && !dismissed.has(def.id)){
+      _userWidgets.push(JSON.parse(JSON.stringify(def)));
+    }
   }
 
   // Pack once to resolve any overlaps from legacy saved layouts
@@ -10985,13 +11122,16 @@ function wgSaveWidgets(){
   currentUser.prefs.dashboardWidgets = JSON.parse(JSON.stringify(_userWidgets));
   // Cache locally
   localStorage.setItem('ark_widgets_'+currentUser.id, JSON.stringify(_userWidgets));
+  // Mirror dismissed defaults so F5 doesn't resurrect deleted widgets
+  // before the server PUT lands or while offline.
+  localStorage.setItem('ark_widgets_dismissed_'+currentUser.id, JSON.stringify(currentUser.prefs.dismissedDefaultWidgets || []));
   // Debounce server save
   clearTimeout(_wgSaveTimer);
   _wgSaveTimer = setTimeout(async()=>{
     try{
       await authFetch(ARK_SERVER+'/users/'+currentUser.id+'/prefs',{
         method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({dashboardWidgets:_userWidgets})
+        body:JSON.stringify({dashboardWidgets:_userWidgets, dismissedDefaultWidgets: currentUser?.prefs?.dismissedDefaultWidgets || []})
       });
     }catch(e){console.warn('Widget save failed:',e);}
   },1000);
@@ -11123,7 +11263,7 @@ function wgToggleEdit(){
       try {
         authFetch(ARK_SERVER+'/users/'+currentUser.id+'/prefs',{
           method:'PUT',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({dashboardWidgets:_userWidgets})
+          body:JSON.stringify({dashboardWidgets:_userWidgets, dismissedDefaultWidgets: currentUser?.prefs?.dismissedDefaultWidgets || []})
         }).catch(()=>{});
       } catch(_){}
     }
@@ -11190,6 +11330,16 @@ function wgDeleteWidget(id){
   if(w?.locked) return;
   if(!confirm('Remove this widget from your dashboard?')) return;
   _userWidgets = _userWidgets.filter(w=>w.id!==id);
+  // If it's a default widget, mark it dismissed so the missing-defaults
+  // backfill in wgLoadWidgets doesn't add it back on next load.
+  // The library can still re-add it (which un-dismisses).
+  if (DEFAULT_WIDGETS.some(d => d.id === id)){
+    if (currentUser){
+      currentUser.prefs = currentUser.prefs || {};
+      const list = currentUser.prefs.dismissedDefaultWidgets = Array.isArray(currentUser.prefs.dismissedDefaultWidgets) ? currentUser.prefs.dismissedDefaultWidgets : [];
+      if (!list.includes(id)) list.push(id);
+    }
+  }
   _wgPackLayout(_userWidgets);
   wgSaveWidgets();
   renderWidgets();
@@ -11248,12 +11398,75 @@ function wgbOpen(editId){
     // Map chart subtypes
     if(w.type==='chart') _wgbState._uiType='chart-'+(w.display?.chartType||'bar');
     else _wgbState._uiType = w.type;
+    // Don't show the library when editing — the user wants to tweak THIS one,
+    // not pick a different one.
+    const sec = document.getElementById('wgb-library-section');
+    if (sec) sec.style.display = 'none';
   } else {
     document.getElementById('wgb-title').textContent = 'Add Widget';
     _wgbState = {type:null,_uiType:null,title:'',source:{type:'collection',collection:'clients'},display:{metric:'count',accentColor:'var(--gold)',subtitle:''},filters:[],grid:{col:1,row:1,colSpan:3,rowSpan:1}};
+    wgbPopulateLibrary();
   }
   wgbRenderStep();
   document.getElementById('modal-widget-builder').style.display='flex';
+}
+
+// Populate the "From the Library" section with default widgets the user is
+// currently missing. Hidden when there's nothing to re-add. Each card is a
+// one-click add — no need to walk the type/source/appearance flow.
+function wgbPopulateLibrary(){
+  const sec = document.getElementById('wgb-library-section');
+  const lib = document.getElementById('wgb-library');
+  if (!sec || !lib) return;
+  const have = new Set((_userWidgets||[]).map(w => w.id));
+  const missing = DEFAULT_WIDGETS.filter(d => !have.has(d.id));
+  if (!missing.length){ sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const iconFor = d => {
+    if (d.type === 'quickActions') return '⚡';
+    if (d.type === 'calendar') return '📅';
+    const cmp = d.source?.compute;
+    if (cmp === 'productionTasks') return '📋';
+    if (cmp === 'payrollTasks')    return '💰';
+    if (cmp === 'bankingHoliday')  return '🏦';
+    if (cmp === 'clockedIn')       return '⏰';
+    if (cmp === 'activeAMs')       return '👥';
+    if (cmp === 'onboarding')      return '📝';
+    return '🔢';
+  };
+  const descFor = d => {
+    if (d.display?.subtitle) return d.display.subtitle;
+    if (d.type === 'quickActions') return 'Quick links & actions';
+    if (d.type === 'calendar')     return 'Schedule view';
+    if (d.type === 'kpi')          return 'Number metric';
+    return '';
+  };
+  lib.innerHTML = missing.map(d => `
+    <div class="wg-type-card" onclick="wgbAddFromLibrary('${d.id}')">
+      <div class="wg-type-icon">${iconFor(d)}</div>
+      <div class="wg-type-name">${d.title}</div>
+      <div class="wg-type-desc">${descFor(d)}</div>
+    </div>
+  `).join('');
+}
+
+// One-click add — clones the default's config into the user's layout and
+// closes the builder. _wgPackLayout finds a free spot for the new widget.
+// Also clears any dismissed flag so future page loads don't think the user
+// re-deleted it.
+function wgbAddFromLibrary(id){
+  const def = DEFAULT_WIDGETS.find(d => d.id === id);
+  if (!def) return;
+  if ((_userWidgets||[]).some(w => w.id === id)) { wgbClose(); return; }
+  _userWidgets.push(JSON.parse(JSON.stringify(def)));
+  if (currentUser?.prefs?.dismissedDefaultWidgets){
+    currentUser.prefs.dismissedDefaultWidgets =
+      currentUser.prefs.dismissedDefaultWidgets.filter(x => x !== id);
+  }
+  _wgPackLayout(_userWidgets);
+  wgSaveWidgets();
+  wgbClose();
+  renderWidgets();
 }
 function wgEditWidget(id){
   const w = _userWidgets.find(x=>x.id===id);
@@ -28911,6 +29124,11 @@ document.addEventListener('click', (e) => {
   if (menu && !e.target.closest('[onclick*="tc-newtask-menu"]') && !menu.contains(e.target)) {
     menu.style.display = 'none';
   }
+  // Same idea for the Quick Actions payroll-platforms dropdowns: close any
+  // open .wg-qa-dd unless the click came from inside its host wg-qa-btn.
+  document.querySelectorAll('.wg-qa-dd.open').forEach(dd => {
+    if (!dd.parentElement.contains(e.target)) dd.classList.remove('open');
+  });
 });
 
 function tcAddProject() {
