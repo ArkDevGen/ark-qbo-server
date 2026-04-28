@@ -3466,8 +3466,18 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div id="tc-pnotes-editor" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
         <input type="text" id="tc-pnote-title" class="field-input" placeholder="Note title..." style="font-size:15px;font-weight:600;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:8px 0;width:100%;box-sizing:border-box;">
-        <input type="text" id="tc-pnote-category" class="field-input" placeholder="Category (optional, e.g. Procedures, Contacts)" list="tc-pnote-categories" style="font-size:12px;margin-bottom:10px;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:6px 0;width:100%;box-sizing:border-box;color:var(--text-d);">
-        <datalist id="tc-pnote-categories"></datalist>
+        <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Section <span style="opacity:.5;font-weight:500;">(optional)</span></label>
+            <input type="text" id="tc-pnote-section" class="field-input" placeholder="e.g. PAYROLL, BANK/CREDIT CARD" list="tc-pnote-sections" style="font-size:12px;padding:6px 8px;width:100%;box-sizing:border-box;">
+            <datalist id="tc-pnote-sections"></datalist>
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Category <span style="opacity:.5;font-weight:500;">(optional)</span></label>
+            <input type="text" id="tc-pnote-category" class="field-input" placeholder="e.g. Procedures, Contacts" list="tc-pnote-categories" style="font-size:12px;padding:6px 8px;width:100%;box-sizing:border-box;">
+            <datalist id="tc-pnote-categories"></datalist>
+          </div>
+        </div>
         <textarea id="tc-pnote-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;width:100%;box-sizing:border-box;"></textarea>
         <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <span id="tc-pnote-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
@@ -29349,9 +29359,11 @@ function tcNewProjectNote() {
   if (fClient && fClient !== '_noClient') {
     // Client already selected from project view — open editor directly
     tcPopulateNoteCategoryDatalist();
+    tcPopulateNoteSectionDatalist();
     document.getElementById('tc-pnote-id').value = '';
     document.getElementById('tc-pnote-title').value = '';
     document.getElementById('tc-pnote-category').value = '';
+    document.getElementById('tc-pnote-section').value = '';
     document.getElementById('tc-pnote-content').value = '';
     document.getElementById('tc-pnote-meta').textContent = '';
     document.getElementById('tc-pnotes-editor').style.display = '';
@@ -29486,15 +29498,17 @@ function tcSaveNewNote() {
 function tcEditProjectNote(id) {
   const task = (DB.tasks || []).find(t => t.id === id);
   if (!task) return;
-  // Refresh datalist suggestions before showing the editor so the user gets
-  // existing categories as autocomplete options.
+  // Refresh both datalists so the user gets existing values as autocomplete
+  // options when editing.
   tcPopulateNoteCategoryDatalist();
+  tcPopulateNoteSectionDatalist();
   document.getElementById('tc-pnote-id').value = id;
   document.getElementById('tc-pnote-title').value = task.name || '';
   // Default 'Other' is the legacy seed value — show empty so the user can
   // leave it blank if they don't want a category.
   const cat = task.category && task.category !== 'Other' ? task.category : '';
   document.getElementById('tc-pnote-category').value = cat;
+  document.getElementById('tc-pnote-section').value = task.section || '';
   document.getElementById('tc-pnote-content').value = task.notes || '';
   const date = task.updatedAt ? new Date(task.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
   document.getElementById('tc-pnote-meta').textContent = date ? `Last edited ${date}${task.createdBy ? ' by ' + task.createdBy : ''}` : '';
@@ -29506,6 +29520,7 @@ function tcSaveProjectNote() {
   const title = document.getElementById('tc-pnote-title').value.trim();
   const content = document.getElementById('tc-pnote-content').value;
   const category = (document.getElementById('tc-pnote-category')?.value || '').trim();
+  const section  = (document.getElementById('tc-pnote-section')?.value || '').trim();
   if (!title) { alert('Title is required'); return; }
 
   const existingId = document.getElementById('tc-pnote-id').value;
@@ -29518,6 +29533,7 @@ function tcSaveProjectNote() {
       task.name = title;
       task.notes = content;
       task.category = category || 'Other';
+      task.section = section;
       task.updatedAt = new Date().toISOString();
     }
   } else {
@@ -29526,7 +29542,8 @@ function tcSaveProjectNote() {
       id: uid(), name: title, notes: content, type: 'note',
       clientId: fClient && fClient !== '_noClient' ? fClient : '',
       clientName: fClient ? ((DB.clients || []).find(c => c.id === fClient)?.biz || '') : '',
-      amId: currentUser?.id || '', category: category || 'Other', dueDate: '', priority: 'medium',
+      amId: currentUser?.id || '', category: category || 'Other', section,
+      dueDate: '', priority: 'medium',
       recurring: false, recurFreq: null, showDaysAdvance: 3, status: 'open',
       noteLog: [], parentId: null, parentTaskId: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: who,
@@ -29541,8 +29558,9 @@ function tcSaveProjectNote() {
 
 function tcCancelProjectNote() {
   document.getElementById('tc-pnotes-editor').style.display = 'none';
-  // Clear category so the next "+ New Note" doesn't carry over a stale value
+  // Clear so the next "+ New Note" doesn't carry over stale values
   const c = document.getElementById('tc-pnote-category'); if (c) c.value = '';
+  const s = document.getElementById('tc-pnote-section');  if (s) s.value = '';
 }
 
 // Populate the note-category datalist with the union of categories on
@@ -29556,6 +29574,25 @@ function tcPopulateNoteCategoryDatalist(){
     if (t.type === 'note' && t.category && t.category !== 'Other' && !t._deleted) cats.add(t.category);
   });
   dl.innerHTML = Array.from(cats).sort().map(c => `<option value="${c.replace(/"/g,'&quot;')}">`).join('');
+}
+
+// Populate the note-section datalist from the union of sections used by
+// any task (notes OR tasks) for the current client when in a project
+// view, otherwise across all tasks. Lets users reuse the same section
+// labels their task board already uses (PAYROLL, BANK/CREDIT CARD, etc.)
+// without retyping.
+function tcPopulateNoteSectionDatalist(){
+  const dl = document.getElementById('tc-pnote-sections');
+  if (!dl) return;
+  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  const sections = new Set();
+  (DB.tasks || []).forEach(t => {
+    if (t._deleted || !t.section) return;
+    // Project view: scope suggestions to this client's sections only
+    if (fClient && fClient !== '_noClient' && t.clientId !== fClient) return;
+    sections.add(t.section);
+  });
+  dl.innerHTML = Array.from(sections).sort().map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
 }
 
 // ── Subtask Support ─────────────────────────────────────────────
