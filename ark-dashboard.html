@@ -1716,25 +1716,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-group">
       <div class="nav-item" id="nav-qbo" onclick="nav('qbo')"><span class="ni">💼</span>QBO Center</div>
       <div class="nav-item" id="nav-filecenter" onclick="nav('filecenter')"><span class="ni">📁</span>File Center</div>
-      <div class="nav-item" id="nav-integrations" onclick="nav('integrations')"><span class="ni">🔗</span>Integrations</div>
     </div>
 
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Tools <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <!-- Tools & Reports merged: one sidebar item, internal tabs at the top of
+         each view flip between the two pages. -->
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Tools & Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
-      <div class="nav-item" id="nav-tools" onclick="nav('tools')"><span class="ni">🧰</span>Tools Center</div>
-    </div>
-
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
-    <div class="nav-group">
-      <div class="nav-item" id="nav-reports" onclick="nav('reports')"><span class="ni">▦</span>Reports</div>
-      <!-- Activity Log moved inside Reports → Activity tab -->
-      <!-- New Hire Report moved to Tools Center -->
+      <div class="nav-item" id="nav-tools" onclick="nav('tools')"><span class="ni">🧰</span>Tools & Reports</div>
     </div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
       <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Team & Users</div>
       <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
+      <div class="nav-item" id="nav-integrations" onclick="nav('integrations')"><span class="ni">🔗</span>Integrations</div>
     </div>
 
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Team Hub <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
@@ -1994,6 +1989,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   <!-- ══ REPORTS ══ -->
   <div class="view content" id="view-reports">
+
+    <!-- ── TOP-LEVEL: Tools / Reports switcher (combined sidebar item) ── -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin:-4px -4px 14px;padding:0 0 0 4px;">
+      <button onclick="nav('tools')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">🧰 Tools</button>
+      <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">📊 Reports</button>
+    </div>
 
     <!-- ── REPORTS TAB BAR ── -->
     <div id="rpt-tabs" style="display:flex;gap:2px;border-bottom:2px solid var(--border);margin:-4px -4px 22px;flex-wrap:wrap;">
@@ -6553,6 +6554,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   <!-- ════ TOOLS CENTER ════ -->
   <div class="view content" id="view-tools" style="padding:28px 32px;">
+    <!-- ── TOP-LEVEL: Tools / Reports switcher (combined sidebar item) ── -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin:-12px -16px 18px;padding:0 0 0 16px;">
+      <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">🧰 Tools</button>
+      <button onclick="nav('reports')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">📊 Reports</button>
+    </div>
     <div style="max-width:1100px;margin:0 auto;">
       <div style="margin-bottom:24px;">
         <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--navy);margin-bottom:4px;">Tools</div>
@@ -10387,9 +10393,11 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings center',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews',tools:'tools center'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'tools & reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews',tools:'tools & reports',filecenter:'file center'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
+  // Pages that share the combined Tools & Reports sidebar item
+  const toolsReportsPages=['tools','reports','newhirereport'];
   if(taxChildren.includes(page)){
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes('tax center')) n.classList.add('active'); });
   } else if(page==='qbo'){
@@ -10397,8 +10405,20 @@ function nav(page){
   } else if(page==='w9gen'){
     // w9gen lives in tax center hub — highlight tax center
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes('tax center')) n.classList.add('active'); });
+  } else if(toolsReportsPages.includes(page)){
+    // Tools, Reports, and the standalone New Hire Report all live behind the
+    // single "Tools & Reports" sidebar item now.
+    const el=document.getElementById('nav-tools'); if(el) el.classList.add('active');
   } else {
-    document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
+    // Prefer the explicit nav-<page> id when one exists — more reliable than
+    // text matching (which silently broke for Meetings and File Center).
+    // Fall back to a text contains-match for legacy items without an id.
+    const direct = document.getElementById('nav-' + page);
+    if(direct){
+      direct.classList.add('active');
+    } else {
+      document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
+    }
   }
   const titles={dashboard:'Dashboard',clients:'Client Center',proposals:'Lead Center',tasks:'Production',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews',tools:'Tools Center'};
   document.getElementById('page-title').textContent = titles[page]||page;
