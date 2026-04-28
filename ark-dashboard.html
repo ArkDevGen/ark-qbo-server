@@ -27410,6 +27410,11 @@ function tcDeleteTask(id){
   if(typeof notifRenderList === 'function') notifRenderList();
   if(typeof notifRenderSentList === 'function') notifRenderSentList();
   tcRender();
+  // tcRender only repaints list/board/calendar — the project Notes panel
+  // has its own renderer, so refresh it explicitly when a note was the
+  // thing deleted (otherwise the deleted card lingers in the UI even
+  // though the underlying task is gone).
+  if(typeof tcRenderProjectNotes === 'function') tcRenderProjectNotes();
 }
 
 // Helper: is a task hidden from the current viewer? Covers both the global
