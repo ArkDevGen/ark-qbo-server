@@ -20045,7 +20045,9 @@ async function tcPopulateEmployees(){
   const sel = document.getElementById('tc-emp-select');
   // Ensure server users are loaded
   if (!_cachedServerUsers.length) await refreshServerUsersCache();
-  const users = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]);
+  const users = ((_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.users||[]))
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   sel.innerHTML = '<option value="">— Select employee —</option>' +
     users.map(u=>`<option value="${u.id}">${u.fname||u.userName||''} ${u.lname||''}</option>`).join('');
 }
@@ -26672,7 +26674,9 @@ async function tcPopulateFilters(){
   // Ensure server users are loaded for AM dropdown
   if (!_cachedServerUsers.length) await refreshServerUsersCache();
   const aVal = amSel.value;
-  const amList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
+  const amList = ((_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]))
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   // Non-admins: only show themselves. Admins: show all team.
   const isAdmin = currentUser && currentUser.role === 'admin';
   if (isAdmin) {
@@ -28815,7 +28819,10 @@ async function tcPopulateSendList() {
   if (!_cachedServerUsers.length) await refreshServerUsersCache();
   const users = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
   // Show all team members (including self — they can assign to themselves via the form)
-  const others = users.filter(u => !currentUser || u.id !== currentUser.id);
+  const others = users
+    .filter(u => !currentUser || u.id !== currentUser.id)
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   list.innerHTML = others.length
     ? '<div class="dropdown-header">Send task to…</div>' +
       others.map(u => `<div class="dropdown-item" onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNewFor('${u.id}')">
@@ -31585,7 +31592,10 @@ function tcToggleReviewer(){
 function tcPopulateReviewerSelect(excludeAmId){
   const sel = document.getElementById('tc-reviewer-id'); if(!sel) return;
   const teamList = (_cachedServerUsers||[]).length ? _cachedServerUsers : (DB.accountManagers||[]);
-  const filtered = teamList.filter(a => a.id !== excludeAmId);
+  const filtered = teamList
+    .filter(a => a.id !== excludeAmId)
+    .slice()
+    .sort((a,b) => `${a.fname||a.userName||''} ${a.lname||''}`.localeCompare(`${b.fname||b.userName||''} ${b.lname||''}`));
   sel.innerHTML = '<option value="">— Select reviewer —</option>' +
     filtered.map(a=>`<option value="${a.id}">${a.fname||a.userName||''} ${a.lname||''}</option>`).join('');
 }
