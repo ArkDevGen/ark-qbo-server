@@ -27619,6 +27619,35 @@ function tcNextDue(task, fromDateStr){
   return next.toISOString().slice(0,10);
 }
 
+// Returns YYYY-MM-DD strings for every occurrence of a recurring task
+// within [startStr, endStr], walking forward from the task's current
+// dueDate using tcNextDue. Used to project virtual instances into future
+// weeks on the board so a recurring routine stays visible even before the
+// task has been advanced. Returns [] for non-recurring tasks.
+function tcOccurrencesInRange(task, startStr, endStr){
+  if (!task || !task.recurring || !task.recurFreq || !task.dueDate) return [];
+  if (startStr > endStr) return [];
+  const result = [];
+  let cursor = task.dueDate;
+  let safety = 400; // bound on iterations — covers ~7yr of weekly tasks
+  // Walk forward until we're at or past startStr
+  while (cursor < startStr && safety-- > 0) {
+    const next = tcNextDue(task, cursor);
+    const nextStr = next.toISOString().slice(0,10);
+    if (nextStr <= cursor) return result; // tcNextDue didn't advance — give up
+    cursor = nextStr;
+  }
+  // Collect occurrences within [startStr, endStr]
+  while (cursor <= endStr && safety-- > 0) {
+    if (cursor >= startStr) result.push(cursor);
+    const next = tcNextDue(task, cursor);
+    const nextStr = next.toISOString().slice(0,10);
+    if (nextStr <= cursor) break;
+    cursor = nextStr;
+  }
+  return result;
+}
+
 function tcRecurLabel(freq, n, d1, d2){
   function dayLabel(d){ return d==='last' ? 'last day' : d ? `${d}${['','st','nd','rd'][d]||'th'}` : '?'; }
   switch(freq){
@@ -27868,7 +27897,26 @@ async function tcRender(){
       // labels only appear when offset is 0 and the day actually matches.
       // Project view uses the same layout (user preference) — far-future
       // and undated tasks remain visible in the project's List view.
+      //
+      // Recurring tasks ALSO get projected into future weeks via
+      // tcOccurrencesInRange. Their dueDate only advances when completed,
+      // so without projection a "every Thursday" routine vanishes from the
+      // board the moment the user navigates away from this week.
       const tmrwStr = (() => { const d = new Date(today); d.setDate(today.getDate()+1); return d.toISOString().slice(0,10); })();
+      // Pre-filter candidates by client/AM/search/notes/parent — same gates
+      // as the main list filter, but no date window. We re-bucket by day
+      // below and attach virtual recurring instances per day.
+      const visibleCandidates = (DB.tasks || []).filter(t => {
+        if (_taskHiddenForMe(t)) return false;
+        if (t.parentId) return false;
+        if (t.type === 'note') return false;
+        if (t.status === 'completed') return false;
+        if (fClient === '_noClient' && t.clientId) return false;
+        if (fClient && fClient !== '_noClient' && t.clientId !== fClient) return false;
+        if (fAM && t.amId !== fAM) return false;
+        if (search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
+        return true;
+      });
       for (let i = 0; i < 7; i++) {
         const d = new Date(weekMonday);
         d.setDate(weekMonday.getDate() + i);
@@ -27879,7 +27927,22 @@ async function tcRender(){
         if (dStr === todayStr)      label = `${monthDay} · Today`;
         else if (dStr === tmrwStr)  label = `${monthDay} · Tomorrow`;
         else                        label = `${monthDay} · ${weekday}`;
-        ordered[label] = list.filter(t => t.dueDate === dStr && t.status !== 'completed');
+        const dayItems = [];
+        for (const t of visibleCandidates) {
+          if (t.dueDate === dStr) {
+            // Real occurrence — task's actual dueDate matches
+            dayItems.push(t);
+          } else if (t.recurring && t.recurFreq && t.dueDate) {
+            // Project recurring pattern; only add if it lands on this day
+            const occ = tcOccurrencesInRange(t, dStr, dStr);
+            if (occ.length) {
+              // Synthetic instance — same id (so click/check still hit the parent),
+              // overridden dueDate, _virtualRecur flag for any future visual cue.
+              dayItems.push({ ...t, dueDate: dStr, _virtualRecur: true });
+            }
+          }
+        }
+        ordered[label] = dayItems;
       }
     } else {
       // Default: group by due-date status (Overdue / Today / This Week /
