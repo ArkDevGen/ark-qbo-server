@@ -11276,6 +11276,16 @@ function wgAttachDrag(){
   const grid = document.getElementById('widget-grid');
   if(!grid) return;
   grid.querySelectorAll('.wg-widget').forEach(el=>{
+    // Locked widgets (Quick Actions, Schedule) are pinned to the bottom of
+    // the layout — they should never be drag sources or drop targets, since
+    // their positions are computed from the top zone in _wgPackLayout.
+    const wid = el.dataset.wid;
+    const widget = _userWidgets.find(w => w.id === wid);
+    if (widget?.locked) {
+      el.setAttribute('draggable','false');
+      el.style.cursor = '';
+      return;
+    }
     el.setAttribute('draggable','true');
     // In edit mode, suppress the widget's onclick nav so clicks don't
     // navigate instead of dragging. Restore on dragend / edit-mode exit.
@@ -11310,6 +11320,9 @@ function wgAttachDrag(){
       if(!draggedId || draggedId===targetId) return;
       const wA = _userWidgets.find(w=>w.id===draggedId);
       const wB = _userWidgets.find(w=>w.id===targetId);
+      // Defense-in-depth: even if a locked widget somehow gets a drop event
+      // (e.g. via keyboard accessibility paths), refuse to swap with it.
+      if(wA?.locked || wB?.locked) return;
       if(wA && wB){
         // Swap grid positions (col/row), keep their own sizes
         const tmpCol = wA.grid.col, tmpRow = wA.grid.row;
@@ -11352,9 +11365,9 @@ function wgDuplicateWidget(id){
   dup.id = 'w_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   dup.isDefault = false;
   dup.title = src.title+' (copy)';
-  // Place after source (packing will find a real spot)
-  const maxRow = Math.max(..._userWidgets.map(w=>w.grid.row+w.grid.rowSpan),1);
-  dup.grid.row = maxRow;
+  // New widgets float to the top — row 0 sorts before any existing
+  // row 1+ widget, so packing places this duplicate first.
+  dup.grid.row = 0;
   dup.grid.col = 1;
   _userWidgets.push(dup);
   _wgPackLayout(_userWidgets);
@@ -11458,7 +11471,17 @@ function wgbAddFromLibrary(id){
   const def = DEFAULT_WIDGETS.find(d => d.id === id);
   if (!def) return;
   if ((_userWidgets||[]).some(w => w.id === id)) { wgbClose(); return; }
-  _userWidgets.push(JSON.parse(JSON.stringify(def)));
+  // New widgets land at the top — row 0 sorts before any existing row 1+,
+  // so packing places this re-added one first.
+  const fresh = JSON.parse(JSON.stringify(def));
+  // Only force the "land at top" position for widgets that live in the
+  // top zone. Quick Actions and Schedule are zone-fixed, leave them alone.
+  if (fresh.type !== 'quickActions' && fresh.type !== 'calendar'){
+    fresh.grid = fresh.grid || {};
+    fresh.grid.row = 0;
+    fresh.grid.col = 1;
+  }
+  _userWidgets.push(fresh);
   if (currentUser?.prefs?.dismissedDefaultWidgets){
     currentUser.prefs.dismissedDefaultWidgets =
       currentUser.prefs.dismissedDefaultWidgets.filter(x => x !== id);
@@ -11534,17 +11557,32 @@ function wgApplySize(id, cs, rs){
 // Mutates widget.grid.col and widget.grid.row. Rows can extend infinitely.
 function _wgPackLayout(widgets){
   const COLS = 12;
-  // Sort by current position so the reading order is preserved
-  const list = widgets.slice().sort((a,b)=>{
+  // Three-zone layout enforced here regardless of saved positions:
+  //   1. TOP    — all customizable widgets, packed left-to-right top-down
+  //   2. MIDDLE — Quick Actions (full width, single row)
+  //   3. BOTTOM — Schedule (full width, default 4 rows)
+  // Quick Actions and Schedule are always last; the user can reorder
+  // anything in the top zone but can't drag those two out of place.
+  const isQuickActions = w => w.type === 'quickActions';
+  const isSchedule     = w => w.type === 'calendar';
+  const topWidgets     = widgets.filter(w => !isQuickActions(w) && !isSchedule(w));
+  const quickActions   = widgets.filter(isQuickActions);
+  const schedule       = widgets.filter(isSchedule);
+
+  // Sort the top zone by current (row, col) so user-reordered positions
+  // are respected. New widgets that have row 0 (or a row below 1) bubble
+  // to the front so freshly added ones land at the top of the page.
+  const topList = topWidgets.slice().sort((a,b)=>{
     const ra = a.grid?.row||1, rb = b.grid?.row||1;
     if(ra !== rb) return ra - rb;
     return (a.grid?.col||1) - (b.grid?.col||1);
   });
+
   const occupied = new Set();
-  const mark = (row,col,cs,rs,val)=>{
+  const mark = (row,col,cs,rs)=>{
     for(let r=row; r<row+rs; r++)
       for(let c=col; c<col+cs; c++)
-        val ? occupied.add(r+':'+c) : occupied.delete(r+':'+c);
+        occupied.add(r+':'+c);
   };
   const fits = (row,col,cs,rs)=>{
     if(col+cs-1 > COLS) return false;
@@ -11553,7 +11591,9 @@ function _wgPackLayout(widgets){
         if(occupied.has(r+':'+c)) return false;
     return true;
   };
-  for(const w of list){
+
+  let topMaxRow = 0;
+  for(const w of topList){
     const cs = w.grid?.colSpan||3;
     const rs = w.grid?.rowSpan||1;
     if(cs > COLS) return {ok:false, error:'Widget wider than grid'};
@@ -11563,12 +11603,33 @@ function _wgPackLayout(widgets){
         if(fits(row,col,cs,rs)){
           w.grid.row = row;
           w.grid.col = col;
-          mark(row,col,cs,rs,true);
+          mark(row,col,cs,rs);
+          topMaxRow = Math.max(topMaxRow, row+rs-1);
           placed = true;
         }
       }
     }
     if(!placed) return {ok:false, error:'Could not place widget'};
+  }
+
+  // Quick Actions immediately below the top zone, full width.
+  let nextRow = topMaxRow + 1;
+  for(const qa of quickActions){
+    qa.grid = qa.grid || {};
+    qa.grid.row     = nextRow;
+    qa.grid.col     = 1;
+    qa.grid.colSpan = COLS;
+    qa.grid.rowSpan = qa.grid.rowSpan || 1;
+    nextRow += qa.grid.rowSpan;
+  }
+  // Schedule immediately below Quick Actions, full width.
+  for(const sch of schedule){
+    sch.grid = sch.grid || {};
+    sch.grid.row     = nextRow;
+    sch.grid.col     = 1;
+    sch.grid.colSpan = COLS;
+    sch.grid.rowSpan = sch.grid.rowSpan || 4;
+    nextRow += sch.grid.rowSpan;
   }
   return {ok:true};
 }
@@ -11764,11 +11825,10 @@ function wgbSave(){
     // Create new
     _wgbState.id = 'w_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     _wgbState.isDefault = false;
-    // Auto-place: find next available row
-    const maxRow = _userWidgets.length ? Math.max(..._userWidgets.map(w=>(w.grid?.row||1)+(w.grid?.rowSpan||1))) : 1;
+    // New widgets float to the top of the customizable zone.
     _wgbState.grid = _wgbState.grid||{};
-    _wgbState.grid.col = _wgbState.grid.col||1;
-    _wgbState.grid.row = maxRow;
+    _wgbState.grid.col = 1;
+    _wgbState.grid.row = 0;
     _userWidgets.push(_wgbState);
   }
   // Repack so no overlaps regardless of edit or create
