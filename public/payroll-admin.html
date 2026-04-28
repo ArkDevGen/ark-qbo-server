@@ -1085,7 +1085,10 @@ function importClientChange() {
   const mode = cfg?.mode || 'portal';
   const isHteao  = mode === 'hteao-revel';
   const isHaines = mode === 'haines-buddypunch';
-  const isPortal = !isHteao && !isHaines;
+  // Require a selected client — when nothing's picked, hide all the
+  // mode-specific UI (portal upload tabs, period/pay-date inputs,
+  // employee management) instead of defaulting to the portal layout.
+  const isPortal = !!cfg && !isHteao && !isHaines;
   document.querySelectorAll('.portal-only').forEach(el => {
     // Preserve the original display value (most are 'block' / inline). Use ''
     // to fall back to the stylesheet default rather than forcing 'block'.
@@ -2703,6 +2706,10 @@ function populateImportClientSelect() {
   // Auto-select if only one client
   if (clients.length === 1) {
     sel.value = clients[0][0];
+    importClientChange();
+  } else {
+    // Always run once on init so the portal-only UI is hidden when no
+    // client is selected — otherwise it flashes visible until first change.
     importClientChange();
   }
 }
