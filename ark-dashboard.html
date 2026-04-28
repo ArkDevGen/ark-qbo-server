@@ -3327,10 +3327,10 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <!-- TEMP: remove once Production redesign ships -->
         <button class="btn btn-ghost btn-sm" onclick="tcClearMyImported()" title="Hard-delete tasks imported from Todoist assigned to you. Temporary cleanup action." style="color:var(--red);">🧹 Clear My Imported</button>
         <button class="btn btn-ghost btn-sm" onclick="tcManageTemplates()" title="Reusable project task lists you can stamp onto a client">📋 Templates</button>
-        <button class="btn btn-ghost btn-sm" onclick="tcAddProject()">+ Project</button>
         <div style="position:relative;display:inline-block;">
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New Task ▾</button>
-          <div id="tc-newtask-menu" class="dropdown-menu" style="display:none;top:calc(100% + 4px);right:0;min-width:220px;z-index:9999;">
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New ▾</button>
+          <div id="tc-newtask-menu" class="dropdown-menu" style="display:none;top:calc(100% + 4px);right:0;min-width:240px;z-index:9999;">
+            <div class="dropdown-item" onclick="document.getElementById('tc-newtask-menu').style.display='none';tcAddProject()">📁 New Project</div>
             <div class="dropdown-item" onclick="document.getElementById('tc-newtask-menu').style.display='none';tcOpenNew()">📝 New Task (for me)</div>
             <div id="tc-send-task-list" style="max-height:260px;overflow-y:auto;"></div>
           </div>
