@@ -6287,6 +6287,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <th style="font-size:10px;">Client</th>
             <th style="font-size:10px;">Script</th>
             <th style="font-size:10px;">Input File</th>
+            <th style="font-size:10px;">Output</th>
             <th style="font-size:10px;">Status</th>
           </tr></thead>
           <tbody id="pr-history-body"></tbody>
@@ -22129,7 +22130,26 @@ async function prProcess(){
     document.getElementById('pr-output-name').textContent = _prOutputName;
     document.getElementById('pr-download-wrap').style.display = '';
     prStatus('','');
-    prSaveHistory(client, 'success');
+    // Persist server-side so this row can re-download later. Best-effort —
+    // history still saves locally if the upload fails.
+    let runId = '';
+    try {
+      const b64 = await prBlobToBase64(_prOutputBlob);
+      if(_serverToken){
+        const r = await authFetch(ARK_SERVER + '/payroll/admin/dashboard-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: client.id, clientName: client.biz, script: client.prScript,
+            inputFile: _prFile?.name || '', outputName: _prOutputName, outputB64: b64,
+            status: 'success',
+            processedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
+          }),
+        });
+        if(r && r.ok){ const data = await r.json(); runId = data.runId || ''; }
+      }
+    } catch(_){}
+    prSaveHistory(client, 'success', runId, _prOutputName);
   } catch(err){
     prStatus(`✗ Error: ${err.message}`,'#c0392b');
     prSaveHistory(client, 'error');
@@ -22173,7 +22193,20 @@ function prResetForm(){
 }
 
 // ── History ──
-function prSaveHistory(client, status){
+function prBlobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || '');
+      const i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i+1) : s);
+    };
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+
+function prSaveHistory(client, status, runId, outputFile){
   if(!DB.payrollHistory) DB.payrollHistory = [];
   DB.payrollHistory.unshift({
     id: uid(),
@@ -22181,6 +22214,8 @@ function prSaveHistory(client, status){
     clientName: client.biz,
     script: client.prScript,
     inputFile: _prFile?.name || '',
+    outputFile: outputFile || '',
+    runId: runId || '',
     status,
     processedBy: currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Unknown',
     processedAt: new Date().toISOString()
@@ -22196,20 +22231,26 @@ function prRenderHistory(){
   const list = DB.payrollHistory || [];
   if(countEl) countEl.textContent = `${list.length} export${list.length!==1?'s':''}`;
   if(!list.length){
-    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-d);font-style:italic;padding:20px;">No exports yet.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-d);font-style:italic;padding:20px;">No exports yet.</td></tr>';
     return;
   }
   const sc = { success:'#2e7d5e', error:'#c0392b', 'not implemented':'#856404' };
   const sb = { success:'#eaf4ef', error:'#fdf0f0', 'not implemented':'#fff3cd' };
-  body.innerHTML = list.slice(0,25).map(h=>`
+  body.innerHTML = list.slice(0,25).map(h=>{
+    // Older entries pre-date server-side run storage and have no runId.
+    const out = h.runId
+      ? `<a href="${ARK_SERVER}/payroll/admin/dashboard-run/${encodeURIComponent(h.runId)}/download?token=${encodeURIComponent(_serverToken||'')}" style="color:var(--navy);text-decoration:none;" title="Download ${h.outputFile||'file'}">⬇ ${h.outputFile||'download'}</a>`
+      : (h.outputFile || '—');
+    return `
     <tr>
       <td style="font-size:12px;white-space:nowrap;">${new Date(h.processedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td>
       <td style="font-size:12px;font-weight:600;">${h.clientName}</td>
       <td style="font-size:12px;font-family:monospace;">${h.script||'—'}</td>
       <td style="font-size:12px;">${h.inputFile||'—'}</td>
+      <td style="font-size:12px;">${out}</td>
       <td><span style="font-size:10px;font-weight:700;text-transform:uppercase;background:${sb[h.status]||'#f0f0f0'};color:${sc[h.status]||'#555'};padding:2px 8px;border-radius:8px;">${h.status}</span></td>
     </tr>
-  `).join('');
+  `;}).join('');
 }
 
 // ── Close dropdown on outside click ──

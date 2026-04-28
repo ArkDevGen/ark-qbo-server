@@ -3189,6 +3189,58 @@ app.post('/payroll/admin/hteao-history', requireAuth, (req, res) => {
   res.json({ success: true, entry, history: payrollData.hteaoHistory });
 });
 
+// Generic dashboard-payroll runs — one file per run, any binary type
+// (xlsx, csv, pdf). Mirrors the HTeaO storage model so re-downloads work
+// the same way for non-HTeaO scripts dispatched from the main dashboard.
+app.post('/payroll/admin/dashboard-run', requireAuth, (req, res) => {
+  const { clientId, clientName, script, inputFile, outputName, outputB64, status, processedBy } = req.body || {};
+  if (!outputName || !outputB64) {
+    return res.status(400).json({ error: 'outputName and outputB64 required' });
+  }
+  if (!Array.isArray(payrollData.dashboardRuns)) payrollData.dashboardRuns = [];
+  const runId = crypto.randomUUID();
+  const safeName = path.basename(outputName) || `payroll-${runId}.bin`;
+  const runDir = path.join(PAYROLL_RUNS_DIR, runId);
+  try {
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, safeName), Buffer.from(outputB64, 'base64'));
+  } catch (e) {
+    return res.status(500).json({ error: 'failed to persist file: ' + e.message });
+  }
+  const entry = {
+    id: runId,
+    runAt: new Date().toISOString(),
+    clientId: String(clientId || ''),
+    clientName: String(clientName || ''),
+    script: String(script || ''),
+    inputFile: String(inputFile || ''),
+    outputFile: safeName,
+    status: String(status || 'success'),
+    processedBy: String(processedBy || 'Unknown'),
+  };
+  payrollData.dashboardRuns.unshift(entry);
+  if (payrollData.dashboardRuns.length > 500) {
+    const dropped = payrollData.dashboardRuns.splice(500);
+    for (const old of dropped) {
+      try { fs.rmSync(path.join(PAYROLL_RUNS_DIR, old.id), { recursive: true, force: true }); }
+      catch(_) {}
+    }
+  }
+  savePayrollData();
+  res.json({ success: true, runId });
+});
+
+app.get('/payroll/admin/dashboard-run/:runId/download', requireAuth, (req, res) => {
+  const { runId } = req.params;
+  const run = (payrollData.dashboardRuns || []).find(r => r.id === runId);
+  if (!run || !run.outputFile) return res.status(404).json({ error: 'run not found' });
+  const safeName = path.basename(run.outputFile);
+  const filePath = path.join(PAYROLL_RUNS_DIR, runId, safeName);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file missing on disk' });
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName.replace(/"/g, '')}"`);
+  fs.createReadStream(filePath).pipe(res);
+});
+
 // Stream a single CSV from a past HTeaO run. The token can be in either
 // the Authorization header (XHR) or the ?token= query string (plain <a> link).
 app.get('/payroll/admin/hteao-history/:runId/:storeIdx/download', requireAuth, (req, res) => {
