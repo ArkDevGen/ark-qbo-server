@@ -10339,9 +10339,23 @@ function nav(page){
   }
   if(page==='filecenter'){ fcInit(); }
   if(page==='tasks'){
-    const savedView = sessionStorage.getItem('tc_view_mode') || 'list';
-    document.querySelectorAll('.tc-vtoggle').forEach(b => b.classList.toggle('active', b.dataset.view === savedView));
-    ['list','board','calendar'].forEach(v => { const el = document.getElementById('tc-view-'+v); if(el) el.style.display = (v===savedView)?'':'none'; });
+    // Land on the user's preferred default view + filter every time the
+    // Production tab is opened. The previous behavior just kept whatever
+    // filter/view was last set, so first visit defaulted to filter=Open
+    // (a 3-day window), which felt empty/confusing.
+    //
+    // Per-user override lives at currentUser.tcDefaultFilter
+    // ('upcoming' | 'today' | 'overdue' | 'open' | 'all'). Falls back to
+    // 'upcoming' so everyone starts on the calendar-week board.
+    const userFilter = (currentUser && currentUser.tcDefaultFilter) || 'upcoming';
+    const userViewMode = (currentUser && currentUser.tcDefaultViewMode) || (userFilter === 'upcoming' ? 'board' : 'list');
+    const filterEl = document.getElementById('tc-filter-status');
+    if (filterEl) filterEl.value = userFilter;
+    _tcActiveView = userFilter === 'open' ? 'upcoming' : userFilter; // 'open' isn't a sidebar view, treat as upcoming
+    _tcWeekOffset = 0;
+    sessionStorage.setItem('tc_view_mode', userViewMode);
+    document.querySelectorAll('.tc-vtoggle').forEach(b => b.classList.toggle('active', b.dataset.view === userViewMode));
+    ['list','board','calendar'].forEach(v => { const el = document.getElementById('tc-view-'+v); if(el) el.style.display = (v===userViewMode)?'':'none'; });
     _tcCalYear = new Date().getFullYear(); _tcCalMonth = new Date().getMonth();
     tcRender();
   }
