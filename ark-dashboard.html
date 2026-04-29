@@ -10863,6 +10863,8 @@ const DEFAULT_WIDGETS = [
   {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:4},locked:true},
   {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
   {id:'dw13',type:'kpi',title:'My Payroll Tasks',source:{type:'computed',compute:'payrollTasks'},display:{metric:'custom',accentColor:'#0070c0'},filters:[],grid:{col:5,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
+  {id:'dw14',type:'ptoApprovals',title:'PTO Approvals',source:{type:'static'},display:{},filters:[],grid:{col:1,row:10,colSpan:12,rowSpan:2},locked:true,adminOnly:true},
+  {id:'dw15',type:'ptoOut',title:"Who's Out",source:{type:'static'},display:{},filters:[],grid:{col:1,row:12,colSpan:12,rowSpan:2},locked:true},
 ];
 
 // ── Computed widget handlers ──
@@ -11205,6 +11207,48 @@ function wgRenderWidget(w, data){
     </div>`;
   }
 
+  if(w.type==='ptoApprovals'){
+    // Admin-only — Shannon's home for pending PTO requests with inline
+    // approve/deny. Body is populated by ptoWgRenderApprovals() after the
+    // template is in the DOM (deferred so renderWidgets stays sync-safe).
+    setTimeout(() => ptoWgRenderApprovals(), 0);
+    return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:14px 22px;">
+        <div style="display:flex;align-items:center;gap:8px;">${dragHandle}
+          <div class="wg-title">🏖 PTO Approvals <span id="pto-wg-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 7px;margin-left:4px;font-weight:700;display:none;"></span></div>
+        </div>
+        <button onclick="nav('ptocenter')" class="btn btn-ghost btn-sm" style="font-size:11px;">Open PTO Center →</button>
+      </div>
+      <div id="pto-wg-approvals-body" class="wg-body" style="padding:14px 22px 18px;max-height:340px;overflow-y:auto;">
+        <div style="padding:20px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+      </div>
+    </div>`;
+  }
+
+  if(w.type==='ptoOut'){
+    // Visible to everyone — approved PTO with week/month dropdown +
+    // "Request PTO" button (uses the modal from phase 3).
+    setTimeout(() => ptoWgRenderOut(), 0);
+    return `<div class="wg-widget" style="--wg-accent:#0070c0;grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
+      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:14px 22px;">
+        <div style="display:flex;align-items:center;gap:8px;">${dragHandle}
+          <div class="wg-title">🏖 Who's Out</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:12px;padding:4px 8px;height:30px;">
+            <option value="week">This week</option>
+            <option value="month" selected>This month</option>
+            <option value="quarter">Next 90 days</option>
+          </select>
+          <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm" style="font-size:11px;">+ Request PTO</button>
+        </div>
+      </div>
+      <div id="pto-wg-out-body" class="wg-body" style="padding:14px 22px 18px;max-height:340px;overflow-y:auto;">
+        <div style="padding:20px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+      </div>
+    </div>`;
+  }
+
   if(w.type==='calendar'){
     return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
       <div class="wg-header" style="border-bottom:1px solid var(--border);padding:16px 24px;">
@@ -11416,7 +11460,9 @@ function wgLoadWidgets(){
   }
   const dismissed = new Set(dismissedList);
   const haveIds = new Set(_userWidgets.map(w => w.id));
+  const _isAdminUser = currentUser && (currentUser.role === 'admin' || (getPerms(currentUser)._isAdmin));
   for (const def of DEFAULT_WIDGETS) {
+    if (def.adminOnly && !_isAdminUser) continue; // never inject admin-only into non-admin layouts
     if (!haveIds.has(def.id) && !dismissed.has(def.id)){
       _userWidgets.push(JSON.parse(JSON.stringify(def)));
     }
@@ -11460,7 +11506,10 @@ async function renderWidgets(){
   const myToken = ++_renderToken;
   const grid = document.getElementById('widget-grid');
   if(!grid) return;
-  const widgets = wgLoadWidgets();
+  // Hide adminOnly widgets from non-admin users without mutating their saved
+  // layout. If they later become admin, the widgets reappear automatically.
+  const isAdmin = currentUser && (currentUser.role === 'admin' || (getPerms(currentUser)._isAdmin));
+  const widgets = wgLoadWidgets().filter(w => !w.adminOnly || isAdmin);
   if(!widgets.length){
     grid.innerHTML = `<div class="wg-empty"><div class="wg-empty-icon">📊</div><strong>No widgets yet.</strong>Build a personalized dashboard by pinning the metrics, lists, and calendars that matter most to you.<br><button class="btn btn-primary" style="margin-top:18px;" onclick="wgbOpen()">+ Add Your First Widget</button></div>`;
     return;
@@ -26850,6 +26899,132 @@ async function ptoCancelRequest(id){
     ptoLoadMyRequests();
   } catch(e){
     showToast(e.message, 'error');
+  }
+}
+
+// ── Dashboard widgets — populated after the widget shell mounts ──
+// (Each widget's wgRenderWidget branch schedules a setTimeout(0) that calls
+// these. Re-running is safe — they replace the body each time.)
+
+async function ptoWgRenderApprovals(){
+  const body = document.getElementById('pto-wg-approvals-body');
+  const badge = document.getElementById('pto-wg-pending-count');
+  if(!body) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/requests?status=pending');
+    if(!resp.ok){
+      // Non-admin or other error — render quietly. The widget should be
+      // hidden for non-admins anyway thanks to the adminOnly filter.
+      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:13px;">Couldn't load requests.</div>`;
+      return;
+    }
+    const data = await resp.json();
+    const requests = data.requests || [];
+    if(badge){
+      if(requests.length > 0){ badge.textContent = requests.length; badge.style.display = ''; }
+      else                   { badge.style.display = 'none'; }
+    }
+    if(requests.length === 0){
+      body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">No pending requests. 🎉</div>`;
+      return;
+    }
+    body.innerHTML = requests.map(r => `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <div style="font-weight:700;font-size:13px;color:var(--navy);">${_ptoEsc(r.userName)}</div>
+          <div style="font-size:13px;color:var(--text);margin-top:2px;">${ptoFmtRange(r.startDate, r.endDate)} · ${Number(r.hours).toFixed(1)} hrs</div>
+          ${r.notes ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;font-style:italic;">${_ptoEsc(r.notes)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="ptoWgApprove('${_ptoEsc(r.id)}')" class="btn btn-primary btn-sm" style="background:#2e7d5e;border-color:#2e7d5e;font-size:11px;">✓ Approve</button>
+          <button onclick="ptoWgDeny('${_ptoEsc(r.id)}', '${_ptoEsc(r.userName)}')" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">✕ Deny</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--red);font-size:13px;">${_ptoEsc(e.message)}</div>`;
+  }
+}
+
+// Dashboard-widget approve/deny — same endpoints as PTO Center, but on
+// success we just re-render the widget (PTO Center isn't visible).
+async function ptoWgApprove(id){
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/requests/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to approve');
+    showToast('Request approved');
+    ptoWgRenderApprovals();
+    ptoWgRenderOut();
+  } catch(e){ showToast(e.message, 'error'); }
+}
+
+async function ptoWgDeny(id, name){
+  const reason = prompt(`Deny ${name}'s PTO request? Optional reason:`, '');
+  if(reason === null) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/requests/' + encodeURIComponent(id) + '/deny', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to deny');
+    showToast('Request denied');
+    ptoWgRenderApprovals();
+  } catch(e){ showToast(e.message, 'error'); }
+}
+
+// "Who's Out" — approved PTO across the picked range. Defaults to month.
+async function ptoWgRenderOut(){
+  const body = document.getElementById('pto-wg-out-body');
+  const sel = document.getElementById('pto-wg-range');
+  if(!body) return;
+  const range = sel ? sel.value : 'month';
+
+  const now = new Date();
+  const start = new Date(now);
+  let end = new Date(now);
+  if(range === 'week'){
+    // Sunday → Saturday this week
+    start.setDate(now.getDate() - now.getDay());
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+  } else if(range === 'month'){
+    start.setDate(1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  } else { // quarter — next 90 days
+    end = new Date(now.getTime() + 90 * 24 * 3600 * 1000);
+  }
+  const fromStr = start.toISOString().slice(0, 10);
+  const toStr   = end.toISOString().slice(0, 10);
+
+  try {
+    const resp = await authFetch(ARK_SERVER + `/pto/approved?from=${fromStr}&to=${toStr}`);
+    if(!resp.ok){
+      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:13px;">Couldn't load approved PTO.</div>`;
+      return;
+    }
+    const data = await resp.json();
+    const requests = data.requests || [];
+    if(requests.length === 0){
+      const label = range === 'week' ? 'this week' : range === 'month' ? 'this month' : 'the next 90 days';
+      body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">No one is out ${label}. ✨</div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 0.6fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="padding:8px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Employee</div>
+        <div style="padding:8px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Dates</div>
+        <div style="padding:8px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Hours</div>
+        ${requests.map(r => `
+          <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--navy);font-weight:600;">${_ptoEsc(r.userName)}</div>
+          <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);">${ptoFmtRange(r.startDate, r.endDate)}</div>
+          <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${Number(r.hours).toFixed(1)}</div>
+        `).join('')}
+      </div>
+    `;
+  } catch(e){
+    body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--red);font-size:13px;">${_ptoEsc(e.message)}</div>`;
   }
 }
 
