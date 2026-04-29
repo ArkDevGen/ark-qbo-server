@@ -1917,10 +1917,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ══ EMPLOYEES ══ -->
   <div class="view content" id="view-employees" style="padding:0;">
 
-    <!-- ── TOP-LEVEL: Payroll / New Hires switcher (combined sidebar item) ── -->
+    <!-- ── TOP-LEVEL: Payroll / New Hires / PTO switcher (combined sidebar item) ── -->
     <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 28px;">
       <button onclick="nav('payrollcenter')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">💰 Payroll</button>
       <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">👥 New Hires</button>
+      <button onclick="nav('ptocenter')" class="pto-admin-tab" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;display:none;">🏖 PTO</button>
     </div>
 
     <!-- Sub-tab bar -->
@@ -6200,12 +6201,40 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ PAYROLL CENTER ════ -->
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:0;">
-    <!-- ── TOP-LEVEL: Payroll / New Hires switcher (combined sidebar item) ── -->
+    <!-- ── TOP-LEVEL: Payroll / New Hires / PTO switcher (combined sidebar item) ── -->
     <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 28px;">
       <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">💰 Payroll</button>
       <button onclick="nav('employees')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">👥 New Hires</button>
+      <button onclick="nav('ptocenter')" class="pto-admin-tab" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;display:none;">🏖 PTO</button>
     </div>
     <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 100px);border:none;display:block;background:var(--bg);"></iframe>
+  </div>
+
+  <!-- ══ PTO CENTER (admin-only) — manage employee PTO balances ══ -->
+  <div class="view content" id="view-ptocenter" style="padding:0;">
+    <!-- Top switcher (matches Payroll Center / Employees pattern) -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 28px;">
+      <button onclick="nav('payrollcenter')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">💰 Payroll</button>
+      <button onclick="nav('employees')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">👥 New Hires</button>
+      <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">🏖 PTO</button>
+    </div>
+
+    <div style="padding:28px 32px;max-width:1100px;">
+      <div style="margin-bottom:20px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--navy);margin-bottom:4px;">PTO Balances</div>
+        <div style="font-size:13px;color:var(--text-m);">Hours-based balances per employee. Admin-only — Shannon edits these manually as PTO is taken.</div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+        <input id="pto-admin-search" placeholder="Search by name…" oninput="ptoAdminFilter()" class="field-input" style="flex:1;min-width:240px;max-width:380px;">
+        <div style="font-size:12px;color:var(--text-m);">
+          <span id="pto-admin-summary">—</span>
+        </div>
+      </div>
+
+      <div id="pto-admin-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+      <div id="pto-admin-list"></div>
+    </div>
   </div>
 
   <!-- OLD PAYROLL CENTER (removed — replaced with embedded payroll-admin above) -->
@@ -9392,6 +9421,10 @@ function applyNavPermissions(u){
 
   // Admin-only items
   document.getElementById('nav-users').style.display = isAdmin ? 'flex' : 'none';
+  // PTO tab buttons inside Payroll Center / Employees / PTO Center top switchers
+  document.querySelectorAll('.pto-admin-tab').forEach(el => {
+    el.style.display = isAdmin ? '' : 'none';
+  });
   setNavVisible('nav-amcenter',   isAdmin || p.canViewAMCenter   !== false);
   setNavVisible('nav-reports',      isAdmin || p.canViewReports    !== false);
   setNavVisible('nav-commcenter',   isAdmin || p.canViewCommCenter !== false);
@@ -10483,7 +10516,7 @@ function nav(page){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('view-'+page).classList.add('active');
-  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'tools & reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings',payrollcenter:'payroll center',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews',tools:'tools & reports',filecenter:'file center'};
+  const navMap={dashboard:'dashboard',clients:'client center',acctmgrs:'am center',employees:'new hire center',reports:'tools & reports',newhirereport:'new hire report',activity:'activity log',salestax:'sales tax center',form1099s:'1099 center',taxcenter:'tax center',w2center:'w-2 center',eftps:'eftps payment builder',timecenter:'time center',commcenter:'comm center',meetings:'meetings',payrollcenter:'payroll center',ptocenter:'pto',proposals:'lead center',tasks:'production',beta:'insights',users:'users',integrations:'integrations',devhub:'team hub',plreviews:'p&l reviews',tools:'tools & reports',filecenter:'file center'};
   // Tax Center nav item stays active for all child modules (except qbo and w9gen which have their own nav items)
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   // Pages that share the combined Tools & Reports sidebar item
@@ -10516,7 +10549,7 @@ function nav(page){
       document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes(navMap[page]||page)) n.classList.add('active'); });
     }
   }
-  const titles={dashboard:'Dashboard',clients:'Client Center',proposals:'Lead Center',tasks:'Production',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews',tools:'Tools Center'};
+  const titles={dashboard:'Dashboard',clients:'Client Center',proposals:'Lead Center',tasks:'Production',acctmgrs:'AM Center',employees:'New Hire Center',reports:'Reports',newhirereport:'New Hire Report',activity:'Activity Log',salestax:'Sales Tax Center',form1099s:'1099 Center',taxcenter:'Tax Center',w2center:'W-2 Center',eftps:'EFTPS Payment Builder',qbo:'QBO Center',w9gen:'W-9 Generator',import:'Import Clients',timecenter:'Time Center',commcenter:'Comm Center',meetings:'Meetings',payrollcenter:'Payroll Center',ptocenter:'PTO Center',filecenter:'File Center',users:'Team & Users',integrations:'Integrations',devhub:'Team Hub',plreviews:'P&L Reviews',tools:'Tools Center'};
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = (PAGE_ACTIONS[page]?.()||'');
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
@@ -10595,6 +10628,10 @@ function nav(page){
   if(page==='users'){
     if(!currentUser || currentUser.role !== 'admin'){ nav('dashboard'); return; }
     renderUsers();
+  }
+  if(page==='ptocenter'){
+    if(!currentUser || currentUser.role !== 'admin'){ nav('dashboard'); return; }
+    ptoAdminInit();
   }
   if(page==='integrations'){ integrationsInit(); }
   if(page==='devhub'){ dhInit(); }
@@ -26272,6 +26309,149 @@ async function rbxDelete(slug, name){
     showToast(e.message, 'error');
   }
 }
+
+// ════════════════════════════════════════════════════════════════
+//  PTO CENTER (admin) — manage employee PTO balances
+//  Phase 1: balances only. Requests/approvals (Phase 3) and the
+//  dashboard widgets (Phase 4) plug into the same /pto/* endpoints.
+// ════════════════════════════════════════════════════════════════
+let _ptoAdminUsers = [];     // [{ id, fname, lname, status, role }]
+let _ptoAdminBalances = {};  // { [userId]: { hours, updatedAt, updatedBy } }
+let _ptoAdminFilter = '';
+
+async function ptoAdminInit(){
+  const list = document.getElementById('pto-admin-list');
+  const loading = document.getElementById('pto-admin-loading');
+  if(loading) loading.style.display = 'block';
+  if(list) list.innerHTML = '';
+  try {
+    const [usersResp, balResp] = await Promise.all([
+      authFetch(ARK_SERVER + '/users/team'),
+      authFetch(ARK_SERVER + '/pto/admin/balances'),
+    ]);
+    if(!usersResp.ok) throw new Error('users/team ' + usersResp.status);
+    if(!balResp.ok)   throw new Error('pto balances ' + balResp.status);
+    const usersData = await usersResp.json();
+    const balData = await balResp.json();
+    _ptoAdminUsers = (usersData.users || usersData || [])
+      .filter(u => !u.status || u.status.toLowerCase() === 'active')
+      .map(u => ({ id: u._id || u.id, fname: u.fname, lname: u.lname, role: u.role, status: u.status }))
+      .sort((a,b) => `${a.fname||''} ${a.lname||''}`.localeCompare(`${b.fname||''} ${b.lname||''}`));
+    _ptoAdminBalances = balData.balances || {};
+    ptoAdminRender();
+  } catch(e){
+    if(list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);font-size:13px;">${e.message}</div>`;
+  } finally {
+    if(loading) loading.style.display = 'none';
+  }
+}
+
+function ptoAdminFilter(){
+  _ptoAdminFilter = (document.getElementById('pto-admin-search').value || '').trim().toLowerCase();
+  ptoAdminRender();
+}
+
+function ptoAdminRender(){
+  const list = document.getElementById('pto-admin-list');
+  const summary = document.getElementById('pto-admin-summary');
+  if(!list) return;
+
+  const q = _ptoAdminFilter;
+  const visible = _ptoAdminUsers.filter(u => {
+    if(!q) return true;
+    return `${u.fname||''} ${u.lname||''}`.toLowerCase().includes(q);
+  });
+
+  const totalSet = Object.keys(_ptoAdminBalances).length;
+  const totalHours = Object.values(_ptoAdminBalances).reduce((s, b) => s + (Number(b.hours) || 0), 0);
+  if(summary) summary.textContent = `${totalSet} balance${totalSet===1?'':'s'} set · ${totalHours.toFixed(1)} total hours`;
+
+  if(visible.length === 0){
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);">No matching users.</div>`;
+    return;
+  }
+
+  list.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 140px 200px 160px;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Employee</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Hours</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Last updated</div>
+      <div style="padding:10px 14px;background:var(--surface2);"></div>
+      ${visible.map(u => ptoAdminRowHtml(u)).join('')}
+    </div>
+  `;
+}
+
+function ptoAdminRowHtml(u){
+  const bal = _ptoAdminBalances[u.id];
+  const hours = bal ? Number(bal.hours).toFixed(1) : '';
+  const updated = bal && bal.updatedAt ? new Date(bal.updatedAt).toLocaleDateString() : '—';
+  const roleBadge = u.role === 'admin' ? `<span style="font-size:10px;background:var(--gold);color:#fff;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.05em;">Admin</span>` : '';
+  return `
+    <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;">
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--navy);">${_ptoEsc(u.fname || '')} ${_ptoEsc(u.lname || '')}${roleBadge}</div>
+        <div style="font-size:11px;color:var(--text-d);font-family:monospace;">${_ptoEsc(u.id)}</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;">
+      <input id="pto-bal-${_ptoEsc(u.id)}" type="number" min="0" step="0.5" value="${hours}" placeholder="—" class="field-input" style="width:100px;text-align:right;font-family:monospace;">
+    </div>
+    <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;font-size:12px;color:var(--text-d);">
+      ${updated}
+    </div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+      <button onclick="ptoAdminSave('${_ptoEsc(u.id)}')" class="btn btn-primary btn-sm">Save</button>
+      ${bal ? `<button onclick="ptoAdminRemove('${_ptoEsc(u.id)}', '${_ptoEsc((u.fname||'') + ' ' + (u.lname||''))}')" class="btn btn-ghost btn-sm" style="color:var(--red);">Remove</button>` : ''}
+    </div>
+  `;
+}
+
+async function ptoAdminSave(userId){
+  const input = document.getElementById('pto-bal-' + userId);
+  if(!input) return;
+  const raw = input.value.trim();
+  if(raw === ''){
+    showToast('Enter a number of hours (or click Remove to clear)', 'error');
+    return;
+  }
+  const hours = Number(raw);
+  if(!Number.isFinite(hours) || hours < 0){
+    showToast('Hours must be 0 or greater', 'error');
+    return;
+  }
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/balance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, hours }),
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to save');
+    _ptoAdminBalances[userId] = data.balance;
+    ptoAdminRender();
+    showToast(`Balance set to ${hours.toFixed(1)} hours`);
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+async function ptoAdminRemove(userId, name){
+  if(!confirm(`Remove PTO balance for ${name}?`)) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/balance/' + encodeURIComponent(userId), { method: 'DELETE' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to remove');
+    delete _ptoAdminBalances[userId];
+    ptoAdminRender();
+    showToast(`Balance removed for ${name}`);
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+const _ptoEscMap = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function _ptoEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => _ptoEscMap[c]); }
 
 function renderToolsCenter(){
   const grid = document.getElementById('tools-grid');

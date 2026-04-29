@@ -3952,6 +3952,73 @@ app.delete('/robidoux/admin/client/:slug', requireAuth, (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════
+// PTO — BALANCES + REQUESTS
+// Phase 1 here: admin-managed balances. Requests/approvals come later.
+// Shape: {
+//   balances: { <userId>: { hours, updatedAt, updatedBy } },
+//   requests: [ { id, userId, startDate, endDate, hours, notes,
+//                 status: 'pending'|'approved'|'denied',
+//                 requestedAt, decidedAt, decidedBy } ]
+// }
+// ═════════════════════════════════════════════════════════════════
+const PTO_FILE = path.join(DATA_DIR, 'pto-data.json');
+let ptoData = { balances: {}, requests: [] };
+if (fs.existsSync(PTO_FILE)) {
+  try { ptoData = JSON.parse(fs.readFileSync(PTO_FILE, 'utf8')); }
+  catch(e){ console.log('Could not load pto-data.json, starting fresh'); }
+} else {
+  const repoCopy = path.join(__dirname, 'pto-data.json');
+  if (fs.existsSync(repoCopy) && DATA_DIR !== __dirname) {
+    try { ptoData = JSON.parse(fs.readFileSync(repoCopy, 'utf8')); } catch(_){}
+  }
+  try { fs.writeFileSync(PTO_FILE, JSON.stringify(ptoData, null, 2)); } catch(_){}
+}
+// Defensive: top-level keys may be missing if a hand-edited file omits one.
+if (!ptoData.balances) ptoData.balances = {};
+if (!ptoData.requests) ptoData.requests = [];
+function savePtoData(){
+  fs.writeFileSync(PTO_FILE, JSON.stringify(ptoData, null, 2));
+}
+
+// Admin — list all balances (returns the full map keyed by userId so the
+// admin UI can join against /users/team for names).
+app.get('/pto/admin/balances', requireAuth, requireRole('admin'), (req, res) => {
+  res.json({ balances: ptoData.balances });
+});
+
+// Admin — set or update balance for a user. Pass hours = 0 to zero out;
+// to remove the entry entirely use the DELETE endpoint.
+app.post('/pto/admin/balance', requireAuth, requireRole('admin'), (req, res) => {
+  const { userId, hours } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h < 0) return res.status(400).json({ error: 'hours must be a non-negative number' });
+  ptoData.balances[userId] = {
+    hours: h,
+    updatedAt: new Date().toISOString(),
+    updatedBy: req.arkUser.userId || null,
+  };
+  savePtoData();
+  res.json({ success: true, balance: ptoData.balances[userId] });
+});
+
+// Admin — remove balance entry entirely (e.g. when an employee leaves).
+app.delete('/pto/admin/balance/:userId', requireAuth, requireRole('admin'), (req, res) => {
+  const userId = req.params.userId;
+  if (!ptoData.balances[userId]) return res.status(404).json({ error: 'No balance for that user' });
+  delete ptoData.balances[userId];
+  savePtoData();
+  res.json({ success: true });
+});
+
+// Auth — current user's own PTO balance (used by the Time Center card later).
+app.get('/pto/balance', requireAuth, (req, res) => {
+  const me = req.arkUser.userId;
+  const entry = ptoData.balances[me] || null;
+  res.json({ balance: entry });
+});
+
+// ═════════════════════════════════════════════════════════════════
 // P&L DIGESTER — AI ANALYSIS + FLEET DATA + HISTORY
 // ═════════════════════════════════════════════════════════════════
 
