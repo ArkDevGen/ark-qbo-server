@@ -3850,6 +3850,111 @@ app.post('/payroll/notifications/clear', (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════════
+// ROBIDOUX GJE BUILDER — ACCESS GATE
+// Hosts the client-facing GJE engine at /robidoux-entry. Per-client
+// access keys are managed from the CRM's Tools Center.
+// Shape: { clients: { <slug>: { name, accessKey, _sessionToken, createdAt, lastLoginAt } } }
+// ═════════════════════════════════════════════════════════════════
+const ROBIDOUX_FILE = path.join(DATA_DIR, 'robidoux-data.json');
+let robidouxData = { clients: {} };
+if (fs.existsSync(ROBIDOUX_FILE)) {
+  try { robidouxData = JSON.parse(fs.readFileSync(ROBIDOUX_FILE, 'utf8')); }
+  catch(e){ console.log('Could not load robidoux-data.json, starting fresh'); }
+} else {
+  // First boot — seed from repo copy if present, else write empty file.
+  const repoCopy = path.join(__dirname, 'robidoux-data.json');
+  if (fs.existsSync(repoCopy) && DATA_DIR !== __dirname) {
+    try { robidouxData = JSON.parse(fs.readFileSync(repoCopy, 'utf8')); } catch(_){}
+  }
+  try { fs.writeFileSync(ROBIDOUX_FILE, JSON.stringify(robidouxData, null, 2)); } catch(_){}
+}
+function saveRobidouxData(){
+  fs.writeFileSync(ROBIDOUX_FILE, JSON.stringify(robidouxData, null, 2));
+}
+function generateRobidouxAccessKey(){
+  // 16-char block key, hyphenated. Excludes ambiguous chars (0/O, 1/I/L).
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let raw = '';
+  for (let i = 0; i < 16; i++) raw += alphabet[crypto.randomInt(alphabet.length)];
+  return `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}`;
+}
+
+// Public — serve the engine HTML
+app.get('/robidoux-entry', (req, res) => {
+  res.sendFile(__dirname + '/public/robidoux-entry.html');
+});
+
+// Public — client login
+app.post('/robidoux/login', (req, res) => {
+  const { clientSlug, accessKey } = req.body || {};
+  if (!clientSlug || !accessKey) return res.status(400).json({ error: 'Missing credentials' });
+  const client = robidouxData.clients[clientSlug];
+  if (!client || client.accessKey !== accessKey) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  const token = crypto.randomUUID();
+  client._sessionToken = token;
+  client.lastLoginAt = new Date().toISOString();
+  saveRobidouxData();
+  res.json({ success: true, token, clientName: client.name });
+});
+
+// Admin — list clients (full keys returned so AMs can share with clients)
+app.get('/robidoux/admin/clients', requireAuth, (req, res) => {
+  const list = Object.entries(robidouxData.clients).map(([slug, c]) => ({
+    slug,
+    name: c.name,
+    accessKey: c.accessKey,
+    createdAt: c.createdAt || null,
+    lastLoginAt: c.lastLoginAt || null,
+  }));
+  res.json({ clients: list });
+});
+
+// Admin — upsert (add new or update existing)
+app.post('/robidoux/admin/client', requireAuth, (req, res) => {
+  const { slug, name, accessKey } = req.body || {};
+  if (!slug || !name) return res.status(400).json({ error: 'slug and name are required' });
+  const cleanSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (!cleanSlug) return res.status(400).json({ error: 'Invalid slug' });
+  const existing = robidouxData.clients[cleanSlug];
+  if (existing) {
+    existing.name = name;
+    if (accessKey) existing.accessKey = accessKey;
+  } else {
+    robidouxData.clients[cleanSlug] = {
+      name,
+      accessKey: accessKey || generateRobidouxAccessKey(),
+      createdAt: new Date().toISOString(),
+      lastLoginAt: null,
+    };
+  }
+  saveRobidouxData();
+  const c = robidouxData.clients[cleanSlug];
+  res.json({ success: true, client: { slug: cleanSlug, name: c.name, accessKey: c.accessKey, createdAt: c.createdAt, lastLoginAt: c.lastLoginAt } });
+});
+
+// Admin — rotate access key
+app.post('/robidoux/admin/client/:slug/regenerate-key', requireAuth, (req, res) => {
+  const slug = req.params.slug;
+  const client = robidouxData.clients[slug];
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  client.accessKey = generateRobidouxAccessKey();
+  client._sessionToken = null;
+  saveRobidouxData();
+  res.json({ success: true, accessKey: client.accessKey });
+});
+
+// Admin — delete client
+app.delete('/robidoux/admin/client/:slug', requireAuth, (req, res) => {
+  const slug = req.params.slug;
+  if (!robidouxData.clients[slug]) return res.status(404).json({ error: 'Client not found' });
+  delete robidouxData.clients[slug];
+  saveRobidouxData();
+  res.json({ success: true });
+});
+
+// ═════════════════════════════════════════════════════════════════
 // P&L DIGESTER — AI ANALYSIS + FLEET DATA + HISTORY
 // ═════════════════════════════════════════════════════════════════
 

@@ -6705,6 +6705,60 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
   </div>
 
+  <!-- ── Robidoux GJE Builder — credential management ───────────────
+       Lets AMs add/edit/delete clients who are paying for the Robidoux
+       GJE Builder, and rotate their access keys. All calls go through
+       /robidoux/admin/* on our Express server.
+  -->
+  <div class="overlay" id="modal-robidoux-admin" style="display:none" onclick="overlayClose(event,'modal-robidoux-admin')">
+    <div class="modal modal-lg" style="max-width:780px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">⚙ Robidoux GJE Builder</div>
+          <div style="font-size:12px;color:var(--text-m);margin-top:2px;">Manage paid client access to the GJE Builder.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-robidoux-admin')">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
+          <div style="font-size:12px;color:var(--text-m);">
+            Builder URL:
+            <a id="rbx-builder-url" href="#" target="_blank" rel="noopener" style="font-family:monospace;color:var(--navy);">…</a>
+            <button onclick="rbxCopyBuilderUrl()" class="btn btn-ghost btn-sm" style="margin-left:6px;">Copy</button>
+          </div>
+          <button onclick="rbxOpenAddForm()" class="btn btn-primary btn-sm">+ Add client</button>
+        </div>
+
+        <div id="rbx-add-form" style="display:none;border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;background:var(--surface2);">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--navy);">Add Robidoux client</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:11px;color:var(--text-m);">Business name *</label>
+              <input id="rbx-add-name" class="field-input" placeholder="Robidoux Inc." style="width:100%;">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-m);">Company code (slug) *</label>
+              <input id="rbx-add-slug" class="field-input" placeholder="robidoux" style="width:100%;font-family:monospace;">
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-m);margin-top:8px;">An access key will be auto-generated. You can rotate it anytime.</div>
+          <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+            <button onclick="rbxCloseAddForm()" class="btn btn-ghost btn-sm">Cancel</button>
+            <button onclick="rbxSubmitNew()" class="btn btn-primary btn-sm">Create</button>
+          </div>
+        </div>
+
+        <div id="rbx-clients-wrap">
+          <div id="rbx-clients-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+          <div id="rbx-clients-list"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-robidoux-admin')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ P&L REVIEWS CENTER ══ -->
   <div class="view content" id="view-plreviews" style="padding:24px 28px;">
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
@@ -26046,8 +26100,165 @@ const TOOLS_REGISTRY = [
     desc: 'Generate and fax new hire reports for unfiled employees. Includes the state reporting fax reference table.',
     tags: ['hr','compliance','fax'],
     launch: () => { nav('newhirereport'); }
+  },
+  {
+    id: 'robidoux-gje',
+    icon: '⚙',
+    title: 'Robidoux GJE Builder',
+    desc: 'Sales-report → QBO journal-entry engine. Manage which clients can access the builder and their access keys.',
+    tags: ['qbo','client-tool','billable'],
+    launch: () => { rbxOpenAdmin(); }
   }
 ];
+
+// ════════════════════════════════════════════════════════════════
+//  ROBIDOUX GJE BUILDER — credential management UI
+// ════════════════════════════════════════════════════════════════
+const _rbxEscMap = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function _rbxEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => _rbxEscMap[c]); }
+
+function rbxBuilderUrl(){
+  // Use ARK_SERVER (origin-aware: localhost in dev, render URL in prod).
+  return ARK_SERVER + '/robidoux-entry';
+}
+
+function rbxOpenAdmin(){
+  // Wire the builder URL into the modal each open in case ARK_SERVER changes.
+  const a = document.getElementById('rbx-builder-url');
+  const url = rbxBuilderUrl();
+  a.href = url;
+  a.textContent = url;
+  rbxCloseAddForm();
+  document.getElementById('modal-robidoux-admin').style.display = 'flex';
+  rbxLoadClients();
+}
+
+function rbxCopyBuilderUrl(){
+  const url = rbxBuilderUrl();
+  navigator.clipboard.writeText(url).then(
+    ()=> showToast('Builder URL copied'),
+    ()=> showToast('Copy failed', 'error')
+  );
+}
+
+function rbxOpenAddForm(){
+  document.getElementById('rbx-add-form').style.display = 'block';
+  document.getElementById('rbx-add-name').value = '';
+  document.getElementById('rbx-add-slug').value = '';
+  setTimeout(()=>document.getElementById('rbx-add-name').focus(), 50);
+}
+function rbxCloseAddForm(){
+  document.getElementById('rbx-add-form').style.display = 'none';
+}
+
+async function rbxLoadClients(){
+  const loading = document.getElementById('rbx-clients-loading');
+  const list = document.getElementById('rbx-clients-list');
+  loading.style.display = 'block';
+  list.innerHTML = '';
+  try {
+    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/clients');
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to load');
+    rbxRenderClients(data.clients || []);
+  } catch(e){
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);font-size:13px;">${e.message}</div>`;
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function rbxFmtDate(iso){
+  if(!iso) return '—';
+  try { return new Date(iso).toLocaleString(); } catch(e){ return iso; }
+}
+
+function rbxRenderClients(clients){
+  const list = document.getElementById('rbx-clients-list');
+  if(clients.length === 0){
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);">No clients yet. Click <b>+ Add client</b> to grant access.</div>`;
+    return;
+  }
+  list.innerHTML = clients.map(c => `
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-weight:700;font-size:14px;color:var(--navy);">${_rbxEsc(c.name)}</div>
+          <div style="font-size:11px;color:var(--text-m);font-family:monospace;margin-top:2px;">${_rbxEsc(c.slug)}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text-m);text-align:right;">
+          <div>Created: ${rbxFmtDate(c.createdAt)}</div>
+          <div>Last login: ${rbxFmtDate(c.lastLoginAt)}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface2);padding:8px 10px;border-radius:6px;">
+        <span style="font-size:11px;color:var(--text-m);">ACCESS KEY:</span>
+        <code style="font-family:monospace;font-size:13px;color:var(--navy);font-weight:600;letter-spacing:.5px;">${_rbxEsc(c.accessKey)}</code>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button onclick="rbxCopyKey('${_rbxEsc(c.accessKey)}')" class="btn btn-ghost btn-sm">Copy</button>
+          <button onclick="rbxRegenerate('${_rbxEsc(c.slug)}', '${_rbxEsc(c.name)}')" class="btn btn-ghost btn-sm">Regenerate</button>
+          <button onclick="rbxDelete('${_rbxEsc(c.slug)}', '${_rbxEsc(c.name)}')" class="btn btn-ghost btn-sm" style="color:var(--red);">Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function rbxCopyKey(key){
+  navigator.clipboard.writeText(key).then(
+    ()=> showToast('Access key copied'),
+    ()=> showToast('Copy failed', 'error')
+  );
+}
+
+async function rbxSubmitNew(){
+  const name = document.getElementById('rbx-add-name').value.trim();
+  const slug = document.getElementById('rbx-add-slug').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if(!name || !slug){
+    showToast('Business name and company code are required', 'error');
+    return;
+  }
+  try {
+    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, name }),
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to create');
+    showToast(`Created ${name} (key: ${data.client.accessKey})`);
+    rbxCloseAddForm();
+    rbxLoadClients();
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+async function rbxRegenerate(slug, name){
+  if(!confirm(`Regenerate access key for ${name}? Their current key will stop working immediately.`)) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client/' + encodeURIComponent(slug) + '/regenerate-key', { method: 'POST' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to regenerate');
+    showToast(`New key: ${data.accessKey}`);
+    rbxLoadClients();
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+async function rbxDelete(slug, name){
+  if(!confirm(`Delete ${name} from Robidoux access? They won't be able to log in anymore.`)) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client/' + encodeURIComponent(slug), { method: 'DELETE' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to delete');
+    showToast(`${name} removed`);
+    rbxLoadClients();
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
 
 function renderToolsCenter(){
   const grid = document.getElementById('tools-grid');
@@ -50851,8 +51062,8 @@ async function stgRefresh(){
           const url = c.html_url || '#';
           return `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
             <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;color:var(--text);">${_escapeHtml(msg)}</div>
-              <div style="font-size:11px;color:var(--text-d);margin-top:3px;">${_escapeHtml(author)} · ${whenStr}</div>
+              <div style="font-weight:600;color:var(--text);">${__rbxEsc(msg)}</div>
+              <div style="font-size:11px;color:var(--text-d);margin-top:3px;">${__rbxEsc(author)} · ${whenStr}</div>
             </div>
             <a href="${url}" target="_blank" rel="noopener" style="font-size:11px;font-family:monospace;color:var(--text-d);text-decoration:none;flex-shrink:0;">${sha}</a>
           </div>`;
@@ -50876,7 +51087,7 @@ async function stgRefresh(){
       const color = status === 'live' ? '#10b981' : status === 'build_in_progress' || status === 'update_in_progress' ? '#f59e0b' : status === 'build_failed' || status === 'deactivated' ? '#ef4444' : '#6b7280';
       const label = status.replace(/_/g,' ').toUpperCase();
       const when = d.finishedAt ? new Date(d.finishedAt).toLocaleString() : '';
-      const commit = d.commitMessage ? `<div style="font-size:12px;color:var(--text);margin-top:6px;">${_escapeHtml(d.commitMessage.split('\n')[0])}</div>` : '';
+      const commit = d.commitMessage ? `<div style="font-size:12px;color:var(--text);margin-top:6px;">${__rbxEsc(d.commitMessage.split('\n')[0])}</div>` : '';
       statusEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></div>
@@ -50952,7 +51163,7 @@ function stgAddToQueue(){
   // Clear editor so they can add another file
   document.getElementById('stg-push-content').value = '';
   document.getElementById('stg-push-loadstatus').textContent = '';
-  result.innerHTML = `<span style="color:#10b981;">Added ${_escapeHtml(path)} to queue (${_stgQueue.length} file${_stgQueue.length===1?'':'s'} ready).</span>`;
+  result.innerHTML = `<span style="color:#10b981;">Added ${__rbxEsc(path)} to queue (${_stgQueue.length} file${_stgQueue.length===1?'':'s'} ready).</span>`;
 }
 
 function stgRemoveFromQueue(idx){
@@ -50974,7 +51185,7 @@ function stgRenderQueue(){
     const kb = (new Blob([f.content]).size / 1024).toFixed(1);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;">
       <div style="display:flex;gap:10px;align-items:center;min-width:0;">
-        <span style="font-family:monospace;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_escapeHtml(f.path)}</span>
+        <span style="font-family:monospace;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${__rbxEsc(f.path)}</span>
         <span style="font-size:10px;color:var(--text-d);flex-shrink:0;">${kb} KB</span>
       </div>
       <button class="btn btn-sm btn-ghost" onclick="stgRemoveFromQueue(${i})" title="Remove">✕</button>
@@ -51014,7 +51225,7 @@ async function stgDoPush(){
     });
     const data = await r.json().catch(() => ({}));
     if(!r.ok){
-      result.innerHTML = `<span style="color:var(--red);">${_escapeHtml(data.error || 'Push failed ('+r.status+')')}</span>`;
+      result.innerHTML = `<span style="color:var(--red);">${__rbxEsc(data.error || 'Push failed ('+r.status+')')}</span>`;
       return;
     }
     const sha = (data.commitSha || '').slice(0, 7);
@@ -51028,7 +51239,7 @@ async function stgDoPush(){
     // Pull the updated commits list so the team sees it immediately
     setTimeout(stgRefresh, 3000);
   } catch(e){
-    result.innerHTML = `<span style="color:var(--red);">${_escapeHtml(e.message)}</span>`;
+    result.innerHTML = `<span style="color:var(--red);">${__rbxEsc(e.message)}</span>`;
   }
 }
 
@@ -51048,7 +51259,7 @@ function stgCopyClaudePrompt(){
   }).catch(() => alert('Could not copy — select the text manually and Ctrl+C.'));
 }
 
-function _escapeHtml(s){
+function __rbxEsc(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 

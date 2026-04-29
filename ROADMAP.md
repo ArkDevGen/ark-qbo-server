@@ -119,7 +119,8 @@ sections (or strike them out under "✅ Shipped") as they progress.
 - RTBS CRM/Hub
 
 ### Branding / Domain
-- Change domain for all surfaces (CRM, GC Hub, client entry page, etc.)
+- Change domain for all surfaces (CRM, GC Hub, client entry page, Robidoux
+  GJE Builder at `/robidoux-entry`, etc.)
 - Compile all login information in one place
 
 ---

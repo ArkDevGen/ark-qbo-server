@@ -1,0 +1,2553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GJE Builder · Robidoux Inc.</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230F1729'/%3E%3Ctext x='16' y='22' font-family='monospace' font-weight='700' font-size='16' fill='%23F0B000' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root {
+  --bg-deep: #0F1729;
+  --bg-card: #1A2138;
+  --bg-card-hover: #222B47;
+  --border: #2A3553;
+  --border-light: #3A4663;
+  --text-primary: #E8EDF7;
+  --text-secondary: #A0AEC8;
+  --text-muted: #6B7795;
+  /* Robidoux brand yellow - the dominant color in their logo (#F0B000) */
+  --accent: #F0B000;
+  --accent-hover: #FFC42E;
+  --accent-dim: rgba(240, 176, 0, 0.15);
+  --accent-deep: #C49000;
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+  --shadow: 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-accent: 0 2px 16px rgba(240, 176, 0, 0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+/* Subtle yellow accent line under the header — a nod to the industrial brand */
+header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 80px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.brand-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+  /* The logo is yellow on black; keep its native bg and round it slightly */
+  border-radius: 3px;
+}
+.brand-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--border-light);
+}
+.brand-text h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.brand-text .subtitle {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.entity-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  padding: 6px 12px;
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+.ark-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  font-style: italic;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 12px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.tab-step {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.tab.active .tab-step {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Upload zone */
+.dropzone {
+  border: 2px dashed var(--border-light);
+  border-radius: 8px;
+  padding: 56px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.dropzone::before {
+  /* Subtle diagonal stripe pattern hint - industrial feel */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 14px,
+    rgba(240, 176, 0, 0.015) 14px,
+    rgba(240, 176, 0, 0.015) 28px
+  );
+  pointer-events: none;
+}
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+  box-shadow: var(--shadow-accent);
+}
+.dropzone.dragover::before {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 14px,
+    rgba(240, 176, 0, 0.06) 14px,
+    rgba(240, 176, 0, 0.06) 28px
+  );
+}
+.dropzone-icon {
+  font-size: 36px;
+  margin-bottom: 14px;
+  color: var(--accent);
+  opacity: 0.85;
+  position: relative;
+}
+.dropzone h2 {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  position: relative;
+}
+.dropzone p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  position: relative;
+}
+.dropzone .hint {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.04em;
+  position: relative;
+}
+
+/* File list */
+.file-list {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.file-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.file-item-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.file-platform-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.file-platform-tag.amazon { background: rgba(255, 153, 0, 0.15); color: #FFB84D; }
+.file-platform-tag.ebay { background: rgba(229, 62, 62, 0.15); color: #FC8181; }
+.file-platform-tag.shopify { background: rgba(149, 191, 71, 0.15); color: #B5D77F; }
+.file-platform-tag.walmart { background: rgba(255, 194, 32, 0.15); color: #FFD970; }
+.file-platform-tag.unknown { background: rgba(160, 174, 200, 0.15); color: var(--text-muted); }
+
+.file-name {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-status {
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-status.ok { color: var(--success); }
+.file-status.warn { color: var(--warning); }
+.file-status.err { color: var(--error); }
+.spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Buttons */
+.btn-row {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn {
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg-deep);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(240, 176, 0, 0.2);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 12px rgba(240, 176, 0, 0.35);
+}
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.btn-secondary:hover { background: var(--bg-card); color: var(--text-primary); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.btn-ghost:hover { color: var(--text-primary); }
+
+/* Review panel */
+.je-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.je-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card-hover);
+  border-bottom: 1px solid var(--border);
+}
+.je-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  font-size: 14px;
+}
+.je-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.je-balance {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.je-balance.ok { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.je-balance.bad { background: rgba(248, 113, 113, 0.15); color: var(--error); }
+
+.je-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+}
+.je-table th, .je-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.je-table th {
+  background: var(--bg-deep);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.je-table td:nth-child(2),
+.je-table td:nth-child(3),
+.je-table th:nth-child(2),
+.je-table th:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.je-table td.account { color: var(--text-primary); }
+.je-table td.amount-debit { color: var(--text-primary); }
+.je-table td.amount-credit { color: var(--text-primary); }
+.je-table td.amount-zero { color: var(--text-muted); }
+.je-table td.memo {
+  color: var(--text-muted);
+  font-size: 11px;
+  max-width: 380px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.je-table tfoot td {
+  background: var(--bg-deep);
+  font-weight: 600;
+  border-bottom: none;
+  border-top: 1px solid var(--border-light);
+}
+
+/* Editable cells */
+.je-table td.editable {
+  cursor: pointer;
+  position: relative;
+}
+.je-table td.editable:hover { background: var(--bg-card-hover); }
+.je-table td input.edit-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  text-align: right;
+  width: 100%;
+  outline: none;
+}
+.je-table select.edit-select {
+  background: var(--bg-deep);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+
+/* Empty state / processing */
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Export tab */
+.export-summary {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.export-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.export-stat:last-child { border-bottom: none; }
+.export-stat-label { color: var(--text-secondary); }
+.export-stat-value {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-primary);
+}
+
+.csv-preview {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  white-space: pre;
+  overflow-x: auto;
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+}
+
+/* OCR progress */
+.ocr-progress {
+  display: inline-block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.toast.success { border-left-color: var(--success); }
+.toast.error { border-left-color: var(--error); }
+
+/* Issue badges */
+.issues-list {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.issues-list-title {
+  color: var(--warning);
+  font-weight: 500;
+  margin-bottom: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.issues-list ul { list-style: none; }
+.issues-list li {
+  color: var(--text-secondary);
+  padding: 2px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+}
+
+/* Add line button */
+.add-line-row {
+  padding: 10px 14px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.add-line-btn {
+  background: transparent;
+  border: 1px dashed var(--border-light);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.add-line-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.delete-line-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.delete-line-btn:hover { color: var(--error); }
+
+</style>
+</head>
+<body>
+
+<!-- ─── ARK login gate ──────────────────────────────────────────────
+     Wraps the GJE Builder engine. The engine itself is unchanged below;
+     it just stays hidden until the client signs in with their slug +
+     access key (managed via the CRM's Tools Center).
+-->
+<style>
+  .ark-login-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .ark-login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 36px 32px 28px;
+    box-shadow: var(--shadow);
+  }
+  .ark-login-card h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .ark-login-card .ark-login-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    margin-bottom: 24px;
+  }
+  .ark-login-card label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 14px 0 6px;
+    letter-spacing: 0.02em;
+  }
+  .ark-login-card input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .ark-login-card input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .ark-login-card button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 11px 16px;
+    background: var(--accent);
+    color: #0F1729;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .ark-login-card button:hover { background: var(--accent-hover); }
+  .ark-login-card button:disabled { opacity: .55; cursor: not-allowed; }
+  .ark-login-status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+  }
+  .ark-login-status.show { display: block; }
+  .ark-login-status.error { background: rgba(248,113,113,.1); border: 1px solid var(--error); color: var(--error); }
+  .ark-login-status.info  { background: rgba(240,176,0,.08);  border: 1px solid var(--accent); color: var(--accent); }
+  .ark-login-footer {
+    margin-top: 22px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+</style>
+
+<div id="arkLoginShell" class="ark-login-shell">
+  <form id="arkLoginForm" class="ark-login-card" autocomplete="off">
+    <h1>GJE Builder</h1>
+    <div class="ark-login-sub">SECURE ACCESS · ROBIDOUX INC.</div>
+
+    <label for="arkLoginSlug">Company Code</label>
+    <input id="arkLoginSlug" type="text" autocomplete="username" spellcheck="false" required>
+
+    <label for="arkLoginKey">Access Key</label>
+    <input id="arkLoginKey" type="password" autocomplete="current-password" required>
+
+    <button type="submit" id="arkLoginBtn">Sign in</button>
+    <div id="arkLoginStatus" class="ark-login-status"></div>
+
+    <div class="ark-login-footer">An ARK Financial tool</div>
+  </form>
+</div>
+
+<script>
+(function(){
+  const shell  = document.getElementById('arkLoginShell');
+  const form   = document.getElementById('arkLoginForm');
+  const slugEl = document.getElementById('arkLoginSlug');
+  const keyEl  = document.getElementById('arkLoginKey');
+  const btn    = document.getElementById('arkLoginBtn');
+  const status = document.getElementById('arkLoginStatus');
+
+  function setStatus(msg, kind){
+    if(!msg){ status.className = 'ark-login-status'; status.textContent = ''; return; }
+    status.className = 'ark-login-status show ' + (kind || 'info');
+    status.textContent = msg;
+  }
+
+  function revealEngine(){
+    shell.style.display = 'none';
+    const app = document.querySelector('.app');
+    if(app) app.style.display = '';
+  }
+
+  // Restore session from localStorage so a refresh doesn't kick the user out.
+  try {
+    const saved = JSON.parse(localStorage.getItem('robidoux_session') || 'null');
+    if(saved && saved.token && saved.slug){
+      revealEngine();
+      return;
+    }
+  } catch(e){}
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const slug = slugEl.value.trim().toLowerCase().replace(/\s+/g, '');
+    const key  = keyEl.value;
+    if(!slug || !key){
+      setStatus('Enter your company code and access key.', 'error');
+      return;
+    }
+    btn.disabled = true;
+    setStatus('Verifying…', 'info');
+    try {
+      const resp = await fetch('/robidoux/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientSlug: slug, accessKey: key }),
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data.success){
+        setStatus(data.error || 'Invalid credentials.', 'error');
+        btn.disabled = false;
+        return;
+      }
+      try {
+        localStorage.setItem('robidoux_session', JSON.stringify({
+          slug, token: data.token, clientName: data.clientName, savedAt: Date.now(),
+        }));
+      } catch(_){}
+      revealEngine();
+    } catch(err){
+      setStatus('Network error. Please try again.', 'error');
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+<div class="app" style="display:none;">
+  <header>
+    <div class="brand">
+      <img class="brand-logo" src="data:image/png;base64,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" alt="Robidoux Inc.">
+      <div class="brand-divider"></div>
+      <div class="brand-text">
+        <h1>GJE Builder</h1>
+        <div class="subtitle">SALES REPORTS → QBO JOURNAL ENTRY CSV</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="entity-badge">QBO · ROBIDOUX INC.</div>
+      <div class="ark-badge">An ARK Financial tool</div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <div class="tab active" data-tab="upload"><span class="tab-step">01</span> Upload Reports</div>
+    <div class="tab" data-tab="review"><span class="tab-step">02</span> Review &amp; Edit</div>
+    <div class="tab" data-tab="export"><span class="tab-step">03</span> Export CSV</div>
+  </nav>
+
+  <!-- UPLOAD PANEL -->
+  <section class="panel active" data-panel="upload">
+    <div id="dropzone" class="dropzone">
+      <div class="dropzone-icon">⬆</div>
+      <h2>Drop sales reports here</h2>
+      <p>Amazon Seller Central · eBay Payments · Shopify Finances · Walmart Payouts</p>
+      <p class="hint">PDF files only · Click or drag to upload</p>
+      <input type="file" id="fileInput" multiple accept=".pdf" style="display:none">
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="clearBtn" disabled>Clear All</button>
+      <button class="btn btn-primary" id="processBtn" disabled>Process Reports →</button>
+    </div>
+  </section>
+
+  <!-- REVIEW PANEL -->
+  <section class="panel" data-panel="review">
+    <div id="reviewContent">
+      <div class="empty">Upload and process reports to see the journal entries here.</div>
+    </div>
+  </section>
+
+  <!-- EXPORT PANEL -->
+  <section class="panel" data-panel="export">
+    <div id="exportContent">
+      <div class="empty">Process reports first to generate the export.</div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =======================================================================
+// CONFIG
+// =======================================================================
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// =======================================================================
+// STATE
+// =======================================================================
+const state = {
+  files: [],          // {id, name, file, platform, parsed, je, status, error, issues}
+  currentTab: 'upload',
+};
+
+// =======================================================================
+// UTIL
+// =======================================================================
+const $ = (s, p=document) => p.querySelector(s);
+const $$ = (s, p=document) => Array.from(p.querySelectorAll(s));
+const fmt2 = (n) => Number(n).toFixed(2);
+const fmtMoney = (n) => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function showToast(msg, type='info') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast ' + type, 3000);
+}
+
+function detectPlatform(filename) {
+  const n = filename.toLowerCase();
+  if (n.includes('amazon')) return 'amazon';
+  if (n.includes('ebay')) return 'ebay';
+  if (n.includes('shopify')) return 'shopify';
+  if (n.includes('walmart')) return 'walmart';
+  return 'unknown';
+}
+
+function parseNumber(s) {
+  if (s == null) return 0;
+  s = String(s).trim().replace(/§/g, '$').replace(/,/g, '').replace(/\$/g, '').replace(/\s+/g, '');
+  if (!s || s === '-') return 0;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// =======================================================================
+// PDF TEXT EXTRACTION
+// =======================================================================
+async function extractPdfText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let lines = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    // Group items into rows based on Y position
+    const items = tc.items
+      .filter(it => 'str' in it && it.str.trim() !== '')
+      .map(it => ({
+        str: it.str,
+        x: it.transform[4],
+        y: it.transform[5],
+        width: it.width,
+      }));
+
+    // Sort by descending Y (top to bottom), then ascending X
+    items.sort((a, b) => {
+      if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+      return a.x - b.x;
+    });
+
+    // Group into lines (within 3px Y tolerance)
+    const rows = [];
+    let currentRow = [];
+    let currentY = null;
+    for (const item of items) {
+      if (currentY === null || Math.abs(item.y - currentY) <= 3) {
+        currentRow.push(item);
+        currentY = currentY === null ? item.y : currentY;
+      } else {
+        rows.push(currentRow);
+        currentRow = [item];
+        currentY = item.y;
+      }
+    }
+    if (currentRow.length) rows.push(currentRow);
+
+    // Build space-padded text lines.
+    // Use CHAR_PX to convert PDF X coordinates into character columns,
+    // but ALWAYS leave at least one space between adjacent items
+    // (otherwise "Gross" + "sales" merges into "Grosssales" when items
+    // are tightly spaced). EXCEPT after a "$" or "-" prefix item, which
+    // should bind tightly to the next number.
+    for (const row of rows) {
+      const CHAR_PX = 4;
+      let line = '';
+      for (let i = 0; i < row.length; i++) {
+        const it = row[i];
+        const prevItem = row[i - 1];
+        const prevStr = prevItem ? prevItem.str.trim() : '';
+        const tightBind = prevStr === '$' || prevStr === '-' || prevStr === '-$' || prevStr === '$-';
+        if (tightBind) {
+          // Append directly, ignoring target column - sign/currency hugs the next item.
+          line += it.str;
+          continue;
+        }
+        const targetCol = Math.round(it.x / CHAR_PX);
+        const minLen = line.length === 0 ? 0 : line.length + 1;
+        const padTo = Math.max(targetCol, minLen);
+        while (line.length < padTo) line += ' ';
+        line += it.str;
+      }
+      lines.push(line);
+    }
+    lines.push(''); // blank line between pages
+  }
+  return lines.join('\n');
+}
+
+// Returns rows of text items with X positions preserved.
+// Each row is an array of { str, x, y, width, xEnd } items, sorted by X.
+// This is used by the Amazon parser which needs precise column positions.
+async function extractPdfRows(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const allRows = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    const items = tc.items
+      .filter(it => 'str' in it && it.str.trim() !== '')
+      .map(it => ({
+        str: it.str,
+        x: it.transform[4],
+        y: it.transform[5],
+        width: it.width,
+        xEnd: it.transform[4] + it.width,
+      }));
+    items.sort((a, b) => {
+      if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+      return a.x - b.x;
+    });
+    let currentRow = [];
+    let currentY = null;
+    for (const item of items) {
+      if (currentY === null || Math.abs(item.y - currentY) <= 3) {
+        currentRow.push(item);
+        currentY = currentY === null ? item.y : currentY;
+      } else {
+        allRows.push(currentRow);
+        currentRow = [item];
+        currentY = item.y;
+      }
+    }
+    if (currentRow.length) allRows.push(currentRow);
+  }
+  return allRows;
+}
+
+// Returns true if PDF has extractable text (>50 non-whitespace chars)
+async function pdfHasText(file) {
+  try {
+    const text = await extractPdfText(file);
+    return text.replace(/\s/g, '').length > 50;
+  } catch (e) { return false; }
+}
+
+// =======================================================================
+// OCR (for Walmart image-based PDFs)
+// =======================================================================
+async function rasterizePdfPage(file, pageNum=1, scale=2.5) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(pageNum);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas;
+}
+
+let _tesseractWorker = null;
+async function getTesseractWorker(progressCb) {
+  if (_tesseractWorker) return _tesseractWorker;
+  _tesseractWorker = await Tesseract.createWorker('eng', 1, {
+    logger: progressCb || (() => {}),
+  });
+  await _tesseractWorker.setParameters({
+    tessedit_pageseg_mode: '6',  // PSM 6: uniform block
+  });
+  return _tesseractWorker;
+}
+
+async function ocrPdf(file, progressCb) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const worker = await getTesseractWorker(progressCb);
+  const pageTexts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const canvas = await rasterizePdfPage(file, i, 2.5);
+    const { data } = await worker.recognize(canvas);
+    pageTexts.push(data.text);
+  }
+  let text = pageTexts.join('\n');
+  // Normalize OCR misreads
+  text = text.replace(/§/g, '$');
+  text = text.replace(/\bS\$/g, '$');
+  return text;
+}
+
+// Combine text items in a row into a single label string (concatenate
+// items whose str isn't a pure number).
+function rowLabel(row) {
+  const parts = [];
+  for (const it of row) {
+    if (/^-?\$?\s*[\d,]+\.?\d*$/.test(it.str.trim())) break;
+    parts.push(it.str);
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// Merge adjacent numeric items in a row (e.g. "-" + "7,830.68" → "-7,830.68"
+// or "61,221" + ".36" → "61,221.36"). Adjacency is determined by X gap.
+function mergeAdjacentNumbers(row) {
+  if (!row || row.length === 0) return row;
+  const merged = [];
+  let i = 0;
+  while (i < row.length) {
+    let cur = { ...row[i] };
+    // Try merging with subsequent items if they're numeric/sign continuations
+    while (i + 1 < row.length) {
+      const nxt = row[i + 1];
+      const gap = nxt.x - cur.xEnd;
+      // Conditions for merge:
+      // 1. Small horizontal gap (<5 px)
+      // 2. Current ends with sign or digit, next starts with digit/comma/dot
+      const curEnd = cur.str.slice(-1);
+      const nxtStart = nxt.str.charAt(0);
+      const isCurNumericish = /[\d,.\-]/.test(curEnd) || cur.str === '-';
+      const isNxtNumericish = /[\d,.]/.test(nxtStart);
+      if (gap < 5 && isCurNumericish && isNxtNumericish) {
+        cur.str = cur.str + nxt.str;
+        cur.width = (nxt.x + nxt.width) - cur.x;
+        cur.xEnd = nxt.x + nxt.width;
+        i++;
+      } else {
+        break;
+      }
+    }
+    merged.push(cur);
+    i++;
+  }
+  return merged;
+}
+
+// Test if a string represents a number (after merging).
+function isNumberStr(s) {
+  return /^-?\$?[\d,]+\.?\d*$/.test(s.replace(/\s/g, ''));
+}
+
+// Find rows that contain "Debits" and "Credits" header markers.
+// Returns the 4 column END X positions (or null if not found).
+function detectAmazonColumnsFromRows(rows) {
+  for (const row of rows) {
+    const debitItems = row.filter(it => /^Debits$/i.test(it.str.trim()));
+    const creditItems = row.filter(it => /^Credits$/i.test(it.str.trim()));
+    if (debitItems.length >= 2 && creditItems.length >= 2) {
+      // Sort by X to get them in left-to-right order
+      debitItems.sort((a, b) => a.x - b.x);
+      creditItems.sort((a, b) => a.x - b.x);
+      return {
+        income_debit_x: debitItems[0].xEnd,
+        income_credit_x: creditItems[0].xEnd,
+        expense_debit_x: debitItems[1].xEnd,
+        expense_credit_x: creditItems[1].xEnd,
+      };
+    }
+  }
+  return null;
+}
+
+// Find a row containing the given label. The label can be at the start
+// of the row OR appear after a number (because Amazon's two-column layout
+// puts an Income label and an Expense label on the same row).
+//
+// Returns { row, labelStartIdx } where labelStartIdx is the item index
+// where the label begins. Numbers BEFORE labelStartIdx belong to a different
+// label and should be ignored.
+function findRowByLabel(rows, label) {
+  for (const row of rows) {
+    const merged = mergeAdjacentNumbers(row);
+    // Try every position - the label might start at item 0 (Income side)
+    // or partway through the row (Expense side, after Income's numbers).
+    for (let startIdx = 0; startIdx < merged.length; startIdx++) {
+      // Build a string from items[startIdx..] (excluding numbers)
+      const parts = [];
+      let endIdx = startIdx;
+      for (let i = startIdx; i < merged.length; i++) {
+        if (isNumberStr(merged[i].str)) break;
+        parts.push(merged[i].str);
+        endIdx = i + 1;
+      }
+      const candidate = parts.join(' ').replace(/\s+/g, ' ').trim();
+      if (!candidate) continue;
+      if (candidate === label) return { row: merged, labelStartIdx: startIdx, labelEndIdx: endIdx };
+      if (candidate.startsWith(label)) {
+        // Boundary check: label must be followed by whitespace or end
+        if (candidate.length === label.length || /\s/.test(candidate[label.length])) {
+          return { row: merged, labelStartIdx: startIdx, labelEndIdx: endIdx };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Get debit/credit values for a label using row-based X positions.
+function getAmazonAmountFromRows(rows, label, debitX, creditX, tolerance=15) {
+  const found = findRowByLabel(rows, label);
+  if (!found) return [0, 0];
+  const { row, labelEndIdx } = found;
+  let debit = 0, credit = 0;
+  // Only look at numeric items AFTER the label, but BEFORE the next non-numeric label
+  // (so we don't grab the OTHER column's numbers from this same row).
+  for (let i = labelEndIdx; i < row.length; i++) {
+    const it = row[i];
+    if (!isNumberStr(it.str)) {
+      // We've hit another label - stop
+      break;
+    }
+    const xEnd = it.xEnd;
+    if (Math.abs(xEnd - debitX) <= tolerance) {
+      debit = parseNumber(it.str);
+    } else if (Math.abs(xEnd - creditX) <= tolerance) {
+      credit = parseNumber(it.str);
+    }
+  }
+  return [debit, credit];
+}
+
+function parseAmazonFromRows(rows) {
+  // Extract metadata from rows
+  let displayName = null, legalName = null, dateRange = null;
+  for (const row of rows) {
+    const text = row.map(it => it.str).join(' ');
+    let m = text.match(/Display name:\s+(.+)/);
+    if (m) displayName = m[1].trim();
+    m = text.match(/Legal name:\s+(.+)/);
+    if (m) legalName = m[1].trim();
+    m = text.match(/Account activity from (\w+ \d+, \d{4}).*?through (\w+ \d+, \d{4})/);
+    if (m) dateRange = [m[1], m[2]];
+  }
+
+  const cols = detectAmazonColumnsFromRows(rows);
+  if (!cols) throw new Error('Could not detect Amazon column layout');
+
+  // Extract summary totals
+  const summary = {};
+  const summaryChecks = [
+    ['income_total', 'Net sales, credits, and refunds'],
+    ['expenses_total', 'Net fees, including Amazon service fees'],
+    ['tax_total', 'Net taxes collected on product sales and services'],
+    ['transfers_total', 'Net deposits and withdrawals'],
+  ];
+  for (const row of rows) {
+    const rowText = row.map(it => it.str).join(' ');
+    for (const [key, label] of summaryChecks) {
+      if (rowText.includes(label)) {
+        // Find the last numeric item in the row
+        const nums = row.filter(it => /^-?\$?[\d,]+\.?\d*$/.test(it.str.replace(/\s/g, '')));
+        if (nums.length) summary[key] = parseNumber(nums[nums.length - 1].str);
+      }
+    }
+  }
+
+  const data = {
+    platform: 'amazon',
+    display_name: displayName,
+    legal_name: legalName,
+    date_range: dateRange,
+    summary,
+    columns_detected: cols,
+    income: {}, expenses: {}, tax: {}, transfers: {},
+  };
+
+  for (const [label, key] of AMAZON_INCOME_LABELS) {
+    const [d, c] = getAmazonAmountFromRows(rows, label, cols.income_debit_x, cols.income_credit_x);
+    data.income[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_EXPENSE_LABELS) {
+    const [d, c] = getAmazonAmountFromRows(rows, label, cols.expense_debit_x, cols.expense_credit_x);
+    data.expenses[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_TAX_LABELS) {
+    const [d, c] = getAmazonAmountFromRows(rows, label, cols.expense_debit_x, cols.expense_credit_x);
+    data.tax[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_TRANSFER_LABELS) {
+    const [d, c] = getAmazonAmountFromRows(rows, label, cols.income_debit_x, cols.income_credit_x);
+    data.transfers[key] = { label, debit: d, credit: c };
+  }
+  return data;
+}
+
+// =======================================================================
+// AMAZON PARSER (text-based fallback - kept for backwards compat / tests)
+// =======================================================================
+const AMAZON_INCOME_LABELS = [
+  ['Product sales (non-FBA)', 'product_sales'],
+  ['Product sale refunds (non-FBA)', 'product_refunds'],
+  ['FBA product sales', 'fba_product_sales'],
+  ['FBA product sale refunds', 'fba_product_refunds'],
+  ['FBA inventory credit', 'fba_inventory_credit'],
+  ['FBA liquidation proceeds', 'fba_liquidation_proceeds'],
+  ['FBA Liquidations proceeds adjustments', 'fba_liquidation_adj'],
+  ['Shipping credits', 'shipping_credits'],
+  ['Shipping credit refunds', 'shipping_credit_refunds'],
+  ['Gift wrap credits', 'gift_wrap_credits'],
+  ['Gift wrap credit refunds', 'gift_wrap_credit_refunds'],
+  ['Promotional rebates', 'promo_rebates'],
+  ['Promotional rebate refunds', 'promo_rebate_refunds'],
+  ['A-to-z Guarantee claims', 'a_to_z_claims'],
+  ['Chargebacks', 'chargebacks'],
+  ['Amazon Shipping Reimbursement Adjustments', 'amazon_shipping_reimb_adj'],
+  ['SAFE-T reimbursement', 'safe_t'],
+];
+const AMAZON_EXPENSE_LABELS = [
+  ['Seller fulfilled selling fees', 'seller_fulfilled_fees'],
+  ['FBA selling fees', 'fba_selling_fees'],
+  ['Selling fee refunds', 'selling_fee_refunds'],
+  ['FBA transaction fees', 'fba_transaction_fees'],
+  ['FBA transaction fee refunds', 'fba_transaction_fee_refunds'],
+  ['Other transaction fees', 'other_transaction_fees'],
+  ['Other transaction fee refunds', 'other_transaction_fee_refunds'],
+  ['FBA inventory and inbound services fees', 'fba_inventory_fees'],
+  ['Shipping label purchases', 'shipping_label_purchases'],
+  ['Shipping label refunds', 'shipping_label_refunds'],
+  ['Carrier shipping label adjustments', 'carrier_shipping_adj'],
+  ['Service fees', 'service_fees'],
+  ['Refund administration fees', 'refund_admin_fees'],
+  ['Adjustments', 'adjustments'],
+  ['Cost of Advertising', 'advertising'],
+  ['Refund for Advertiser', 'advertising_refund'],
+  ['Liquidations fees', 'liquidations_fees'],
+  ['Receivables Deductions', 'receivables_deductions'],
+  ['Amazon Shipping Charge Adjustments', 'amazon_shipping_charge_adj'],
+];
+const AMAZON_TAX_LABELS = [
+  ['Product, shipping, gift wrap taxes and regulatory fee collected', 'tax_collected'],
+  ['Product, shipping, gift wrap taxes and regulatory fee refunded', 'tax_refunded'],
+  ['Amazon Obligated Tax and Regulatory Fee Withheld', 'tax_withheld'],
+];
+const AMAZON_TRANSFER_LABELS = [
+  ['Transfers to bank account', 'transfer_to_bank'],
+  ['Failed transfers to bank account', 'failed_transfers'],
+  ['Disburse to Amazon Gift Card balance', 'gift_card_disburse'],
+  ['Charges to credit card and other debt recovery', 'cc_charges'],
+];
+
+function detectAmazonColumns(text) {
+  const NUM_RE_GLOBAL = /\bDebits\b|\bCredits\b/g;
+  for (const line of text.split('\n')) {
+    const dPos = [];
+    const cPos = [];
+    let m;
+    const re1 = /\bDebits\b/g;
+    while ((m = re1.exec(line)) !== null) dPos.push(m.index + 6);
+    const re2 = /\bCredits\b/g;
+    while ((m = re2.exec(line)) !== null) cPos.push(m.index + 7);
+    if (dPos.length >= 2 && cPos.length >= 2) {
+      return {
+        income_debit_end: dPos[0],
+        income_credit_end: cPos[0],
+        expense_debit_end: dPos[1],
+        expense_credit_end: cPos[1],
+      };
+    }
+  }
+  return null;
+}
+
+function findAmazonLabelLine(text, label) {
+  const lines = text.split('\n');
+  for (const line of lines) {
+    let idx = 0;
+    while ((idx = line.indexOf(label, idx)) !== -1) {
+      const beforeOk = idx === 0 || /\s/.test(line[idx-1]);
+      const afterIdx = idx + label.length;
+      const afterOk = afterIdx >= line.length || /[\s.,]/.test(line[afterIdx]);
+      if (beforeOk && afterOk) return { line, labelPos: idx };
+      idx++;
+    }
+  }
+  return null;
+}
+
+function getAmazonAmount(text, label, debitEnd, creditEnd, tolerance=4) {
+  const found = findAmazonLabelLine(text, label);
+  if (!found) return [0, 0];
+  const { line, labelPos } = found;
+  let debit = 0, credit = 0;
+  const numRe = /-?[\d,]+\.?\d*/g;
+  let m;
+  while ((m = numRe.exec(line)) !== null) {
+    if (m.index < labelPos + label.length) continue;
+    const endPos = m.index + m[0].length;
+    if (Math.abs(endPos - debitEnd) <= tolerance) debit = parseNumber(m[0]);
+    else if (Math.abs(endPos - creditEnd) <= tolerance) credit = parseNumber(m[0]);
+  }
+  return [debit, credit];
+}
+
+function parseAmazon(text) {
+  let displayName = null, legalName = null;
+  for (const line of text.split('\n')) {
+    let m = line.match(/Display name:\s+(.+)/);
+    if (m) displayName = m[1].trim();
+    m = line.match(/Legal name:\s+(.+)/);
+    if (m) legalName = m[1].trim();
+  }
+  let dateRange = null;
+  const dr = text.match(/Account activity from (\w+ \d+, \d{4}).*?through (\w+ \d+, \d{4})/);
+  if (dr) dateRange = [dr[1], dr[2]];
+
+  const cols = detectAmazonColumns(text);
+  if (!cols) throw new Error('Could not detect Amazon column layout');
+
+  const summary = {};
+  for (const line of text.split('\n')) {
+    const checks = [
+      ['income_total', 'Net sales, credits, and refunds'],
+      ['expenses_total', 'Net fees, including Amazon service fees'],
+      ['tax_total', 'Net taxes collected on product sales and services'],
+      ['transfers_total', 'Net deposits and withdrawals'],
+    ];
+    for (const [key, label] of checks) {
+      if (line.includes(label)) {
+        const nums = line.match(/-?[\d,]+\.?\d*/g);
+        if (nums) summary[key] = parseNumber(nums[nums.length - 1]);
+      }
+    }
+  }
+
+  const data = {
+    platform: 'amazon',
+    display_name: displayName,
+    legal_name: legalName,
+    date_range: dateRange,
+    summary,
+    income: {}, expenses: {}, tax: {}, transfers: {},
+  };
+
+  for (const [label, key] of AMAZON_INCOME_LABELS) {
+    const [d, c] = getAmazonAmount(text, label, cols.income_debit_end, cols.income_credit_end);
+    data.income[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_EXPENSE_LABELS) {
+    const [d, c] = getAmazonAmount(text, label, cols.expense_debit_end, cols.expense_credit_end);
+    data.expenses[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_TAX_LABELS) {
+    const [d, c] = getAmazonAmount(text, label, cols.expense_debit_end, cols.expense_credit_end);
+    data.tax[key] = { label, debit: d, credit: c };
+  }
+  for (const [label, key] of AMAZON_TRANSFER_LABELS) {
+    const [d, c] = getAmazonAmount(text, label, cols.income_debit_end, cols.income_credit_end);
+    data.transfers[key] = { label, debit: d, credit: c };
+  }
+  return data;
+}
+
+function validateAmazon(data) {
+  const issues = [];
+  for (const [section, sumKey] of [
+    ['income', 'income_total'],
+    ['expenses', 'expenses_total'],
+    ['tax', 'tax_total'],
+  ]) {
+    let d = 0, c = 0;
+    for (const v of Object.values(data[section])) { d += v.debit; c += v.credit; }
+    const net = d + c;
+    if (sumKey in data.summary) {
+      const expected = data.summary[sumKey];
+      if (Math.abs(net - expected) > 0.02) {
+        issues.push(`${section} mismatch: parsed ${fmt2(net)} vs report ${fmt2(expected)}`);
+      }
+    }
+  }
+  return issues;
+}
+
+// =======================================================================
+// EBAY PARSER
+// =======================================================================
+const EBAY_REFUND_LABELS = [
+  ['Gross refunds', 'gross_refunds'],
+  ['Gross claims', 'gross_claims'],
+  ['Gross payment disputes', 'gross_payment_disputes'],
+];
+const EBAY_EXPENSE_LABELS = [
+  ['Insertion fees', 'insertion_fees'],
+  ['Promoted Listings fees', 'promoted_listings_fees'],
+  ['Other fees', 'other_fees'],
+  ['Transaction fees', 'transaction_fees'],
+  ['Shipping labels', 'shipping_labels'],
+  ['Donations', 'donations'],
+  ['Advanced listing upgrade fees', 'advanced_listing_fees'],
+];
+
+function parseEbaySections(text) {
+  const sections = {};
+  let current = null, currentLines = [];
+  const headers = {
+    'Orders': 'orders',
+    'Refunds': 'refunds',
+    'Expenses': 'expenses',
+    'Net transfers': 'net_transfers',
+  };
+  for (const line of text.split('\n')) {
+    let matched = null;
+    for (const [hdr, key] of Object.entries(headers)) {
+      const re = new RegExp(`^${hdr.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s+Debits\\s+Credits\\s+Net\\s*$`);
+      if (re.test(line.trim())) { matched = key; break; }
+    }
+    if (matched) {
+      if (current) sections[current] = currentLines.join('\n');
+      current = matched;
+      currentLines = [];
+    } else if (current) {
+      currentLines.push(line);
+    }
+  }
+  if (current) sections[current] = currentLines.join('\n');
+  return sections;
+}
+
+function findEbayLineAmounts(sectionText, label) {
+  const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^${labelEsc}\\s+(.+)$`);
+  for (const line of sectionText.split('\n')) {
+    const stripped = line.trim();
+    if (!stripped) continue;
+    const m = stripped.match(re);
+    if (m) {
+      const tail = m[1];
+      const nums = tail.match(/-?\$?[\d,]+\.?\d*/g);
+      if (nums && nums.length >= 3) {
+        return [parseNumber(nums[0]), parseNumber(nums[1]), parseNumber(nums[2])];
+      }
+    }
+  }
+  return null;
+}
+
+function findEbaySummary(text, label) {
+  const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^${labelEsc}\\s+(-?\\$?[\\d,]+\\.?\\d*)\\s*$`);
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(re);
+    if (m) return parseNumber(m[1]);
+  }
+  return null;
+}
+
+function parseEbay(text) {
+  let dateRange = null;
+  const dr = text.match(/Date range:\s*(\w+ \d+, \d{4})\s*-\s*(\w+ \d+, \d{4})/);
+  if (dr) dateRange = [dr[1], dr[2]];
+
+  const summary = {};
+  for (const [key, label] of [
+    ['orders', 'Orders'], ['refunds', 'Refunds'],
+    ['expenses', 'Expenses'], ['net_transfers', 'Net transfers'],
+  ]) {
+    const v = findEbaySummary(text, label);
+    if (v !== null) summary[key] = v;
+  }
+
+  const data = {
+    platform: 'ebay', date_range: dateRange, summary,
+    orders: {}, refunds: {}, expenses: {}, transfers: {},
+  };
+
+  const sections = parseEbaySections(text);
+  if (sections.orders) {
+    const r = findEbayLineAmounts(sections.orders, 'Subtotal');
+    if (r) data.orders.subtotal = { label: 'Orders Subtotal', debit: r[0], credit: r[1], net: r[2] };
+  }
+  if (sections.refunds) {
+    for (const [label, key] of EBAY_REFUND_LABELS) {
+      const r = findEbayLineAmounts(sections.refunds, label);
+      if (r) data.refunds[key] = { label, debit: r[0], credit: r[1], net: r[2] };
+    }
+  }
+  if (sections.expenses) {
+    for (const [label, key] of EBAY_EXPENSE_LABELS) {
+      const r = findEbayLineAmounts(sections.expenses, label);
+      if (r) data.expenses[key] = { label, debit: r[0], credit: r[1], net: r[2] };
+    }
+  }
+  if (sections.net_transfers) {
+    for (const [label, key] of [['Charges', 'charges'], ['Payouts', 'payouts']]) {
+      const r = findEbayLineAmounts(sections.net_transfers, label);
+      if (r) data.transfers[key] = { label, debit: r[0], credit: r[1], net: r[2] };
+    }
+  }
+  return data;
+}
+
+function validateEbay(data) {
+  const issues = [];
+  let refundNet = 0;
+  for (const v of Object.values(data.refunds)) refundNet += (v.net || 0);
+  if ('refunds' in data.summary && Math.abs(refundNet - data.summary.refunds) > 0.02) {
+    issues.push(`refunds mismatch: parsed ${fmt2(refundNet)} vs report ${fmt2(data.summary.refunds)}`);
+  }
+  let expNet = 0;
+  for (const v of Object.values(data.expenses)) expNet += (v.net || 0);
+  if ('expenses' in data.summary && Math.abs(expNet - data.summary.expenses) > 0.02) {
+    issues.push(`expenses mismatch: parsed ${fmt2(expNet)} vs report ${fmt2(data.summary.expenses)}`);
+  }
+  return issues;
+}
+
+// =======================================================================
+// SHOPIFY PARSER
+// =======================================================================
+const SHOPIFY_SALES_LABELS = [
+  ['Gross sales', 'gross_sales'],
+  ['Discounts', 'discounts'],
+  ['Returns', 'returns'],
+  ['Net sales', 'net_sales'],
+  ['Shipping charges', 'shipping_charges'],
+  ['Return fees', 'return_fees'],
+  ['Taxes', 'taxes'],
+  ['Total sales', 'total_sales'],
+];
+const SHOPIFY_KNOWN_GATEWAYS = [
+  'Shopify Payments', 'Shop Pay Installments', 'Afterpay (New)', 'Afterpay',
+  'PayPal Express Checkout', 'PayPal', 'store-credit', 'Manual',
+  'Amazon Pay', 'Google Pay', 'Apple Pay',
+];
+
+function findShopifyLabelValue(text, label) {
+  // The label may be at start of line OR mid-line (because the multi-column
+  // layout sometimes places chart labels and sales labels in the same row).
+  // We require the label to be preceded by either start-of-line or whitespace,
+  // followed by whitespace, and a $ amount.
+  // We also need a strong word boundary so that "Net sales" doesn't match
+  // "Returns" -> "Net sales" and so that "Returns" doesn't match
+  // "Return fees".
+  const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Pattern: (start of line OR whitespace) + label + whitespace +
+  //          $-amount + (whitespace OR end of line/word boundary)
+  const re = new RegExp(`(?:^|\\s)${labelEsc}\\s+(-?\\$?[\\d,]+\\.?\\d*)(?:\\s|$)`, 'm');
+  for (const line of text.split('\n')) {
+    const m = line.match(re);
+    if (m) {
+      // Validate that what immediately follows the label is whitespace
+      // (to prevent partial-match e.g., "Return" matching "Return fees").
+      const idx = line.indexOf(label);
+      if (idx >= 0) {
+        const after = line[idx + label.length];
+        if (after === undefined || /\s/.test(after)) {
+          return parseNumber(m[1]);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function findShopifyStoreName(text) {
+  for (const line of text.split('\n')) {
+    const m = line.match(/(\S[\S ]*?)\s*·\s*Reports\s*·\s*Finances summary/);
+    if (m) {
+      let name = m[1].trim();
+      name = name.replace(/^\d+\/\d+\/\d+,?\s+\d+:\d+\s*[AaPp][Mm]\s+/, '').trim();
+      return name;
+    }
+  }
+  const m = text.match(/admin\.shopify\.com\/store\/([^/]+)\//);
+  if (m) return m[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return null;
+}
+
+function parseShopify(text) {
+  const storeName = findShopifyStoreName(text);
+  let dateRange = null;
+  const dr = text.match(/(\w+) (\d+)[\u2013\u2014\-](\d+),\s*(\d{4})/);
+  if (dr) dateRange = [`${dr[1]} ${dr[2]}, ${dr[4]}`, `${dr[1]} ${dr[3]}, ${dr[4]}`];
+
+  const data = {
+    platform: 'shopify', store_name: storeName, date_range: dateRange,
+    sales: {}, payments_by_gateway: {},
+  };
+
+  for (const [label, key] of SHOPIFY_SALES_LABELS) {
+    const v = findShopifyLabelValue(text, label);
+    if (v !== null) data.sales[key] = { label, amount: v };
+  }
+
+  const gatewayStart = text.indexOf('Payments by gateway summary');
+  if (gatewayStart >= 0) {
+    const gwText = text.slice(gatewayStart);
+    for (const gw of SHOPIFY_KNOWN_GATEWAYS) {
+      if (data.payments_by_gateway[gw] != null) continue;
+      const gwEsc = gw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`(?:^|\\s)${gwEsc}\\s+(-?\\$?[\\d,]+\\.?\\d*)`, 'm');
+      const m = gwText.match(re);
+      if (m) data.payments_by_gateway[gw] = parseNumber(m[1]);
+    }
+  }
+  return data;
+}
+
+function validateShopify(data) {
+  const issues = [];
+  const s = data.sales;
+  if (s.gross_sales && s.discounts && s.returns && s.net_sales) {
+    const calc = s.gross_sales.amount + s.discounts.amount + s.returns.amount;
+    if (Math.abs(calc - s.net_sales.amount) > 0.02) {
+      issues.push(`net sales mismatch: ${fmt2(calc)} vs ${fmt2(s.net_sales.amount)}`);
+    }
+  }
+  if (s.net_sales && s.shipping_charges && s.taxes && s.total_sales) {
+    const rf = s.return_fees ? s.return_fees.amount : 0;
+    const calc = s.net_sales.amount + s.shipping_charges.amount + rf + s.taxes.amount;
+    if (Math.abs(calc - s.total_sales.amount) > 0.02) {
+      issues.push(`total sales mismatch: ${fmt2(calc)} vs ${fmt2(s.total_sales.amount)}`);
+    }
+  }
+  return issues;
+}
+
+// =======================================================================
+// WALMART PARSER (operates on OCR text)
+// =======================================================================
+const WALMART_SALES_LABELS = [
+  ['Product\\s*price', 'product_price', 'Product price'],
+  ['Shipping', 'shipping', 'Shipping'],
+  ['Net\\s*tax\\s*collected', 'net_tax_collected', 'Net tax collected'],
+  ['Other\\s*taxes\\s*\\(fee\\)', 'other_taxes_fee', 'Other taxes (fee)'],
+  ['Net\\s*commission', 'net_commission', 'Net commission'],
+  ['Net\\s*tax\\s*withheld', 'net_tax_withheld', 'Net tax withheld'],
+  ['Total\\s*Walmart\\s*funded\\s*savings', 'walmart_funded_savings', 'Total Walmart funded savings'],
+];
+const WALMART_REFUND_LABELS = [
+  ['Product\\s*price', 'product_price', 'Product price'],
+  ['Shipping', 'shipping', 'Shipping'],
+  ['Net\\s*tax\\s*collected', 'net_tax_collected', 'Net tax collected'],
+  ['Commission', 'commission', 'Commission'],
+  ['Net\\s*tax\\s*withheld', 'net_tax_withheld', 'Net tax withheld'],
+  ['Total\\s*Walmart\\s*funded\\s*savings', 'walmart_funded_savings', 'Total Walmart funded savings'],
+];
+const WALMART_ADJ_LABELS = [
+  ['Misc\\.?\\s*adjustments?', 'misc_adjustments', 'Misc. adjustments'],
+  ['Walmart\\s*Return\\s*Shipping\\s*Service\\s*Charge', 'return_shipping_charge', 'Walmart Return Shipping Service Charge'],
+];
+const WALMART_FULFILL_LABELS = [
+  ['WFS\\s*total\\s*discount', 'wfs_total_discount', 'WFS total discount'],
+];
+const WALMART_OTHER_LABELS = [
+  ['Walmart\\s*product\\s*advertising', 'product_advertising', 'Walmart product advertising'],
+];
+
+function findWalmartValue(sectionText, labelPattern) {
+  const re = new RegExp(`${labelPattern}\\s*(-?\\s*\\$?\\s*[\\d,]+\\.?\\d*)\\s*$`);
+  for (const line of sectionText.split('\n')) {
+    const m = line.trim().match(re);
+    if (m) return parseNumber(m[1]);
+  }
+  return null;
+}
+
+function findWalmartSection(text, header, nextHeaders) {
+  const lines = text.split('\n');
+  const headerRe = new RegExp(`^${header}\\b`, 'i');
+  const nextRes = nextHeaders.map(h => new RegExp(`^${h}\\b`, 'i'));
+  let inSection = false;
+  const out = [];
+  for (const line of lines) {
+    const stripped = line.trim();
+    if (!inSection) {
+      if (headerRe.test(stripped)) { inSection = true; continue; }
+    } else {
+      for (const re of nextRes) {
+        if (re.test(stripped)) return out.join('\n');
+      }
+      out.push(line);
+    }
+  }
+  return out.join('\n');
+}
+
+function parseWalmart(text) {
+  let dateRange = null;
+  const dr = text.match(/(\w{3})\s*(\d+),?\s*(\d{4})\s*[-\u2013]\s*(\w{3})\s*(\d+),?\s*(\d{4})/);
+  if (dr) dateRange = [`${dr[1]} ${dr[2]}, ${dr[3]}`, `${dr[4]} ${dr[5]}, ${dr[6]}`];
+
+  let paidToYou = null;
+  for (const line of text.split('\n')) {
+    const m = line.match(/Paid\s+to\s+you\s*\$?\s*([\d,]+\.?\d*)/);
+    if (m) { paidToYou = parseNumber(m[1]); break; }
+  }
+
+  const salesText = findWalmartSection(text, 'Sales',
+    ['Refunds', 'Adjustments', 'Walmart fulfillment services', 'Other activities', 'Paid to you']);
+  const refundsText = findWalmartSection(text, 'Refunds',
+    ['Adjustments', 'Walmart fulfillment services', 'Other activities', 'Paid to you']);
+  const adjText = findWalmartSection(text, 'Adjustments',
+    ['Walmart fulfillment services', 'Other activities', 'Paid to you']);
+  const fulfillText = findWalmartSection(text, 'Walmart fulfillment services',
+    ['Other activities', 'Paid to you']);
+  const otherText = findWalmartSection(text, 'Other activities',
+    ['Paid to you', 'Closing balance']);
+
+  const data = {
+    platform: 'walmart', date_range: dateRange, paid_to_you: paidToYou,
+    sales: {}, refunds: {}, adjustments: {}, fulfillment: {}, other_activities: {},
+    section_totals: {},
+  };
+
+  for (const [pat, key, label] of WALMART_SALES_LABELS) {
+    const v = findWalmartValue(salesText, pat);
+    if (v !== null) data.sales[key] = { label, amount: v };
+  }
+  for (const [pat, key, label] of WALMART_REFUND_LABELS) {
+    const v = findWalmartValue(refundsText, pat);
+    if (v !== null) data.refunds[key] = { label, amount: v };
+  }
+  for (const [pat, key, label] of WALMART_ADJ_LABELS) {
+    const v = findWalmartValue(adjText, pat);
+    if (v !== null) data.adjustments[key] = { label, amount: v };
+  }
+  for (const [pat, key, label] of WALMART_FULFILL_LABELS) {
+    const v = findWalmartValue(fulfillText, pat);
+    if (v !== null) data.fulfillment[key] = { label, amount: v };
+  }
+  for (const [pat, key, label] of WALMART_OTHER_LABELS) {
+    const v = findWalmartValue(otherText, pat);
+    if (v !== null) data.other_activities[key] = { label, amount: v };
+  }
+
+  data.section_totals.sales = findWalmartValue(salesText, 'Total\\s*:?');
+  data.section_totals.refunds = findWalmartValue(refundsText, 'Total\\s*:?');
+  data.section_totals.adjustments = findWalmartValue(adjText, 'Total\\s*:?');
+  data.section_totals.other_activities = findWalmartValue(otherText, 'Total\\s*:?');
+
+  return data;
+}
+
+function validateWalmart(data) {
+  const issues = [];
+  if (data.section_totals.sales !== null) {
+    let s = 0;
+    for (const v of Object.values(data.sales)) s += v.amount;
+    if (Math.abs(s - data.section_totals.sales) > 0.05) {
+      issues.push(`sales mismatch: ${fmt2(s)} vs ${fmt2(data.section_totals.sales)}`);
+    }
+  }
+  return issues;
+}
+
+// =======================================================================
+// MAPPER (parsed → JE)
+// =======================================================================
+const ACCOUNT_MAP = {
+  // AMAZON
+  'amazon|product_sales': 'Amazon Seller Central - US Total',
+  'amazon|product_refunds': 'Returns',
+  'amazon|fba_product_sales': 'Amazon Seller Central - US Total',
+  'amazon|fba_product_refunds': 'Returns',
+  'amazon|fba_inventory_credit': 'Amazon Seller Central - US Total',
+  'amazon|fba_liquidation_proceeds': 'Amazon Seller Central - US Total',
+  'amazon|fba_liquidation_adj': 'Amazon Seller Central - US Total',
+  'amazon|shipping_credits': 'Shipping Income',
+  'amazon|shipping_credit_refunds': 'Shipping Income',
+  'amazon|gift_wrap_credits': 'Shipping Income',
+  'amazon|gift_wrap_credit_refunds': 'Shipping Income',
+  'amazon|promo_rebates': 'Discounts given',
+  'amazon|promo_rebate_refunds': 'Discounts given',
+  'amazon|a_to_z_claims': 'Returns',
+  'amazon|chargebacks': 'Bank Charges & Fees',
+  'amazon|amazon_shipping_reimb_adj': 'Shipping Income',
+  'amazon|safe_t': 'Amazon Seller Central - US Total',
+  'amazon|seller_fulfilled_fees': 'Seller Fees',
+  'amazon|fba_selling_fees': 'Seller Fees',
+  'amazon|selling_fee_refunds': 'Seller Fees',
+  'amazon|fba_transaction_fees': 'Seller Fees',
+  'amazon|fba_transaction_fee_refunds': 'Seller Fees',
+  'amazon|other_transaction_fees': 'Seller Fees',
+  'amazon|other_transaction_fee_refunds': 'Seller Fees',
+  'amazon|fba_inventory_fees': 'Seller Fees',
+  'amazon|shipping_label_purchases': 'Shipping:Outbound Shipping',
+  'amazon|shipping_label_refunds': 'Shipping:Outbound Shipping',
+  'amazon|carrier_shipping_adj': 'Shipping:Outbound Shipping',
+  'amazon|service_fees': 'Seller Fees',
+  'amazon|refund_admin_fees': 'Bank Charges & Fees',
+  'amazon|adjustments': 'Bank Charges & Fees',
+  'amazon|advertising': 'Advertising & Marketing',
+  'amazon|advertising_refund': 'Advertising & Marketing',
+  'amazon|liquidations_fees': 'Seller Fees',
+  'amazon|receivables_deductions': 'Bank Charges & Fees',
+  'amazon|amazon_shipping_charge_adj': 'Shipping:Outbound Shipping',
+  'amazon|tax_collected': 'Sales Tax Payable',
+  'amazon|tax_refunded': 'Sales Tax Payable',
+  'amazon|tax_withheld': 'Sales Tax Payable',
+  'amazon|transfer_to_bank': 'Payments In Transit',
+  // EBAY
+  'ebay|orders_subtotal': 'eBay Fixed Price Total',
+  'ebay|gross_refunds': 'Returns',
+  'ebay|gross_claims': 'Returns',
+  'ebay|gross_payment_disputes': 'Bank Charges & Fees',
+  'ebay|insertion_fees': 'Seller Fees',
+  'ebay|promoted_listings_fees': 'Seller Fees',
+  'ebay|other_fees': 'Seller Fees',
+  'ebay|transaction_fees': 'Seller Fees',
+  'ebay|shipping_labels': 'Shipping:Outbound Shipping',
+  'ebay|donations': 'Donations - Cash',
+  'ebay|advanced_listing_fees': 'Seller Fees',
+  'ebay|payouts': 'Payments In Transit',
+  'ebay|charges': 'Payments In Transit',
+  // SHOPIFY
+  'shopify|gross_sales': 'Shopify Total',
+  'shopify|discounts': 'Discounts given',
+  'shopify|returns': 'Returns',
+  'shopify|shipping_charges': 'Shipping Income',
+  'shopify|taxes': 'Sales Tax Payable',
+  'shopify|total_deposit': 'Payments In Transit',
+  // WALMART
+  'walmart|sales_product_price': 'Walmart Marketplace Total',
+  'walmart|sales_shipping': 'Shipping Income',
+  'walmart|sales_net_tax_collected': 'Sales Tax Payable',
+  'walmart|sales_other_taxes_fee': 'Sales Tax Payable',
+  'walmart|sales_net_commission': 'Seller Fees',
+  'walmart|sales_net_tax_withheld': 'Sales Tax Payable',
+  'walmart|sales_walmart_funded_savings': 'Discounts given',
+  'walmart|refunds_product_price': 'Returns',
+  'walmart|refunds_shipping': 'Shipping Income',
+  'walmart|refunds_net_tax_collected': 'Sales Tax Payable',
+  'walmart|refunds_commission': 'Seller Fees',
+  'walmart|refunds_net_tax_withheld': 'Sales Tax Payable',
+  'walmart|refunds_walmart_funded_savings': 'Discounts given',
+  'walmart|adj_misc_adjustments': 'Bank Charges & Fees',
+  'walmart|adj_return_shipping_charge': 'Shipping:Outbound Shipping',
+  'walmart|fulfill_wfs_total_discount': 'Discounts given',
+  'walmart|other_product_advertising': 'Advertising & Marketing',
+  'walmart|paid_to_you': 'Payments In Transit',
+};
+
+function lookupAccount(platform, key) {
+  return ACCOUNT_MAP[`${platform}|${key}`];
+}
+
+function normalizeAmount(amount) {
+  if (amount > 0) return [0, amount];
+  if (amount < 0) return [-amount, 0];
+  return [0, 0];
+}
+
+function buildAmazonJE(parsed) {
+  const lines = [];
+  for (const section of ['income', 'expenses', 'tax']) {
+    for (const [key, item] of Object.entries(parsed[section])) {
+      const net = item.debit + item.credit;
+      if (Math.abs(net) < 0.005) continue;
+      const account = lookupAccount('amazon', key);
+      if (!account) continue;
+      const [d, c] = normalizeAmount(net);
+      lines.push({ account, debit: d, credit: c, memo: item.label });
+    }
+  }
+  const transfer = parsed.transfers.transfer_to_bank || {};
+  const transferAmt = (transfer.debit || 0) + (transfer.credit || 0);
+  if (Math.abs(transferAmt) > 0.005) {
+    const [d, c] = normalizeAmount(transferAmt);
+    lines.push({ account: lookupAccount('amazon', 'transfer_to_bank'), debit: d, credit: c, memo: 'Transfers to bank account' });
+  }
+  return finalizeJE(lines, parsed, 'Amazon', parsed.display_name);
+}
+
+function buildEbayJE(parsed) {
+  const lines = [];
+  const orders = parsed.orders.subtotal;
+  if (orders && orders.net) {
+    const [d, c] = normalizeAmount(orders.net);
+    lines.push({ account: lookupAccount('ebay', 'orders_subtotal'), debit: d, credit: c, memo: 'eBay Orders' });
+  }
+  for (const [key, item] of Object.entries(parsed.refunds)) {
+    if (Math.abs(item.net) < 0.005) continue;
+    const account = lookupAccount('ebay', key);
+    if (!account) continue;
+    const [d, c] = normalizeAmount(item.net);
+    lines.push({ account, debit: d, credit: c, memo: item.label });
+  }
+  for (const [key, item] of Object.entries(parsed.expenses)) {
+    if (Math.abs(item.net) < 0.005) continue;
+    const account = lookupAccount('ebay', key);
+    if (!account) continue;
+    const [d, c] = normalizeAmount(item.net);
+    lines.push({ account, debit: d, credit: c, memo: item.label });
+  }
+  const payouts = parsed.transfers.payouts;
+  if (payouts && payouts.net) {
+    const [d, c] = normalizeAmount(payouts.net);
+    lines.push({ account: lookupAccount('ebay', 'payouts'), debit: d, credit: c, memo: 'eBay Payouts' });
+  }
+  return finalizeJE(lines, parsed, 'eBay');
+}
+
+function buildShopifyJE(parsed) {
+  const lines = [];
+  const s = parsed.sales;
+  const storeName = parsed.store_name || '';
+  const isBigBBQ = storeName.toLowerCase().includes('big bbq');
+  const grossAccount = isBigBBQ ? 'Big BBQ CO' : lookupAccount('shopify', 'gross_sales');
+
+  if (s.gross_sales && Math.abs(s.gross_sales.amount) > 0.005) {
+    const [d, c] = normalizeAmount(s.gross_sales.amount);
+    lines.push({ account: grossAccount, debit: d, credit: c, memo: `Gross sales - ${storeName}` });
+  }
+  for (const [key, mapKey, account] of [
+    ['discounts', 'discounts', lookupAccount('shopify', 'discounts')],
+    ['returns', 'returns', lookupAccount('shopify', 'returns')],
+    ['shipping_charges', 'shipping_charges', lookupAccount('shopify', 'shipping_charges')],
+    ['taxes', 'taxes', lookupAccount('shopify', 'taxes')],
+  ]) {
+    if (s[key] && Math.abs(s[key].amount) > 0.005) {
+      const [d, c] = normalizeAmount(s[key].amount);
+      lines.push({ account, debit: d, credit: c, memo: s[key].label });
+    }
+  }
+  if (s.total_sales && Math.abs(s.total_sales.amount) > 0.005) {
+    const [d, c] = normalizeAmount(-s.total_sales.amount);
+    lines.push({ account: lookupAccount('shopify', 'total_deposit'), debit: d, credit: c, memo: `Shopify deposit - ${storeName}` });
+  }
+  return finalizeJE(lines, parsed, 'Shopify', storeName);
+}
+
+function buildWalmartJE(parsed) {
+  const lines = [];
+  const sectionMap = [
+    ['sales', 'sales_'],
+    ['refunds', 'refunds_'],
+    ['adjustments', 'adj_'],
+    ['fulfillment', 'fulfill_'],
+    ['other_activities', 'other_'],
+  ];
+  for (const [section, prefix] of sectionMap) {
+    for (const [key, item] of Object.entries(parsed[section] || {})) {
+      if (Math.abs(item.amount) < 0.005) continue;
+      const mapKey = prefix + key;
+      const account = lookupAccount('walmart', mapKey);
+      if (!account) continue;
+      const [d, c] = normalizeAmount(item.amount);
+      lines.push({ account, debit: d, credit: c, memo: `Walmart ${section} - ${item.label}` });
+    }
+  }
+  if (parsed.paid_to_you && Math.abs(parsed.paid_to_you) > 0.005) {
+    const [d, c] = normalizeAmount(-parsed.paid_to_you);
+    lines.push({ account: lookupAccount('walmart', 'paid_to_you'), debit: d, credit: c, memo: 'Walmart payout' });
+  }
+  return finalizeJE(lines, parsed, 'Walmart');
+}
+
+function finalizeJE(lines, parsed, platform, subtitle) {
+  // Add balance plug
+  let totalD = lines.reduce((s, l) => s + l.debit, 0);
+  let totalC = lines.reduce((s, l) => s + l.credit, 0);
+  const diff = totalC - totalD;
+  if (Math.abs(diff) > 0.005) {
+    const [d, c] = diff > 0 ? [diff, 0] : [0, -diff];
+    lines.push({
+      account: 'Payments In Transit',
+      debit: d, credit: c,
+      memo: `${platform} held balance change / period-end timing`,
+    });
+  }
+  const dateStr = parsed.date_range ? parsed.date_range[1] : null;
+  const date = dateStr ? parseDate(dateStr) : null;
+  const memo = parsed.date_range
+    ? `${platform}${subtitle ? ' - ' + subtitle : ''} - ${parsed.date_range[0]} to ${parsed.date_range[1]}`
+    : platform;
+  return { date, memo, lines };
+}
+
+function parseDate(s) {
+  if (!s) return null;
+  const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11,
+                   January:0, February:1, March:2, April:3, May:4, June:5, July:6, August:7, September:8, October:9, November:10, December:11 };
+  const m = s.trim().match(/(\w+)\s+(\d+),\s+(\d{4})/);
+  if (m && m[1] in months) return new Date(parseInt(m[3]), months[m[1]], parseInt(m[2]));
+  return null;
+}
+
+function consolidateLines(je) {
+  const acctMap = {};
+  for (const line of je.lines) {
+    const a = line.account;
+    if (!(a in acctMap)) acctMap[a] = { debit: 0, credit: 0, memos: [] };
+    acctMap[a].debit += line.debit;
+    acctMap[a].credit += line.credit;
+    acctMap[a].memos.push(line.memo);
+  }
+  const newLines = [];
+  for (const [account, agg] of Object.entries(acctMap)) {
+    const net = agg.credit - agg.debit;
+    if (Math.abs(net) < 0.005) continue;
+    const [d, c] = net > 0 ? [0, net] : [-net, 0];
+    newLines.push({
+      account,
+      debit: Math.round(d * 100) / 100,
+      credit: Math.round(c * 100) / 100,
+      memo: [...new Set(agg.memos)].join('; ').slice(0, 200),
+    });
+  }
+  return { ...je, lines: newLines };
+}
+
+function buildJE(parsed) {
+  if (parsed.platform === 'amazon') return buildAmazonJE(parsed);
+  if (parsed.platform === 'ebay') return buildEbayJE(parsed);
+  if (parsed.platform === 'shopify') return buildShopifyJE(parsed);
+  if (parsed.platform === 'walmart') return buildWalmartJE(parsed);
+  throw new Error('Unknown platform: ' + parsed.platform);
+}
+
+function isBalanced(je) {
+  const d = je.lines.reduce((s, l) => s + l.debit, 0);
+  const c = je.lines.reduce((s, l) => s + l.credit, 0);
+  return Math.abs(c - d) < 0.01;
+}
+
+// =======================================================================
+// CSV EXPORT (QBO Journal Entry format)
+// =======================================================================
+function csvEscape(s) {
+  s = String(s == null ? '' : s);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+function jesToQboCsv(jes, startNo=1) {
+  const header = ['Journal No.', 'Journal Date', 'Account', 'Debits', 'Credits', 'Description'];
+  const rows = [header.join(',')];
+  jes.forEach((je, i) => {
+    const jno = String(startNo + i);
+    const date = je.date ? formatDate(je.date) : '';
+    for (const line of je.lines) {
+      rows.push([
+        jno, date,
+        csvEscape(line.account),
+        line.debit ? line.debit.toFixed(2) : '',
+        line.credit ? line.credit.toFixed(2) : '',
+        csvEscape(line.memo || je.memo),
+      ].join(','));
+    }
+  });
+  return rows.join('\n');
+}
+function formatDate(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${m}/${day}/${d.getFullYear()}`;
+}
+
+// =======================================================================
+// PROCESSING ORCHESTRATION
+// =======================================================================
+async function processFile(fileEntry) {
+  fileEntry.status = 'processing';
+  renderFileList();
+
+  try {
+    let text;
+    let rows = null;
+    let needsOcr = false;
+
+    if (fileEntry.platform === 'walmart') {
+      // Walmart PDFs are image-based; always OCR
+      needsOcr = true;
+    } else if (fileEntry.platform === 'amazon') {
+      // Amazon needs precise X-coordinate column detection -
+      // extract rows with positions instead of reconstructed text.
+      rows = await extractPdfRows(fileEntry.file);
+      if (!rows || rows.length === 0) needsOcr = true;
+    } else {
+      // Try text extraction first for eBay/Shopify
+      text = await extractPdfText(fileEntry.file);
+      if (text.replace(/\s/g, '').length < 50) {
+        needsOcr = true;
+      }
+    }
+
+    if (needsOcr) {
+      fileEntry.status = 'ocr';
+      renderFileList();
+      text = await ocrPdf(fileEntry.file, ({ progress, status }) => {
+        if (status === 'recognizing text') {
+          fileEntry.ocrProgress = Math.round(progress * 100);
+          renderFileList();
+        }
+      });
+    }
+
+    fileEntry.text = text;
+    fileEntry.rows = rows;
+
+    // Parse
+    let parsed;
+    if (fileEntry.platform === 'amazon') {
+      parsed = parseAmazonFromRows(rows);
+    } else if (fileEntry.platform === 'ebay') {
+      parsed = parseEbay(text);
+    } else if (fileEntry.platform === 'shopify') {
+      parsed = parseShopify(text);
+    } else if (fileEntry.platform === 'walmart') {
+      parsed = parseWalmart(text);
+    } else {
+      throw new Error('Unknown platform');
+    }
+
+    fileEntry.parsed = parsed;
+
+    // Validate parser
+    let issues = [];
+    if (fileEntry.platform === 'amazon') issues = validateAmazon(parsed);
+    else if (fileEntry.platform === 'ebay') issues = validateEbay(parsed);
+    else if (fileEntry.platform === 'shopify') issues = validateShopify(parsed);
+    else if (fileEntry.platform === 'walmart') issues = validateWalmart(parsed);
+    fileEntry.issues = issues;
+
+    // Build JE
+    const je = consolidateLines(buildJE(parsed));
+    fileEntry.je = je;
+    fileEntry.balanced = isBalanced(je);
+    fileEntry.status = 'done';
+  } catch (err) {
+    console.error(err);
+    fileEntry.status = 'error';
+    fileEntry.error = err.message || String(err);
+  }
+  renderFileList();
+}
+
+async function processAll() {
+  for (const f of state.files) {
+    if (f.status === 'queued' || f.status === 'error') {
+      await processFile(f);
+    }
+  }
+  showToast('Processing complete', 'success');
+  switchTab('review');
+  renderReview();
+  renderExport();
+}
+
+// =======================================================================
+// RENDERING
+// =======================================================================
+function renderFileList() {
+  const el = $('#fileList');
+  if (state.files.length === 0) {
+    el.innerHTML = '';
+    $('#processBtn').disabled = true;
+    $('#clearBtn').disabled = true;
+    return;
+  }
+  $('#processBtn').disabled = false;
+  $('#clearBtn').disabled = false;
+  el.innerHTML = state.files.map(f => {
+    let statusEl = '';
+    if (f.status === 'queued') statusEl = `<span class="file-status">Ready</span>`;
+    else if (f.status === 'processing') statusEl = `<span class="file-status"><span class="spinner"></span> Reading PDF...</span>`;
+    else if (f.status === 'ocr') statusEl = `<span class="file-status"><span class="spinner"></span> OCR ${f.ocrProgress || 0}%</span>`;
+    else if (f.status === 'done') {
+      const balCls = f.balanced ? 'ok' : 'warn';
+      const balText = f.balanced ? '✓ Balanced' : '⚠ Unbalanced';
+      statusEl = `<span class="file-status ${balCls}">${balText}</span>`;
+    } else if (f.status === 'error') {
+      statusEl = `<span class="file-status err">✗ ${f.error}</span>`;
+    }
+    return `
+      <div class="file-item">
+        <div class="file-item-info">
+          <span class="file-platform-tag ${f.platform}">${f.platform}</span>
+          <span class="file-name" title="${f.name}">${f.name}</span>
+        </div>
+        ${statusEl}
+        <button class="btn-ghost" onclick="removeFile('${f.id}')">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function renderReview() {
+  const el = $('#reviewContent');
+  const done = state.files.filter(f => f.status === 'done');
+  if (done.length === 0) {
+    el.innerHTML = `<div class="empty">No processed reports yet. Go to Upload and process some files.</div>`;
+    return;
+  }
+
+  el.innerHTML = done.map((f, idx) => {
+    const je = f.je;
+    const totalD = je.lines.reduce((s, l) => s + l.debit, 0);
+    const totalC = je.lines.reduce((s, l) => s + l.credit, 0);
+    const diff = totalC - totalD;
+    const balanced = Math.abs(diff) < 0.01;
+    const balCls = balanced ? 'ok' : 'bad';
+    const balText = balanced ? `Balanced` : `Out of balance: ${fmtMoney(diff)}`;
+
+    const dateStr = je.date ? formatDate(je.date) : 'No date';
+    const memo = je.memo;
+
+    const accountOptions = ALL_ACCOUNTS.map(a => `<option value="${a}">${a}</option>`).join('');
+
+    const linesHtml = je.lines.map((line, lineIdx) => `
+      <tr data-file="${f.id}" data-line="${lineIdx}">
+        <td class="account editable" data-field="account" onclick="editCell(this, '${f.id}', ${lineIdx}, 'account')">${line.account}</td>
+        <td class="amount-debit editable ${line.debit ? '' : 'amount-zero'}" data-field="debit" onclick="editCell(this, '${f.id}', ${lineIdx}, 'debit')">${line.debit ? fmtMoney(line.debit) : '—'}</td>
+        <td class="amount-credit editable ${line.credit ? '' : 'amount-zero'}" data-field="credit" onclick="editCell(this, '${f.id}', ${lineIdx}, 'credit')">${line.credit ? fmtMoney(line.credit) : '—'}</td>
+        <td class="memo editable" data-field="memo" onclick="editCell(this, '${f.id}', ${lineIdx}, 'memo')" title="${(line.memo||'').replace(/"/g, '&quot;')}">${line.memo || ''}</td>
+        <td><button class="delete-line-btn" onclick="deleteLine('${f.id}', ${lineIdx})" title="Delete line">×</button></td>
+      </tr>
+    `).join('');
+
+    const issuesHtml = f.issues && f.issues.length > 0 ? `
+      <div class="issues-list" style="margin: 0 18px 14px 18px;">
+        <div class="issues-list-title">Parser warnings</div>
+        <ul>${f.issues.map(i => `<li>${i}</li>`).join('')}</ul>
+      </div>
+    ` : '';
+
+    return `
+      <div class="je-card">
+        <div class="je-header">
+          <div class="je-title">
+            <span class="file-platform-tag ${f.platform}">${f.platform}</span>
+            ${memo}
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span class="je-meta">${dateStr}</span>
+            <span class="je-balance ${balCls}">${balText}</span>
+          </div>
+        </div>
+        ${issuesHtml}
+        <table class="je-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Debit</th>
+              <th>Credit</th>
+              <th>Memo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${linesHtml}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>TOTALS</td>
+              <td class="amount-debit">${fmtMoney(totalD)}</td>
+              <td class="amount-credit">${fmtMoney(totalC)}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="add-line-row">
+          <button class="add-line-btn" onclick="addLine('${f.id}')">+ Add line</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderExport() {
+  const el = $('#exportContent');
+  const done = state.files.filter(f => f.status === 'done');
+  if (done.length === 0) {
+    el.innerHTML = `<div class="empty">Process reports first to generate the export.</div>`;
+    return;
+  }
+  const allBalanced = done.every(f => isBalanced(f.je));
+  const balancedCount = done.filter(f => isBalanced(f.je)).length;
+
+  const jes = done.map(f => f.je);
+  const csv = jesToQboCsv(jes);
+
+  el.innerHTML = `
+    <div class="export-summary">
+      <div class="export-stat">
+        <span class="export-stat-label">Reports processed</span>
+        <span class="export-stat-value">${done.length}</span>
+      </div>
+      <div class="export-stat">
+        <span class="export-stat-label">Journal entries</span>
+        <span class="export-stat-value">${jes.length}</span>
+      </div>
+      <div class="export-stat">
+        <span class="export-stat-label">Balanced</span>
+        <span class="export-stat-value" style="color: ${allBalanced ? 'var(--success)' : 'var(--warning)'}">${balancedCount} / ${done.length}</span>
+      </div>
+      <div class="export-stat">
+        <span class="export-stat-label">CSV rows</span>
+        <span class="export-stat-value">${csv.split('\n').length - 1}</span>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+      <button class="btn btn-primary" onclick="downloadCsv()">⬇ Download QBO CSV</button>
+      <button class="btn btn-secondary" onclick="copyCsv()">Copy to Clipboard</button>
+    </div>
+
+    ${!allBalanced ? `
+      <div class="issues-list" style="margin-bottom: 16px;">
+        <div class="issues-list-title">⚠ Some entries are not balanced</div>
+        <ul>${done.filter(f => !isBalanced(f.je)).map(f => `<li>${f.name}</li>`).join('')}</ul>
+      </div>
+    ` : ''}
+
+    <div style="margin-top: 16px;">
+      <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">CSV Preview</div>
+      <div class="csv-preview">${csv.split('\n').slice(0, 50).join('\n')}${csv.split('\n').length > 50 ? '\n...' : ''}</div>
+    </div>
+  `;
+}
+
+// =======================================================================
+// EDIT HANDLERS
+// =======================================================================
+const ALL_ACCOUNTS = [
+  'Amazon Seller Central - US Total',
+  'Big BBQ CO',
+  'Bank Charges & Fees',
+  'Discounts given',
+  'Donations - Cash',
+  'eBay Fixed Price Total',
+  'eBay Motors Fixed Price Total',
+  'Payments In Transit',
+  'Returns',
+  'Sales Income',
+  'Sales Tax Payable',
+  'Seller Fees',
+  'Shipping Income',
+  'Shipping:Outbound Shipping',
+  'Shopify Fees',
+  'Shopify Total',
+  'Advertising & Marketing',
+  'Walmart Marketplace Total',
+];
+
+function getFile(id) { return state.files.find(f => f.id === id); }
+
+function editCell(td, fileId, lineIdx, field) {
+  if (td.querySelector('input, select')) return;
+  const f = getFile(fileId);
+  if (!f || !f.je) return;
+  const line = f.je.lines[lineIdx];
+  const original = line[field];
+
+  if (field === 'account') {
+    const select = document.createElement('select');
+    select.className = 'edit-select';
+    select.innerHTML = ALL_ACCOUNTS.map(a => `<option value="${a}" ${a === original ? 'selected' : ''}>${a}</option>`).join('');
+    td.innerHTML = '';
+    td.appendChild(select);
+    select.focus();
+    select.addEventListener('change', () => {
+      line.account = select.value;
+      const consolidated = consolidateLines(f.je);
+      f.je = consolidated;
+      renderReview();
+    });
+    select.addEventListener('blur', () => {
+      renderReview();
+    });
+  } else {
+    const input = document.createElement('input');
+    input.className = 'edit-input';
+    input.type = (field === 'memo') ? 'text' : 'number';
+    if (field !== 'memo') input.step = '0.01';
+    input.value = (field === 'memo') ? (original || '') : (original || 0);
+    td.innerHTML = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      let v = input.value;
+      if (field === 'memo') {
+        line.memo = v;
+      } else {
+        const num = parseFloat(v) || 0;
+        line[field] = num;
+        // Don't allow both debit and credit
+        if (field === 'debit' && num) line.credit = 0;
+        if (field === 'credit' && num) line.debit = 0;
+      }
+      renderReview();
+      renderExport();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { renderReview(); }
+    });
+  }
+}
+
+function deleteLine(fileId, lineIdx) {
+  const f = getFile(fileId);
+  if (!f || !f.je) return;
+  f.je.lines.splice(lineIdx, 1);
+  renderReview();
+  renderExport();
+}
+
+function addLine(fileId) {
+  const f = getFile(fileId);
+  if (!f || !f.je) return;
+  f.je.lines.push({ account: ALL_ACCOUNTS[0], debit: 0, credit: 0, memo: '' });
+  renderReview();
+  renderExport();
+}
+
+function removeFile(id) {
+  state.files = state.files.filter(f => f.id !== id);
+  renderFileList();
+  renderReview();
+  renderExport();
+}
+
+window.editCell = editCell;
+window.deleteLine = deleteLine;
+window.addLine = addLine;
+window.removeFile = removeFile;
+window.downloadCsv = downloadCsv;
+window.copyCsv = copyCsv;
+
+function downloadCsv() {
+  const done = state.files.filter(f => f.status === 'done');
+  const csv = jesToQboCsv(done.map(f => f.je));
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().slice(0, 10);
+  a.download = `gje_export_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV downloaded', 'success');
+}
+
+function copyCsv() {
+  const done = state.files.filter(f => f.status === 'done');
+  const csv = jesToQboCsv(done.map(f => f.je));
+  navigator.clipboard.writeText(csv).then(() => {
+    showToast('CSV copied to clipboard', 'success');
+  });
+}
+
+// =======================================================================
+// FILE INPUT HANDLERS
+// =======================================================================
+function addFiles(fileList) {
+  for (const file of fileList) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) continue;
+    const id = 'f' + Date.now() + Math.random().toString(36).slice(2, 8);
+    state.files.push({
+      id,
+      name: file.name,
+      file,
+      platform: detectPlatform(file.name),
+      status: 'queued',
+    });
+  }
+  renderFileList();
+}
+
+const dropzone = $('#dropzone');
+const fileInput = $('#fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+['dragenter', 'dragover'].forEach(ev => {
+  dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(ev => {
+  dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+});
+dropzone.addEventListener('drop', e => {
+  if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+});
+
+$('#processBtn').addEventListener('click', processAll);
+$('#clearBtn').addEventListener('click', () => {
+  state.files = [];
+  renderFileList();
+  renderReview();
+  renderExport();
+});
+
+// =======================================================================
+// TAB SWITCHING
+// =======================================================================
+function switchTab(name) {
+  state.currentTab = name;
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+  if (name === 'review') renderReview();
+  if (name === 'export') renderExport();
+}
+$$('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+
+// Initial render
+renderFileList();
+</script>
+</body>
+</html>
