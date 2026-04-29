@@ -6255,6 +6255,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="dh-tab active" id="pto-tab-pending" onclick="ptoSwitchTab('pending')">📥 Pending Requests <span id="pto-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-weight:700;display:none;"></span></button>
         <button class="dh-tab" id="pto-tab-balances" onclick="ptoSwitchTab('balances')">💰 Balances</button>
         <button class="dh-tab" id="pto-tab-history" onclick="ptoSwitchTab('history')">📚 History</button>
+        <button class="dh-tab" id="pto-tab-reports" onclick="ptoSwitchTab('reports')">📊 Reports</button>
       </div>
 
       <!-- Pending Requests panel -->
@@ -6279,6 +6280,47 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div id="pto-panel-history" style="display:none;">
         <div id="pto-history-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
         <div id="pto-history-list"></div>
+      </div>
+
+      <!-- Reports panel — totals per employee, filterable by period & status -->
+      <div id="pto-panel-reports" style="display:none;">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);">
+          <div>
+            <label style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;font-weight:600;display:block;margin-bottom:4px;">Period</label>
+            <select id="pto-rpt-period" class="field-input" onchange="ptoReportPeriodChange()" style="font-size:13px;padding:6px 10px;height:32px;">
+              <option value="week">This week</option>
+              <option value="month" selected>This month</option>
+              <option value="quarter">This quarter</option>
+              <option value="year">This year</option>
+              <option value="last30">Last 30 days</option>
+              <option value="last90">Last 90 days</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </div>
+          <div id="pto-rpt-custom-wrap" style="display:none;gap:8px;align-items:flex-end;">
+            <div>
+              <label style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;font-weight:600;display:block;margin-bottom:4px;">From</label>
+              <input id="pto-rpt-from" type="date" class="field-input" style="font-size:13px;padding:6px 10px;height:32px;">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;font-weight:600;display:block;margin-bottom:4px;">To</label>
+              <input id="pto-rpt-to" type="date" class="field-input" style="font-size:13px;padding:6px 10px;height:32px;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;font-weight:600;display:block;margin-bottom:4px;">Status</label>
+            <select id="pto-rpt-status" class="field-input" onchange="ptoReportRender()" style="font-size:13px;padding:6px 10px;height:32px;">
+              <option value="all">All statuses</option>
+              <option value="approved" selected>Approved only</option>
+              <option value="pending">Pending</option>
+              <option value="denied">Denied</option>
+            </select>
+          </div>
+          <button onclick="ptoReportRender()" class="btn btn-primary btn-sm" style="height:32px;">Run report</button>
+          <button onclick="ptoReportExportCsv()" class="btn btn-ghost btn-sm" style="height:32px;">⬇ Export CSV</button>
+        </div>
+        <div id="pto-rpt-summary" style="font-size:12px;color:var(--text-m);margin-bottom:10px;"></div>
+        <div id="pto-rpt-body"></div>
       </div>
     </div>
   </div>
@@ -11294,7 +11336,7 @@ function wgRenderWidget(w, data){
           <div class="wg-title" style="font-size:13px;">🏖 Who's Out</div>
         </div>
         <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:11px;padding:2px 6px;height:24px;">
+          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:11px;padding:2px 22px 2px 6px;height:24px;">
             <option value="week">Week</option>
             <option value="month" selected>Month</option>
             <option value="quarter">90d</option>
@@ -11532,18 +11574,24 @@ function wgLoadWidgets(){
   }
 
   // One-time migration: PTO widgets (dw14/dw15) shipped at full-width and
-  // were later shrunk to standard KPI sizes. For users whose saved layout
-  // still has the old big sizes, force them to the new compact defaults
-  // once. After this runs the user can freely resize via the ✏️ pencil
-  // and that change will persist (we set a per-user flag in localStorage).
+  // were later shrunk to standard KPI sizes. We bump the version key
+  // whenever sizing rules change so existing layouts get force-reset
+  // once on the next load. After the reset, any future ✏️ pencil resize
+  // sticks normally.
+  // v4 reset triggers: stuck widgets at any rowSpan > 1 (the new size
+  // model is single-row only — Small/Medium/Large all = rowSpan 1) or
+  // colSpan > 6 (largest standard size).
   if (currentUser) {
-    const PTO_RESIZE_KEY = 'ark_pto_widgets_v3_reset_' + currentUser.id;
+    const PTO_RESIZE_KEY = 'ark_pto_widgets_v4_reset_' + currentUser.id;
     try {
       if (!localStorage.getItem(PTO_RESIZE_KEY)) {
         ['dw14','dw15'].forEach(id => {
           const w = _userWidgets.find(x => x.id === id);
           const def = defaultsById[id];
-          if (w && def) w.grid = { ...def.grid };
+          if (!w || !def) return;
+          const isStuckBig = (w.grid?.rowSpan || 1) > 1 || (w.grid?.colSpan || 1) > 6;
+          if (isStuckBig) w.grid = { ...def.grid };
+          else if (w.grid?.rowSpan > 1) w.grid.rowSpan = 1; // belt + suspenders
         });
         localStorage.setItem(PTO_RESIZE_KEY, '1');
       }
@@ -26581,12 +26629,151 @@ async function ptoAdminInit(){
 
 function ptoSwitchTab(tab){
   _ptoActiveTab = tab;
-  ['pending','balances','history'].forEach(t => {
+  ['pending','balances','history','reports'].forEach(t => {
     const btn = document.getElementById('pto-tab-' + t);
     const panel = document.getElementById('pto-panel-' + t);
     if(btn) btn.classList.toggle('active', t === tab);
     if(panel) panel.style.display = t === tab ? '' : 'none';
   });
+  if (tab === 'reports') ptoReportRender();
+}
+
+// ── PTO Reports ─────────────────────────────────────────────────
+// Resolve a period key (or a custom from/to pair) to YYYY-MM-DD bounds.
+function ptoReportRange(){
+  const sel = document.getElementById('pto-rpt-period');
+  const key = sel ? sel.value : 'month';
+  const now = new Date();
+  let start, end;
+  if (key === 'custom') {
+    const f = document.getElementById('pto-rpt-from')?.value;
+    const t = document.getElementById('pto-rpt-to')?.value;
+    return { from: f || '', to: t || '', label: f && t ? `${ptoFmtDate(f)} – ${ptoFmtDate(t)}` : 'Custom range' };
+  }
+  if (key === 'week'){
+    start = new Date(now); start.setDate(now.getDate() - now.getDay());
+    end = new Date(start); end.setDate(start.getDate() + 6);
+  } else if (key === 'month'){
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  } else if (key === 'quarter'){
+    const qStart = Math.floor(now.getMonth() / 3) * 3;
+    start = new Date(now.getFullYear(), qStart, 1);
+    end   = new Date(now.getFullYear(), qStart + 3, 0);
+  } else if (key === 'year'){
+    start = new Date(now.getFullYear(), 0, 1);
+    end   = new Date(now.getFullYear(), 11, 31);
+  } else if (key === 'last30'){
+    end = new Date(now);
+    start = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  } else { // last90
+    end = new Date(now);
+    start = new Date(now.getTime() - 90 * 24 * 3600 * 1000);
+  }
+  const fmt = d => d.toISOString().slice(0, 10);
+  const labelFmt = d => `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+  return { from: fmt(start), to: fmt(end), label: `${labelFmt(start)} – ${labelFmt(end)}` };
+}
+
+function ptoReportPeriodChange(){
+  const sel = document.getElementById('pto-rpt-period');
+  const wrap = document.getElementById('pto-rpt-custom-wrap');
+  if (wrap) wrap.style.display = sel.value === 'custom' ? 'flex' : 'none';
+  if (sel.value !== 'custom') ptoReportRender();
+}
+
+// Aggregate _ptoAdminRequests in the chosen window into per-employee rows.
+function ptoReportAggregate(range, statusFilter){
+  const rows = new Map(); // userId -> { name, total, count, approved, pending, denied }
+  for (const r of _ptoAdminRequests){
+    // Status filter
+    if (statusFilter !== 'all' && r.status !== statusFilter) continue;
+    // Range filter — request overlaps the window
+    if (range.from && r.endDate   < range.from) continue;
+    if (range.to   && r.startDate > range.to)   continue;
+    if (!rows.has(r.userId)) rows.set(r.userId, { userId: r.userId, name: r.userName, total: 0, count: 0, approved: 0, pending: 0, denied: 0 });
+    const row = rows.get(r.userId);
+    row.count += 1;
+    if (r.status === 'approved') { row.approved += 1; row.total += Number(r.hours) || 0; }
+    else if (r.status === 'pending') { row.pending += 1; }
+    else if (r.status === 'denied')  { row.denied  += 1; }
+  }
+  return Array.from(rows.values()).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+}
+
+function ptoReportRender(){
+  const body = document.getElementById('pto-rpt-body');
+  const summary = document.getElementById('pto-rpt-summary');
+  if(!body) return;
+  const range = ptoReportRange();
+  const status = document.getElementById('pto-rpt-status')?.value || 'approved';
+  const statusLabel = status === 'all' ? 'All statuses' : status[0].toUpperCase() + status.slice(1);
+  const rows = ptoReportAggregate(range, status);
+  const totalApprovedHours = rows.reduce((s, r) => s + r.total, 0);
+  const totalRequests = rows.reduce((s, r) => s + r.count, 0);
+
+  if (summary) {
+    summary.textContent = range.from && range.to
+      ? `${range.label} · ${statusLabel} · ${rows.length} employee${rows.length===1?'':'s'} · ${totalRequests} request${totalRequests===1?'':'s'} · ${totalApprovedHours.toFixed(1)} approved hours`
+      : 'Pick a date range to run the report.';
+  }
+
+  if (rows.length === 0){
+    body.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);">No PTO matches that filter.</div>`;
+    return;
+  }
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1.6fr 100px 80px 80px 80px 80px;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;">Employee</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Approved hrs</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Requests</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Approved</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Pending</div>
+      <div style="padding:10px 14px;background:var(--surface2);font-size:11px;font-weight:700;color:var(--text-d);text-transform:uppercase;letter-spacing:.04em;text-align:right;">Denied</div>
+      ${rows.map(r => `
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--navy);font-weight:600;">${_ptoEsc(r.name)}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${r.total.toFixed(1)}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${r.count}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${r.approved}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${r.pending}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text);text-align:right;font-family:monospace;">${r.denied}</div>
+      `).join('')}
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:12px;color:var(--text-d);font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:var(--surface2);">Team total</div>
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:13px;color:var(--navy);font-weight:700;text-align:right;font-family:monospace;background:var(--surface2);">${totalApprovedHours.toFixed(1)}</div>
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:13px;color:var(--navy);font-weight:700;text-align:right;font-family:monospace;background:var(--surface2);">${totalRequests}</div>
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:13px;color:var(--text-d);text-align:right;font-family:monospace;background:var(--surface2);">${rows.reduce((s,r)=>s+r.approved,0)}</div>
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:13px;color:var(--text-d);text-align:right;font-family:monospace;background:var(--surface2);">${rows.reduce((s,r)=>s+r.pending,0)}</div>
+      <div style="padding:10px 14px;border-top:2px solid var(--border);font-size:13px;color:var(--text-d);text-align:right;font-family:monospace;background:var(--surface2);">${rows.reduce((s,r)=>s+r.denied,0)}</div>
+    </div>
+  `;
+}
+
+function ptoReportExportCsv(){
+  const range = ptoReportRange();
+  const status = document.getElementById('pto-rpt-status')?.value || 'approved';
+  const rows = ptoReportAggregate(range, status);
+  const csvSafe = v => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [
+    ['Employee','Approved hours','Total requests','Approved','Pending','Denied'].join(','),
+    ...rows.map(r => [r.name, r.total.toFixed(1), r.count, r.approved, r.pending, r.denied].map(csvSafe).join(',')),
+    ['Team total',
+     rows.reduce((s,r)=>s+r.total,0).toFixed(1),
+     rows.reduce((s,r)=>s+r.count,0),
+     rows.reduce((s,r)=>s+r.approved,0),
+     rows.reduce((s,r)=>s+r.pending,0),
+     rows.reduce((s,r)=>s+r.denied,0)].map(csvSafe).join(','),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fname = `pto-report_${range.from || 'start'}_to_${range.to || 'end'}_${status}.csv`;
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function ptoAdminFilter(){
@@ -26798,6 +26985,7 @@ async function ptoApprove(id){
     ptoRenderPending();
     ptoRenderHistory();
     ptoUpdatePendingBadge();
+    try { ptoNotifyRequester(data.request, 'approved'); } catch(_){}
     showToast('Request approved');
   } catch(e){
     showToast(e.message, 'error');
@@ -26820,9 +27008,37 @@ async function ptoDeny(id, name){
     ptoRenderPending();
     ptoRenderHistory();
     ptoUpdatePendingBadge();
+    try { ptoNotifyRequester(data.request, 'denied'); } catch(_){}
     showToast('Request denied');
   } catch(e){
     showToast(e.message, 'error');
+  }
+}
+
+// Push an in-CRM notification to the request's owner when Shannon decides.
+// Mirrors how the new-request notification flows (notifCreate → SSE relay).
+function ptoNotifyRequester(request, decision){
+  if (!request || !request.userId) return;
+  if (typeof notifCreate !== 'function') return;
+  const range = ptoFmtRange(request.startDate, request.endDate);
+  const hours = `${Number(request.hours).toFixed(1)} hrs`;
+  if (decision === 'approved') {
+    notifCreate({
+      type: 'info',
+      targetAm: request.userId,
+      title: '✅ PTO approved',
+      body: `${range} · ${hours}`,
+      priority: 'normal',
+    });
+  } else {
+    const reason = (request.denyReason || '').trim();
+    notifCreate({
+      type: 'alert',
+      targetAm: request.userId,
+      title: '❌ PTO denied',
+      body: reason ? `${range} · ${hours} — ${reason}` : `${range} · ${hours}`,
+      priority: 'high',
+    });
   }
 }
 
@@ -27120,6 +27336,7 @@ async function ptoWgApprove(id){
     const resp = await authFetch(ARK_SERVER + '/pto/admin/requests/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
     const data = await resp.json();
     if(!resp.ok) throw new Error(data.error || 'Failed to approve');
+    try { ptoNotifyRequester(data.request, 'approved'); } catch(_){}
     showToast('Request approved');
     ptoWgRenderApprovals();
     ptoWgRenderOut();
@@ -27136,6 +27353,7 @@ async function ptoWgDeny(id, name){
     });
     const data = await resp.json();
     if(!resp.ok) throw new Error(data.error || 'Failed to deny');
+    try { ptoNotifyRequester(data.request, 'denied'); } catch(_){}
     showToast('Request denied');
     ptoWgRenderApprovals();
   } catch(e){ showToast(e.message, 'error'); }
