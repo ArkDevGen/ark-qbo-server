@@ -151,7 +151,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 
 .logo-area{
-  padding:8px 6px;
+  padding:6px;
+  aspect-ratio:1 / 1; /* white square — sidebar width × sidebar width */
   border-bottom:1px solid rgba(255,255,255,.08);
   background:transparent;
   display:flex;
@@ -161,8 +162,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .logo-area img{
   display:block;
   width:100%;
-  max-width:226px;
-  height:auto;
+  height:100%;
+  /* object-fit:contain keeps the PNG's aspect ratio and centers it in
+     the square — fixes the "too high" rendering where the image's
+     intrinsic aspect made the container taller than the visible logo. */
+  object-fit:contain;
+  object-position:center;
   margin:0;
   image-rendering:auto;
   -webkit-backface-visibility:hidden;
