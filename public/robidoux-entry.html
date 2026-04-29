@@ -2082,11 +2082,20 @@ function csvEscape(s) {
   }
   return s;
 }
-function jesToQboCsv(jes, startNo=1) {
+function buildJournalNo(je, perDateCounts) {
+  if (!je.date) return 'Sales-NoDate';
+  const m = String(je.date.getMonth() + 1).padStart(2, '0');
+  const day = String(je.date.getDate()).padStart(2, '0');
+  const key = `${m}${day}${je.date.getFullYear()}`;
+  perDateCounts[key] = (perDateCounts[key] || 0) + 1;
+  return `Sales-${key}-${perDateCounts[key]}`;
+}
+function jesToQboCsv(jes) {
   const header = ['Journal No.', 'Journal Date', 'Account', 'Debits', 'Credits', 'Description'];
   const rows = [header.join(',')];
-  jes.forEach((je, i) => {
-    const jno = String(startNo + i);
+  const perDateCounts = {};
+  jes.forEach((je) => {
+    const jno = buildJournalNo(je, perDateCounts);
     const date = je.date ? formatDate(je.date) : '';
     for (const line of je.lines) {
       rows.push([
