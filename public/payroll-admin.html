@@ -474,6 +474,38 @@
   </div>
 </div>
 
+<!-- Haines Reclassify Hours Modal — move worked hours into vacation -->
+<div id="modal-haines-reclass" class="modal-overlay hidden" onclick="if(event.target===this)hainesCloseReclassModal()">
+  <div class="modal" style="width:540px;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+      <h3 style="margin:0;">🔄 Reclassify Hours → Vacation</h3>
+      <button class="btn btn-outline btn-sm" onclick="hainesCloseReclassModal()" style="font-size:11px;">Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Move hours from "All other work" into vacation. The employee's worked hours drop by the amount you enter, REG/OT recompute, and vacation goes up. Use this when someone clocked time as worked but it should've been counted as PTO.</div>
+    <div style="display:flex;gap:8px;align-items:end;">
+      <div style="flex:2;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Employee</label>
+        <select id="haines-reclass-emp" style="width:100%;">
+          <option value="">— Select employee —</option>
+        </select>
+      </div>
+      <div style="flex:1.4;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Week</label>
+        <select id="haines-reclass-week" style="width:100%;">
+          <option value="0">Week 1</option>
+          <option value="1">Week 2</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px;">Hours</label>
+        <input id="haines-reclass-hours" type="number" min="0" step="0.25" placeholder="e.g. 8" style="width:100%;text-align:right;">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="hainesSaveReclass()" style="font-size:11px;">+ Save</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;font-style:italic;">Tip: you can stack multiple reclassifications per employee and per week — they all get applied when REG/OT recomputes.</div>
+  </div>
+</div>
+
 <!-- Haines Tool Deductions Modal -->
 <div id="modal-haines-deductions" class="modal-overlay hidden" onclick="if(event.target===this)hainesCloseDeductionsModal()">
   <div class="modal" style="width:580px;">
@@ -1876,9 +1908,14 @@ function hteaoMakeCSV(rows, totalTips) {
 // the staging area before download.
 // ════════════════════════════════════════════════════════════════
 let _hainesParsed = null; // { employees: [...], periodStart, periodEnd, dateRange, fileName }
+// Per-CSV reclassifications: hours moved from worked → vacation for a
+// specific employee + week. Cleared on Clear / new upload.
+//   [{ empKey: 'lname|fname', empName: 'First Last', week: 0|1, hours: 5 }]
+let _hainesReclassifications = [];
 
 function hainesReset() {
   _hainesParsed = null;
+  _hainesReclassifications = [];
   const inp = document.getElementById('haines-file-input');
   if (inp) inp.value = '';
   const status = document.getElementById('haines-status');
@@ -2095,6 +2132,11 @@ function hainesParseTimesheet(text, filename) {
       sick:  Math.round(e.sick  * 100) / 100,
       ot80:  Math.round(e.ot80  * 100) / 100,
       oc:    e.oc,
+      // Originals preserved so hainesApplyReclassifications() can recompute
+      // REG/OT/VAC after the user moves hours between worked and vacation.
+      _origWeeks:    [...e.weeks],
+      _origWeekOt80: [...e.weekOt80],
+      _origVac:      e.vac,
     });
   }
   employees.sort((a,b) => (a.lname||'').localeCompare(b.lname||'') || (a.fname||'').localeCompare(b.fname||''));
@@ -2203,12 +2245,32 @@ function hainesRender() {
       lifecycleHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">${blocks.join('')}</div>`;
     }
   }
+  // Reclassifications panel — list current entries (worked → vacation moves)
+  // with remove buttons, plus a "+ Reclassify Hours" button that opens the
+  // modal. Hidden when the list is empty AND the user hasn't expanded it.
+  const reclassRows = _hainesReclassifications.map((r, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;">
+      <span style="flex:1;color:var(--text);"><strong>${esc(r.empName)}</strong> <span style="color:var(--muted);">·</span> Week ${r.week+1} <span style="color:var(--muted);">·</span> <strong style="color:var(--accent);">${fmt(r.hours)} hrs</strong> moved worked → vacation</span>
+      <button onclick="hainesRemoveReclass(${i})" class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 8px;color:var(--red);border-color:var(--red);">Remove</button>
+    </div>
+  `).join('');
+  const reclassPanel = `
+    <div style="margin:10px 0;border:1px solid var(--border);border-radius:6px;background:var(--surface);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;${_hainesReclassifications.length?'border-bottom:1px solid var(--border);':''}">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">
+          🔄 Reclassify Hours <span style="text-transform:none;letter-spacing:0;font-weight:400;">— move worked hours into vacation; REG/OT recompute on the reduced worked hours.</span>
+        </div>
+        <button onclick="hainesOpenReclassModal()" class="btn btn-primary btn-sm" style="font-size:11px;">+ Reclassify</button>
+      </div>
+      ${reclassRows}
+    </div>`;
   stage.innerHTML = `
     ${lifecycleHtml}
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">${_hainesParsed.employees.length} employees from CSV · ${_hainesParsed.dateRange || 'period ?'}</div>
       <div style="font-size:10px;color:var(--muted);font-style:italic;">Click any field to edit — your changes flow into the PDF.</div>
     </div>
+    ${reclassPanel}
     <div style="border:1px solid var(--border);border-radius:6px;background:var(--card);">
       <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface);border-bottom:1px solid var(--border);">
         <span>Name</span><span style="text-align:right;">REG</span><span style="text-align:right;">OT</span><span style="text-align:right;">Vac</span><span style="text-align:right;">Hol</span><span style="text-align:right;">Sick</span><span style="text-align:right;">OT@$80</span><span style="text-align:right;">OC@$25 #</span>
@@ -2216,6 +2278,102 @@ function hainesRender() {
       ${empRows}
     </div>
     ${manualHtml}`;
+}
+
+// Recompute REG/OT/VAC for every employee from the parser originals + any
+// reclassifications. Called whenever the reclass list changes. Each
+// reclassification subtracts X hours from a specific week's worked bucket
+// and adds X to the employee's vacation total. REG/OT then re-derive from
+// the reduced worked hours (so an OT-triggering week can drop back below
+// 40 if enough hours are moved).
+function hainesApplyReclassifications() {
+  if (!_hainesParsed) return;
+  const byKey = new Map();
+  for (const r of _hainesReclassifications) {
+    if (!byKey.has(r.empKey)) byKey.set(r.empKey, [0, 0]);
+    byKey.get(r.empKey)[r.week] += r.hours;
+  }
+  for (const emp of _hainesParsed.employees) {
+    const empKey = hainesEmpKey(emp.fname, emp.lname);
+    const moved = byKey.get(empKey) || [0, 0];
+    const adjWeeks = [
+      Math.max(0, (emp._origWeeks[0]||0) - moved[0]),
+      Math.max(0, (emp._origWeeks[1]||0) - moved[1]),
+    ];
+    let reg = 0, ot = 0;
+    for (let i = 0; i < adjWeeks.length; i++) {
+      const wk = Math.max(0, adjWeeks[i] - (emp._origWeekOt80[i]||0));
+      if (wk > 40) { reg += 40; ot += wk - 40; }
+      else         { reg += wk; }
+    }
+    emp.reg = Math.round(reg * 100) / 100;
+    emp.ot  = Math.round(ot  * 100) / 100;
+    emp.vac = Math.round(((emp._origVac||0) + moved[0] + moved[1]) * 100) / 100;
+  }
+  hainesRender();
+}
+
+// Open the reclassify modal — fresh form each time.
+function hainesOpenReclassModal() {
+  if (!_hainesParsed) { hainesSetStatus('Drop the timesheets CSV first.', 'var(--red)'); return; }
+  const sel = document.getElementById('haines-reclass-emp');
+  const wkSel = document.getElementById('haines-reclass-week');
+  const hrs = document.getElementById('haines-reclass-hours');
+  if (!sel || !wkSel || !hrs) return;
+  // Populate employee dropdown from parsed list (alpha by last name)
+  const opts = _hainesParsed.employees.map(e => {
+    const k = hainesEmpKey(e.fname, e.lname);
+    const name = `${e.lname}, ${e.fname}`;
+    return `<option value="${k}" data-name="${name.replace(/"/g,'&quot;')}">${name}</option>`;
+  }).join('');
+  sel.innerHTML = `<option value="">— Select employee —</option>${opts}`;
+  // Week labels show the actual date ranges.
+  const start = _hainesParsed.periodStart ? new Date(_hainesParsed.periodStart + 'T00:00:00') : null;
+  const labelWeek = (idx) => {
+    if (!start) return `Week ${idx+1}`;
+    const a = new Date(start); a.setDate(a.getDate() + idx*7);
+    const b = new Date(a); b.setDate(b.getDate() + 6);
+    const fmtD = d => `${d.getMonth()+1}/${d.getDate()}`;
+    return `Week ${idx+1} (${fmtD(a)}–${fmtD(b)})`;
+  };
+  wkSel.innerHTML = `<option value="0">${labelWeek(0)}</option><option value="1">${labelWeek(1)}</option>`;
+  sel.value = '';
+  wkSel.value = '0';
+  hrs.value = '';
+  document.getElementById('modal-haines-reclass').classList.remove('hidden');
+  setTimeout(() => sel.focus(), 50);
+}
+function hainesCloseReclassModal() {
+  document.getElementById('modal-haines-reclass').classList.add('hidden');
+}
+function hainesSaveReclass() {
+  const sel = document.getElementById('haines-reclass-emp');
+  const wkSel = document.getElementById('haines-reclass-week');
+  const hrs = document.getElementById('haines-reclass-hours');
+  const empKey = sel.value;
+  const empName = sel.options[sel.selectedIndex]?.dataset.name || '';
+  const week = parseInt(wkSel.value, 10);
+  const hours = parseFloat(hrs.value);
+  if (!empKey)         { alert('Pick an employee.'); return; }
+  if (!(hours > 0))    { alert('Enter hours greater than 0.'); return; }
+  if (week !== 0 && week !== 1) { alert('Pick a week.'); return; }
+  // Sanity check: don't let the user move more hours than the employee
+  // actually had worked in that week (post-OT@$80 adjustment).
+  const emp = _hainesParsed.employees.find(e => hainesEmpKey(e.fname, e.lname) === empKey);
+  if (emp) {
+    const already = _hainesReclassifications.filter(r => r.empKey === empKey && r.week === week).reduce((s,r)=>s+r.hours, 0);
+    const available = Math.max(0, (emp._origWeeks[week]||0) - already);
+    if (hours > available + 0.001) {
+      if (!confirm(`${empName} only has ${fmt(available)} unreclassified worked hours in week ${week+1}. Save anyway? (Worked hours will clamp at 0.)`)) return;
+    }
+  }
+  _hainesReclassifications.push({ empKey, empName, week, hours });
+  hainesCloseReclassModal();
+  hainesApplyReclassifications();
+}
+function hainesRemoveReclass(idx) {
+  _hainesReclassifications.splice(idx, 1);
+  hainesApplyReclassifications();
 }
 
 // Read CSV-row inputs back into the same {fname,lname,reg,ot,vac,hol,sick,
