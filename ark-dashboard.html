@@ -11312,52 +11312,46 @@ function wgRenderWidget(w, data){
 
   if(w.type==='ptoApprovals'){
     // Admin-only — compact pending-requests card with inline approve/deny.
-    // Body is populated by ptoWgRenderApprovals() once the shell mounts.
-    // editBtns adds the ✏️ pencil so the user can resize Small/Medium/Large
-    // like every other widget; .wg-actions is opacity:0 by default so the
-    // pencil only shows on hover and doesn't crowd the header.
+    // Header now matches every other widget (title + actions); the pending
+    // count badge sits next to the pencil so it stays visible even when
+    // the widget is Small and the title ellipsizes. Body populated by
+    // ptoWgRenderApprovals() once the shell mounts.
     setTimeout(() => ptoWgRenderApprovals(), 0);
     return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
-      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:10px 14px;">
-        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}
-          <div class="wg-title" style="font-size:13px;">🏖 PTO Approvals <span id="pto-wg-pending-count" style="font-size:9px;background:var(--gold);color:#fff;border-radius:8px;padding:0 6px;margin-left:2px;font-weight:700;display:none;"></span></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <button onclick="nav('ptocenter')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" title="Open PTO Center">→</button>
+      <div class="wg-header">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}<div class="wg-title">PTO Approvals</div></div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          <span id="pto-wg-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;display:none;"></span>
           ${editBtns}
         </div>
       </div>
-      <div id="pto-wg-approvals-body" class="wg-body" style="padding:8px 12px 12px;overflow-y:auto;">
+      <div id="pto-wg-approvals-body" class="wg-body" style="padding:0 14px 12px;overflow-y:auto;justify-content:flex-start;">
         <div style="padding:14px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>
       </div>
     </div>`;
   }
 
   if(w.type==='ptoOut'){
-    // Visible to everyone — compact approved-PTO card with range dropdown
-    // and Request PTO. Click ⛶ to expand to a popup. ✏️ pencil resizes
-    // the widget Small/Medium/Large like every other widget.
+    // Visible to everyone — compact approved-PTO card. Header matches every
+    // other widget. Footer strip houses the range dropdown, expand-to-modal
+    // button, and Request PTO so the header stays clean even at Small size.
     setTimeout(() => ptoWgRenderOut(), 0);
     return `<div class="wg-widget" style="--wg-accent:#0070c0;grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
-      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:10px 14px;">
-        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}
-          <div class="wg-title" style="font-size:13px;">🏖 Who's Out</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:11px;padding:2px 22px 2px 6px;height:24px;">
-            <option value="week">Week</option>
-            <option value="month" selected>Month</option>
-            <option value="quarter">90d</option>
-          </select>
-          <button onclick="ptoOpenWhosOutModal()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px;" title="Expand">⛶</button>
-          ${editBtns}
-        </div>
+      <div class="wg-header">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}<div class="wg-title">Who's Out</div></div>
+        ${editBtns}
       </div>
-      <div id="pto-wg-out-body" class="wg-body" style="padding:8px 12px 8px;overflow-y:auto;">
+      <div id="pto-wg-out-body" class="wg-body" style="padding:0 14px 6px;overflow-y:auto;justify-content:flex-start;">
         <div style="padding:14px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>
       </div>
-      <div style="padding:6px 12px 12px;border-top:1px solid var(--border);">
-        <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px;width:100%;">+ Request PTO</button>
+      <div style="padding:6px 14px 12px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:11px;padding:2px 22px 2px 6px;height:26px;flex:1;min-width:0;">
+          <option value="week">Week</option>
+          <option value="month" selected>Month</option>
+          <option value="quarter">90d</option>
+        </select>
+        <button onclick="ptoOpenWhosOutModal()" class="btn btn-ghost btn-sm" style="font-size:12px;padding:0 8px;height:26px;flex-shrink:0;" title="Expand">⛶</button>
+        <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm" style="font-size:11px;padding:0 10px;height:26px;flex-shrink:0;" title="Request PTO">+ PTO</button>
       </div>
     </div>`;
   }
