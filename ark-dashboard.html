@@ -10985,10 +10985,18 @@ function wgRenderWidget(w, data){
       {label:'Homebase',    href:'https://app.joinhomebase.com/'},
       {label:'7Shifts',     href:'https://app.7shifts.com/'},
     ];
+    const officeApps = [
+      {label:'Calendly',     href:'https://calendly.com'},
+      {label:'Zoom',         href:'https://zoom.us'},
+      {label:'Otter Notes',  href:'https://otter.ai/home'},
+      {label:'Eakes',        href:'https://einfo.eakes.com/Gateway/Login?ReturnUrl=%2f'},
+      {label:'Check Orders', href:'https://intuitmarket.intuit.com/reorder'},
+    ];
     const actions = [
       {label:'Add New Hire',icon:'📋',bg:'var(--green)',fn:'openAddEmp()'},
       {label:'QuickBooks',  icon:'💼',bg:'#2ca01c',href:'https://qbo.intuit.com'},
       {label:'Payroll ▾',   icon:'💰',bg:'#0070c0',dropdown:payrollPlatforms},
+      {label:'Office ▾',    icon:'🏢',bg:'#475569',dropdown:officeApps},
       {label:'Outlook',     icon:'📧',bg:'#0078d4',href:'https://outlook.office.com/mail/',badge:'Soon'},
       {label:'Add Client',  icon:'👤',bg:'var(--navy)',fn:'openAddClient()'},
       {label:'Add Postage', icon:'📬',bg:'#6b3fa0',fn:'openPostage()'},
