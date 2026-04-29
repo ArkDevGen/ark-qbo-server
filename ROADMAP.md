@@ -55,10 +55,11 @@ sections (or strike them out under "✅ Shipped") as they progress.
 ### Dashboard / UX
 - Priority pop-ups (urgent tier exists in notification system; broader use TBD)
 - Weekly backup
-- **Right-click → open in new tab** — Jacob wants to be able to right-click on
-  things (clients, tasks, etc.) and open them in a new tab without disturbing
-  the current view. Investigate whether this is feasible given the single-page
-  architecture (likely needs deep-link URLs per entity).
+- **Right-click → open in new tab — Phase 2 (per-entity)** — let users
+  right-click a client row, task card, etc. and open *that specific entity* in
+  a new tab. Needs per-entity deep links (e.g. `#/clients/123`) and a router
+  that opens the right modal/view on load. Phase 1 (sidebar pages) shipped —
+  decide if Phase 2 is wanted before building.
 
 ### Security
 - SMS confidentiality
@@ -142,3 +143,7 @@ sections (or strike them out under "✅ Shipped") as they progress.
 - Clock-in/out reminders — no longer pops on every refresh; only fires at the
   designated time. Added 5/10/15/20/30 min snooze.
 - Sidebar logo — enlarged + centered in a true square white area
+- Right-click → open in new tab (Phase 1) — sidebar nav pages now have hash
+  routes (`#/clients`, `#/payroll`, etc.). Right-clicking a sidebar item lets
+  the browser "Open Link in New Tab" land on that page directly. Per-entity
+  deep links (Phase 2) tracked under Dashboard / UX.
