@@ -41,6 +41,8 @@ sections (or strike them out under "✅ Shipped") as they progress.
 - **Dashboard — My Production Tasks / My Payroll Tasks widgets** — clean up.
   (Layout, content, hover state — TBD; Mackenzie to specify when ready.)
 - **Payroll Time Report** — clean up. (Specifics TBD.)
+- **iheartcoffee — update output file** — payroll output needs updating.
+  (Specifics TBD; Mackenzie to provide details when ready.)
 
 ---
 
