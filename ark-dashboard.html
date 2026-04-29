@@ -26876,7 +26876,35 @@ async function ptoSubmitRequest(){
     return;
   }
 
+  // Coverage check — warn (don't block) if any day in the requested range
+  // already has 2+ approved PTO from other team members. Goal is to keep
+  // 3rd-person-off days rare; user can still confirm to continue.
   btn.disabled = true;
+  statusEl.textContent = 'Checking coverage…';
+  statusEl.style.color = 'var(--text-d)';
+  try {
+    const conflicts = await ptoFindCoverageConflicts(startDate, endDate);
+    if (conflicts.length > 0) {
+      const lines = conflicts.slice(0, 6).map(c =>
+        `  • ${ptoFmtDate(c.date)} — ${c.names.join(', ')}`
+      );
+      const extra = conflicts.length > 6 ? `  …and ${conflicts.length - 6} more day(s)` : '';
+      const msg =
+        `⚠️ Coverage warning: 2 or more people are already approved off on:\n\n` +
+        lines.join('\n') + (extra ? '\n' + extra : '') +
+        `\n\nWe try to keep no more than 2 people out per day. Submit your request anyway?`;
+      if (!confirm(msg)) {
+        statusEl.textContent = '';
+        btn.disabled = false;
+        return;
+      }
+    }
+  } catch(_){
+    // If the coverage lookup fails (network blip etc.), don't block the
+    // submit — just log and proceed.
+    console.warn('PTO coverage check failed; submitting without it.');
+  }
+
   statusEl.textContent = 'Submitting…';
   statusEl.style.color = 'var(--text-d)';
   try {
@@ -26901,6 +26929,51 @@ async function ptoSubmitRequest(){
     statusEl.style.color = 'var(--red)';
     btn.disabled = false;
   }
+}
+
+// Coverage check — fetch approved PTO overlapping the requested range and
+// return a list of days where 2+ OTHER team members are already off.
+// We exclude the current user from the count so a person extending their
+// own approved PTO doesn't trigger a warning against themselves.
+async function ptoFindCoverageConflicts(startDate, endDate){
+  const resp = await authFetch(ARK_SERVER + `/pto/approved?from=${encodeURIComponent(startDate)}&to=${encodeURIComponent(endDate)}`);
+  if(!resp.ok) throw new Error('approved ' + resp.status);
+  const data = await resp.json();
+  const approved = data.requests || [];
+  const myId = currentUser ? currentUser.id : null;
+
+  // dayUsers[date] = Set of userIds with approved PTO that day (excluding self)
+  const dayUsers = new Map();
+  // userId → name (cache for display)
+  const nameMap = new Map();
+
+  for (const r of approved) {
+    if (r.userId === myId) continue;
+    nameMap.set(r.userId, r.userName);
+    // Iterate days from r.startDate to r.endDate inclusive
+    let d = new Date(r.startDate + 'T00:00:00');
+    const end = new Date(r.endDate + 'T00:00:00');
+    while (d <= end) {
+      const key = d.toISOString().slice(0, 10);
+      if (key >= startDate && key <= endDate) {
+        if (!dayUsers.has(key)) dayUsers.set(key, new Set());
+        dayUsers.get(key).add(r.userId);
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+
+  const conflicts = [];
+  for (const [date, ids] of dayUsers) {
+    if (ids.size >= 2) {
+      conflicts.push({
+        date,
+        names: Array.from(ids).map(id => nameMap.get(id) || '(team member)'),
+      });
+    }
+  }
+  conflicts.sort((a, b) => a.date.localeCompare(b.date));
+  return conflicts;
 }
 
 // Resolve Shannon's user ID from /users/team. Cached after first lookup.
