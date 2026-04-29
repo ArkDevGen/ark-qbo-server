@@ -27438,6 +27438,28 @@ function tcFirstDueFromPattern(parsed) {
 // contain a "[Todoist: …]" hint, populate the structured recurrence fields so
 // auto-roll lands on the correct weekday / day-of-month / month.
 // Idempotent: skips tasks already marked recurring=true with a freq.
+// Match a task against the active client filter. Supports three modes:
+//   '' (empty)     → match all
+//   '_noClient'    → match tasks with no clientId AND no clientName
+//   '<clientId>'   → match tasks whose clientId equals it
+//   'name:<name>'  → synthetic bucket for tasks that have clientName but
+//                    no (matching) clientId — used by the project sidebar
+//                    so unmatched-name tasks still appear under their name.
+function tcTaskMatchesClientFilter(t, fClient) {
+  if (!fClient) return true;
+  if (fClient === '_noClient') {
+    if (t.clientId) return false;
+    if (String(t.clientName || '').trim()) return false;
+    return true;
+  }
+  if (fClient.startsWith('name:')) {
+    if (t.clientId) return false;
+    const want = fClient.slice(5);
+    return String(t.clientName || '').trim().toLowerCase() === want;
+  }
+  return t.clientId === fClient;
+}
+
 function tcMigrateRecurrence() {
   for (const t of (DB.tasks || [])) {
     if (t.recurring && t.recurFreq) continue;
@@ -28646,7 +28668,14 @@ async function tcRender(){
   const tasks  = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const search = (document.getElementById('tc-search')?.value||'').toLowerCase();
   const fStat  = document.getElementById('tc-filter-status')?.value || 'open';
-  const fClient= document.getElementById('tc-filter-client')?.value || '';
+  let fClient  = document.getElementById('tc-filter-client')?.value || '';
+  // Synthetic buckets ('_noClient', 'name:<lowercase>') don't have an
+  // <option> in the client dropdown, so setting clientSel.value silently
+  // fails for those. Fall back to _tcActiveView only when the dropdown
+  // value is empty — that way a manual dropdown pick still wins.
+  if (!fClient && typeof _tcActiveView === 'string' && _tcActiveView.startsWith('project:')) {
+    fClient = _tcActiveView.slice(8) || '';
+  }
   const fAM    = document.getElementById('tc-filter-am')?.value || '';
   const groupBy= document.getElementById('tc-group-by')?.value || 'due';
 
@@ -28693,8 +28722,7 @@ async function tcRender(){
       if(!t.dueDate && t.status !== 'completed') return false; // no-date → Notes panel (not in project view)
     }
     if(t.type === 'note') return false; // notes go to project Notes tab
-    if(fClient === '_noClient' && t.clientId) return false; // "No Client" filter
-    if(fClient && fClient !== '_noClient' && t.clientId !== fClient) return false;
+    if(!tcTaskMatchesClientFilter(t, fClient)) return false;
     if(fAM && t.amId !== fAM) return false;
     if(search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
     if(fStat === 'open'){
@@ -28785,8 +28813,7 @@ async function tcRender(){
         if (t.parentId) return false;
         if (t.type === 'note') return false;
         if (t.status === 'completed') return false;
-        if (fClient === '_noClient' && t.clientId) return false;
-        if (fClient && fClient !== '_noClient' && t.clientId !== fClient) return false;
+        if (!tcTaskMatchesClientFilter(t, fClient)) return false;
         if (fAM && t.amId !== fAM) return false;
         if (search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
         return true;
@@ -29256,14 +29283,47 @@ function tcBuildProjectSidebar() {
   // Notes count — type:'note' tasks for current user
   const cNotes = myTasks.filter(t => t.type === 'note' && t.status !== 'completed').length;
 
-  // Projects: group by client
+  // Projects: group by client. The grouping resolves an effective bucket
+  // for each task in priority order so tasks never get dumped into Personal
+  // unless they truly have no client at all:
+  //   1. clientId set + matches a real client → group by clientId, label = biz
+  //   2. clientId set but no match → group by clientId, label = clientName
+  //   3. No clientId but clientName matches a real client (case/whitespace
+  //      insensitive) → group by that client.id (auto-bridges stale data)
+  //   4. No clientId, clientName doesn't match any client → group by a
+  //      synthetic "name:<lowercased name>" key so the task still appears
+  //      under its client name (NOT Personal)
+  //   5. Genuinely no client → '_noClient' (Personal)
   const projects = {};
+  const clientList = (DB.clients || []).filter(c => !c._deleted);
+  const bizLookup = new Map();
+  for (const c of clientList) {
+    const k = String(c.biz || '').trim().toLowerCase();
+    if (k && !bizLookup.has(k)) bizLookup.set(k, c);
+  }
   myTasks.filter(t => t.status !== 'completed').forEach(t => {
-    const key = t.clientId || '_noClient';
-    if (!projects[key]) {
-      const client = t.clientId ? (DB.clients || []).find(c => c.id === t.clientId) : null;
-      projects[key] = { name: client ? client.biz : (t.clientName || 'No Client'), count: 0, hasDueDate: false };
+    let key, label;
+    if (t.clientId) {
+      const client = clientList.find(c => c.id === t.clientId);
+      key = t.clientId;
+      label = client ? client.biz : (t.clientName || 'Unknown Client');
+    } else {
+      const rawName = String(t.clientName || '').trim();
+      if (rawName) {
+        const matched = bizLookup.get(rawName.toLowerCase());
+        if (matched) {
+          key = matched.id;
+          label = matched.biz;
+        } else {
+          key = 'name:' + rawName.toLowerCase();
+          label = rawName;
+        }
+      } else {
+        key = '_noClient';
+        label = 'No Client';
+      }
     }
+    if (!projects[key]) projects[key] = { name: label, count: 0, hasDueDate: false };
     projects[key].count++;
     if (t.dueDate) projects[key].hasDueDate = true;
   });
