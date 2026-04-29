@@ -128,6 +128,8 @@ sections (or strike them out under "✅ Shipped") as they progress.
 - Sandbox/staging — notify admin when dev complete, push "help wanted" tasks
 - Help Wanted priorities — nice-to-have / need-help (notify, accept comments) /
   urgent (send to all AMs immediately, confirmation when accepted)
+- **Emoji picker on team chat** — add an emoji picker so users can drop emojis
+  into chat messages.
 
 ### New CRM / Hub Builds
 - Hardy CRM/Hub
