@@ -19,6 +19,11 @@ sections (or strike them out under "✅ Shipped") as they progress.
   field or overrides a QBO-pulled value, the next QBO sync wipes it. The user's
   edit must win on save. (Also tracked in MEMORY: "QBO overwrites CRM edits on
   save".)
+- **Comm Center / SMS — incoming texts from team members don't show their name.**
+  Texts from Jacob render as the raw `+1…` number even though his number is on
+  his user profile. Likely an `+1` prefix-mismatch on lookup (stored without
+  the prefix, incoming Sinch payload has it). Lookup should normalize both
+  sides before matching.
 
 ---
 
@@ -28,6 +33,9 @@ sections (or strike them out under "✅ Shipped") as they progress.
   - Drop the "SOON" badge on Outlook (it's a working link now).
   - Possibly spacing / button order / what's actually shown.
 - **Tools Center** — remove New Hire Report (it lives in Payroll Center now).
+- **Tools Center** — surface Postage tool here too (keep on the dashboard
+  Quick Actions; just also expose it as a tile in Tools Center for users who
+  navigate by tool).
 - **Scooter's QBO Center** — collapse the row of Sales / COGS / P&L / etc. buttons
   into dropdowns. Currently too cluttered.
 
@@ -64,6 +72,13 @@ sections (or strike them out under "✅ Shipped") as they progress.
 ### Security
 - SMS confidentiality
 - MFA / passcodes (double security)
+
+### Comm Center
+- **Saved contacts / contacts folder** — today only client phones get
+  recognized in the Comm Center. Add a place to store labeled non-client
+  numbers (Homebase, verification-code senders, vendors, payroll platforms,
+  etc.) so incoming SMS surfaces a meaningful sender name instead of a raw
+  number. Should also be reusable from the user's profile (team numbers).
 
 ### API / Integrations
 - Lightspeed, Toast, PowerBI, Patriot, SurePay (real-time updates)
@@ -148,3 +163,8 @@ sections (or strike them out under "✅ Shipped") as they progress.
   routes (`#/clients`, `#/payroll`, etc.). Right-clicking a sidebar item lets
   the browser "Open Link in New Tab" land on that page directly. Per-entity
   deep links (Phase 2) tracked under Dashboard / UX.
+- Quick Actions — Office dropdown added next to Payroll, with Calendly,
+  Zoom, Otter Notes, Eakes, and Check Orders.
+- Robidoux GJE Builder — hosted at `/robidoux-entry` behind per-client access
+  keys. Tools Center has a "Robidoux GJE Builder" tile that opens credential
+  management (add/edit/delete clients, copy or regenerate access keys).
