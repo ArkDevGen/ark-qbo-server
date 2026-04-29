@@ -6838,6 +6838,34 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
   </div>
 
+  <!-- ── Who's Out (expanded) modal — bigger view of the dashboard widget. -->
+  <div class="overlay" id="modal-pto-whosout" style="display:none" onclick="overlayClose(event,'modal-pto-whosout')">
+    <div class="modal" style="max-width:720px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">🏖 Who's Out</div>
+          <div style="font-size:12px;color:var(--text-m);margin-top:2px;">Approved PTO across the team.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-pto-whosout')">×</button>
+      </div>
+      <div class="modal-body" style="padding:18px 22px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <label style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;font-weight:600;">Range:</label>
+          <select id="pto-out-modal-range" onchange="ptoOutModalRender()" class="field-input" style="font-size:12px;padding:4px 8px;height:30px;">
+            <option value="week">This week</option>
+            <option value="month" selected>This month</option>
+            <option value="quarter">Next 90 days</option>
+          </select>
+        </div>
+        <div id="pto-out-modal-body"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-pto-whosout')">Close</button>
+        <button class="btn btn-primary" onclick="closeModal('modal-pto-whosout');ptoOpenRequestModal()">+ Request PTO</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── PTO Request modal — submitted by any user; goes to Shannon ── -->
   <div class="overlay" id="modal-pto-request" style="display:none" onclick="overlayClose(event,'modal-pto-request')">
     <div class="modal" style="max-width:520px;" onclick="event.stopPropagation()">
@@ -10891,8 +10919,8 @@ const DEFAULT_WIDGETS = [
   {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:4},locked:true},
   {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
   {id:'dw13',type:'kpi',title:'My Payroll Tasks',source:{type:'computed',compute:'payrollTasks'},display:{metric:'custom',accentColor:'#0070c0'},filters:[],grid:{col:5,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
-  {id:'dw14',type:'ptoApprovals',title:'PTO Approvals',source:{type:'static'},display:{},filters:[],grid:{col:1,row:10,colSpan:12,rowSpan:2},locked:true,adminOnly:true},
-  {id:'dw15',type:'ptoOut',title:"Who's Out",source:{type:'static'},display:{},filters:[],grid:{col:1,row:12,colSpan:12,rowSpan:2},locked:true},
+  {id:'dw15',type:'ptoOut',title:"Who's Out",source:{type:'static'},display:{},filters:[],grid:{col:1,row:10,colSpan:4,rowSpan:2},locked:true},
+  {id:'dw14',type:'ptoApprovals',title:'PTO Approvals',source:{type:'static'},display:{},filters:[],grid:{col:5,row:10,colSpan:4,rowSpan:2},locked:true,adminOnly:true},
 ];
 
 // ── Computed widget handlers ──
@@ -11236,43 +11264,45 @@ function wgRenderWidget(w, data){
   }
 
   if(w.type==='ptoApprovals'){
-    // Admin-only — Shannon's home for pending PTO requests with inline
-    // approve/deny. Body is populated by ptoWgRenderApprovals() after the
-    // template is in the DOM (deferred so renderWidgets stays sync-safe).
+    // Admin-only — compact pending-requests card with inline approve/deny.
+    // Body is populated by ptoWgRenderApprovals() once the shell mounts.
     setTimeout(() => ptoWgRenderApprovals(), 0);
     return `<div class="wg-widget" style="--wg-accent:var(--gold);grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
-      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:14px 22px;">
-        <div style="display:flex;align-items:center;gap:8px;">${dragHandle}
-          <div class="wg-title">🏖 PTO Approvals <span id="pto-wg-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 7px;margin-left:4px;font-weight:700;display:none;"></span></div>
+      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:10px 14px;">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}
+          <div class="wg-title" style="font-size:13px;">🏖 PTO Approvals <span id="pto-wg-pending-count" style="font-size:9px;background:var(--gold);color:#fff;border-radius:8px;padding:0 6px;margin-left:2px;font-weight:700;display:none;"></span></div>
         </div>
-        <button onclick="nav('ptocenter')" class="btn btn-ghost btn-sm" style="font-size:11px;">Open PTO Center →</button>
+        <button onclick="nav('ptocenter')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" title="Open PTO Center">→</button>
       </div>
-      <div id="pto-wg-approvals-body" class="wg-body" style="padding:14px 22px 18px;max-height:340px;overflow-y:auto;">
-        <div style="padding:20px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+      <div id="pto-wg-approvals-body" class="wg-body" style="padding:8px 12px 12px;overflow-y:auto;">
+        <div style="padding:14px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>
       </div>
     </div>`;
   }
 
   if(w.type==='ptoOut'){
-    // Visible to everyone — approved PTO with week/month dropdown +
-    // "Request PTO" button (uses the modal from phase 3).
+    // Visible to everyone — compact approved-PTO card with range dropdown
+    // and Request PTO. Click "Expand" for the full popup.
     setTimeout(() => ptoWgRenderOut(), 0);
     return `<div class="wg-widget" style="--wg-accent:#0070c0;grid-column:${w.grid.col}/span ${w.grid.colSpan};grid-row:${w.grid.row}/span ${w.grid.rowSpan};" data-wid="${w.id}" draggable="false">
-      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:14px 22px;">
-        <div style="display:flex;align-items:center;gap:8px;">${dragHandle}
-          <div class="wg-title">🏖 Who's Out</div>
+      <div class="wg-header" style="border-bottom:1px solid var(--border);padding:10px 14px;">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0;">${dragHandle}
+          <div class="wg-title" style="font-size:13px;">🏖 Who's Out</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:12px;padding:4px 8px;height:30px;">
-            <option value="week">This week</option>
-            <option value="month" selected>This month</option>
-            <option value="quarter">Next 90 days</option>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          <select id="pto-wg-range" onchange="ptoWgRenderOut()" class="field-input" style="font-size:11px;padding:2px 6px;height:24px;">
+            <option value="week">Week</option>
+            <option value="month" selected>Month</option>
+            <option value="quarter">90d</option>
           </select>
-          <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm" style="font-size:11px;">+ Request PTO</button>
+          <button onclick="ptoOpenWhosOutModal()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px;" title="Expand">⛶</button>
         </div>
       </div>
-      <div id="pto-wg-out-body" class="wg-body" style="padding:14px 22px 18px;max-height:340px;overflow-y:auto;">
-        <div style="padding:20px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+      <div id="pto-wg-out-body" class="wg-body" style="padding:8px 12px 8px;overflow-y:auto;">
+        <div style="padding:14px;text-align:center;color:var(--text-d);font-size:12px;">Loading…</div>
+      </div>
+      <div style="padding:6px 12px 12px;border-top:1px solid var(--border);">
+        <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px;width:100%;">+ Request PTO</button>
       </div>
     </div>`;
   }
@@ -11446,7 +11476,10 @@ function wgLoadWidgets(){
   // Sync flags from defaults (authoritative — overrides any stale locked state
   // that may have been written to a user's saved layout by a prior version)
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
-  const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar
+  // dw14/15 are PTO widgets we just resized — force them back to default
+  // dimensions so existing users with the old (big) saved layout see the
+  // new compact sizes on next load.
+  const FULL_LOCKED = new Set(['dw10','dw11','dw14','dw15']); // Quick Actions, Calendar, PTO widgets
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
     if(!def){
@@ -11459,9 +11492,10 @@ function wgLoadWidgets(){
     // a stale saved layout.
     w.locked = !!def.locked;
     if(def.locked && FULL_LOCKED.has(w.id)){
-      w.grid = w.grid || {};
-      w.grid.colSpan = def.grid.colSpan;
-      w.grid.rowSpan = def.grid.rowSpan;
+      // Force the entire grid spec from the default for these widgets
+      // so resizes/repositions in DEFAULT_WIDGETS take effect on next load
+      // even if the user already has an older layout cached.
+      w.grid = { ...def.grid };
     }
   });
 
@@ -26943,7 +26977,7 @@ async function ptoWgRenderApprovals(){
     if(!resp.ok){
       // Non-admin or other error — render quietly. The widget should be
       // hidden for non-admins anyway thanks to the adminOnly filter.
-      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:13px;">Couldn't load requests.</div>`;
+      body.innerHTML = `<div style="padding:14px;text-align:center;color:var(--text-d);font-size:11px;">Couldn't load requests.</div>`;
       return;
     }
     const data = await resp.json();
@@ -26953,24 +26987,30 @@ async function ptoWgRenderApprovals(){
       else                   { badge.style.display = 'none'; }
     }
     if(requests.length === 0){
-      body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">No pending requests. 🎉</div>`;
+      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:12px;">No pending requests. 🎉</div>`;
       return;
     }
-    body.innerHTML = requests.map(r => `
-      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:220px;">
-          <div style="font-weight:700;font-size:13px;color:var(--navy);">${_ptoEsc(r.userName)}</div>
-          <div style="font-size:13px;color:var(--text);margin-top:2px;">${ptoFmtRange(r.startDate, r.endDate)} · ${Number(r.hours).toFixed(1)} hrs</div>
-          ${r.notes ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;font-style:italic;">${_ptoEsc(r.notes)}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:6px;">
-          <button onclick="ptoWgApprove('${_ptoEsc(r.id)}')" class="btn btn-primary btn-sm" style="background:#2e7d5e;border-color:#2e7d5e;font-size:11px;">✓ Approve</button>
-          <button onclick="ptoWgDeny('${_ptoEsc(r.id)}', '${_ptoEsc(r.userName)}')" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;">✕ Deny</button>
+    // Show top 3 inline; spill rest to PTO Center.
+    const inline = requests.slice(0, 3);
+    const overflow = requests.length - inline.length;
+    body.innerHTML = inline.map(r => `
+      <div style="border-bottom:1px solid var(--border);padding:6px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:600;font-size:12px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_ptoEsc(r.userName)}</div>
+            <div style="font-size:11px;color:var(--text-d);">${ptoFmtRange(r.startDate, r.endDate)} · ${Number(r.hours).toFixed(1)}h</div>
+          </div>
+          <div style="display:flex;gap:3px;flex-shrink:0;">
+            <button onclick="ptoWgApprove('${_ptoEsc(r.id)}')" class="btn btn-sm" style="background:#2e7d5e;color:#fff;border:none;font-size:11px;padding:2px 6px;line-height:1;" title="Approve">✓</button>
+            <button onclick="ptoWgDeny('${_ptoEsc(r.id)}', '${_ptoEsc(r.userName)}')" class="btn btn-sm" style="background:transparent;color:var(--red);border:1px solid var(--red);font-size:11px;padding:2px 6px;line-height:1;" title="Deny">✕</button>
+          </div>
         </div>
       </div>
-    `).join('');
+    `).join('') + (overflow > 0 ? `<div style="text-align:center;padding:6px 0 0;font-size:11px;color:var(--text-d);"><a onclick="nav('ptocenter')" style="cursor:pointer;color:var(--accent);">+${overflow} more →</a></div>` : '');
+    // Drop top border on the first row
+    if(body.firstElementChild) body.firstElementChild.style.borderTop = 'none';
   } catch(e){
-    body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--red);font-size:13px;">${_ptoEsc(e.message)}</div>`;
+    body.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:11px;">${_ptoEsc(e.message)}</div>`;
   }
 }
 
@@ -27002,41 +27042,87 @@ async function ptoWgDeny(id, name){
   } catch(e){ showToast(e.message, 'error'); }
 }
 
-// "Who's Out" — approved PTO across the picked range. Defaults to month.
+// Compute the [from, to] date range for "Who's Out" given a key.
+function ptoWgRange(key){
+  const now = new Date();
+  const start = new Date(now);
+  let end = new Date(now);
+  if(key === 'week'){
+    start.setDate(now.getDate() - now.getDay());
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+  } else if(key === 'month'){
+    start.setDate(1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  } else { // 'quarter' — next 90 days
+    end = new Date(now.getTime() + 90 * 24 * 3600 * 1000);
+  }
+  return { fromStr: start.toISOString().slice(0,10), toStr: end.toISOString().slice(0,10), key };
+}
+
+// "Who's Out" — compact card body. Top 4 inline; "+N more →" for overflow.
 async function ptoWgRenderOut(){
   const body = document.getElementById('pto-wg-out-body');
   const sel = document.getElementById('pto-wg-range');
   if(!body) return;
-  const range = sel ? sel.value : 'month';
-
-  const now = new Date();
-  const start = new Date(now);
-  let end = new Date(now);
-  if(range === 'week'){
-    // Sunday → Saturday this week
-    start.setDate(now.getDate() - now.getDay());
-    end = new Date(start);
-    end.setDate(start.getDate() + 6);
-  } else if(range === 'month'){
-    start.setDate(1);
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  } else { // quarter — next 90 days
-    end = new Date(now.getTime() + 90 * 24 * 3600 * 1000);
-  }
-  const fromStr = start.toISOString().slice(0, 10);
-  const toStr   = end.toISOString().slice(0, 10);
+  const { fromStr, toStr, key } = ptoWgRange(sel ? sel.value : 'month');
 
   try {
     const resp = await authFetch(ARK_SERVER + `/pto/approved?from=${fromStr}&to=${toStr}`);
     if(!resp.ok){
-      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:13px;">Couldn't load approved PTO.</div>`;
+      body.innerHTML = `<div style="padding:14px;text-align:center;color:var(--text-d);font-size:11px;">Couldn't load.</div>`;
       return;
     }
     const data = await resp.json();
     const requests = data.requests || [];
     if(requests.length === 0){
-      const label = range === 'week' ? 'this week' : range === 'month' ? 'this month' : 'the next 90 days';
-      body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">No one is out ${label}. ✨</div>`;
+      const label = key === 'week' ? 'this week' : key === 'month' ? 'this month' : 'next 90 days';
+      body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:12px;">No one is out ${label}. ✨</div>`;
+      return;
+    }
+    const inline = requests.slice(0, 4);
+    const overflow = requests.length - inline.length;
+    body.innerHTML = inline.map(r => `
+      <div style="border-bottom:1px solid var(--border);padding:6px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-weight:600;font-size:12px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_ptoEsc(r.userName)}</div>
+            <div style="font-size:11px;color:var(--text-d);">${ptoFmtRange(r.startDate, r.endDate)}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-d);font-family:monospace;flex-shrink:0;">${Number(r.hours).toFixed(1)}h</div>
+        </div>
+      </div>
+    `).join('') + (overflow > 0 ? `<div style="text-align:center;padding:6px 0 0;font-size:11px;color:var(--text-d);"><a onclick="ptoOpenWhosOutModal()" style="cursor:pointer;color:var(--accent);">+${overflow} more →</a></div>` : '');
+    if(body.firstElementChild) body.firstElementChild.style.borderTop = 'none';
+  } catch(e){
+    body.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:11px;">${_ptoEsc(e.message)}</div>`;
+  }
+}
+
+// Expanded "Who's Out" — opens a modal with the full table. Reuses the
+// range dropdown state from the widget if present, else defaults to month.
+function ptoOpenWhosOutModal(){
+  const widgetSel = document.getElementById('pto-wg-range');
+  const modalSel = document.getElementById('pto-out-modal-range');
+  if(modalSel && widgetSel) modalSel.value = widgetSel.value;
+  document.getElementById('modal-pto-whosout').style.display = 'flex';
+  ptoOutModalRender();
+}
+
+async function ptoOutModalRender(){
+  const sel = document.getElementById('pto-out-modal-range');
+  const body = document.getElementById('pto-out-modal-body');
+  if(!body) return;
+  const { fromStr, toStr, key } = ptoWgRange(sel ? sel.value : 'month');
+  body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>`;
+  try {
+    const resp = await authFetch(ARK_SERVER + `/pto/approved?from=${fromStr}&to=${toStr}`);
+    if(!resp.ok) throw new Error('approved ' + resp.status);
+    const data = await resp.json();
+    const requests = data.requests || [];
+    if(requests.length === 0){
+      const label = key === 'week' ? 'this week' : key === 'month' ? 'this month' : 'the next 90 days';
+      body.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">No one is out ${label}. ✨</div>`;
       return;
     }
     body.innerHTML = `
