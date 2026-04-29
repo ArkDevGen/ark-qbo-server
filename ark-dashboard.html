@@ -1712,16 +1712,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="nav-item" id="nav-meetings" onclick="nav('meetings')"><span class="ni">📅</span>Meetings</div>
     </div>
 
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Integrations <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <!-- Workspace — infrastructure used across daily work: QBO, files, tools,
+         and reports. Distinct from the client-facing groups above. -->
+    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Workspace <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
       <div class="nav-item" id="nav-qbo" onclick="nav('qbo')"><span class="ni">💼</span>QBO Center</div>
       <div class="nav-item" id="nav-filecenter" onclick="nav('filecenter')"><span class="ni">📁</span>File Center</div>
-    </div>
-
-    <!-- Tools & Reports merged: one sidebar item, internal tabs at the top of
-         each view flip between the two pages. -->
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Tools & Reports <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
-    <div class="nav-group">
       <div class="nav-item" id="nav-tools" onclick="nav('tools')"><span class="ni">🧰</span>Tools & Reports</div>
     </div>
 
