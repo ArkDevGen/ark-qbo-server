@@ -55,6 +55,10 @@ sections (or strike them out under "✅ Shipped") as they progress.
 ### Dashboard / UX
 - Priority pop-ups (urgent tier exists in notification system; broader use TBD)
 - Weekly backup
+- **Right-click → open in new tab** — Jacob wants to be able to right-click on
+  things (clients, tasks, etc.) and open them in a new tab without disturbing
+  the current view. Investigate whether this is feasible given the single-page
+  architecture (likely needs deep-link URLs per entity).
 
 ### Security
 - SMS confidentiality
