@@ -2021,58 +2021,75 @@ function hainesParseTimesheet(text, filename) {
   const byEmp = new Map();
   const ot80Re = /(\d+(?:\.\d+)?)\s*hrs?\s*@\s*\$?\s*80\b/i;
   const ocRe   = /\bon[\s-]?call\b/i;
+  // Helper: row date → week index (0 or 1)
+  const weekOf = (date) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 0;
+    const ms = Date.UTC(...date.split('-').map((v,i) => i===1 ? parseInt(v,10)-1 : parseInt(v,10)));
+    let wk = Math.floor((ms - startMs) / (7*24*60*60*1000));
+    if (wk < 0) wk = 0;
+    if (wk > 1) wk = 1;
+    return wk;
+  };
   for (let i = 1; i < lines.length; i++) {
     const c = parseLine(lines[i], I);
     const fname = (c[I.fname]||'').trim();
     const lname = (c[I.lname]||'').trim();
     if (!fname && !lname) continue;
     const hours = parseFloat(c[I.hours]) || 0;
-    if (hours <= 0) continue;
     const job   = (c[I.job]||'').trim().toLowerCase();
     const note  = (c[I.notes]||'').trim();
     const date  = (c[I.date]||'').trim();
     const key = `${fname.toLowerCase()}|${lname.toLowerCase()}`;
     if (!byEmp.has(key)) {
-      byEmp.set(key, { fname, lname, weeks: [0, 0], vac: 0, sick: 0, hol: 0, ot80: 0, oc: 0 });
+      byEmp.set(key, { fname, lname, weeks: [0, 0], weekOt80: [0, 0], vac: 0, sick: 0, hol: 0, ot80: 0, oc: 0 });
     }
     const e = byEmp.get(key);
+
+    // Notes are processed even on 0-hour rows. Buddy Punch / QuickBooks Time
+    // emit "Shift Total" rows with hours=0 on Sat/Sun to flag a full weekend
+    // on-call shift; we still need the OC@$25 count from those.
+    if (note) {
+      if (ocRe.test(note)) e.oc += 1;
+      const m = note.match(ot80Re);
+      if (m) {
+        const ot80Hours = parseFloat(m[1]) || 0;
+        e.ot80 += ot80Hours;
+        // Track which week the OT@$80 batch fell in so we can pull it out
+        // of that week's worked-hours total BEFORE the 40h OT threshold is
+        // applied. Those hours are already paid at premium rate and must
+        // not also count as overtime.
+        const wk = weekOf(date);
+        e.weekOt80[wk] = (e.weekOt80[wk] || 0) + ot80Hours;
+      }
+    }
+
+    if (hours <= 0) continue;
     if (job === 'vacation')      e.vac  += hours;
     else if (job === 'sick')     e.sick += hours;
     else if (job === 'holiday')  e.hol  += hours;
     else {
       // Worked hours — bucket into Week 1 or Week 2 by date offset
-      let wk = 0;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        const ms = Date.UTC(...date.split('-').map((v,i) => i===1 ? parseInt(v,10)-1 : parseInt(v,10)));
-        wk = Math.floor((ms - startMs) / (7*24*60*60*1000));
-        if (wk < 0) wk = 0;
-        if (wk > 1) wk = 1; // cap at week 2 (period is bi-weekly)
-      }
-      e.weeks[wk] = (e.weeks[wk] || 0) + hours;
-    }
-    if (note) {
-      if (ocRe.test(note)) e.oc += 1;
-      const m = note.match(ot80Re);
-      if (m) e.ot80 += parseFloat(m[1]) || 0;
+      e.weeks[weekOf(date)] += hours;
     }
   }
-  // Compute REG / OT per employee — anything over 40 worked hours per week is OT.
+  // Compute REG / OT per employee. OT@$80 hours are pulled OUT of their
+  // matching week's worked hours BEFORE the 40h OT threshold runs (premium
+  // rate already paid). The previous logic subtracted from the OT bucket
+  // post-hoc, which under-reported REG when an employee logged OT@$80 in a
+  // week that wasn't actually over 40 hours.
   const employees = [];
   for (const e of byEmp.values()) {
     let reg = 0, ot = 0;
-    for (const w of e.weeks) {
-      const wk = Number(w) || 0;
-      if (wk > 40) { reg += 40; ot += wk - 40; }
-      else         { reg += wk; }
+    for (let i = 0; i < e.weeks.length; i++) {
+      const adjWk = Math.max(0, (Number(e.weeks[i]) || 0) - (Number(e.weekOt80[i]) || 0));
+      if (adjWk > 40) { reg += 40; ot += adjWk - 40; }
+      else            { reg += adjWk; }
     }
-    // OT@$80 hours come OUT of the regular OT bucket (they're already in there;
-    // we're moving them into the premium-rate bucket).
-    const otNet = Math.max(0, ot - e.ot80);
     employees.push({
       fname: e.fname,
       lname: e.lname,
       reg:   Math.round(reg     * 100) / 100,
-      ot:    Math.round(otNet   * 100) / 100,
+      ot:    Math.round(ot      * 100) / 100,
       vac:   Math.round(e.vac   * 100) / 100,
       hol:   Math.round(e.hol   * 100) / 100,
       sick:  Math.round(e.sick  * 100) / 100,
@@ -2112,17 +2129,25 @@ function hainesRender() {
     totals.reg += e.reg; totals.ot += e.ot; totals.vac += e.vac; totals.hol += e.hol;
     totals.sick += e.sick; totals.ot80 += e.ot80; totals.oc += e.oc;
   }
-  const empRows = _hainesParsed.employees.map(e => `
-    <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;align-items:center;">
+  // CSV-parsed employees render as editable inputs so the user can override
+  // any value (e.g. add manual vacation hours that aren't in the timesheet
+  // export). Defaults come from the parser; overrides are read at process
+  // time via hainesCollectCsvEntries(). Each row carries the parser key
+  // ("lname|fname") in data-key so saves/reloads can stay aligned.
+  const empRows = _hainesParsed.employees.map(e => {
+    const rowKey = hainesEmpKey(e.fname, e.lname);
+    return `
+    <div class="haines-csv-row" data-key="${esc(rowKey)}" data-fname="${esc(e.fname)}" data-lname="${esc(e.lname)}" style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;align-items:center;">
       <span><strong style="color:var(--text);">${esc(e.lname)}, ${esc(e.fname)}</strong></span>
-      <span style="text-align:right;">${fmt(e.reg)}</span>
-      <span style="text-align:right;">${fmt(e.ot)}</span>
-      <span style="text-align:right;color:${e.vac>0?'var(--text)':'var(--muted)'};">${fmt(e.vac)}</span>
-      <span style="text-align:right;color:${e.hol>0?'var(--text)':'var(--muted)'};">${fmt(e.hol)}</span>
-      <span style="text-align:right;color:${e.sick>0?'var(--text)':'var(--muted)'};">${fmt(e.sick)}</span>
-      <span style="text-align:right;color:${e.ot80>0?'var(--gold)':'var(--muted)'};font-weight:${e.ot80>0?'600':'400'};">${fmt(e.ot80)}</span>
-      <span style="text-align:right;color:${e.oc>0?'var(--gold)':'var(--muted)'};font-weight:${e.oc>0?'600':'400'};">${e.oc>0?'$'+(e.oc*25):'—'}</span>
-    </div>`).join('');
+      <input class="hc-reg"  type="number" min="0" step="0.01" value="${fmt(e.reg)}"  style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+      <input class="hc-ot"   type="number" min="0" step="0.01" value="${fmt(e.ot)}"   style="width:100%;text-align:right;font-size:11px;padding:3px 5px;">
+      <input class="hc-vac"  type="number" min="0" step="0.01" value="${fmt(e.vac)}"  style="width:100%;text-align:right;font-size:11px;padding:3px 5px;${e.vac>0?'':'color:var(--muted);'}">
+      <input class="hc-hol"  type="number" min="0" step="0.01" value="${fmt(e.hol)}"  style="width:100%;text-align:right;font-size:11px;padding:3px 5px;${e.hol>0?'':'color:var(--muted);'}">
+      <input class="hc-sick" type="number" min="0" step="0.01" value="${fmt(e.sick)}" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;${e.sick>0?'':'color:var(--muted);'}">
+      <input class="hc-ot80" type="number" min="0" step="0.01" value="${fmt(e.ot80)}" style="width:100%;text-align:right;font-size:11px;padding:3px 5px;${e.ot80>0?'color:var(--gold);font-weight:600;':'color:var(--muted);'}">
+      <input class="hc-oc"   type="number" min="0" step="1"    value="${e.oc||0}"     style="width:100%;text-align:right;font-size:11px;padding:3px 5px;${e.oc>0?'color:var(--gold);font-weight:600;':'color:var(--muted);'}">
+    </div>`;
+  }).join('');
   // Manual employees — editable inputs
   const manualList = hainesGetManualList();
   let manualHtml = '';
@@ -2180,14 +2205,36 @@ function hainesRender() {
   }
   stage.innerHTML = `
     ${lifecycleHtml}
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;">${_hainesParsed.employees.length} employees from CSV · ${_hainesParsed.dateRange || 'period ?'}</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">${_hainesParsed.employees.length} employees from CSV · ${_hainesParsed.dateRange || 'period ?'}</div>
+      <div style="font-size:10px;color:var(--muted);font-style:italic;">Click any field to edit — your changes flow into the PDF.</div>
+    </div>
     <div style="border:1px solid var(--border);border-radius:6px;background:var(--card);">
       <div style="display:grid;grid-template-columns:1.6fr 60px 60px 60px 60px 60px 70px 70px;gap:6px;padding:6px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface);border-bottom:1px solid var(--border);">
-        <span>Name</span><span style="text-align:right;">REG</span><span style="text-align:right;">OT</span><span style="text-align:right;">Vac</span><span style="text-align:right;">Hol</span><span style="text-align:right;">Sick</span><span style="text-align:right;">OT@$80</span><span style="text-align:right;">OC@$25</span>
+        <span>Name</span><span style="text-align:right;">REG</span><span style="text-align:right;">OT</span><span style="text-align:right;">Vac</span><span style="text-align:right;">Hol</span><span style="text-align:right;">Sick</span><span style="text-align:right;">OT@$80</span><span style="text-align:right;">OC@$25 #</span>
       </div>
       ${empRows}
     </div>
     ${manualHtml}`;
+}
+
+// Read CSV-row inputs back into the same {fname,lname,reg,ot,vac,hol,sick,
+// ot80,oc} shape the parser produces. Called at process time so any manual
+// edits the user typed override the parser's defaults.
+function hainesCollectCsvEntries() {
+  const out = [];
+  document.querySelectorAll('.haines-csv-row').forEach(row => {
+    const num = (cls) => parseFloat(row.querySelector('.'+cls)?.value) || 0;
+    out.push({
+      fname: row.dataset.fname || '',
+      lname: row.dataset.lname || '',
+      reg:  num('hc-reg'),  ot:   num('hc-ot'),
+      vac:  num('hc-vac'),  hol:  num('hc-hol'),
+      sick: num('hc-sick'), ot80: num('hc-ot80'),
+      oc:   num('hc-oc'),
+    });
+  });
+  return out;
 }
 
 function hainesCollectManualEntries() {
@@ -2326,7 +2373,10 @@ function hainesMakePDF(employees, dateRange) {
 async function hainesProcessAll() {
   const btn = document.getElementById('haines-process-btn');
   if (!_hainesParsed) { hainesSetStatus('No file loaded','var(--red)'); return; }
-  const all = [..._hainesParsed.employees, ...hainesCollectManualEntries()];
+  // Pull the live values from the editable CSV rows (so any manual edits the
+  // user made — vacation, OT@$80, etc. — flow into the PDF) and concatenate
+  // the manually-entered employees (Marilynn Haines, etc.).
+  const all = [...hainesCollectCsvEntries(), ...hainesCollectManualEntries()];
   if (!all.length) { hainesSetStatus('No employees to process','var(--red)'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) {
     hainesSetStatus('PDF library failed to load — refresh the page and try again.','var(--red)');
