@@ -2439,28 +2439,13 @@ function hainesMakePDF(employees, dateRange) {
   });
   const ocTotalDisplay = T.oc > 0 ? '$' + (T.oc * 25) : '—';
   const dedTotalDisplay = T.ded > 0 ? '$' + T.ded : '—';
-  // Cell-level styling so the footer reads like a clean summary:
-  //  • TOTALS row — label spans First+Last columns; every value cell bordered
-  //  • PATRIOT REG / PATRIOT TOTAL — label spans First+Last; only the value
-  //    cell is bordered; the trailing 8 columns are a single borderless,
-  //    fill-less spacer so blank space stays blank.
-  const labelStyle = (color) => ({ halign: 'left', textColor: color || [26, 36, 64] });
-  const valueClipRight = { halign: 'right', lineWidth: { top: 0.75, bottom: 0.75, left: 0.75, right: 0 } };
-  const blankSpacer = { content: '', colSpan: 8, styles: { lineWidth: 0, fillColor: false } };
+  // Footer is just the TOTALS row now — Patriot summary lives in its own
+  // small bordered box at the bottom-right, rendered after the main table.
+  const labelStyle = { halign: 'left', textColor: [26, 36, 64] };
   const foot = [
     [
-      { content: 'TOTALS', colSpan: 2, styles: labelStyle() },
+      { content: 'TOTALS', colSpan: 2, styles: labelStyle },
       fmt(T.reg), fmt(T.ot), fmt(T.vac), fmt(T.hol), fmt(T.sick), fmt(T.ot80), ocTotalDisplay, fmt(T.total), dedTotalDisplay,
-    ],
-    [
-      { content: 'PATRIOT REG', colSpan: 2, styles: labelStyle([184, 146, 42]) },
-      { content: fmt(T.reg + T.ot80), styles: valueClipRight },
-      blankSpacer,
-    ],
-    [
-      { content: 'PATRIOT TOTAL', colSpan: 2, styles: labelStyle([184, 146, 42]) },
-      { content: fmt(T.total), styles: valueClipRight },
-      blankSpacer,
     ],
   ];
 
@@ -2468,31 +2453,31 @@ function hainesMakePDF(employees, dateRange) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
 
-  // Title
+  // Tighter title block so the table has more vertical room — fits ~30
+  // employees + footer + Patriot box on a single landscape-letter page.
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(26, 36, 64); // var(--navy)
-  doc.text('HAINES PAYROLL', pageW / 2, 40, { align: 'center' });
+  doc.setFontSize(15);
+  doc.setTextColor(26, 36, 64); // navy
+  doc.text('HAINES PAYROLL', pageW / 2, 26, { align: 'center' });
 
-  // Subtitle: period + run timestamp
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(8.5);
   doc.setTextColor(106, 101, 96);
   const subtitle = dateRange
     ? `Pay Period: ${dateRange}    ·    Generated ${new Date().toLocaleString()}`
     : `Generated ${new Date().toLocaleString()}`;
-  doc.text(subtitle, pageW / 2, 58, { align: 'center' });
+  doc.text(subtitle, pageW / 2, 40, { align: 'center' });
 
   doc.autoTable({
-    startY: 78,
+    startY: 54,
     head: [['First Name','Last Name','Regular','OT','Vacation','Holiday','Sick','OT @ $80','OC @ $25','Total','Tool Ded']],
     body,
     foot,
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 9.5,
-      cellPadding: 5,
+      fontSize: 8,
+      cellPadding: 3,
       lineColor: [180, 175, 168],
       lineWidth: 0.5,
       textColor: [26, 25, 22],
@@ -2502,7 +2487,7 @@ function hainesMakePDF(employees, dateRange) {
       fillColor: [26, 36, 64],   // navy
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: 10,
+      fontSize: 8.5,
       halign: 'center',
       lineColor: [26, 36, 64],
     },
@@ -2511,7 +2496,7 @@ function hainesMakePDF(employees, dateRange) {
       fillColor: [240, 237, 232],   // surface2
       textColor: [26, 36, 64],
       fontStyle: 'bold',
-      fontSize: 10,
+      fontSize: 9,
       lineColor: [26, 36, 64],
       lineWidth: 0.75,
     },
@@ -2522,7 +2507,43 @@ function hainesMakePDF(employees, dateRange) {
       9: { fontStyle: 'bold' },     // Total column
       10:{ fontStyle: 'bold' },     // Tool Ded column
     },
-    margin: { top: 78, left: 28, right: 28, bottom: 36 },
+    margin: { top: 54, left: 28, right: 28, bottom: 24 },
+  });
+
+  // Patriot summary — small bordered box anchored to the bottom-right under
+  // the main table. Two rows, two columns; every cell bordered all four
+  // sides (which the previous in-footer approach was missing on the right).
+  const patriotY = (doc.lastAutoTable?.finalY || 60) + 14;
+  doc.autoTable({
+    startY: patriotY,
+    body: [
+      ['PATRIOT REG',   fmt(T.reg + T.ot80)],
+      ['PATRIOT TOTAL', fmt(T.total)],
+    ],
+    theme: 'grid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 10,
+      cellPadding: 6,
+      lineColor: [184, 146, 42],   // gold border on all sides
+      lineWidth: 0.75,
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: {
+        halign: 'left',
+        fillColor: [240, 237, 232],
+        textColor: [184, 146, 42],   // gold label
+        cellWidth: 130,
+      },
+      1: {
+        halign: 'right',
+        textColor: [26, 36, 64],     // navy value
+        cellWidth: 90,
+      },
+    },
+    tableWidth: 'wrap',
+    margin: { left: pageW - 28 - 220, right: 28 },
   });
 
   return { doc, totals: { ...T, oc25: T.oc * 25 } };
