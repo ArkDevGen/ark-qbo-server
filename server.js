@@ -3852,8 +3852,8 @@ app.post('/payroll/notifications/clear', (req, res) => {
 // ═════════════════════════════════════════════════════════════════
 // ROBIDOUX GJE BUILDER — ACCESS GATE
 // Hosts the client-facing GJE engine at /robidoux-entry. Per-client
-// access keys are managed from the CRM's Tools Center.
-// Shape: { clients: { <slug>: { name, accessKey, _sessionToken, createdAt, lastLoginAt } } }
+// passwords are set from the CRM's Tools Center.
+// Shape: { clients: { <slug>: { name, password, _sessionToken, createdAt, lastLoginAt } } }
 // ═════════════════════════════════════════════════════════════════
 const ROBIDOUX_FILE = path.join(DATA_DIR, 'robidoux-data.json');
 let robidouxData = { clients: {} };
@@ -3871,13 +3871,6 @@ if (fs.existsSync(ROBIDOUX_FILE)) {
 function saveRobidouxData(){
   fs.writeFileSync(ROBIDOUX_FILE, JSON.stringify(robidouxData, null, 2));
 }
-function generateRobidouxAccessKey(){
-  // 16-char block key, hyphenated. Excludes ambiguous chars (0/O, 1/I/L).
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  let raw = '';
-  for (let i = 0; i < 16; i++) raw += alphabet[crypto.randomInt(alphabet.length)];
-  return `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,12)}-${raw.slice(12,16)}`;
-}
 
 // Public — serve the engine HTML
 app.get('/robidoux-entry', (req, res) => {
@@ -3886,10 +3879,10 @@ app.get('/robidoux-entry', (req, res) => {
 
 // Public — client login
 app.post('/robidoux/login', (req, res) => {
-  const { clientSlug, accessKey } = req.body || {};
-  if (!clientSlug || !accessKey) return res.status(400).json({ error: 'Missing credentials' });
+  const { clientSlug, password } = req.body || {};
+  if (!clientSlug || !password) return res.status(400).json({ error: 'Missing credentials' });
   const client = robidouxData.clients[clientSlug];
-  if (!client || client.accessKey !== accessKey) {
+  if (!client || client.password !== password) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   const token = crypto.randomUUID();
@@ -3899,50 +3892,54 @@ app.post('/robidoux/login', (req, res) => {
   res.json({ success: true, token, clientName: client.name });
 });
 
-// Admin — list clients (full keys returned so AMs can share with clients)
+// Admin — list clients (passwords returned so AMs can share with clients)
 app.get('/robidoux/admin/clients', requireAuth, (req, res) => {
   const list = Object.entries(robidouxData.clients).map(([slug, c]) => ({
     slug,
     name: c.name,
-    accessKey: c.accessKey,
+    password: c.password,
     createdAt: c.createdAt || null,
     lastLoginAt: c.lastLoginAt || null,
   }));
   res.json({ clients: list });
 });
 
-// Admin — upsert (add new or update existing)
+// Admin — upsert (add new or update existing). Password required on create,
+// optional on update (omit to keep the existing password unchanged).
 app.post('/robidoux/admin/client', requireAuth, (req, res) => {
-  const { slug, name, accessKey } = req.body || {};
+  const { slug, name, password } = req.body || {};
   if (!slug || !name) return res.status(400).json({ error: 'slug and name are required' });
   const cleanSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
   if (!cleanSlug) return res.status(400).json({ error: 'Invalid slug' });
   const existing = robidouxData.clients[cleanSlug];
   if (existing) {
     existing.name = name;
-    if (accessKey) existing.accessKey = accessKey;
+    if (password) existing.password = password;
   } else {
+    if (!password) return res.status(400).json({ error: 'password is required for new clients' });
     robidouxData.clients[cleanSlug] = {
       name,
-      accessKey: accessKey || generateRobidouxAccessKey(),
+      password,
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
     };
   }
   saveRobidouxData();
   const c = robidouxData.clients[cleanSlug];
-  res.json({ success: true, client: { slug: cleanSlug, name: c.name, accessKey: c.accessKey, createdAt: c.createdAt, lastLoginAt: c.lastLoginAt } });
+  res.json({ success: true, client: { slug: cleanSlug, name: c.name, password: c.password, createdAt: c.createdAt, lastLoginAt: c.lastLoginAt } });
 });
 
-// Admin — rotate access key
-app.post('/robidoux/admin/client/:slug/regenerate-key', requireAuth, (req, res) => {
+// Admin — set a new password (invalidates any active session)
+app.post('/robidoux/admin/client/:slug/password', requireAuth, (req, res) => {
   const slug = req.params.slug;
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'password is required' });
   const client = robidouxData.clients[slug];
   if (!client) return res.status(404).json({ error: 'Client not found' });
-  client.accessKey = generateRobidouxAccessKey();
+  client.password = password;
   client._sessionToken = null;
   saveRobidouxData();
-  res.json({ success: true, accessKey: client.accessKey });
+  res.json({ success: true });
 });
 
 // Admin — delete client

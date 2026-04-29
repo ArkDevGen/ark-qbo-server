@@ -6741,7 +6741,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <input id="rbx-add-slug" class="field-input" placeholder="robidoux" style="width:100%;font-family:monospace;">
             </div>
           </div>
-          <div style="font-size:11px;color:var(--text-m);margin-top:8px;">An access key will be auto-generated. You can rotate it anytime.</div>
+          <div style="margin-top:10px;">
+            <label style="font-size:11px;color:var(--text-m);">Password *</label>
+            <input id="rbx-add-password" class="field-input" type="text" placeholder="Choose a password to share with the client" style="width:100%;">
+          </div>
+          <div style="font-size:11px;color:var(--text-m);margin-top:8px;">You'll share this password with the client so they can log in. You can change it anytime.</div>
           <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
             <button onclick="rbxCloseAddForm()" class="btn btn-ghost btn-sm">Cancel</button>
             <button onclick="rbxSubmitNew()" class="btn btn-primary btn-sm">Create</button>
@@ -26145,6 +26149,7 @@ function rbxOpenAddForm(){
   document.getElementById('rbx-add-form').style.display = 'block';
   document.getElementById('rbx-add-name').value = '';
   document.getElementById('rbx-add-slug').value = '';
+  document.getElementById('rbx-add-password').value = '';
   setTimeout(()=>document.getElementById('rbx-add-name').focus(), 50);
 }
 function rbxCloseAddForm(){
@@ -26192,11 +26197,11 @@ function rbxRenderClients(clients){
         </div>
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface2);padding:8px 10px;border-radius:6px;">
-        <span style="font-size:11px;color:var(--text-m);">ACCESS KEY:</span>
-        <code style="font-family:monospace;font-size:13px;color:var(--navy);font-weight:600;letter-spacing:.5px;">${_rbxEsc(c.accessKey)}</code>
+        <span style="font-size:11px;color:var(--text-m);">PASSWORD:</span>
+        <code style="font-family:monospace;font-size:13px;color:var(--navy);font-weight:600;letter-spacing:.5px;">${_rbxEsc(c.password)}</code>
         <div style="margin-left:auto;display:flex;gap:6px;">
-          <button onclick="rbxCopyKey('${_rbxEsc(c.accessKey)}')" class="btn btn-ghost btn-sm">Copy</button>
-          <button onclick="rbxRegenerate('${_rbxEsc(c.slug)}', '${_rbxEsc(c.name)}')" class="btn btn-ghost btn-sm">Regenerate</button>
+          <button onclick="rbxCopyKey('${_rbxEsc(c.password)}')" class="btn btn-ghost btn-sm">Copy</button>
+          <button onclick="rbxChangePassword('${_rbxEsc(c.slug)}', '${_rbxEsc(c.name)}')" class="btn btn-ghost btn-sm">Change password</button>
           <button onclick="rbxDelete('${_rbxEsc(c.slug)}', '${_rbxEsc(c.name)}')" class="btn btn-ghost btn-sm" style="color:var(--red);">Delete</button>
         </div>
       </div>
@@ -26204,9 +26209,9 @@ function rbxRenderClients(clients){
   `).join('');
 }
 
-function rbxCopyKey(key){
-  navigator.clipboard.writeText(key).then(
-    ()=> showToast('Access key copied'),
+function rbxCopyKey(value){
+  navigator.clipboard.writeText(value).then(
+    ()=> showToast('Password copied'),
     ()=> showToast('Copy failed', 'error')
   );
 }
@@ -26214,19 +26219,20 @@ function rbxCopyKey(key){
 async function rbxSubmitNew(){
   const name = document.getElementById('rbx-add-name').value.trim();
   const slug = document.getElementById('rbx-add-slug').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-  if(!name || !slug){
-    showToast('Business name and company code are required', 'error');
+  const password = document.getElementById('rbx-add-password').value;
+  if(!name || !slug || !password){
+    showToast('Business name, company code, and password are required', 'error');
     return;
   }
   try {
     const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug, name }),
+      body: JSON.stringify({ slug, name, password }),
     });
     const data = await resp.json();
     if(!resp.ok) throw new Error(data.error || 'Failed to create');
-    showToast(`Created ${name} (key: ${data.client.accessKey})`);
+    showToast(`Created ${name}`);
     rbxCloseAddForm();
     rbxLoadClients();
   } catch(e){
@@ -26234,13 +26240,20 @@ async function rbxSubmitNew(){
   }
 }
 
-async function rbxRegenerate(slug, name){
-  if(!confirm(`Regenerate access key for ${name}? Their current key will stop working immediately.`)) return;
+async function rbxChangePassword(slug, name){
+  const next = prompt(`Set a new password for ${name}:`, '');
+  if (next == null) return; // cancelled
+  const trimmed = String(next).trim();
+  if (!trimmed) { showToast('Password cannot be empty', 'error'); return; }
   try {
-    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client/' + encodeURIComponent(slug) + '/regenerate-key', { method: 'POST' });
+    const resp = await authFetch(ARK_SERVER + '/robidoux/admin/client/' + encodeURIComponent(slug) + '/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: trimmed }),
+    });
     const data = await resp.json();
-    if(!resp.ok) throw new Error(data.error || 'Failed to regenerate');
-    showToast(`New key: ${data.accessKey}`);
+    if(!resp.ok) throw new Error(data.error || 'Failed to update password');
+    showToast(`Password updated for ${name}`);
     rbxLoadClients();
   } catch(e){
     showToast(e.message, 'error');

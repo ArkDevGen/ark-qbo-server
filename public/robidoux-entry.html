@@ -692,7 +692,7 @@ header::after {
     <label for="arkLoginSlug">Company Code</label>
     <input id="arkLoginSlug" type="text" autocomplete="username" spellcheck="false" required>
 
-    <label for="arkLoginKey">Access Key</label>
+    <label for="arkLoginKey">Password</label>
     <input id="arkLoginKey" type="password" autocomplete="current-password" required>
 
     <button type="submit" id="arkLoginBtn">Sign in</button>
@@ -735,9 +735,9 @@ header::after {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const slug = slugEl.value.trim().toLowerCase().replace(/\s+/g, '');
-    const key  = keyEl.value;
-    if(!slug || !key){
-      setStatus('Enter your company code and access key.', 'error');
+    const password = keyEl.value;
+    if(!slug || !password){
+      setStatus('Enter your company code and password.', 'error');
       return;
     }
     btn.disabled = true;
@@ -746,7 +746,7 @@ header::after {
       const resp = await fetch('/robidoux/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientSlug: slug, accessKey: key }),
+        body: JSON.stringify({ clientSlug: slug, password }),
       });
       const data = await resp.json();
       if(!resp.ok || !data.success){
