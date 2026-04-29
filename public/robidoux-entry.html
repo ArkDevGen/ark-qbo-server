@@ -451,6 +451,18 @@ header::after {
   outline: none;
   width: 100%;
 }
+.je-date-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  outline: none;
+}
+.je-date-input:hover { border-color: var(--accent); }
+.je-date-input:focus { border-color: var(--accent); }
 
 /* Empty state / processing */
 .empty {
@@ -2093,6 +2105,16 @@ function formatDate(d) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${m}/${day}/${d.getFullYear()}`;
 }
+function toDateInputValue(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function fromDateInputValue(s) {
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+}
 
 // =======================================================================
 // PROCESSING ORCHESTRATION
@@ -2239,7 +2261,7 @@ function renderReview() {
     const balCls = balanced ? 'ok' : 'bad';
     const balText = balanced ? `Balanced` : `Out of balance: ${fmtMoney(diff)}`;
 
-    const dateStr = je.date ? formatDate(je.date) : 'No date';
+    const dateInputVal = je.date ? toDateInputValue(je.date) : '';
     const memo = je.memo;
 
     const accountOptions = ALL_ACCOUNTS.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -2269,7 +2291,7 @@ function renderReview() {
             ${memo}
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
-            <span class="je-meta">${dateStr}</span>
+            <input type="date" class="je-date-input" value="${dateInputVal}" onchange="updateJeDate('${f.id}', this.value)" title="Journal entry date">
             <span class="je-balance ${balCls}">${balText}</span>
           </div>
         </div>
@@ -2461,10 +2483,20 @@ function removeFile(id) {
   renderExport();
 }
 
+function updateJeDate(fileId, value) {
+  const f = getFile(fileId);
+  if (!f || !f.je) return;
+  const d = fromDateInputValue(value);
+  if (!d) return;
+  f.je.date = d;
+  renderExport();
+}
+
 window.editCell = editCell;
 window.deleteLine = deleteLine;
 window.addLine = addLine;
 window.removeFile = removeFile;
+window.updateJeDate = updateJeDate;
 window.downloadCsv = downloadCsv;
 window.copyCsv = copyCsv;
 
