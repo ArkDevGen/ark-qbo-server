@@ -10919,8 +10919,12 @@ const DEFAULT_WIDGETS = [
   {id:'dw11',type:'calendar',title:'Schedule',source:{type:'api',endpoint:'gcal'},display:{},filters:[],grid:{col:1,row:4,colSpan:12,rowSpan:4},locked:true},
   {id:'dw12',type:'kpi',title:'My Production Tasks',source:{type:'computed',compute:'productionTasks'},display:{metric:'custom',accentColor:'var(--red)'},filters:[],grid:{col:1,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
   {id:'dw13',type:'kpi',title:'My Payroll Tasks',source:{type:'computed',compute:'payrollTasks'},display:{metric:'custom',accentColor:'#0070c0'},filters:[],grid:{col:5,row:8,colSpan:4,rowSpan:2},onClick:'tasks'},
-  {id:'dw15',type:'ptoOut',title:"Who's Out",source:{type:'static'},display:{},filters:[],grid:{col:1,row:10,colSpan:4,rowSpan:2},locked:true},
-  {id:'dw14',type:'ptoApprovals',title:'PTO Approvals',source:{type:'static'},display:{},filters:[],grid:{col:5,row:10,colSpan:4,rowSpan:2},locked:true,adminOnly:true},
+  // PTO widgets default to Medium (3×1) — same sizing model as the KPI tiles.
+  // User can resize via the ✏️ pencil to Small / Medium / Large. They stay
+  // `locked: true` so the delete button is hidden (these aren't user-created
+  // widgets — they're part of the PTO feature).
+  {id:'dw15',type:'ptoOut',title:"Who's Out",source:{type:'static'},display:{},filters:[],grid:{col:1,row:10,colSpan:3,rowSpan:1},locked:true},
+  {id:'dw14',type:'ptoApprovals',title:'PTO Approvals',source:{type:'static'},display:{},filters:[],grid:{col:4,row:10,colSpan:3,rowSpan:1},locked:true,adminOnly:true},
 ];
 
 // ── Computed widget handlers ──
@@ -11476,10 +11480,7 @@ function wgLoadWidgets(){
   // Sync flags from defaults (authoritative — overrides any stale locked state
   // that may have been written to a user's saved layout by a prior version)
   const defaultsById = Object.fromEntries(DEFAULT_WIDGETS.map(d=>[d.id,d]));
-  // dw14/15 are PTO widgets we just resized — force them back to default
-  // dimensions so existing users with the old (big) saved layout see the
-  // new compact sizes on next load.
-  const FULL_LOCKED = new Set(['dw10','dw11','dw14','dw15']); // Quick Actions, Calendar, PTO widgets
+  const FULL_LOCKED = new Set(['dw10','dw11']); // Quick Actions, Calendar — never user-resizable
   _userWidgets.forEach(w=>{
     const def = defaultsById[w.id];
     if(!def){
@@ -11528,6 +11529,25 @@ function wgLoadWidgets(){
     if (!haveIds.has(def.id) && !dismissed.has(def.id)){
       _userWidgets.push(JSON.parse(JSON.stringify(def)));
     }
+  }
+
+  // One-time migration: PTO widgets (dw14/dw15) shipped at full-width and
+  // were later shrunk to standard KPI sizes. For users whose saved layout
+  // still has the old big sizes, force them to the new compact defaults
+  // once. After this runs the user can freely resize via the ✏️ pencil
+  // and that change will persist (we set a per-user flag in localStorage).
+  if (currentUser) {
+    const PTO_RESIZE_KEY = 'ark_pto_widgets_v3_reset_' + currentUser.id;
+    try {
+      if (!localStorage.getItem(PTO_RESIZE_KEY)) {
+        ['dw14','dw15'].forEach(id => {
+          const w = _userWidgets.find(x => x.id === id);
+          const def = defaultsById[id];
+          if (w && def) w.grid = { ...def.grid };
+        });
+        localStorage.setItem(PTO_RESIZE_KEY, '1');
+      }
+    } catch(_){}
   }
 
   // Pack once to resolve any overlaps from legacy saved layouts
@@ -26990,8 +27010,9 @@ async function ptoWgRenderApprovals(){
       body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:12px;">No pending requests. 🎉</div>`;
       return;
     }
-    // Show top 3 inline; spill rest to PTO Center.
-    const inline = requests.slice(0, 3);
+    // Show top 2 inline so the widget fits cleanly at Medium (3×1) size;
+    // the rest spill to PTO Center via the "+N more →" link.
+    const inline = requests.slice(0, 2);
     const overflow = requests.length - inline.length;
     body.innerHTML = inline.map(r => `
       <div style="border-bottom:1px solid var(--border);padding:6px 0;">
@@ -27080,7 +27101,9 @@ async function ptoWgRenderOut(){
       body.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-d);font-size:12px;">No one is out ${label}. ✨</div>`;
       return;
     }
-    const inline = requests.slice(0, 4);
+    // Top 2 inline so the widget fits cleanly at Medium (3×1) size;
+    // the rest open in the expand modal via "+N more →".
+    const inline = requests.slice(0, 2);
     const overflow = requests.length - inline.length;
     body.innerHTML = inline.map(r => `
       <div style="border-bottom:1px solid var(--border);padding:6px 0;">
