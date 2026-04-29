@@ -458,9 +458,24 @@ app.post('/auth/reset-password', async (req, res) => {
   res.json({ success: true, message: `Password reset for ${username}` });
 });
 
-// ─── User CRUD (admin only) ─────────────────────────────────────
-app.get('/users', requireAuth, requireRole('admin'), (req, res) => {
-  res.json({ users: _users.map(safeUser) });
+// ─── User CRUD ──────────────────────────────────────────────────
+// GET /users is visible to any authenticated user so the Team & Users page
+// works for non-admins (read-only of others, edit own account). For
+// non-admin requesters we redact role + permissions + assignedClients so
+// they can't see who has what level of access. Admins still get the full
+// shape.
+app.get('/users', requireAuth, (req, res) => {
+  const requesterIsAdmin = req.arkUser.role === 'admin';
+  const users = _users.map(u => {
+    const safe = safeUser(u);
+    if (!requesterIsAdmin) {
+      delete safe.role;
+      delete safe.permissions;
+      delete safe.assignedClients;
+    }
+    return safe;
+  });
+  res.json({ users });
 });
 
 // Public team list — returns minimal info (name, id, role) for any authenticated user
@@ -470,7 +485,10 @@ app.get('/users/team', requireAuth, (req, res) => {
   })));
 });
 
-app.get('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
+app.get('/users/:id', requireAuth, (req, res) => {
+  const requesterIsAdmin = req.arkUser.role === 'admin';
+  const isSelf = req.arkUser.userId === req.params.id;
+  if (!requesterIsAdmin && !isSelf) return res.status(403).json({ error: 'You can only view your own account.' });
   const user = _users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(safeUser(user));
@@ -513,7 +531,15 @@ app.post('/users', requireAuth, requireRole('admin'), async (req, res) => {
   res.json({ success: true, user: safeUser(newUser) });
 });
 
-app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
+// PUT /users/:id — admins can edit any user; non-admin users can edit their
+// own account only, and only basic profile fields (name, contact info,
+// avatar color, password). Role / status / permissions / assigned clients
+// stay admin-only to prevent privilege escalation.
+app.put('/users/:id', requireAuth, async (req, res) => {
+  const requesterIsAdmin = req.arkUser.role === 'admin';
+  const isSelf = req.arkUser.userId === req.params.id;
+  if (!requesterIsAdmin && !isSelf) return res.status(403).json({ error: 'You can only edit your own account.' });
+
   const user = _users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -525,17 +551,20 @@ app.put('/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (phone !== undefined) user.phone = phone;
   if (title !== undefined) user.title = title;
   if (color !== undefined) user.color = color;
-  if (status !== undefined) user.status = status;
-  if (role && ['admin', 'am', 'pm', 'viewer'].includes(role)) user.role = role;
-  if (assignedClients !== undefined) user.assignedClients = assignedClients;
-  if (permissions !== undefined) user.permissions = permissions;
+  // Privileged fields — admin only.
+  if (requesterIsAdmin) {
+    if (status !== undefined) user.status = status;
+    if (role && ['admin', 'am', 'pm', 'viewer'].includes(role)) user.role = role;
+    if (assignedClients !== undefined) user.assignedClients = assignedClients;
+    if (permissions !== undefined) user.permissions = permissions;
+  }
   const pw = newPassword || password;
   if (pw && pw.length >= 6) {
     user.passwordHash = await bcrypt.hash(pw, 10);
   }
 
   saveUsers();
-  console.log(`User updated: ${user.fname} ${user.lname} by ${req.arkUser.userName}`);
+  console.log(`User updated: ${user.fname} ${user.lname} by ${req.arkUser.userName}${isSelf ? ' (self-edit)' : ''}`);
   res.json({ success: true, user: safeUser(user) });
 });
 

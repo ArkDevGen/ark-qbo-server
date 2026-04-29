@@ -4440,7 +4440,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <input type="text" id="users-search" placeholder="Search users..." oninput="renderUsers(this.value)"
           style="padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;width:220px;outline:none;"
           onfocus="this.style.borderColor='var(--navy)'" onblur="this.style.borderColor='var(--border)'">
-        <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
+        <button class="btn btn-primary" id="users-add-btn" onclick="openUserModal()">+ Add User</button>
       </div>
     </div>
     <div class="card" style="overflow:visible;">
@@ -4452,7 +4452,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
               <span style="color:var(--border);margin:0 2px;">|</span>
               <span onclick="sortUsersBy('last')" style="cursor:pointer;user-select:none;" id="uth-last">Last ↕</span>
             </th>
-            <th onclick="sortUsersBy('role')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-role">Role ↕</th>
+            <th id="uth-role-cell" onclick="sortUsersBy('role')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;"><span id="uth-role">Role ↕</span></th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Email</th>
             <th onclick="sortUsersBy('clients')" style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);cursor:pointer;user-select:none;" id="uth-clients">Clients ↕</th>
             <th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);">Open Tasks</th>
@@ -9504,8 +9504,9 @@ function applyNavPermissions(u){
   const p = u ? getPerms(u) : {};
   const isAdmin = p._isAdmin || false;
 
-  // Admin-only items
-  document.getElementById('nav-users').style.display = isAdmin ? 'flex' : 'none';
+  // Team & Users is visible to everyone now — non-admins see a redacted
+  // (no-roles, read-only-for-others) view.
+  document.getElementById('nav-users').style.display = 'flex';
   // PTO tab buttons inside Payroll Center / Employees / PTO Center top switchers
   document.querySelectorAll('.pto-admin-tab').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
@@ -10240,6 +10241,12 @@ function _updateUserSortHeaders() {
 async function renderUsers(q){
   const tbody = document.getElementById('users-tbody');
   if(!tbody) return;
+  // Hide admin-only chrome (Add User button, Role column header) for non-admins.
+  const isAdmin = currentUser && (currentUser.role === 'admin' || (typeof getPerms === 'function' && getPerms(currentUser)._isAdmin));
+  const addBtn = document.getElementById('users-add-btn');
+  if(addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+  const roleHeader = document.getElementById('uth-role-cell');
+  if(roleHeader) roleHeader.style.display = isAdmin ? '' : 'none';
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-d);">Loading users...</td></tr>';
   try {
     const resp = await authFetch(ARK_SERVER + '/users');
@@ -10310,6 +10317,14 @@ async function renderUsers(q){
       const lastLogin = u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—';
       const avatarBg = u.color || '#1a2440';
       const initials = ((u.fname||'?')[0] + (u.lname||'?')[0]).toUpperCase();
+      // Non-admin viewers: hide role cell, hide Deactivate/Activate, and
+      // only allow the Edit button on their own row (own-account edit only).
+      const isOwnRow = currentUser && uid === currentUser.id;
+      const roleCell = isAdmin ? `<td style="padding:10px 12px;">${roleBadge}</td>` : '';
+      const actionsHtml = isAdmin
+        ? `<button class="btn btn-ghost btn-sm" onclick="openUserModal('${uid}')">Edit</button>
+           ${(u.status||'active')==='active' ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${uid}')">Deactivate</button>` : `<button class="btn btn-ghost btn-sm" onclick="activateUser('${uid}')">Activate</button>`}`
+        : (isOwnRow ? `<button class="btn btn-ghost btn-sm" onclick="openUserModal('${uid}')">Edit</button>` : '');
       return `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:10px 12px;">
           <div style="display:flex;align-items:center;gap:10px;">
@@ -10320,17 +10335,14 @@ async function renderUsers(q){
             </div>
           </div>
         </td>
-        <td style="padding:10px 12px;">${roleBadge}</td>
+        ${roleCell}
         <td style="padding:10px 12px;font-size:12px;">${u.email||'—'}</td>
         <td style="padding:10px 12px;text-align:center;font-weight:600;color:var(--navy);">${displayClients}</td>
         <td style="padding:10px 12px;text-align:center;">${openTasks > 0 ? '<span style="font-weight:600;color:var(--gold);">'+openTasks+'</span>' : '<span style="color:var(--text-d);">0</span>'}</td>
         <td style="padding:10px 12px;">${statusDot}</td>
         <td style="padding:10px 12px;font-size:12px;color:var(--text-d);">${lastLogin}</td>
         <td style="padding:10px 12px;">
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="openUserModal('${uid}')">Edit</button>
-            ${(u.status||'active')==='active' ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser('${uid}')">Deactivate</button>` : `<button class="btn btn-ghost btn-sm" onclick="activateUser('${uid}')">Activate</button>`}
-          </div>
+          <div style="display:flex;gap:6px;">${actionsHtml}</div>
         </td>
       </tr>`;
     }).join('');
@@ -10355,6 +10367,12 @@ function openUserModal(userId){
   document.getElementById('ue-title').value = '';
   document.getElementById('ue-status').value = 'active';
   document.getElementById('user-edit-title').textContent = userId ? 'Edit User' : 'Add User';
+  // Hide privileged rows for non-admin self-edit. Admin sees all fields.
+  const ueIsAdmin = currentUser && (currentUser.role === 'admin' || (typeof getPerms === 'function' && getPerms(currentUser)._isAdmin));
+  ['ue-row-username','ue-row-role','ue-row-status','ue-row-clients'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = ueIsAdmin ? '' : 'none';
+  });
   // Show password field for new users, reset button for existing
   if(userId){
     document.getElementById('ue-password').style.display = 'none';
@@ -10416,8 +10434,16 @@ async function saveUser(){
   const status = document.getElementById('ue-status').value;
   const assignedClients = Array.from(document.querySelectorAll('.ue-client-cb:checked')).map(cb => cb.value);
 
-  if(!username || !fname){
+  // Non-admin self-edit: skip username (it's the user's identity, not editable)
+  // and don't send privileged fields. Server enforces this too, but no point
+  // sending them.
+  const ueIsAdmin = currentUser && (currentUser.role === 'admin' || (typeof getPerms === 'function' && getPerms(currentUser)._isAdmin));
+  if(ueIsAdmin && (!username || !fname)){
     alert('Username and First Name are required.');
+    return;
+  }
+  if(!ueIsAdmin && !fname){
+    alert('First Name is required.');
     return;
   }
   if(!id && !password){
@@ -10425,7 +10451,9 @@ async function saveUser(){
     return;
   }
 
-  const payload = { username, fname, lname, email, phone, role, title, status, assignedClients };
+  const payload = ueIsAdmin
+    ? { username, fname, lname, email, phone, role, title, status, assignedClients }
+    : { fname, lname, email, phone, title };
   if(password) { payload.password = password; payload.newPassword = password; }
 
   try {
@@ -10711,7 +10739,7 @@ function nav(page){
     }
   }
   if(page==='users'){
-    if(!currentUser || currentUser.role !== 'admin'){ nav('dashboard'); return; }
+    if(!currentUser){ nav('dashboard'); return; }
     renderUsers();
   }
   if(page==='ptocenter'){
@@ -55619,17 +55647,17 @@ function htAttachAccountPickers(accounts){
     <div class="modal-body" style="overflow-y:auto;">
       <input type="hidden" id="ue-id">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Username</label><input type="text" id="ue-username" class="form-control" placeholder="e.g. jmalousek" style="width:100%;box-sizing:border-box;"></div>
+        <div id="ue-row-username"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Username</label><input type="text" id="ue-username" class="form-control" placeholder="e.g. jmalousek" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;" id="ue-password-label">Temporary Password</label><input type="text" id="ue-password" class="form-control" placeholder="For new users" style="width:100%;box-sizing:border-box;"><div id="ue-reset-pw-wrap" style="display:none;margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('ue-password').style.display='';document.getElementById('ue-password').placeholder='Enter new password';document.getElementById('ue-reset-pw-wrap').style.display='none';" style="font-size:11px;color:var(--accent);">🔑 Reset Password</button></div></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">First Name</label><input type="text" id="ue-fname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Last Name</label><input type="text" id="ue-lname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Email</label><input type="email" id="ue-email" class="form-control" style="width:100%;box-sizing:border-box;"></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Phone</label><input type="tel" id="ue-phone" class="form-control" style="width:100%;box-sizing:border-box;"></div>
-        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Role</label><select id="ue-role" class="form-control" style="width:100%;box-sizing:border-box;"><option value="admin">Admin</option><option value="am" selected>Account Manager</option><option value="pm">Payroll Manager</option><option value="viewer">Viewer</option></select></div>
+        <div id="ue-row-role"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Role</label><select id="ue-role" class="form-control" style="width:100%;box-sizing:border-box;"><option value="admin">Admin</option><option value="am" selected>Account Manager</option><option value="pm">Payroll Manager</option><option value="viewer">Viewer</option></select></div>
         <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Title</label><input type="text" id="ue-title" class="form-control" placeholder="e.g. Senior Account Manager" style="width:100%;box-sizing:border-box;"></div>
-        <div><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Status</label><select id="ue-status" class="form-control" style="width:100%;box-sizing:border-box;"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        <div id="ue-row-status"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:4px;">Status</label><select id="ue-status" class="form-control" style="width:100%;box-sizing:border-box;"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
       </div>
-      <div style="margin-top:18px;">
+      <div id="ue-row-clients" style="margin-top:18px;">
         <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text-d);display:block;margin-bottom:8px;">Assigned Clients</label>
         <div id="ue-clients-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:4px;"></div>
       </div>
