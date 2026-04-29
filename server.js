@@ -4059,6 +4059,8 @@ app.post('/pto/requests', requireAuth, (req, res) => {
   if (endDate < startDate) return res.status(400).json({ error: 'endDate must be on or after startDate' });
   const h = Number(hours);
   if (!Number.isFinite(h) || h <= 0) return res.status(400).json({ error: 'hours must be greater than 0' });
+  const trimmedNotes = (notes || '').trim();
+  if (!trimmedNotes) return res.status(400).json({ error: 'notes are required' });
 
   const userId = req.arkUser.userId;
   const userName = (req.arkUser.user ? [req.arkUser.user.fname, req.arkUser.user.lname].filter(Boolean).join(' ') : '') || req.arkUser.userName || '(unknown)';
@@ -4069,7 +4071,7 @@ app.post('/pto/requests', requireAuth, (req, res) => {
     startDate,
     endDate,
     hours: h,
-    notes: (notes || '').trim().slice(0, 500),
+    notes: trimmedNotes.slice(0, 500),
     status: 'pending',
     requestedAt: new Date().toISOString(),
     decidedAt: null,

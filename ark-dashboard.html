@@ -6893,7 +6893,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div style="font-size:11px;color:var(--text-d);margin-top:4px;">Total PTO hours used across this date range.</div>
         </div>
         <div style="margin-top:12px;">
-          <label class="field-label">Notes (optional)</label>
+          <label class="field-label">Notes *</label>
           <textarea id="pto-req-notes" class="field-input" rows="3" placeholder="Reason or coverage details — anything Shannon should know" style="width:100%;resize:vertical;"></textarea>
         </div>
         <div id="pto-req-status" style="margin-top:10px;font-size:13px;"></div>
@@ -26867,6 +26867,11 @@ async function ptoSubmitRequest(){
   const hours = Number(hoursRaw);
   if(!Number.isFinite(hours) || hours <= 0){
     statusEl.textContent = 'Enter the total number of PTO hours.';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+  if(!notes || !notes.trim()){
+    statusEl.textContent = 'Add a note explaining the request.';
     statusEl.style.color = 'var(--red)';
     return;
   }
