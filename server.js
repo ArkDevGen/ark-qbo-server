@@ -4018,6 +4018,117 @@ app.get('/pto/balance', requireAuth, (req, res) => {
   res.json({ balance: entry });
 });
 
+// ── PTO Requests ─────────────────────────────────────────────────
+// Validates a YYYY-MM-DD date string (loose — server doesn't need to
+// reject every invalid combo, just the obvious junk).
+function _ptoIsDate(s){ return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+// Auth — submit a new request (status starts pending).
+app.post('/pto/requests', requireAuth, (req, res) => {
+  const { startDate, endDate, hours, notes } = req.body || {};
+  if (!_ptoIsDate(startDate) || !_ptoIsDate(endDate)) return res.status(400).json({ error: 'startDate and endDate must be YYYY-MM-DD' });
+  if (endDate < startDate) return res.status(400).json({ error: 'endDate must be on or after startDate' });
+  const h = Number(hours);
+  if (!Number.isFinite(h) || h <= 0) return res.status(400).json({ error: 'hours must be greater than 0' });
+
+  const userId = req.arkUser.userId;
+  const userName = (req.arkUser.user ? [req.arkUser.user.fname, req.arkUser.user.lname].filter(Boolean).join(' ') : '') || req.arkUser.userName || '(unknown)';
+  const request = {
+    id: crypto.randomUUID(),
+    userId,
+    userName,
+    startDate,
+    endDate,
+    hours: h,
+    notes: (notes || '').trim().slice(0, 500),
+    status: 'pending',
+    requestedAt: new Date().toISOString(),
+    decidedAt: null,
+    decidedBy: null,
+    decidedByName: null,
+    denyReason: null,
+  };
+  ptoData.requests.push(request);
+  savePtoData();
+  res.json({ success: true, request });
+});
+
+// Auth — current user's own request history.
+app.get('/pto/requests/mine', requireAuth, (req, res) => {
+  const me = req.arkUser.userId;
+  const mine = ptoData.requests
+    .filter(r => r.userId === me)
+    .sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+  res.json({ requests: mine });
+});
+
+// Auth — cancel own request (only while still pending).
+app.delete('/pto/requests/:id', requireAuth, (req, res) => {
+  const idx = ptoData.requests.findIndex(r => r.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: 'Request not found' });
+  const r = ptoData.requests[idx];
+  if (r.userId !== req.arkUser.userId) return res.status(403).json({ error: 'Not your request' });
+  if (r.status !== 'pending') return res.status(400).json({ error: 'Cannot cancel a decided request' });
+  ptoData.requests.splice(idx, 1);
+  savePtoData();
+  res.json({ success: true });
+});
+
+// Auth — used by the dashboard "who's out" widget. Returns approved
+// requests overlapping the given range. Visible to all team members so
+// they can plan around coverage. Defaults to the next 60 days.
+app.get('/pto/approved', requireAuth, (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const fromDate = _ptoIsDate(req.query.from) ? req.query.from : today;
+  const toDate   = _ptoIsDate(req.query.to)   ? req.query.to
+                 : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const matches = ptoData.requests.filter(r =>
+    r.status === 'approved' &&
+    r.endDate   >= fromDate &&
+    r.startDate <= toDate
+  ).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  res.json({ requests: matches, range: { from: fromDate, to: toDate } });
+});
+
+// Admin — list all requests. Optional filters: ?status=pending|approved|denied
+//   ?from=YYYY-MM-DD&to=YYYY-MM-DD (range overlaps the request)
+app.get('/pto/admin/requests', requireAuth, requireRole('admin'), (req, res) => {
+  let requests = ptoData.requests.slice();
+  if (req.query.status) requests = requests.filter(r => r.status === req.query.status);
+  if (_ptoIsDate(req.query.from)) requests = requests.filter(r => r.endDate >= req.query.from);
+  if (_ptoIsDate(req.query.to))   requests = requests.filter(r => r.startDate <= req.query.to);
+  requests.sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+  res.json({ requests });
+});
+
+// Admin — approve. Does NOT auto-deduct from balance (Shannon adjusts
+// balances manually as PTO is taken; we may revisit auto-deduct later).
+app.post('/pto/admin/requests/:id/approve', requireAuth, requireRole('admin'), (req, res) => {
+  const r = ptoData.requests.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Request not found' });
+  if (r.status !== 'pending') return res.status(400).json({ error: 'Request already decided' });
+  r.status = 'approved';
+  r.decidedAt = new Date().toISOString();
+  r.decidedBy = req.arkUser.userId;
+  r.decidedByName = (req.arkUser.user ? [req.arkUser.user.fname, req.arkUser.user.lname].filter(Boolean).join(' ') : '') || req.arkUser.userName || null;
+  savePtoData();
+  res.json({ success: true, request: r });
+});
+
+// Admin — deny. Optional reason.
+app.post('/pto/admin/requests/:id/deny', requireAuth, requireRole('admin'), (req, res) => {
+  const r = ptoData.requests.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Request not found' });
+  if (r.status !== 'pending') return res.status(400).json({ error: 'Request already decided' });
+  r.status = 'denied';
+  r.denyReason = ((req.body && req.body.reason) || '').toString().trim().slice(0, 500);
+  r.decidedAt = new Date().toISOString();
+  r.decidedBy = req.arkUser.userId;
+  r.decidedByName = (req.arkUser.user ? [req.arkUser.user.fname, req.arkUser.user.lname].filter(Boolean).join(' ') : '') || req.arkUser.userName || null;
+  savePtoData();
+  res.json({ success: true, request: r });
+});
+
 // ═════════════════════════════════════════════════════════════════
 // P&L DIGESTER — AI ANALYSIS + FLEET DATA + HISTORY
 // ═════════════════════════════════════════════════════════════════

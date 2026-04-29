@@ -2737,20 +2737,29 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- PTO Balance card — shows the logged-in user's own balance.
-           Hidden if the admin hasn't set one yet. -->
-      <div id="tc-pto-balance-card" style="display:none;background:#fff;border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius-lg);padding:12px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <!-- PTO Balance card — shows the logged-in user's own balance + a
+           "Request PTO" button. Always rendered (even with no balance set)
+           so any user can submit a request; the hours bit is hidden when
+           there's no balance to show. -->
+      <div id="tc-pto-balance-card" style="background:#fff;border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius-lg);padding:12px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:14px;">
           <div style="font-size:22px;line-height:1;">🏖</div>
           <div>
             <div style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;font-weight:600;">Your PTO Balance</div>
-            <div style="font-size:20px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">
+            <div id="tc-pto-balance-display" style="font-size:20px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">
               <span id="tc-pto-balance-hours">—</span>
               <span style="font-size:13px;font-weight:500;color:var(--text-m);font-family:'DM Sans',sans-serif;letter-spacing:0;">hours</span>
             </div>
+            <div id="tc-pto-balance-meta" style="font-size:11px;color:var(--text-d);"></div>
           </div>
         </div>
-        <div id="tc-pto-balance-meta" style="font-size:11px;color:var(--text-d);"></div>
+        <button onclick="ptoOpenRequestModal()" class="btn btn-primary btn-sm">+ Request PTO</button>
+      </div>
+
+      <!-- Recent requests by this user (shows when there's at least one) -->
+      <div id="tc-pto-myreq-card" style="display:none;background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 18px;margin-bottom:14px;">
+        <div style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:8px;">Your PTO Requests</div>
+        <div id="tc-pto-myreq-list"></div>
       </div>
 
       <!-- Pay Period Banner -->
@@ -6236,20 +6245,41 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
 
     <div style="padding:28px 32px;max-width:1100px;">
-      <div style="margin-bottom:20px;">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--navy);margin-bottom:4px;">PTO Balances</div>
-        <div style="font-size:13px;color:var(--text-m);">Hours-based balances per employee. Admin-only — Shannon edits these manually as PTO is taken.</div>
+      <div style="margin-bottom:18px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--navy);margin-bottom:4px;">PTO Center</div>
+        <div style="font-size:13px;color:var(--text-m);">Approve requests, manage employee balances, and review history.</div>
       </div>
 
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
-        <input id="pto-admin-search" placeholder="Search by name…" oninput="ptoAdminFilter()" class="field-input" style="flex:1;min-width:240px;max-width:380px;">
-        <div style="font-size:12px;color:var(--text-m);">
-          <span id="pto-admin-summary">—</span>
+      <!-- Tab bar -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px;flex-wrap:wrap;">
+        <button class="dh-tab active" id="pto-tab-pending" onclick="ptoSwitchTab('pending')">📥 Pending Requests <span id="pto-pending-count" style="font-size:10px;background:var(--gold);color:#fff;border-radius:8px;padding:1px 6px;margin-left:4px;font-weight:700;display:none;"></span></button>
+        <button class="dh-tab" id="pto-tab-balances" onclick="ptoSwitchTab('balances')">💰 Balances</button>
+        <button class="dh-tab" id="pto-tab-history" onclick="ptoSwitchTab('history')">📚 History</button>
+      </div>
+
+      <!-- Pending Requests panel -->
+      <div id="pto-panel-pending">
+        <div id="pto-pending-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+        <div id="pto-pending-list"></div>
+      </div>
+
+      <!-- Balances panel -->
+      <div id="pto-panel-balances" style="display:none;">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+          <input id="pto-admin-search" placeholder="Search by name…" oninput="ptoAdminFilter()" class="field-input" style="flex:1;min-width:240px;max-width:380px;">
+          <div style="font-size:12px;color:var(--text-m);">
+            <span id="pto-admin-summary">—</span>
+          </div>
         </div>
+        <div id="pto-admin-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+        <div id="pto-admin-list"></div>
       </div>
 
-      <div id="pto-admin-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
-      <div id="pto-admin-list"></div>
+      <!-- History panel — decided requests -->
+      <div id="pto-panel-history" style="display:none;">
+        <div id="pto-history-loading" style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;">Loading…</div>
+        <div id="pto-history-list"></div>
+      </div>
     </div>
   </div>
 
@@ -6804,6 +6834,45 @@ input[type="checkbox"]{accent-color:var(--navy);}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeModal('modal-robidoux-admin')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PTO Request modal — submitted by any user; goes to Shannon ── -->
+  <div class="overlay" id="modal-pto-request" style="display:none" onclick="overlayClose(event,'modal-pto-request')">
+    <div class="modal" style="max-width:520px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">🏖 Request PTO</div>
+          <div style="font-size:12px;color:var(--text-m);margin-top:2px;">Sends a notification to Shannon for approval.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-pto-request')">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label class="field-label">Start date *</label>
+            <input id="pto-req-start" type="date" class="field-input" style="width:100%;" onchange="ptoReqAutoEnd()">
+          </div>
+          <div>
+            <label class="field-label">End date *</label>
+            <input id="pto-req-end" type="date" class="field-input" style="width:100%;">
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <label class="field-label">Hours *</label>
+          <input id="pto-req-hours" type="number" min="0.5" step="0.5" class="field-input" placeholder="e.g. 8 for one full day" style="width:100%;">
+          <div style="font-size:11px;color:var(--text-d);margin-top:4px;">Total PTO hours used across this date range.</div>
+        </div>
+        <div style="margin-top:12px;">
+          <label class="field-label">Notes (optional)</label>
+          <textarea id="pto-req-notes" class="field-input" rows="3" placeholder="Reason or coverage details — anything Shannon should know" style="width:100%;resize:vertical;"></textarea>
+        </div>
+        <div id="pto-req-status" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-pto-request')">Cancel</button>
+        <button class="btn btn-primary" onclick="ptoSubmitRequest()" id="pto-req-submit">Submit request</button>
       </div>
     </div>
   </div>
@@ -20823,6 +20892,7 @@ async function tcInit(){
   await tcPopulateEmployees();
   tcSetMode('quick');
   ptoLoadMyBalance();
+  ptoLoadMyRequests();
 
   // Show admin dropdown or user-specific display
   // Only admins or users with explicit canViewTimeAll permission see the dropdown
@@ -26336,31 +26406,56 @@ let _ptoAdminUsers = [];     // [{ id, fname, lname, status, role }]
 let _ptoAdminBalances = {};  // { [userId]: { hours, updatedAt, updatedBy } }
 let _ptoAdminFilter = '';
 
+let _ptoActiveTab = 'pending';
+let _ptoAdminRequests = [];  // all admin-visible requests, freshest first
+
 async function ptoAdminInit(){
-  const list = document.getElementById('pto-admin-list');
-  const loading = document.getElementById('pto-admin-loading');
-  if(loading) loading.style.display = 'block';
-  if(list) list.innerHTML = '';
+  // Load both balances and the team list for the Balances panel, AND
+  // load all requests for Pending/History panels. Cheap to do up front
+  // so tab switches don't re-fetch.
+  const adminLoading = document.getElementById('pto-admin-loading');
+  const adminList = document.getElementById('pto-admin-list');
+  if(adminLoading) adminLoading.style.display = 'block';
+  if(adminList) adminList.innerHTML = '';
   try {
-    const [usersResp, balResp] = await Promise.all([
+    const [usersResp, balResp, reqResp] = await Promise.all([
       authFetch(ARK_SERVER + '/users/team'),
       authFetch(ARK_SERVER + '/pto/admin/balances'),
+      authFetch(ARK_SERVER + '/pto/admin/requests'),
     ]);
     if(!usersResp.ok) throw new Error('users/team ' + usersResp.status);
     if(!balResp.ok)   throw new Error('pto balances ' + balResp.status);
+    if(!reqResp.ok)   throw new Error('pto requests ' + reqResp.status);
     const usersData = await usersResp.json();
     const balData = await balResp.json();
+    const reqData = await reqResp.json();
     _ptoAdminUsers = (usersData.users || usersData || [])
       .filter(u => !u.status || u.status.toLowerCase() === 'active')
       .map(u => ({ id: u._id || u.id, fname: u.fname, lname: u.lname, role: u.role, status: u.status }))
       .sort((a,b) => `${a.fname||''} ${a.lname||''}`.localeCompare(`${b.fname||''} ${b.lname||''}`));
     _ptoAdminBalances = balData.balances || {};
+    _ptoAdminRequests = reqData.requests || [];
     ptoAdminRender();
+    ptoRenderPending();
+    ptoRenderHistory();
+    ptoUpdatePendingBadge();
   } catch(e){
-    if(list) list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);font-size:13px;">${e.message}</div>`;
+    if(adminList) adminList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);font-size:13px;">${e.message}</div>`;
   } finally {
-    if(loading) loading.style.display = 'none';
+    if(adminLoading) adminLoading.style.display = 'none';
+    const pl = document.getElementById('pto-pending-loading'); if(pl) pl.style.display = 'none';
+    const hl = document.getElementById('pto-history-loading'); if(hl) hl.style.display = 'none';
   }
+}
+
+function ptoSwitchTab(tab){
+  _ptoActiveTab = tab;
+  ['pending','balances','history'].forEach(t => {
+    const btn = document.getElementById('pto-tab-' + t);
+    const panel = document.getElementById('pto-panel-' + t);
+    if(btn) btn.classList.toggle('active', t === tab);
+    if(panel) panel.style.display = t === tab ? '' : 'none';
+  });
 }
 
 function ptoAdminFilter(){
@@ -26462,6 +26557,297 @@ async function ptoAdminRemove(userId, name){
     delete _ptoAdminBalances[userId];
     ptoAdminRender();
     showToast(`Balance removed for ${name}`);
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Pending / History rendering for PTO Center ───────────────────
+function ptoFmtDate(iso){
+  if(!iso) return '—';
+  // 'YYYY-MM-DD' → 'M/D/YY' without timezone shenanigans
+  if(/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+    const [y,m,d] = iso.split('-');
+    return `${parseInt(m,10)}/${parseInt(d,10)}/${y.slice(2)}`;
+  }
+  try { return new Date(iso).toLocaleDateString(); } catch(e){ return iso; }
+}
+function ptoFmtRange(start, end){
+  return start === end ? ptoFmtDate(start) : `${ptoFmtDate(start)} – ${ptoFmtDate(end)}`;
+}
+
+function ptoUpdatePendingBadge(){
+  const pending = _ptoAdminRequests.filter(r => r.status === 'pending').length;
+  const badge = document.getElementById('pto-pending-count');
+  if(badge){
+    if(pending > 0){
+      badge.textContent = pending;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function ptoRenderPending(){
+  const wrap = document.getElementById('pto-pending-list');
+  if(!wrap) return;
+  const pending = _ptoAdminRequests.filter(r => r.status === 'pending');
+  if(pending.length === 0){
+    wrap.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);">No pending requests. 🎉</div>`;
+    return;
+  }
+  wrap.innerHTML = pending.map(r => {
+    const balance = _ptoAdminBalances[r.userId];
+    const balText = balance ? `${Number(balance.hours).toFixed(1)} hrs` : 'no balance set';
+    return `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <div style="font-weight:700;font-size:14px;color:var(--navy);">${_ptoEsc(r.userName)}</div>
+            <div style="font-size:13px;color:var(--text);margin-top:4px;">
+              <strong>${ptoFmtRange(r.startDate, r.endDate)}</strong>
+              · ${Number(r.hours).toFixed(1)} hours
+            </div>
+            <div style="font-size:11px;color:var(--text-d);margin-top:2px;">Requested ${new Date(r.requestedAt).toLocaleString()} · Current balance: ${balText}</div>
+            ${r.notes ? `<div style="font-size:12px;color:var(--text);margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:6px;white-space:pre-wrap;">${_ptoEsc(r.notes)}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="ptoApprove('${_ptoEsc(r.id)}')" class="btn btn-primary btn-sm" style="background:#2e7d5e;border-color:#2e7d5e;">✓ Approve</button>
+            <button onclick="ptoDeny('${_ptoEsc(r.id)}', '${_ptoEsc(r.userName)}')" class="btn btn-ghost btn-sm" style="color:var(--red);">✕ Deny</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function ptoRenderHistory(){
+  const wrap = document.getElementById('pto-history-list');
+  if(!wrap) return;
+  const decided = _ptoAdminRequests.filter(r => r.status !== 'pending');
+  if(decided.length === 0){
+    wrap.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-d);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);">No history yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = decided.map(r => {
+    const isApproved = r.status === 'approved';
+    const badge = isApproved
+      ? `<span style="font-size:10px;background:#2e7d5e;color:#fff;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Approved</span>`
+      : `<span style="font-size:10px;background:var(--red);color:#fff;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Denied</span>`;
+    const decided = r.decidedAt ? new Date(r.decidedAt).toLocaleString() : '—';
+    return `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-weight:700;font-size:13px;color:var(--navy);">${_ptoEsc(r.userName)}</div>
+              ${badge}
+            </div>
+            <div style="font-size:13px;color:var(--text);margin-top:3px;">
+              ${ptoFmtRange(r.startDate, r.endDate)} · ${Number(r.hours).toFixed(1)} hours
+            </div>
+            <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${isApproved ? 'Approved' : 'Denied'} ${decided}${r.decidedByName ? ' by ' + _ptoEsc(r.decidedByName) : ''}</div>
+            ${r.denyReason ? `<div style="font-size:12px;color:var(--text);margin-top:6px;padding:6px 8px;background:rgba(248,113,113,.08);border-left:2px solid var(--red);border-radius:4px;">${_ptoEsc(r.denyReason)}</div>` : ''}
+            ${r.notes ? `<div style="font-size:12px;color:var(--text-d);margin-top:6px;font-style:italic;">${_ptoEsc(r.notes)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function ptoApprove(id){
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/requests/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to approve');
+    const i = _ptoAdminRequests.findIndex(r => r.id === id);
+    if(i >= 0) _ptoAdminRequests[i] = data.request;
+    ptoRenderPending();
+    ptoRenderHistory();
+    ptoUpdatePendingBadge();
+    showToast('Request approved');
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+async function ptoDeny(id, name){
+  const reason = prompt(`Deny ${name}'s PTO request? Optional reason:`, '');
+  if (reason === null) return; // cancel
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/admin/requests/' + encodeURIComponent(id) + '/deny', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to deny');
+    const i = _ptoAdminRequests.findIndex(r => r.id === id);
+    if(i >= 0) _ptoAdminRequests[i] = data.request;
+    ptoRenderPending();
+    ptoRenderHistory();
+    ptoUpdatePendingBadge();
+    showToast('Request denied');
+  } catch(e){
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Employee-side: request flow + status list ────────────────────
+function ptoOpenRequestModal(){
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('pto-req-start').value = today;
+  document.getElementById('pto-req-end').value = today;
+  document.getElementById('pto-req-hours').value = '';
+  document.getElementById('pto-req-notes').value = '';
+  document.getElementById('pto-req-status').textContent = '';
+  document.getElementById('pto-req-status').style.color = '';
+  document.getElementById('pto-req-submit').disabled = false;
+  document.getElementById('modal-pto-request').style.display = 'flex';
+}
+// When user picks start date, default end date to match (most requests
+// are single-day; multi-day users will adjust).
+function ptoReqAutoEnd(){
+  const s = document.getElementById('pto-req-start').value;
+  const e = document.getElementById('pto-req-end');
+  if(s && (!e.value || e.value < s)) e.value = s;
+}
+
+async function ptoSubmitRequest(){
+  const startDate = document.getElementById('pto-req-start').value;
+  const endDate   = document.getElementById('pto-req-end').value;
+  const hoursRaw  = document.getElementById('pto-req-hours').value;
+  const notes     = document.getElementById('pto-req-notes').value;
+  const statusEl  = document.getElementById('pto-req-status');
+  const btn       = document.getElementById('pto-req-submit');
+
+  if(!startDate || !endDate){
+    statusEl.textContent = 'Pick start and end dates.';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+  if(endDate < startDate){
+    statusEl.textContent = 'End date must be on or after start date.';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+  const hours = Number(hoursRaw);
+  if(!Number.isFinite(hours) || hours <= 0){
+    statusEl.textContent = 'Enter the total number of PTO hours.';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = 'Submitting…';
+  statusEl.style.color = 'var(--text-d)';
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startDate, endDate, hours, notes }),
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to submit');
+
+    // Notify the PTO admin (Shannon). Lookup goes against /users/team so
+    // it picks up renames automatically. If she's not found we silently
+    // skip notification — the request still saves.
+    try { await ptoNotifyAdmin(data.request); } catch(_){}
+
+    closeModal('modal-pto-request');
+    showToast('PTO request submitted');
+    ptoLoadMyRequests();
+  } catch(e){
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red)';
+    btn.disabled = false;
+  }
+}
+
+// Resolve Shannon's user ID from /users/team. Cached after first lookup.
+let _ptoAdminUserCache = null;
+async function ptoFindAdmin(){
+  if(_ptoAdminUserCache !== null) return _ptoAdminUserCache;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/users/team');
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    const users = data.users || data || [];
+    const shannon = users.find(u =>
+      (u.fname||'').toLowerCase() === 'shannon' &&
+      (u.role || '').toLowerCase() === 'admin'
+    );
+    _ptoAdminUserCache = shannon ? (shannon._id || shannon.id) : null;
+    return _ptoAdminUserCache;
+  } catch(e){
+    return null;
+  }
+}
+
+async function ptoNotifyAdmin(request){
+  const targetId = await ptoFindAdmin();
+  if(!targetId) return;
+  if(typeof notifCreate !== 'function') return;
+  notifCreate({
+    type: 'info',
+    targetAm: targetId,
+    title: '🏖 New PTO request',
+    body: `${request.userName} requested ${Number(request.hours).toFixed(1)} hours: ${ptoFmtRange(request.startDate, request.endDate)}`,
+    priority: 'normal',
+  });
+}
+
+// Load and render the current user's own request list under the balance card.
+async function ptoLoadMyRequests(){
+  const card = document.getElementById('tc-pto-myreq-card');
+  const list = document.getElementById('tc-pto-myreq-list');
+  if(!card || !list) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/requests/mine');
+    if(!resp.ok){ card.style.display = 'none'; return; }
+    const data = await resp.json();
+    const requests = (data.requests || []).slice(0, 5); // most recent 5
+    if(requests.length === 0){ card.style.display = 'none'; return; }
+    list.innerHTML = requests.map(r => {
+      const statusBadge = r.status === 'approved' ? `<span style="font-size:10px;background:#2e7d5e;color:#fff;padding:1px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Approved</span>`
+        : r.status === 'denied' ? `<span style="font-size:10px;background:var(--red);color:#fff;padding:1px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Denied</span>`
+        : `<span style="font-size:10px;background:var(--gold);color:#fff;padding:1px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Pending</span>`;
+      const cancelBtn = r.status === 'pending'
+        ? `<button onclick="ptoCancelRequest('${_ptoEsc(r.id)}')" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:11px;padding:2px 8px;">Cancel</button>`
+        : '';
+      const reasonLine = r.denyReason ? `<div style="font-size:11px;color:var(--text-d);margin-top:2px;font-style:italic;">Reason: ${_ptoEsc(r.denyReason)}</div>` : '';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:13px;color:var(--text);">${ptoFmtRange(r.startDate, r.endDate)} · ${Number(r.hours).toFixed(1)} hrs</span>
+              ${statusBadge}
+            </div>
+            ${reasonLine}
+          </div>
+          ${cancelBtn}
+        </div>
+      `;
+    }).join('');
+    // Drop the leading top-border on the first row
+    list.firstElementChild && (list.firstElementChild.style.borderTop = 'none');
+    card.style.display = '';
+  } catch(e){
+    card.style.display = 'none';
+  }
+}
+
+async function ptoCancelRequest(id){
+  if(!confirm('Cancel this PTO request?')) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/requests/' + encodeURIComponent(id), { method: 'DELETE' });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || 'Failed to cancel');
+    showToast('Request cancelled');
+    ptoLoadMyRequests();
   } catch(e){
     showToast(e.message, 'error');
   }
