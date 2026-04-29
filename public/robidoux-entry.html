@@ -723,14 +723,10 @@ header::after {
     if(app) app.style.display = '';
   }
 
-  // Restore session from localStorage so a refresh doesn't kick the user out.
-  try {
-    const saved = JSON.parse(localStorage.getItem('robidoux_session') || 'null');
-    if(saved && saved.token && saved.slug){
-      revealEngine();
-      return;
-    }
-  } catch(e){}
+  // Belt-and-suspenders: clear any legacy session blob so old data from
+  // earlier testing can't accidentally hide the login on this load. Clients
+  // re-enter their password each visit (safer on shared computers anyway).
+  try { localStorage.removeItem('robidoux_session'); } catch(_){}
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -754,11 +750,6 @@ header::after {
         btn.disabled = false;
         return;
       }
-      try {
-        localStorage.setItem('robidoux_session', JSON.stringify({
-          slug, token: data.token, clientName: data.clientName, savedAt: Date.now(),
-        }));
-      } catch(_){}
       revealEngine();
     } catch(err){
       setStatus('Network error. Please try again.', 'error');
