@@ -38,6 +38,9 @@ sections (or strike them out under "✅ Shipped") as they progress.
   navigate by tool).
 - **Scooter's QBO Center** — collapse the row of Sales / COGS / P&L / etc. buttons
   into dropdowns. Currently too cluttered.
+- **Dashboard — My Production Tasks / My Payroll Tasks widgets** — clean up.
+  (Layout, content, hover state — TBD; Mackenzie to specify when ready.)
+- **Payroll Time Report** — clean up. (Specifics TBD.)
 
 ---
 
