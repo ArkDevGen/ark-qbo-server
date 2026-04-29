@@ -2737,6 +2737,22 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
+      <!-- PTO Balance card — shows the logged-in user's own balance.
+           Hidden if the admin hasn't set one yet. -->
+      <div id="tc-pto-balance-card" style="display:none;background:#fff;border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius-lg);padding:12px 18px;margin-bottom:14px;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="font-size:22px;line-height:1;">🏖</div>
+          <div>
+            <div style="font-size:11px;color:var(--text-d);text-transform:uppercase;letter-spacing:.06em;font-weight:600;">Your PTO Balance</div>
+            <div style="font-size:20px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;letter-spacing:-.01em;">
+              <span id="tc-pto-balance-hours">—</span>
+              <span style="font-size:13px;font-weight:500;color:var(--text-m);font-family:'DM Sans',sans-serif;letter-spacing:0;">hours</span>
+            </div>
+          </div>
+        </div>
+        <div id="tc-pto-balance-meta" style="font-size:11px;color:var(--text-d);"></div>
+      </div>
+
       <!-- Pay Period Banner -->
       <div id="tc-period-banner" style="background:var(--navy);color:#fff;border-radius:var(--radius-lg);padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
@@ -20806,6 +20822,7 @@ async function tcInit(){
   tcRenderBanner();
   await tcPopulateEmployees();
   tcSetMode('quick');
+  ptoLoadMyBalance();
 
   // Show admin dropdown or user-specific display
   // Only admins or users with explicit canViewTimeAll permission see the dropdown
@@ -26452,6 +26469,31 @@ async function ptoAdminRemove(userId, name){
 
 const _ptoEscMap = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
 function _ptoEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => _ptoEscMap[c]); }
+
+// ── Time Center balance card — shows the logged-in user's own PTO hours.
+//    Card is hidden by default and only revealed if the admin has set a
+//    balance for this user. Failures (network, 401) just leave it hidden
+//    rather than showing an error in the user's face.
+async function ptoLoadMyBalance(){
+  const card = document.getElementById('tc-pto-balance-card');
+  if(!card) return;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/pto/balance');
+    if(!resp.ok) { card.style.display = 'none'; return; }
+    const data = await resp.json();
+    const bal = data.balance;
+    if(!bal){ card.style.display = 'none'; return; }
+    document.getElementById('tc-pto-balance-hours').textContent = Number(bal.hours).toFixed(1);
+    const meta = document.getElementById('tc-pto-balance-meta');
+    if(meta){
+      const updated = bal.updatedAt ? new Date(bal.updatedAt).toLocaleDateString() : null;
+      meta.textContent = updated ? `Updated ${updated}` : '';
+    }
+    card.style.display = 'flex';
+  } catch(e){
+    card.style.display = 'none';
+  }
+}
 
 function renderToolsCenter(){
   const grid = document.getElementById('tools-grid');
