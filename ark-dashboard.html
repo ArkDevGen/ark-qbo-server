@@ -1728,7 +1728,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
     <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
     <div class="nav-group">
       <div class="nav-item admin-only" id="nav-users" onclick="nav('users')" style="display:none;"><span class="ni">👥</span>Team & Users</div>
-      <div class="nav-item" id="nav-newhires" onclick="nav('employees')"><span class="ni">◎</span>New Hire Center</div>
       <div class="nav-item" id="nav-integrations" onclick="nav('integrations')"><span class="ni">🔗</span>Integrations</div>
     </div>
 
@@ -1919,6 +1918,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
   <!-- ══ EMPLOYEES ══ -->
   <div class="view content" id="view-employees" style="padding:0;">
+
+    <!-- ── TOP-LEVEL: Payroll / New Hires switcher (combined sidebar item) ── -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 28px;">
+      <button onclick="nav('payrollcenter')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">💰 Payroll</button>
+      <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">👥 New Hires</button>
+    </div>
 
     <!-- Sub-tab bar -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);background:var(--surface);padding:0 28px;">
@@ -6197,7 +6202,12 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <!-- ════ PAYROLL CENTER ════ -->
   <!-- ════════════════════════════════════════════════════════════ -->
   <div class="view content" id="view-payrollcenter" style="padding:0;">
-    <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 60px);border:none;display:block;background:var(--bg);"></iframe>
+    <!-- ── TOP-LEVEL: Payroll / New Hires switcher (combined sidebar item) ── -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);padding:0 28px;">
+      <button style="padding:9px 16px;font-size:11px;font-weight:700;color:var(--navy);background:none;border:none;border-bottom:3px solid var(--gold);margin-bottom:-1px;letter-spacing:.04em;text-transform:uppercase;cursor:default;">💰 Payroll</button>
+      <button onclick="nav('employees')" style="padding:9px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-d);background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;letter-spacing:.04em;text-transform:uppercase;">👥 New Hires</button>
+    </div>
+    <iframe id="payroll-admin-iframe" style="width:100%;height:calc(100vh - 100px);border:none;display:block;background:var(--bg);"></iframe>
   </div>
 
   <!-- OLD PAYROLL CENTER (removed — replaced with embedded payroll-admin above) -->
@@ -10398,6 +10408,8 @@ function nav(page){
   const taxChildren=['form1099s','salestax','w2center','taxcenter','eftps'];
   // Pages that share the combined Tools & Reports sidebar item
   const toolsReportsPages=['tools','reports','newhirereport'];
+  // Pages that share the Payroll Center sidebar item (Payroll + New Hires)
+  const payrollPages=['payrollcenter','employees'];
   if(taxChildren.includes(page)){
     document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.trim().toLowerCase().includes('tax center')) n.classList.add('active'); });
   } else if(page==='qbo'){
@@ -10409,6 +10421,10 @@ function nav(page){
     // Tools, Reports, and the standalone New Hire Report all live behind the
     // single "Tools & Reports" sidebar item now.
     const el=document.getElementById('nav-tools'); if(el) el.classList.add('active');
+  } else if(payrollPages.includes(page)){
+    // Payroll Center and New Hire Center share one sidebar item, with a
+    // top-tab bar at the top of each view to flip between them.
+    const el=document.getElementById('nav-payrollcenter'); if(el) el.classList.add('active');
   } else {
     // Prefer the explicit nav-<page> id when one exists — more reliable than
     // text matching (which silently broke for Meetings and File Center).
