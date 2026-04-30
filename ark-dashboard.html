@@ -36665,13 +36665,15 @@ function chatTogglePanel() {
             <button onclick="chatTogglePanel()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-d);">✕</button>
           </div>
         </div>
-        <div id="chat-tab-bar" style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
-          <button id="chat-tab-team" onclick="chatSwitchTab('team')" style="flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px;">
-            <span>💬 Team</span><span id="chat-tab-team-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span>
-          </button>
-          <button id="chat-tab-sms" onclick="chatSwitchTab('sms')" style="flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px;">
-            <span>📱 SMS</span><span id="chat-tab-sms-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span>
-          </button>
+        <div id="chat-tab-bar" style="padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
+          <div style="display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2px;gap:2px;">
+            <button id="chat-tab-team" onclick="chatSwitchTab('team')" style="border:none;background:none;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);padding:4px 10px;border-radius:12px;display:inline-flex;align-items:center;gap:5px;line-height:1;">
+              <span>💬 Team</span><span id="chat-tab-team-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px;"></span>
+            </button>
+            <button id="chat-tab-sms" onclick="chatSwitchTab('sms')" style="border:none;background:none;cursor:pointer;font-size:11px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);padding:4px 10px;border-radius:12px;display:inline-flex;align-items:center;gap:5px;line-height:1;">
+              <span>📱 SMS</span><span id="chat-tab-sms-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px;"></span>
+            </button>
+          </div>
         </div>
         <div id="chat-channel-list" style="flex:1;overflow-y:auto;"></div>
         <div id="chat-thread" style="flex:1;overflow-y:auto;display:none;"></div>
@@ -36797,9 +36799,9 @@ function chatUpdateTabUI() {
   const newDmBtn  = document.getElementById('chat-new-dm-btn');
   const newSmsBtn = document.getElementById('chat-new-sms-btn');
 
-  const active   = 'color:var(--navy);border-bottom:2px solid var(--navy);';
-  const inactive = 'color:var(--text-d);border-bottom:2px solid transparent;';
-  const baseStyle = 'flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;';
+  const active   = 'background:var(--navy);color:#fff;';
+  const inactive = 'background:none;color:var(--text-d);';
+  const baseStyle = 'border:none;cursor:pointer;font-size:11px;font-weight:700;font-family:\'DM Sans\',sans-serif;padding:4px 10px;border-radius:12px;display:inline-flex;align-items:center;gap:5px;line-height:1;';
 
   if (teamBtn) teamBtn.style.cssText = baseStyle + (_chatTab === 'team' ? active : inactive);
   if (smsBtn)  smsBtn.style.cssText  = baseStyle + (_chatTab === 'sms'  ? active : inactive);
