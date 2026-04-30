@@ -3,4 +3,5 @@ RUN apt-get update && apt-get install -y curl && \
     curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
     -o /usr/local/bin/cloudflared && \
     chmod +x /usr/local/bin/cloudflared
-CMD echo "Token is: $CLOUDFLARE_TUNNEL_TOKEN" && cloudflared tunnel --no-autoupdate run --token $CLOUDFLARE_TUNNEL_TOKEN
+COPY config.yml /etc/cloudflared/config.yml
+CMD cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run --token $CLOUDFLARE_TUNNEL_TOKEN
