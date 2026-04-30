@@ -2094,6 +2094,12 @@ app.post('/sms/inbound', (req, res) => {
   if (messages.length > 10000) messages.splice(0, messages.length - 10000);
   _saveChatMessages(messages);
 
+  // Resurrect this SMS channel for any user who previously deleted it from
+  // their popup — without this, a hidden channelId stays in their per-user
+  // hidden.channels list forever and new inbound SMS get silently filtered
+  // out of /chat/channels.
+  _chatUnhideSmsForAll(channelId);
+
   // Broadcast to all team members via SSE
   _sseBroadcastChat(chatMsg);
 
@@ -2102,8 +2108,9 @@ app.post('/sms/inbound', (req, res) => {
 });
 
 // Resolve phone number to a friendly display name (best-effort).
-// Lookup order: client owner → client business phone → standalone smsContacts
-// (Homebase, vendor reps, etc.). Falls back to the raw phone if no match.
+// Lookup order: client owner → client business phone → team member
+// (account manager / user) → standalone smsContacts (Homebase, vendor reps,
+// etc.). Falls back to the raw phone if no match.
 function _smsResolveContactName(phone) {
   const digits = phone.replace(/\D/g, '');
   try {
@@ -2120,6 +2127,19 @@ function _smsResolveContactName(phone) {
       const clientDigits = (client.phone || '').replace(/\D/g, '');
       if (clientDigits && clientDigits.length >= 10 && digits.endsWith(clientDigits.slice(-10))) {
         return client.biz || phone;
+      }
+    }
+    // Team member match — accountManagers and users (employees). Lets
+    // texts from staff phones display as "Mackenzie Hallstrom" instead
+    // of the raw +1XXX number.
+    const teamPools = [db.accountManagers || [], db.employees || [], db.users || [], _users || []];
+    for (const pool of teamPools) {
+      for (const member of pool) {
+        const mDigits = (member.phone || member.mobile || '').replace(/\D/g, '');
+        if (mDigits && mDigits.length >= 10 && digits.endsWith(mDigits.slice(-10))) {
+          const name = `${member.fname || ''} ${member.lname || ''}`.trim() || member.username || member.name || '';
+          if (name) return name;
+        }
       }
     }
     // Fall back to standalone contacts (e.g. short codes that don't have a
@@ -7917,6 +7937,23 @@ function _chatUnhideDmForParticipants(channelId) {
   for (const pid of parts) {
     if (hiddenAll[pid]?.channels?.includes(channelId)) {
       hiddenAll[pid].channels = hiddenAll[pid].channels.filter(c => c !== channelId);
+      changed = true;
+    }
+  }
+  if (changed) _saveChatHidden(hiddenAll);
+}
+
+// Helper — unhide an SMS channel for ANY user who had it hidden. SMS channels
+// are shared (no participant list), so a fresh inbound resurrects the channel
+// for everyone. channelsHiddenAt is preserved so pre-delete messages stay
+// filtered out for the user who deleted it.
+function _chatUnhideSmsForAll(channelId) {
+  if (!channelId.startsWith('sms~')) return;
+  const hiddenAll = _loadChatHidden();
+  let changed = false;
+  for (const userId of Object.keys(hiddenAll)) {
+    if (hiddenAll[userId]?.channels?.includes(channelId)) {
+      hiddenAll[userId].channels = hiddenAll[userId].channels.filter(c => c !== channelId);
       changed = true;
     }
   }

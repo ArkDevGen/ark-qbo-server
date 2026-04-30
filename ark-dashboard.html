@@ -22566,6 +22566,30 @@ function smsMatchClient(phone){
   return null;
 }
 
+// ── Match phone to a team member (account manager / employee / user) ──
+// Lets texts from staff phones display the team member's name instead of
+// the raw number. Checked BETWEEN client and standalone-contact matches.
+function smsMatchTeam(phone){
+  const digits = phone.replace(/\D/g,'').slice(-10);
+  if(digits.length < 10) return null;
+  const pools = [
+    (_cachedServerUsers||[]),
+    (DB.accountManagers||[]),
+    (DB.employees||[]),
+    (DB.users||[]),
+  ];
+  for(const pool of pools){
+    for(const m of pool){
+      const md = (m.phone || m.mobile || '').replace(/\D/g,'').slice(-10);
+      if(md && md === digits){
+        const name = `${m.fname||''} ${m.lname||''}`.trim() || m.username || m.name || '';
+        if(name) return { teamId: m.id || m.username || '', teamName: name };
+      }
+    }
+  }
+  return null;
+}
+
 // ── Match phone to a saved contact (Homebase, vendor reps, etc.) ──
 // Standalone contacts are non-client phone numbers we want to label — e.g.
 // the Homebase short code that sends verification texts. Resolved AFTER a
@@ -22594,17 +22618,21 @@ function smsGetConversations(){
   const byPhone = {};
   msgs.forEach(m=>{
     const key = m.phone;
-    if(!byPhone[key]) byPhone[key] = { phone:key, messages:[], clientId:null, clientName:null, ownerName:null, contactId:null, contactName:null };
+    if(!byPhone[key]) byPhone[key] = { phone:key, messages:[], clientId:null, clientName:null, ownerName:null, teamId:null, teamName:null, contactId:null, contactName:null };
     byPhone[key].messages.push(m);
     if(m.clientId){ byPhone[key].clientId = m.clientId; byPhone[key].clientName = m.clientName; }
   });
-  // Try to match unmatched conversations to clients, then to contacts
+  // Resolution order: client → team member → standalone contact.
   Object.values(byPhone).forEach(c=>{
     if(!c.clientId){
       const match = smsMatchClient(c.phone);
       if(match){ c.clientId=match.clientId; c.clientName=match.clientName; c.ownerName=match.ownerName; }
     }
     if(!c.clientId){
+      const tm = smsMatchTeam(c.phone);
+      if(tm){ c.teamId = tm.teamId; c.teamName = tm.teamName; }
+    }
+    if(!c.clientId && !c.teamId){
       const ct = smsMatchContact(c.phone);
       if(ct){ c.contactId = ct.contactId; c.contactName = ct.contactName; }
     }
@@ -22635,7 +22663,7 @@ function smsRenderConvoList(q){
   }
   el.innerHTML = filtered.map(c=>{
     const last = c.messages[c.messages.length-1];
-    const name = c.clientName || c.ownerName || c.contactName || c.phone;
+    const name = c.clientName || c.ownerName || c.teamName || c.contactName || c.phone;
     const preview = (last.body||'').slice(0,45) + ((last.body||'').length>45?'…':'');
     const time = last.timestamp ? new Date(last.timestamp).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
     const isActive = _smsActivePhone === c.phone;
@@ -22675,13 +22703,15 @@ async function smsOpenThread(phone){
   if(changed) await saveDB({ immediate: true });
 
   // Header
-  const name = convo.clientName || convo.ownerName || convo.contactName || phone;
+  const name = convo.clientName || convo.ownerName || convo.teamName || convo.contactName || phone;
   document.getElementById('sms-thread-header').style.display = '';
   document.getElementById('sms-thread-name').textContent = name;
   document.getElementById('sms-thread-phone').textContent = phone;
   const linkEl = document.getElementById('sms-thread-client-link');
   if(convo.clientId){
     linkEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openEditClient('${convo.clientId}')" style="font-size:11px;">View Client</button>`;
+  } else if(convo.teamId){
+    linkEl.innerHTML = `<span style="font-size:10px;background:var(--navy);color:#fff;padding:2px 7px;border-radius:10px;font-weight:600;">👤 Team</span>`;
   } else if(convo.contactId){
     linkEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="smsContactsOpen('${convo.contactId}')" style="font-size:11px;">📇 Contact</button>`;
   } else {
