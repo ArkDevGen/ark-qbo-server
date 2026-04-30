@@ -37529,6 +37529,14 @@ function chatHandleSSE(msg) {
   // without the user having to close + reopen the panel. Throttled to avoid
   // hammering the server when messages arrive in rapid succession.
   if (_chatOpen) chatRefreshChannelListSoon();
+
+  // Comm Center reads inbound SMS from DB.smsMessages, populated by a 15s
+  // /sms/inbox poll. Without this, an inbound text shows in the chat popup
+  // (via SSE, instant) but takes up to 15s to appear in the Comm Center.
+  // SSE arrives well before the next poll tick — drain the buffer now.
+  if ((msg.channelId || '').startsWith('sms~') && typeof smsPollInbox === 'function') {
+    try { smsPollInbox(); } catch(_) {}
+  }
 }
 
 let _chatChannelRefreshTimer = null;
