@@ -4436,8 +4436,8 @@ input[type="checkbox"]{accent-color:var(--navy);}
   <div class="view content" id="view-users">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">Team & Users</h2>
-        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">Manage dashboard user accounts, roles, and access</div>
+        <h2 id="users-page-title" style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:700;color:var(--navy);margin:0;">Team & Users</h2>
+        <div id="users-page-subtitle" style="font-size:12px;color:var(--text-d);margin-top:2px;">Manage dashboard user accounts, roles, and access</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
         <input type="text" id="users-search" placeholder="Search users..." oninput="renderUsers(this.value)"
@@ -10403,6 +10403,12 @@ async function renderUsers(q){
   if(addBtn) addBtn.style.display = isAdmin ? '' : 'none';
   const roleHeader = document.getElementById('uth-role-cell');
   if(roleHeader) roleHeader.style.display = isAdmin ? '' : 'none';
+  // Soften the page header for non-admins so it reads as a directory rather
+  // than a management surface (and drops the "roles" wording).
+  const pageTitle = document.getElementById('users-page-title');
+  const pageSub   = document.getElementById('users-page-subtitle');
+  if(pageTitle) pageTitle.textContent = isAdmin ? 'Team & Users' : 'Team Directory';
+  if(pageSub)   pageSub.textContent   = isAdmin ? 'Manage dashboard user accounts, roles, and access' : 'View teammates and update your own account';
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-d);">Loading users...</td></tr>';
   try {
     const resp = await authFetch(ARK_SERVER + '/users');
@@ -10509,6 +10515,15 @@ async function renderUsers(q){
 }
 
 function openUserModal(userId){
+  // Defensive guard: non-admins can ONLY open their own row. The row buttons
+  // already enforce this, but this catches stale buttons / direct calls.
+  const _ueIsAdmin = currentUser && (currentUser.role === 'admin' || (typeof getPerms === 'function' && getPerms(currentUser)._isAdmin));
+  if(!_ueIsAdmin){
+    if(!userId || userId !== currentUser?.id){
+      showToast('You can only edit your own account.');
+      return;
+    }
+  }
   // Ensure modal is at body root (fixes QBO view nesting issue)
   const modal = document.getElementById('modal-user-edit');
   if(modal && modal.parentElement !== document.body) document.body.appendChild(modal);
