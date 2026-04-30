@@ -9187,9 +9187,11 @@ async function loadDB(){
   if(!best) return false;
 
   _applyDBPayload(best);
-  // One-time category cleanup: rewrite legacy categories on existing tasks
-  // so the dropdown matches the data. Idempotent — flagged in localStorage.
-  try { migrateTaskCategoriesV1(); } catch(e){ console.warn('Category migration skipped:', e); }
+  // One-time data corrections — each is idempotent and flagged in
+  // localStorage, so they're safe to re-deploy without re-firing on
+  // every page load.
+  try { migrateTaskCategoriesV1();     } catch(e){ console.warn('Category migration skipped:', e); }
+  try { migrateRecurringTaskDatesV1(); } catch(e){ console.warn('Recurring-task date migration skipped:', e); }
   localStorage.setItem(ARK_DB_KEY, JSON.stringify(best));
   return true;
 }
@@ -9209,6 +9211,61 @@ function migrateTaskCategoriesV1(){
   }
   if (changed > 0) {
     console.log(`ARK: migrated ${changed} task category/categories (Bank → Banking, Tax → Other)`);
+    saveDB();
+  }
+  localStorage.setItem(FLAG, '1');
+}
+
+// Walk DB.tasks and re-derive dueDate for any recurring task whose current
+// dueDate doesn't fall on its stated pattern. Fixes tasks the Todoist
+// importer mis-dated when DEADLINE took precedence over the recurrence
+// rule (e.g. "every 20th" tasks ending up on whatever day the export
+// happened, instead of the actual 20th of the month).
+//
+// Only touches tasks where (recurring=true AND a structured anchor is set
+// AND the current dueDate doesn't match that anchor). Tasks the user has
+// deliberately re-dated to a non-pattern day stay untouched as long as
+// they haven't claimed to be recurring on a specific weekday/dayOfMonth/
+// month-day pair.
+function migrateRecurringTaskDatesV1(){
+  const FLAG = 'ark_recurring_task_dates_v1';
+  if (localStorage.getItem(FLAG)) return;
+  if (!Array.isArray(DB.tasks)) { localStorage.setItem(FLAG, '1'); return; }
+  if (typeof tcFirstDueFromPattern !== 'function') return; // not loaded yet
+
+  let changed = 0;
+  for (const t of DB.tasks) {
+    if (!t.recurring || !t.recurFreq || !t.dueDate) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t.dueDate)) continue;
+    const due = new Date(t.dueDate + 'T12:00:00');
+    if (isNaN(due.getTime())) continue;
+
+    let mismatch = false;
+    if (t.recurFreq === 'monthly' && typeof t.recurDayOfMonth === 'number') {
+      const lastDay = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+      const expectedDay = Math.min(t.recurDayOfMonth, lastDay);
+      if (due.getDate() !== expectedDay) mismatch = true;
+    } else if ((t.recurFreq === 'weekly' || t.recurFreq === 'biweekly') && typeof t.recurWeekday === 'number') {
+      if (due.getDay() !== t.recurWeekday) mismatch = true;
+    } else if (t.recurFreq === 'annually' && typeof t.recurMonthOfYear === 'number' && typeof t.recurDayOfMonth === 'number') {
+      if (due.getMonth() !== (t.recurMonthOfYear - 1) || due.getDate() !== t.recurDayOfMonth) mismatch = true;
+    }
+
+    if (mismatch) {
+      const newDue = tcFirstDueFromPattern({
+        recurFreq: t.recurFreq,
+        recurDayOfMonth:  t.recurDayOfMonth,
+        recurWeekday:     t.recurWeekday,
+        recurMonthOfYear: t.recurMonthOfYear,
+      });
+      if (newDue && newDue !== t.dueDate) {
+        t.dueDate = newDue;
+        changed++;
+      }
+    }
+  }
+  if (changed > 0) {
+    console.log(`ARK: corrected ${changed} recurring task due date(s) to match their pattern.`);
     saveDB();
   }
   localStorage.setItem(FLAG, '1');
@@ -33001,12 +33058,19 @@ function tdParseCSV(){
     const dateRaw  = iDate>=0 ? cols[iDate] : '';
     const deadRaw  = iDeadline>=0 ? cols[iDeadline] : '';
     // The Todoist DATE column may be either a concrete date ("2026-04-29")
-    // OR a recurrence rule itself ("every friday"). Detect the rule first;
-    // if matched, set up structured recurrence fields and project a first
-    // due date — otherwise fall back to plain date parsing.
+    // OR a recurrence rule itself ("every friday"). Detect the rule first.
+    // If matched, recurrence is the source of truth — project the next
+    // occurrence and IGNORE the DEADLINE column. Todoist often stuffs a
+    // concrete next-due date in DEADLINE for recurring tasks based on when
+    // the task was last touched in their app, which would otherwise
+    // override our pattern-based calculation (and put e.g. "every 20th"
+    // tasks on whatever day each was exported instead of the actual 20th).
+    // Otherwise (DATE is a literal date or empty), fall back to DATE then
+    // DEADLINE for a concrete value.
     const recurParsed = dateRaw ? tcParseTodoistRecurrence(dateRaw) : null;
-    const explicitDue = parseDate(dateRaw) || parseDate(deadRaw);
-    const dueDate = explicitDue || (recurParsed ? tcFirstDueFromPattern(recurParsed) : '');
+    const dueDate = recurParsed
+      ? tcFirstDueFromPattern(recurParsed)
+      : (parseDate(dateRaw) || parseDate(deadRaw));
 
     if(!dueDate) warnings.push(`Row ${i+1}: "${name}" — no due date, imported as a Note (won't appear on Today/Upcoming)`);
 
