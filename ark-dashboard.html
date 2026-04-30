@@ -21910,7 +21910,7 @@ function ccInit(){
 
 function ccCheckApiConfig(){
   // Check server-side Sinch config instead of localStorage credentials
-  fetch('https://ark-qbo-server.onrender.com/comm/status')
+  fetch(`${ARK_SERVER}/comm/status`)
     .then(r => r.json())
     .then(data => {
       const faxConfigured = !!data.fax;
@@ -22001,7 +22001,7 @@ function faxFileToBase64(file){
 // ── Helper: send fax via local server proxy ───────────────────────
 async function faxSendViaServer(toNumber, file, fileName, headerText){
   const fileData = await faxFileToBase64(file);
-  const resp = await fetch('https://ark-qbo-server.onrender.com/fax/send', {
+  const resp = await fetch(`${ARK_SERVER}/fax/send`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -22336,7 +22336,7 @@ async function ccSendSMS(){
   const digits = toNumber.replace(/\D/g,'');
 
   try {
-    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/send', {
+    const resp = await fetch(`${ARK_SERVER}/sms/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -22690,7 +22690,7 @@ async function smsReplySend(){
   input.disabled = true;
 
   try {
-    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/send', {
+    const resp = await fetch(`${ARK_SERVER}/sms/send`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ to:_smsActivePhone.replace(/\D/g,''), text })
@@ -22729,7 +22729,7 @@ async function smsReplySend(){
 // ── Poll server for inbound messages ──
 async function smsPollInbox(){
   try {
-    const resp = await fetch('https://ark-qbo-server.onrender.com/sms/inbox');
+    const resp = await fetch(`${ARK_SERVER}/sms/inbox`);
     const data = await resp.json();
     if(data.messages && data.messages.length > 0){
       if(!DB.smsMessages) DB.smsMessages = [];
@@ -22798,7 +22798,7 @@ function renderPayrollCenter(){
 }
 
 // ── Payroll Submissions Inbox ─────────────────────────────────────
-const PR_API = 'https://ark-qbo-server.onrender.com';
+const PR_API = ARK_SERVER;
 
 function _esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -39172,7 +39172,10 @@ let qboLiveClasses  = []; // populated from real QBO classes
 let qboLiveDepts    = []; // populated from real QBO departments (locations)
 
 // ── Server URL — update this if your port changes ─────────────────
-const QBO_SERVER = 'https://ark-qbo-server.onrender.com';
+// QBO calls go to the same origin the dashboard is loaded from. Stays in
+// sync with ARK_SERVER (which uses window.location.origin) so the dashboard
+// works correctly on arkhub.us, the staging URL, localhost, and onrender.
+const QBO_SERVER = ARK_SERVER;
 
 // ── Helper: call your local server (now includes realmId) ────────
 async function qboCall(action, payload = {}, realmId) {
