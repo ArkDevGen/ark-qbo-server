@@ -9187,8 +9187,31 @@ async function loadDB(){
   if(!best) return false;
 
   _applyDBPayload(best);
+  // One-time category cleanup: rewrite legacy categories on existing tasks
+  // so the dropdown matches the data. Idempotent — flagged in localStorage.
+  try { migrateTaskCategoriesV1(); } catch(e){ console.warn('Category migration skipped:', e); }
   localStorage.setItem(ARK_DB_KEY, JSON.stringify(best));
   return true;
+}
+
+// Category cleanup migration (v1): "Bank" → "Banking" (merged), "Tax" →
+// "Other" (Tax was unused / catch-all and replaced by Sales Tax for that
+// specific case). Runs once per user; flag stored in localStorage so the
+// migration is safe to re-deploy without re-firing on every page load.
+function migrateTaskCategoriesV1(){
+  const FLAG = 'ark_task_categories_v1';
+  if (localStorage.getItem(FLAG)) return;
+  if (!Array.isArray(DB.tasks)) { localStorage.setItem(FLAG, '1'); return; }
+  let changed = 0;
+  for (const t of DB.tasks) {
+    if (t.category === 'Bank') { t.category = 'Banking'; changed++; }
+    else if (t.category === 'Tax') { t.category = 'Other'; changed++; }
+  }
+  if (changed > 0) {
+    console.log(`ARK: migrated ${changed} task category/categories (Bank → Banking, Tax → Other)`);
+    saveDB();
+  }
+  localStorage.setItem(FLAG, '1');
 }
 
 // Flush pending DB save to server on page close/refresh
@@ -28850,8 +28873,8 @@ async function propGeneratePDFCleanup(p){
 
 // Category color map
 const TC_CAT_COLOR = {
-  Bank:'#1a6b30',
-  Bookkeeping:'#2e75b6', Payroll:'#2e7d5e', Tax:'#b8922a',
+  Banking:'#1a6b30',
+  Bookkeeping:'#2e75b6', Payroll:'#2e7d5e',
   'Sales Tax':'#6b3fa0', Compliance:'#b03a3a', Advisory:'#4a6f8a',
   Onboarding:'#1a6b30', Other:'#555'
 };
@@ -55033,12 +55056,10 @@ function htAttachAccountPickers(accounts){
         <div>
           <label>Category</label>
           <select id="tc-category" class="field-input" onchange="tcCheckBankPanel()">
-            <option value="Bank">Bank</option>
+            <option value="Banking">🏦 Banking</option>
             <option value="Bookkeeping">Bookkeeping</option>
             <option value="Monthly Close">Monthly Close</option>
-            <option value="Banking">🏦 Banking</option>
             <option value="Payroll">Payroll</option>
-            <option value="Tax">Tax</option>
             <option value="Sales Tax">Sales Tax</option>
             <option value="Compliance">Compliance</option>
             <option value="Advisory">Advisory</option>
