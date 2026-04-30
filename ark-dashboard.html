@@ -22627,7 +22627,7 @@ function smsRenderConvoList(q){
 }
 
 // ── Open a conversation thread ──
-function smsOpenThread(phone){
+async function smsOpenThread(phone){
   _smsActivePhone = phone;
   smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
 
@@ -22635,11 +22635,15 @@ function smsOpenThread(phone){
   const convo = convos.find(c=>c.phone===phone);
   if(!convo) return;
 
-  // Mark inbound messages as read
+  // Mark inbound messages as read.
+  // Immediate save closes the 1s debounce window — without it, an SSE-triggered
+  // /db/load can race in and overwrite local DB.smsMessages with stale server
+  // state, which makes the just-clicked conversation vanish from the list.
+  let changed = false;
   (DB.smsMessages||[]).forEach(m=>{
-    if(m.phone===phone && m.direction==='inbound') m.read = true;
+    if(m.phone===phone && m.direction==='inbound' && !m.read){ m.read = true; changed = true; }
   });
-  saveDB();
+  if(changed) await saveDB({ immediate: true });
 
   // Header
   const name = convo.clientName || convo.ownerName || phone;
@@ -22824,7 +22828,9 @@ async function smsPollInbox(){
           read: false
         });
       });
-      saveDB();
+      // Immediate save: avoids the 1s debounce window where _notifRefreshDB
+      // could /db/load and clobber these just-polled messages with stale state.
+      await saveDB({ immediate: true });
       smsRenderConvoList(document.getElementById('sms-convo-search')?.value||'');
       // If viewing the thread that got a new message, refresh it
       if(_smsActivePhone && data.messages.some(m=>m.phone===_smsActivePhone)){
@@ -36633,6 +36639,13 @@ let _chatChannel = 'general';    // current channel
 let _chatChannels = [];          // cached channel list
 let _chatMessages = [];          // messages for current channel
 let _chatHasMore = false;
+let _chatTab = (function(){ try { return localStorage.getItem('arkChatTab') || 'team'; } catch(_) { return 'team'; } })(); // 'team' or 'sms'
+
+function chatIsSmsChannel(id){ return typeof id === 'string' && id.startsWith('sms~'); }
+function chatIsTeamChannel(id){
+  if(typeof id !== 'string') return false;
+  return id === 'general' || id.startsWith('dm_') || id.startsWith('dm~');
+}
 
 function chatTogglePanel() {
   _chatOpen = !_chatOpen;
@@ -36646,11 +36659,19 @@ function chatTogglePanel() {
         <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
           <span id="chat-panel-title" style="font-size:14px;font-weight:700;color:var(--text);">Team Chat</span>
           <div style="display:flex;gap:6px;align-items:center;">
-            <button onclick="chatShowNewDM()" title="New message" style="background:var(--navy);border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:11px;padding:4px 10px;color:#fff;font-weight:600;font-family:'DM Sans',sans-serif;">+ DM</button>
-            <button onclick="chatShowNewSMS()" title="New SMS" style="background:#2e7d5e;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:11px;padding:4px 10px;color:#fff;font-weight:600;font-family:'DM Sans',sans-serif;">📱 SMS</button>
+            <button id="chat-new-dm-btn" onclick="chatShowNewDM()" title="New message" style="background:var(--navy);border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:11px;padding:4px 10px;color:#fff;font-weight:600;font-family:'DM Sans',sans-serif;">+ DM</button>
+            <button id="chat-new-sms-btn" onclick="chatShowNewSMS()" title="New SMS" style="background:#2e7d5e;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:11px;padding:4px 10px;color:#fff;font-weight:600;font-family:'DM Sans',sans-serif;">📱 SMS</button>
             <button onclick="chatBackToList()" title="Channel list" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-d);display:none;" id="chat-back-btn">◀</button>
             <button onclick="chatTogglePanel()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-d);">✕</button>
           </div>
+        </div>
+        <div id="chat-tab-bar" style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
+          <button id="chat-tab-team" onclick="chatSwitchTab('team')" style="flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <span>💬 Team</span><span id="chat-tab-team-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span>
+          </button>
+          <button id="chat-tab-sms" onclick="chatSwitchTab('sms')" style="flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--text-d);border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <span>📱 SMS</span><span id="chat-tab-sms-badge" style="display:none;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 4px;"></span>
+          </button>
         </div>
         <div id="chat-channel-list" style="flex:1;overflow-y:auto;"></div>
         <div id="chat-thread" style="flex:1;overflow-y:auto;display:none;"></div>
@@ -36697,12 +36718,15 @@ function chatRenderChannelList() {
   const compose = document.getElementById('chat-compose');
   const backBtn = document.getElementById('chat-back-btn');
   const title = document.getElementById('chat-panel-title');
+  const tabBar = document.getElementById('chat-tab-bar');
   if (!list) return;
   list.style.display = '';
   thread.style.display = 'none';
   compose.style.display = 'none';
   if (backBtn) backBtn.style.display = 'none';
-  if (title) title.textContent = 'Team Chat';
+  if (tabBar) tabBar.style.display = '';
+  if (title) title.textContent = _chatTab === 'sms' ? 'SMS' : 'Team Chat';
+  chatUpdateTabUI();
 
   const teamList = (_cachedServerUsers || []).length ? _cachedServerUsers : (DB.accountManagers || []);
 
@@ -36717,14 +36741,22 @@ function chatRenderChannelList() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  if (!_chatChannels.length) {
-    list.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--text-d);font-size:13px;">No conversations yet.<br>Click <b>+ DM</b> or send a message in General.</div>';
-    // Still show general
-    list.innerHTML = chatChannelItem('general', 'General', 'Team channel', null, 0, '') + list.innerHTML;
+  // Filter channels by active tab
+  const visible = _chatChannels.filter(ch => _chatTab === 'sms' ? chatIsSmsChannel(ch.channelId) : chatIsTeamChannel(ch.channelId));
+
+  // Empty-state messaging differs per tab; Team tab always seeds General even
+  // when there's no message history, so the user has somewhere to write.
+  if (!visible.length) {
+    if (_chatTab === 'sms') {
+      list.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--text-d);font-size:13px;">No SMS conversations yet.<br>Click <b>📱 SMS</b> to start one.</div>';
+    } else {
+      list.innerHTML = chatChannelItem('general', 'General', 'Team channel', null, 0, '') +
+        '<div style="padding:24px 16px;text-align:center;color:var(--text-d);font-size:12px;">No DMs yet. Click <b>+ DM</b> to start one.</div>';
+    }
     return;
   }
 
-  list.innerHTML = _chatChannels.map(ch => {
+  list.innerHTML = visible.map(ch => {
     if (ch.channelId === 'general') {
       const lastSender = ch.lastMessage ? _chatSenderName(ch.lastMessage).split(' ')[0] : '';
       const preview = ch.lastMessage ? `${lastSender}: ${ch.lastMessage.text.slice(0, 40)}` : 'No messages yet';
@@ -36753,6 +36785,50 @@ function chatRenderChannelList() {
       return chatChannelItem(ch.channelId, name, preview, ch.unread, ch.messages, fmtTime(ch.lastMessage?.createdAt));
     }
   }).join('');
+}
+
+// Reflect active tab in pill styling, per-tab unread badges, and which "+ New"
+// header button is available. Called from chatRenderChannelList and chatSwitchTab.
+function chatUpdateTabUI() {
+  const teamBtn = document.getElementById('chat-tab-team');
+  const smsBtn  = document.getElementById('chat-tab-sms');
+  const teamBadge = document.getElementById('chat-tab-team-badge');
+  const smsBadge  = document.getElementById('chat-tab-sms-badge');
+  const newDmBtn  = document.getElementById('chat-new-dm-btn');
+  const newSmsBtn = document.getElementById('chat-new-sms-btn');
+
+  const active   = 'color:var(--navy);border-bottom:2px solid var(--navy);';
+  const inactive = 'color:var(--text-d);border-bottom:2px solid transparent;';
+  const baseStyle = 'flex:1;padding:9px 12px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:700;font-family:\'DM Sans\',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;';
+
+  if (teamBtn) teamBtn.style.cssText = baseStyle + (_chatTab === 'team' ? active : inactive);
+  if (smsBtn)  smsBtn.style.cssText  = baseStyle + (_chatTab === 'sms'  ? active : inactive);
+
+  // Per-tab unread totals
+  let teamUnread = 0, smsUnread = 0;
+  for (const ch of _chatChannels) {
+    if (chatIsSmsChannel(ch.channelId)) smsUnread += (ch.unread || 0);
+    else if (chatIsTeamChannel(ch.channelId)) teamUnread += (ch.unread || 0);
+  }
+  if (teamBadge) {
+    if (teamUnread > 0) { teamBadge.textContent = teamUnread > 9 ? '9+' : teamUnread; teamBadge.style.display = 'flex'; }
+    else teamBadge.style.display = 'none';
+  }
+  if (smsBadge) {
+    if (smsUnread > 0) { smsBadge.textContent = smsUnread > 9 ? '9+' : smsUnread; smsBadge.style.display = 'flex'; }
+    else smsBadge.style.display = 'none';
+  }
+
+  // Show only the relevant "+ New" button for the active tab
+  if (newDmBtn)  newDmBtn.style.display  = _chatTab === 'team' ? '' : 'none';
+  if (newSmsBtn) newSmsBtn.style.display = _chatTab === 'sms'  ? '' : 'none';
+}
+
+function chatSwitchTab(tab) {
+  if (tab !== 'team' && tab !== 'sms') return;
+  _chatTab = tab;
+  try { localStorage.setItem('arkChatTab', tab); } catch(_) {}
+  chatRenderChannelList();
 }
 
 function chatChannelItem(channelId, name, preview, unread, msgCount, time) {
@@ -36793,11 +36869,21 @@ async function chatOpenChannel(channelId, name) {
   const compose = document.getElementById('chat-compose');
   const backBtn = document.getElementById('chat-back-btn');
   const title = document.getElementById('chat-panel-title');
+  const tabBar = document.getElementById('chat-tab-bar');
   if (list) list.style.display = 'none';
   if (thread) thread.style.display = '';
   if (compose) compose.style.display = '';
   if (backBtn) backBtn.style.display = '';
+  if (tabBar) tabBar.style.display = 'none';
   const isSms = channelId.startsWith('sms~');
+  // Sync tab to whatever channel kind we're opening, so going Back returns the
+  // user to the matching list (e.g. clicking an SMS notification → SMS tab).
+  // Set state only — full re-render would undo the thread-view setup above.
+  const targetTab = isSms ? 'sms' : 'team';
+  if (_chatTab !== targetTab) {
+    _chatTab = targetTab;
+    try { localStorage.setItem('arkChatTab', targetTab); } catch(_) {}
+  }
   if (title) title.textContent = (isSms ? '📱 ' : '') + (name || channelId);
 
   // Load messages
@@ -37005,6 +37091,8 @@ function chatShowNewDM() {
   document.getElementById('chat-panel-title').textContent = 'New Message';
   const backBtn = document.getElementById('chat-back-btn');
   if (backBtn) backBtn.style.display = '';
+  const tabBar = document.getElementById('chat-tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
 
   list.innerHTML = others.map(u => {
     const name = `${u.fname || u.userName || ''} ${u.lname || ''}`.trim();
@@ -37028,6 +37116,8 @@ function chatShowNewSMS() {
   document.getElementById('chat-panel-title').textContent = 'New SMS';
   const backBtn = document.getElementById('chat-back-btn');
   if (backBtn) backBtn.style.display = '';
+  const tabBar = document.getElementById('chat-tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
 
   list.innerHTML = `<div style="padding:16px;">
     <div style="font-size:12px;color:var(--text-d);margin-bottom:8px;">Enter a phone number to start an SMS conversation:</div>
