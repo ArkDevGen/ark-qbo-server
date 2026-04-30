@@ -30220,9 +30220,19 @@ async function tcRender(){
     if(t.status==='completed'){
       if(t.completedAt && t.completedAt.slice(0,10) >= monthStart) kpiDone++;
     } else {
-      if(t.dueDate && t.dueDate < todayStr) kpiOverdue++;
-      else if(t.dueDate === todayStr) kpiToday++;
-      else if(t.dueDate && t.dueDate <= weekStr) kpiWeek++;
+      // Mirror the Overdue / Today / This Week list filters so the KPI tile
+      // never disagrees with what shows up when the user clicks into a
+      // filter. Subtasks render under their parent and notes live in their
+      // own panel — neither belongs in a top-level count. Review-status
+      // tasks are someone else's queue, so they're excluded from "overdue"
+      // the same way the filter excludes them.
+      if (t.parentId) return;
+      if (t.type === 'note') return;
+      if (t.dueDate && t.dueDate < todayStr) {
+        if (t.status !== 'review') kpiOverdue++;
+      }
+      else if (t.dueDate === todayStr) kpiToday++;
+      else if (t.dueDate && t.dueDate <= weekStr) kpiWeek++;
     }
   });
   const s = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
@@ -34382,8 +34392,18 @@ function tcRenderSmartBanner(){
   // Filter by current AM selection
   const fAM = document.getElementById('tc-filter-am')?.value || '';
   const myTasks = (DB.tasks||[]).filter(t => !_taskHiddenForMe(t) && (!fAM || t.amId === fAM));
-  const overdue = myTasks.filter(t=>t.status!=='completed' && t.dueDate && t.dueDate<todayStr);
-  const dueToday= myTasks.filter(t=>t.status!=='completed' && t.dueDate===todayStr);
+  // Match the Overdue/Today list filters so the banner never disagrees with
+  // what the user sees on click-through (subtasks/notes excluded; review
+  // status excluded from overdue specifically).
+  const overdue = myTasks.filter(t =>
+    t.status !== 'completed' && t.status !== 'review' &&
+    !t.parentId && t.type !== 'note' &&
+    t.dueDate && t.dueDate < todayStr
+  );
+  const dueToday = myTasks.filter(t =>
+    t.status !== 'completed' && !t.parentId && t.type !== 'note' &&
+    t.dueDate === todayStr
+  );
   if(!overdue.length && !dueToday.length){ banner.innerHTML=''; return; }
   banner.innerHTML = `<div style="background:${overdue.length?'rgba(176,58,58,.08)':'rgba(184,146,42,.08)'};border:1px solid ${overdue.length?'rgba(176,58,58,.2)':'rgba(184,146,42,.2)'};border-radius:var(--radius);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
