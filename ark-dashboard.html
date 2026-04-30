@@ -30313,7 +30313,28 @@ async function tcRender(){
         if (search && !`${t.name} ${t.category} ${t.notes||''}`.toLowerCase().includes(search)) return false;
         return true;
       });
-      for (let i = 0; i < 7; i++) {
+      // Current week (offset 0): the past-day columns (Mon → yesterday) get
+      // collapsed into a single "🔴 Overdue" column at the front so the
+      // user's eyes land on TODAY first. Tasks from prior weeks that are
+      // still open also fall into this bucket — anything dated before
+      // today and not completed is overdue. Future weeks keep the full
+      // 7-day Mon-Sun layout since "today" doesn't apply.
+      const isCurrentWeek = _tcWeekOffset === 0;
+      let startIdx = 0;
+      if (isCurrentWeek) {
+        const overdueItems = visibleCandidates.filter(t => t.dueDate && t.dueDate < todayStr);
+        if (overdueItems.length > 0) {
+          // Sort oldest-first so the top of the column is the longest-overdue task
+          overdueItems.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+          ordered['🔴 Overdue'] = overdueItems;
+        }
+        // Today's day-index in the Mon-Sun week (0=Mon, 6=Sun). Skip every
+        // earlier day's column — those days are done and any open tasks
+        // were rolled into Overdue above.
+        const dayMs = 24 * 60 * 60 * 1000;
+        startIdx = Math.max(0, Math.min(6, Math.round((today.getTime() - weekMonday.getTime()) / dayMs)));
+      }
+      for (let i = startIdx; i < 7; i++) {
         const d = new Date(weekMonday);
         d.setDate(weekMonday.getDate() + i);
         const dStr = d.toISOString().slice(0,10);
