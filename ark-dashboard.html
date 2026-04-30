@@ -1723,15 +1723,15 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <a class="nav-item" id="nav-tools" href="#/tools" onclick="nav('tools'); return false;"><span class="ni">🧰</span>Tools & Reports</a>
     </div>
 
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
-    <div class="nav-group">
-      <a class="nav-item admin-only" id="nav-users" href="#/users" onclick="nav('users'); return false;" style="display:none;"><span class="ni">👥</span>Team & Users</a>
-      <a class="nav-item" id="nav-integrations" href="#/integrations" onclick="nav('integrations'); return false;"><span class="ni">🔗</span>Integrations</a>
+    <div class="nav-section" id="nav-section-team" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Team <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group" id="nav-group-team">
+      <a class="nav-item" id="nav-users" href="#/users" onclick="nav('users'); return false;" style="display:none;"><span class="ni">👥</span>Team &amp; Users</a>
+      <a class="nav-item" id="nav-devhub" href="#/devhub" onclick="nav('devhub'); return false;"><span class="ni">🤝</span>Team Hub</a>
     </div>
 
-    <div class="nav-section" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Team Hub <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
-    <div class="nav-group">
-      <a class="nav-item" id="nav-devhub" href="#/devhub" onclick="nav('devhub'); return false;"><span class="ni">🤝</span>Team Hub</a>
+    <div class="nav-section" id="nav-section-admin" onclick="toggleNavGroup(this)" style="cursor:pointer;user-select:none;">Admin <span class="nav-arrow" style="float:right;font-size:8px;opacity:.5;transition:transform .2s;">▼</span></div>
+    <div class="nav-group" id="nav-group-admin">
+      <a class="nav-item" id="nav-integrations" href="#/integrations" onclick="nav('integrations'); return false;"><span class="ni">🔗</span>Integrations</a>
     </div>
   </nav>
   <!-- Sidebar utility buttons -->
@@ -9663,6 +9663,15 @@ function applyNavPermissions(u){
   // redacted, no-roles, read-only-for-others view). Hidden when logged out
   // so the sidebar doesn't peek through behind the login screen.
   document.getElementById('nav-users').style.display = u ? 'flex' : 'none';
+  // Admin section (Integrations) is admin-only — hide both the header and
+  // the group for everyone else so non-admins don't see an "Admin" header
+  // with no items under it.
+  const adminSection = document.getElementById('nav-section-admin');
+  const adminGroup   = document.getElementById('nav-group-admin');
+  const integrations = document.getElementById('nav-integrations');
+  if (adminSection) adminSection.style.display = isAdmin ? '' : 'none';
+  if (adminGroup)   adminGroup.style.display   = isAdmin ? '' : 'none';
+  if (integrations) integrations.style.display = isAdmin ? '' : 'none';
   // PTO tab buttons inside Payroll Center / Employees / PTO Center top switchers
   document.querySelectorAll('.pto-admin-tab').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
@@ -9715,14 +9724,13 @@ function applyRoleRestrictions(u){
   // Non-admin: hide sidebar backup dropdown
   const backupWrap = document.getElementById('sidebar-backup-wrap');
   if(backupWrap) backupWrap.style.display = 'none';
-  // AM: hide Users nav and Export Backup
+  // AM: hide Export Backup. Team & Users stays visible (it's now a team
+  // directory with own-account-only edits for non-admins).
   if(role === 'am'){
-    setNavVisible('nav-users', false);
     document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
   }
-  // PM (Payroll Manager): can run payroll, view files, but can't edit clients or manage users
+  // PM (Payroll Manager): can run payroll, view files, but can't edit clients
   if(role === 'pm'){
-    setNavVisible('nav-users', false);
     document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
     // Disable client edit buttons but allow payroll operations
     setTimeout(() => {
@@ -9737,9 +9745,9 @@ function applyRoleRestrictions(u){
       });
     }, 100);
   }
-  // Viewer: hide Users, hide Export Backup, disable edit buttons
+  // Viewer: hide Export Backup, disable edit buttons. Team & Users stays
+  // visible (read-only directory + own-account edits).
   if(role === 'viewer'){
-    setNavVisible('nav-users', false);
     document.querySelectorAll('[onclick*="exportBackup"],[onclick*="ExportBackup"]').forEach(el => el.style.display = 'none');
     setTimeout(() => {
       document.querySelectorAll('.btn-primary').forEach(btn => {
@@ -37632,6 +37640,11 @@ function ccChatRenderChannelList(channels) {
     if (diffH < 24) return diffH + 'h';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+
+  // Comm Center has its own dedicated SMS card above this widget — strip
+  // sms~ channels so they don't get rendered as DMs by the else branch below
+  // (which interprets the channelId via _chatParseDmIds).
+  channels = channels.filter(c => !chatIsSmsChannel(c.channelId));
 
   // Ensure general is always present
   if (!channels.find(c => c.channelId === 'general')) {
