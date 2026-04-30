@@ -1,3 +1,4 @@
 FROM cloudflare/cloudflared:latest
-SHELL ["/bin/sh", "-c"]
-CMD cloudflared tunnel --no-autoupdate run --token $CLOUDFLARE_TUNNEL_TOKEN
+COPY run.sh /run.sh
+RUN chmod +x /run.sh
+ENTRYPOINT ["/bin/sh", "/run.sh"]
