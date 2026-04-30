@@ -1,0 +1,6 @@
+tunnel: crm-tunnel
+credentials-file: /etc/cloudflared/creds.json
+ingress:
+  - hostname: arkhub.us
+    service: http://ark-qbo-server.onrender.com
+  - service: http_status:404
