@@ -43,6 +43,10 @@ sections (or strike them out under "✅ Shipped") as they progress.
 - **Payroll Time Report** — clean up. (Specifics TBD.)
 - **iheartcoffee — update output file** — payroll output needs updating.
   (Specifics TBD; Mackenzie to provide details when ready.)
+- **Production — undo on task completion** — when a task is marked done,
+  show a toast with an "Undo" button for ~10 seconds. Click to revert
+  status; auto-dismiss after the window. Prevents lost work from accidental
+  checkbox clicks.
 
 ---
 
