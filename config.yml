@@ -3,4 +3,6 @@ credentials-file: /etc/cloudflared/creds.json
 ingress:
   - hostname: arkhub.us
     service: http://ark-qbo-server.onrender.com
+  - hostname: staging.arkhub.us
+    service: http://ark-qbo-server-staging.onrender.com
   - service: http_status:404
