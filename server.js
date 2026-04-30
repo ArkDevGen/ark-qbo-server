@@ -2101,7 +2101,9 @@ app.post('/sms/inbound', (req, res) => {
   res.status(200).json({ ok: true });
 });
 
-// Resolve phone number to a client owner name (best-effort)
+// Resolve phone number to a friendly display name (best-effort).
+// Lookup order: client owner → client business phone → standalone smsContacts
+// (Homebase, vendor reps, etc.). Falls back to the raw phone if no match.
 function _smsResolveContactName(phone) {
   const digits = phone.replace(/\D/g, '');
   try {
@@ -2118,6 +2120,16 @@ function _smsResolveContactName(phone) {
       const clientDigits = (client.phone || '').replace(/\D/g, '');
       if (clientDigits && clientDigits.length >= 10 && digits.endsWith(clientDigits.slice(-10))) {
         return client.biz || phone;
+      }
+    }
+    // Fall back to standalone contacts (e.g. short codes that don't have a
+    // 10-digit tail need an exact-digit match).
+    for (const ct of (db.smsContacts || [])) {
+      const cd = (ct.phone || '').replace(/\D/g, '');
+      if (!cd) continue;
+      const tail = cd.slice(-10);
+      if ((tail.length >= 10 && digits.endsWith(tail)) || cd === digits) {
+        return ct.name || phone;
       }
     }
   } catch (_) {}
