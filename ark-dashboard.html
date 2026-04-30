@@ -37493,6 +37493,25 @@ function chatHandleSSE(msg) {
     }
     authFetch(ARK_SERVER + '/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: msg.channelId }) }).catch(() => {});
   }
+
+  // If the panel is open at all, refresh the channel list so brand-new
+  // conversations (e.g. first SMS from a number we haven't texted) appear
+  // without the user having to close + reopen the panel. Throttled to avoid
+  // hammering the server when messages arrive in rapid succession.
+  if (_chatOpen) chatRefreshChannelListSoon();
+}
+
+let _chatChannelRefreshTimer = null;
+function chatRefreshChannelListSoon(){
+  if (_chatChannelRefreshTimer) return;
+  _chatChannelRefreshTimer = setTimeout(() => {
+    _chatChannelRefreshTimer = null;
+    if (_chatOpen) {
+      const list = document.getElementById('chat-channel-list');
+      // Only reload if we're showing the list (not a thread or compose form)
+      if (list && list.style.display !== 'none') chatLoadChannels();
+    }
+  }, 800);
 }
 
 function chatUpdateBadge(increment) {
