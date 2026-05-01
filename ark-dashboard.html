@@ -1855,7 +1855,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <div class="card-header" style="flex-wrap:wrap;gap:10px;">
         <div class="card-header-left"><div class="card-title">All Clients</div><div class="card-subtitle" id="clients-count"></div></div>
         <div class="card-header-actions" style="flex-wrap:wrap;">
-          <select id="client-health-filter" class="field-input" style="min-width:150px;" onchange="renderClients(document.getElementById('client-search').value)">
+          <select id="client-health-filter" class="field-input field-input-sm" style="width:auto;flex:0 0 auto;" onchange="renderClients(document.getElementById('client-search').value)">
             <option value="">All Clients</option>
             <option value="active">Active Only</option>
             <option value="at-risk">🔴 At Risk</option>
