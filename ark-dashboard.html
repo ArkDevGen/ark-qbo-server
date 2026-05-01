@@ -1865,6 +1865,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="search-wrap"><input id="client-search" placeholder="Search clients…" oninput="renderClients(this.value)"></div>
           <button onclick="openC360()" class="btn btn-ghost btn-sm" title="Search any client — tasks, health, activity, and more">🔍 Client 360</button>
           <button onclick="nav('import')" class="btn btn-ghost btn-sm" title="Import clients from CSV">⬆ Import</button>
+          <button onclick="openAddClient()" class="btn btn-primary btn-sm" title="Add a new client">+ Add Client</button>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -3266,10 +3267,21 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
       </div>
 
-      <!-- ══ CARD 4: Coming Soon ══ -->
-      <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;opacity:.4;">
-        <div style="font-size:28px;">⬜</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-d);">Coming Soon</div>
+      <!-- ══ CARD 4: Email Inbox ══ -->
+      <div class="card" style="display:flex;flex-direction:column;">
+        <div class="card-header" style="border-bottom:2px solid #2c5fa122;">
+          <div>
+            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">📬</span> Inbox
+              <span id="inbox-unread-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;"></span>
+            </div>
+            <div class="card-subtitle">support@arkhub.us — Goodman Classic</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="inboxLoad()" title="Refresh">↻</button>
+        </div>
+        <div style="padding:12px 16px;flex:1;overflow-y:auto;max-height:420px;">
+          <div id="inbox-list"><div style="color:var(--text-d);font-size:12px;padding:20px 0;text-align:center;">Loading…</div></div>
+        </div>
       </div>
 
     </div>
@@ -10717,7 +10729,8 @@ const PAGE_ACTIONS = {
       <div class="dropdown-item" onclick="dashGearClose();wgResetWidgets()">↺ Reset to Defaults</div>
     </div>
   </div>`,
-  clients: ()=>`<button class="btn btn-primary" onclick="openAddClient()">+ Add Client</button>`,
+  // clients: "+ Add Client" button moved into the card header (next to Import)
+  clients: ()=>``,
   acctmgrs: ()=>`<button class="btn btn-primary" onclick="openAddAM()">+ Add Account Manager</button>`,
   // employees: "+ Add New Hire" button moved into the card header
   employees: ()=>``,
