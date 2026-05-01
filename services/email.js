@@ -19,7 +19,7 @@ const getGraphClient = () => {
 const getEmails = async () => {
   const client = getGraphClient();
   const messages = await client
-    .api('/users/staff@arkfinancialservices.com/messages')
+    .api('/users/support@arkhub.us/messages')
     .select('subject,from,receivedDateTime,bodyPreview')
     .top(25)
     .get();
@@ -29,7 +29,7 @@ const getEmails = async () => {
 const sendEmail = async ({ to, subject, body }) => {
   const client = getGraphClient();
   await client
-    .api('/users/staff@arkfinancialservices.com/sendMail')
+    .api('/users/support@arkhub.us/sendMail')
     .post({
       message: {
         subject,
