@@ -49875,9 +49875,20 @@ async function cogsHandleFiles(files) {
       const data = await resp.json();
       if (!data.success) throw new Error(data.error || 'Parse failed');
 
-      console.log(`COGS parsed ${file.name}: ${data.totalEntries} entries, ${data.franchises?.length} stores`);
+      const seenList = (data.storesSeen || []).map(s => `${s.storeName}→#${s.storeNum||'?'}(${s.rowCount}r)`).join(', ');
+      console.log(`COGS parsed ${file.name}: ${data.totalEntries} entries, ${data.franchises?.length} stores [seen: ${seenList || 'none'}]`);
       allFranchises.push(...(data.franchises || []));
       allWarnings.push(...(data.warnings || []));
+      // Tag each warning with the file name so the user can find which CSV
+      // dropped a store. The server's warning text alone doesn't carry this.
+      if ((data.warnings || []).length) {
+        for (const w of data.warnings) {
+          if (w.includes('produced 0 journal entries')) {
+            // Replace the generic warning with one that names the file.
+            allWarnings[allWarnings.length - data.warnings.length + data.warnings.indexOf(w)] = `${file.name}: ${w}`;
+          }
+        }
+      }
       totalDebits += data.totalDebits || 0;
       totalCredits += data.totalCredits || 0;
       totalEntries += data.totalEntries || 0;
@@ -49938,7 +49949,26 @@ function cogsShowReview() {
   document.getElementById('cogs-stat-debits').textContent = '$' + _cogsData.totalDebits.toLocaleString('en-US', { minimumFractionDigits: 2 });
   document.getElementById('cogs-stat-credits').textContent = '$' + _cogsData.totalCredits.toLocaleString('en-US', { minimumFractionDigits: 2 });
 
+  // Surface parser warnings inline so dropped stores aren't silently missed.
+  // (Files that returned 0 entries are tagged with their filename earlier.)
   const tbody = document.getElementById('cogs-franchise-body');
+  let warnHost = document.getElementById('cogs-warnings');
+  if (!warnHost) {
+    warnHost = document.createElement('div');
+    warnHost.id = 'cogs-warnings';
+    tbody.parentElement.parentElement.insertBefore(warnHost, tbody.parentElement);
+  }
+  const warns = _cogsData.warnings || [];
+  if (warns.length) {
+    warnHost.style.cssText = 'background:#fff8e1;border:1px solid #f5a623;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#6a4400;';
+    warnHost.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">⚠ ${warns.length} parser warning${warns.length>1?'s':''}:</div>
+      <ul style="margin:0;padding-left:18px;max-height:160px;overflow-y:auto;">
+        ${warns.map(w => `<li style="margin:2px 0;">${String(w).replace(/[<>]/g,'')}</li>`).join('')}
+      </ul>`;
+  } else {
+    warnHost.style.display = 'none';
+  }
+
   tbody.innerHTML = '';
 
   (_cogsData.franchises || []).forEach((f, i) => {
