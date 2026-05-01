@@ -7016,7 +7016,10 @@ app.post('/scooters/parse-sales', requireAuth, upload.single('file'), async (req
     // Parse Excel
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawData = XLSX.utils.sheet_to_json(sheet);
+    // defval:null guarantees every header cell becomes a key on every row object,
+    // so the first row's keys reflect the real header — even if that row's
+    // Gift Card / Promotion cells happen to be blank.
+    const rawData = XLSX.utils.sheet_to_json(sheet, { defval: null });
 
     if (!rawData.length) return res.status(400).json({ error: 'Excel file is empty' });
 
