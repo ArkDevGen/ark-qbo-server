@@ -48352,8 +48352,22 @@ async function sjeHandleFile(file) {
       body: form,
     });
 
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    // Read as text first so we can give a useful error when the response
+    // isn't JSON (e.g. Cloudflare challenge page, Render 502, etc.) instead
+    // of bubbling up the cryptic "Unexpected token '<'" from JSON.parse.
+    const raw = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const looksLikeRender     = /render\.com|application error|502 bad gateway/i.test(raw);
+      const source = looksLikeCloudflare ? 'Cloudflare blocked the upload (likely WAF / Bot Fight Mode). Add /scooters/* to the WAF skip rule.'
+                   : looksLikeRender     ? 'Render returned an error page (likely 502 / cold start). Try again in a few seconds.'
+                                         : `Server returned a non-JSON response (HTTP ${resp.status}).`;
+      throw new Error(source);
+    }
+    if (!resp.ok || data.error) throw new Error(data.error || `Upload failed (HTTP ${resp.status})`);
 
     _sjeData = data;
     sjeShowReview();
