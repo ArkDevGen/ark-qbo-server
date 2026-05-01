@@ -6239,12 +6239,16 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
 
     const franchises = [];
     const warnings = [];
+    // Track every store the parser saw so a debugger can reconcile the upload
+    // count vs the row count when stores go missing in the merged result.
+    const storesSeen = [];
     let totalDebits = 0, totalCredits = 0, totalEntries = 0;
 
     for (const [groupKey, rows] of Object.entries(storeGroups)) {
       const storeName = storeNameMap[groupKey] || groupKey;
       // groupKey is already the resolved store number (or raw name if none found)
       const storeNum = /^\d+$/.test(groupKey) ? groupKey : null;
+      storesSeen.push({ storeName, storeNum: storeNum || null, rowCount: rows.length });
       console.log(`  Store "${storeName}" → #${storeNum || 'NONE'} (${rows.length} rows)`);
       const realm = storeNum ? findRealmForStore(storeNum) : null;
       const entries = [];
@@ -6377,11 +6381,21 @@ app.post('/scooters/parse-harvest', requireAuth, upload.single('file'), (req, re
     // Sort by label
     franchises.sort((a, b) => a.label.localeCompare(b.label));
 
-    console.log(`  Generated ${franchises.length} store groups, ${totalEntries} entries`);
+    // Diagnostic: any store the parser saw but didn't push to franchises (no
+    // journal-eligible rows) so the dashboard can call it out instead of
+    // silently swallowing the file.
+    const pushedNums = new Set(franchises.map(f => f.storeId).filter(Boolean));
+    const droppedStores = storesSeen.filter(s => !s.storeNum || !pushedNums.has(s.storeNum));
+    for (const ds of droppedStores) {
+      warnings.push(`Store "${ds.storeName}" (${ds.storeNum || 'no #'}) parsed ${ds.rowCount} row(s) but produced 0 journal entries`);
+    }
+
+    console.log(`  Generated ${franchises.length} store groups, ${totalEntries} entries (${droppedStores.length} stores dropped for no entries)`);
     res.json({
       success: true,
       franchises,
       warnings,
+      storesSeen,
       totalDebits: Math.round(totalDebits * 100) / 100,
       totalCredits: Math.round(totalCredits * 100) / 100,
       totalEntries,
