@@ -46,6 +46,8 @@ const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 
 // Parse JSON request bodies — 25mb limit for fax file uploads
 app.use(express.json({ limit: '25mb' }));
+const emailRoutes = require('./routes/email');
+app.use('/api/email', emailRoutes);
 
 // Serve the ARK dashboard at the root URL
 app.get('/', (req, res) => {
