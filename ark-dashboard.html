@@ -5344,6 +5344,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <div class="card" style="padding:12px;text-align:center;">
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Franchises</div>
             <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);" id="sje-stat-franchises">0</div>
+            <div style="font-size:10px;color:var(--text-d);margin-top:2px;" id="sje-stat-stores">&nbsp;</div>
           </div>
           <div class="card" style="padding:12px;text-align:center;">
             <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-d);letter-spacing:.06em;">Journal Entries</div>
@@ -48393,6 +48394,12 @@ function sjeShowReview() {
   // Stats
   const s = _sjeData.stats || {};
   document.getElementById('sje-stat-franchises').textContent = s.totalFranchises || 0;
+  // Each card may bundle multiple stores (classed franchises share a QBO company).
+  // Count total stores by splitting the comma-separated storeId on each card.
+  const storeCount = (_sjeData.franchises || []).reduce((n, f) => {
+    return n + (f.storeId ? String(f.storeId).split(',').filter(s => s.trim()).length : 0);
+  }, 0);
+  document.getElementById('sje-stat-stores').textContent = storeCount ? `covering ${storeCount} store${storeCount===1?'':'s'}` : '';
   document.getElementById('sje-stat-entries').textContent = s.totalEntries || 0;
   document.getElementById('sje-stat-debits').textContent = '$' + (s.totalDebits || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
   document.getElementById('sje-stat-credits').textContent = '$' + (s.totalCredits || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
