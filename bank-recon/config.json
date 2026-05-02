@@ -1,0 +1,13 @@
+{
+  "client_name": "Americas Energy",
+  "bank_accounts": {
+    "6001": {"number": "10200", "name": "BMO Checking - 6001",         "type": "Bank"},
+    "1249": {"number": "10300", "name": "TASI - 1249",                  "type": "Bank"},
+    "XXXX": {"number": "10310", "name": "TASI Payroll - XXXX",          "type": "Bank"},
+    "YYYY": {"number": "22000", "name": "TASI Line of Credit - YYYY",   "type": "Liability"}
+  },
+  "ai_enabled": true,
+  "ai_model": "claude-sonnet-4-20250514",
+  "duplicate_strictness": "date_amount_desc",
+  "default_unmapped_account": "Ask My Accountant"
+}

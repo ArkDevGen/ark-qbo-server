@@ -1906,6 +1906,10 @@ app.use('/temp', express.static(TEMP_DIR));
 // Static fonts (MICR E-13B for check printing, etc.)
 app.use('/fonts', express.static(path.join(__dirname, 'fonts')));
 
+// Bank Reconciliation Tool bundle (Python script + config + README)
+// Distributed via the dashboard Tools Center.
+app.use('/bank-recon', express.static(path.join(__dirname, 'bank-recon')));
+
 // ─────────────────────────────────────────────────────────────────
 // FAX: Send via Sinch Fax API v3
 // Dashboard sends: { toNumber, fileName, fileData (base64) }
