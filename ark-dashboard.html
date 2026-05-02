@@ -6886,6 +6886,82 @@ input[type="checkbox"]{accent-color:var(--navy);}
     </div>
   </div>
 
+  <!-- ── Bank Reconciliation Tool — distribution / instructions modal ────
+       Local Python script that parses bank statement PDFs against a QBO GL
+       export and produces a QBO-ready JE import CSV. This modal hands out
+       the bundle (script + config + README) and shows install/usage steps.
+  -->
+  <div class="overlay" id="modal-bank-recon" style="display:none" onclick="overlayClose(event,'modal-bank-recon')">
+    <div class="modal modal-lg" style="max-width:780px;" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">🏦 Bank Reconciliation Tool</div>
+          <div style="font-size:12px;color:var(--text-m);margin-top:2px;">Local Python script — bank statement PDFs → QBO journal-entry import CSV.</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-bank-recon')">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+
+        <div style="font-size:13px;color:var(--text);line-height:1.55;margin-bottom:18px;">
+          Drops PDFs in, gets a QBO-import-ready journal-entry CSV out. Categorizes
+          via vendor regex rules, GL vendor lookup, and a Claude AI fallback for
+          anything unmapped. Detects duplicates already booked to the GL so you
+          don't double-post.
+        </div>
+
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">1. Download the bundle</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+          <a href="/bank-recon/bank_recon.py" download class="btn btn-primary btn-sm">⬇ bank_recon.py</a>
+          <a href="/bank-recon/config.json"   download class="btn btn-ghost   btn-sm">⬇ config.json</a>
+          <a href="/bank-recon/README.md"     download class="btn btn-ghost   btn-sm">⬇ README.md</a>
+          <a href="/bank-recon/README.md"     target="_blank" rel="noopener" class="btn btn-ghost btn-sm">View README →</a>
+        </div>
+
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">2. Install dependencies</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:12px;color:var(--text);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <code>pip install pdfplumber anthropic</code>
+          <button onclick="bankReconCopy('pip install pdfplumber anthropic')" class="btn btn-ghost btn-sm">Copy</button>
+        </div>
+
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">3. Set Anthropic API key (optional, enables AI fallback)</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:12px;color:var(--text);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <code>$env:ANTHROPIC_API_KEY="sk-ant-..."</code>
+          <button onclick="bankReconCopy('$env:ANTHROPIC_API_KEY=&quot;sk-ant-...&quot;')" class="btn btn-ghost btn-sm">Copy</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-m);margin-bottom:18px;">Skip this and pass <code>--no-ai</code> to use "Ask My Accountant" for anything that doesn't match a rule or GL vendor.</div>
+
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">4. Run</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:12px;color:var(--text);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <code>python bank_recon.py --statements .\statements --gl .\gl_export.csv --output .\output</code>
+          <button onclick="bankReconCopy('python bank_recon.py --statements .\\\\statements --gl .\\\\gl_export.csv --output .\\\\output')" class="btn btn-ghost btn-sm">Copy</button>
+        </div>
+
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">Folder layout</div>
+        <pre style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:11px;color:var(--text);margin:0 0 18px 0;white-space:pre;overflow-x:auto;">bank_recon\
+  bank_recon.py
+  config.json
+  statements\
+    BMO_2025-01.pdf
+    TASI_Op_2025-01.pdf
+    TASI_Payroll_2025-01.pdf
+    TASI_LOC_2025-01.pdf
+  gl_export.csv
+  output\
+    qbo_je_import.csv         &lt;- import this to QBO
+    review_report.txt         &lt;- read this first
+    review_report_detail.csv  &lt;- full transaction-level detail</pre>
+
+        <div style="border-left:3px solid var(--gold);background:var(--surface2);padding:10px 14px;font-size:12px;color:var(--text);line-height:1.55;border-radius:0 6px 6px 0;">
+          <b>Before running:</b> edit <code>config.json</code> with the actual last-4 digits for TASI Payroll &amp; TASI LOC, and add those accounts to QBO first (Bank and Other Current Liability respectively). The JE import will fail if account names don't match exactly.
+        </div>
+
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('modal-bank-recon')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Who's Out (expanded) modal — bigger view of the dashboard widget. -->
   <div class="overlay" id="modal-pto-whosout" style="display:none" onclick="overlayClose(event,'modal-pto-whosout')">
     <div class="modal" style="max-width:720px;" onclick="event.stopPropagation()">
@@ -26764,6 +26840,14 @@ const TOOLS_REGISTRY = [
     desc: 'Sales-report → QBO journal-entry engine. Manage which clients can access the builder and their access keys.',
     tags: ['qbo','client-tool','billable'],
     launch: () => { rbxOpenAdmin(); }
+  },
+  {
+    id: 'bank-recon',
+    icon: '🏦',
+    title: 'Bank Reconciliation Tool',
+    desc: 'Local Python script that parses bank statement PDFs against a QBO GL export and produces a QBO-ready journal entry import CSV. Built for Americas Energy.',
+    tags: ['qbo','bookkeeping','python','local'],
+    launch: () => { bankReconOpenInfo(); }
   }
 ];
 
@@ -27896,6 +27980,21 @@ function toolsPickerChoose(id){
   if(!c || !_tpOnPick) return;
   _tpOnPick(c);
   _tpOnPick = null;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BANK RECONCILIATION TOOL — distribution modal
+//  Hands out the local Python script bundle (script + config + README)
+//  served from /bank-recon/* on the Express server.
+// ════════════════════════════════════════════════════════════════
+function bankReconOpenInfo(){
+  document.getElementById('modal-bank-recon').style.display = 'flex';
+}
+function bankReconCopy(text){
+  navigator.clipboard.writeText(text).then(
+    ()=> showToast('Copied to clipboard'),
+    ()=> showToast('Copy failed', 'error')
+  );
 }
 
 // ════════════════════════════════════════════════════════════════
