@@ -31751,17 +31751,17 @@ async function tcClearMyImported(){
   if(!currentUser?.id){ alert('You need to be logged in.'); return; }
   if(!Array.isArray(DB.tasks) || !DB.tasks.length){ alert('No tasks to clear.'); return; }
   // Match tasks the current user imported, regardless of which AM was
-  // assigned at import time. We tag every imported row with _import:true
-  // and stamp createdBy with the importer's name, so checking either of
-  // those (or amId, for backwards compatibility with older imports) covers
-  // every realistic case.
+  // assigned at import time. tdExecuteImport strips _import on save and
+  // tags each saved task with _importedFromTodoist + createdBy. So check
+  // either flag (plus amId for backwards compatibility with older imports).
   const myName = `${currentUser.fname || ''} ${currentUser.lname || ''}`.trim();
   const myUser = currentUser.userName || '';
   const mine = DB.tasks.filter(t => {
     if (t._deleted) return false;
     if (t.amId === currentUser.id) return true;
-    if (t._import && myName && t.createdBy === myName) return true;
-    if (t._import && myUser && t.createdBy === myUser) return true;
+    const isImport = t._importedFromTodoist || t._import;
+    if (isImport && myName && t.createdBy === myName) return true;
+    if (isImport && myUser && t.createdBy === myUser) return true;
     return false;
   });
   if(!mine.length){ alert('No tasks found for your account.'); return; }
