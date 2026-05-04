@@ -9,7 +9,7 @@ new team members before anything is promoted to production.
 | Environment | URL | Branch | Data |
 |---|---|---|---|
 | **Production** | https://ark-qbo-server.onrender.com | `main` | Real client data |
-| **Staging** | https://ark-qbo-server-staging.onrender.com | `staging` | Test data only — resets on deploy |
+| **Staging** | https://staging.arkhub.us | `staging` | Test data only — resets on deploy |
 
 When you're on staging you'll see an orange **STAGING ENVIRONMENT** banner
 at the top of the screen and a 🟠 in the browser tab. If you don't see it,
@@ -65,7 +65,7 @@ the easiest path is the GitHub web editor:
    - ✅ Select "Commit directly to the `staging` branch"
 7. Click **Commit changes**
 8. Wait ~3 minutes → your change is live on
-   https://ark-qbo-server-staging.onrender.com
+   https://staging.arkhub.us
 
 ---
 
@@ -93,7 +93,7 @@ The staging Render service does **not** have a persistent disk, which means:
 If you need test data, re-seed the admin user by running this in PowerShell:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri "https://ark-qbo-server-staging.onrender.com/auth/seed"
+Invoke-RestMethod -Method Post -Uri "https://staging.arkhub.us/auth/seed"
 ```
 
 ---
