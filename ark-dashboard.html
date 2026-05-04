@@ -32959,7 +32959,9 @@ function tdParseMultiFiles() {
     const iIndent = idx('INDENT');
     if (iName < 0) continue;
 
-    function mapPri(p) { const n=parseInt(p); return n===4?'high':n===3?'medium':n===2?'low':'medium'; }
+    // Todoist CSV export uses UI labels: 1=P1 urgent, 2=P2 high, 3=P3 medium,
+    // 4=P4 none/default (the most common in real exports).
+    function mapPri(p) { const n=parseInt(p); return n===1?'urgent':n===2?'high':n===3?'medium':'low'; }
 
     const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
     const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -33343,13 +33345,14 @@ function tdParseCSV(){
   const defaultAM  = document.getElementById('td-am-sel')?.value || '';
   const defaultCat = document.getElementById('td-cat-sel')?.value || 'Other';
 
-  // Map Todoist priority (1=P4/none → 4=P1/urgent) to ARK
+  // Map Todoist CSV priority to ARK. The CSV export uses the UI labels:
+  // 1=P1 urgent, 2=P2 high, 3=P3 medium, 4=P4 none/default (most common).
   function mapPriority(p){
     const n = parseInt(p);
-    if(n===4) return 'high';
+    if(n===1) return 'urgent';
+    if(n===2) return 'high';
     if(n===3) return 'medium';
-    if(n===2) return 'low';
-    return 'medium'; // default
+    return 'low'; // P4 / no priority / blank
   }
 
   // Infer ARK category from the Todoist section name a task lives under.
