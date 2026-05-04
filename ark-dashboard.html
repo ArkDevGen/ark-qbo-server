@@ -3594,6 +3594,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <textarea id="tc-pnote-content" class="field-input" placeholder="Write your note here..." style="min-height:150px;resize:vertical;font-size:13px;line-height:1.6;border:none;padding:8px 0;width:100%;box-sizing:border-box;"></textarea>
         <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <span id="tc-pnote-meta" style="font-size:11px;color:var(--text-d);flex:1;"></span>
+          <button id="tc-pnote-delete-btn" class="btn btn-danger btn-sm" onclick="tcDeleteProjectNote()" style="display:none;">Delete</button>
           <button class="btn btn-ghost btn-sm" onclick="tcCancelProjectNote()">Cancel</button>
           <button class="btn btn-primary btn-sm" onclick="tcSaveProjectNote()">Save</button>
         </div>
@@ -31749,7 +31750,20 @@ function tcAddProject() {
 async function tcClearMyImported(){
   if(!currentUser?.id){ alert('You need to be logged in.'); return; }
   if(!Array.isArray(DB.tasks) || !DB.tasks.length){ alert('No tasks to clear.'); return; }
-  const mine = DB.tasks.filter(t => !t._deleted && t.amId === currentUser.id);
+  // Match tasks the current user imported, regardless of which AM was
+  // assigned at import time. We tag every imported row with _import:true
+  // and stamp createdBy with the importer's name, so checking either of
+  // those (or amId, for backwards compatibility with older imports) covers
+  // every realistic case.
+  const myName = `${currentUser.fname || ''} ${currentUser.lname || ''}`.trim();
+  const myUser = currentUser.userName || '';
+  const mine = DB.tasks.filter(t => {
+    if (t._deleted) return false;
+    if (t.amId === currentUser.id) return true;
+    if (t._import && myName && t.createdBy === myName) return true;
+    if (t._import && myUser && t.createdBy === myUser) return true;
+    return false;
+  });
   if(!mine.length){ alert('No tasks found for your account.'); return; }
   const completedCount = mine.filter(t => t.status === 'completed').length;
   const openCount      = mine.length - completedCount;
@@ -31772,7 +31786,12 @@ async function tcClearMyImported(){
 // ── Project Groups (collapsible sidebar folders) ────────────────
 function tcToggleGroup(groupId) {
   const group = (DB.projectGroups || []).find(g => g.id === groupId);
-  if (group) { group.collapsed = !group.collapsed; saveDB(); tcBuildProjectSidebar(); }
+  if (group) {
+    group.collapsed = !group.collapsed;
+    group._updatedAt = new Date().toISOString();
+    saveDB();
+    tcBuildProjectSidebar();
+  }
 }
 
 function tcManageGroups() {
@@ -31862,18 +31881,22 @@ function tcGroupSearchFilter(groupId, query) {
 }
 
 // Add a client to this group, removing it from any other group it was in
-// (a client should only live in one group at a time).
+// (a client should only live in one group at a time). Every mutation
+// stamps _updatedAt so the server's merge-by-id keeps the fresh state
+// when stale tabs save afterwards.
 function tcAddClientToGroup(groupId, clientId) {
   if (!DB.projectGroups) DB.projectGroups = [];
-  // Remove from any other group first
+  const stamp = new Date().toISOString();
   DB.projectGroups.forEach(x => {
-    if (x.id !== groupId && Array.isArray(x.clientIds)) {
+    if (x.id !== groupId && Array.isArray(x.clientIds) && x.clientIds.includes(clientId)) {
       x.clientIds = x.clientIds.filter(id => id !== clientId);
+      x._updatedAt = stamp;
     }
   });
   const g = DB.projectGroups.find(x => x.id === groupId);
   if (g && !(g.clientIds || []).includes(clientId)) {
     g.clientIds = [...(g.clientIds || []), clientId];
+    g._updatedAt = stamp;
   }
   saveDB();
   tcManageGroups();
@@ -31885,7 +31908,10 @@ function tcCreateGroup() {
   const name = input?.value.trim();
   if (!name) return;
   if (!DB.projectGroups) DB.projectGroups = [];
-  DB.projectGroups.push({ id: uid(), name, userId: currentUser?.id || '', clientIds: [], collapsed: false });
+  DB.projectGroups.push({
+    id: uid(), name, userId: currentUser?.id || '', clientIds: [], collapsed: false,
+    _updatedAt: new Date().toISOString(),
+  });
   if (input) input.value = '';
   saveDB();
   tcManageGroups();
@@ -31904,12 +31930,21 @@ function tcDeleteGroup(groupId) {
 function tcRenameGroup(groupId, newName) {
   const g = (DB.projectGroups || []).find(x => x.id === groupId);
   const trimmed = (newName || '').trim();
-  if (g && trimmed && g.name !== trimmed) { g.name = trimmed; saveDB(); tcBuildProjectSidebar(); }
+  if (g && trimmed && g.name !== trimmed) {
+    g.name = trimmed;
+    g._updatedAt = new Date().toISOString();
+    saveDB();
+    tcBuildProjectSidebar();
+  }
 }
 
 function tcRemoveFromGroup(groupId, clientId) {
   const g = (DB.projectGroups || []).find(x => x.id === groupId);
-  if (g) { g.clientIds = (g.clientIds || []).filter(id => id !== clientId); saveDB(); }
+  if (g) {
+    g.clientIds = (g.clientIds || []).filter(id => id !== clientId);
+    g._updatedAt = new Date().toISOString();
+    saveDB();
+  }
   tcManageGroups();
   tcBuildProjectSidebar();
 }
@@ -32267,7 +32302,7 @@ function tcRenderProjectNotes() {
         ${sec && groupBy !== 'section' ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--navy);font-weight:600;">§ ${sec}</span>` : ''}
         ${cat && groupBy !== 'category' ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--gold-soft, var(--surface2));color:var(--gold);font-weight:600;">${cat}</span>` : ''}
         ${client ? `<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text-d);">${client.biz}</span>` : ''}
-        <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:14px;opacity:.4;">×</button>
+        <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" title="Delete note" style="background:none;border:none;color:var(--text-d);cursor:pointer;font-size:16px;opacity:.7;padding:0 4px;line-height:1;" onmouseover="this.style.opacity='1';this.style.color='var(--red)'" onmouseout="this.style.opacity='.7';this.style.color='var(--text-d)'">×</button>
       </div>
       ${preview ? `<div style="font-size:12px;color:var(--text-d);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${preview}${(t.notes||'').length > 120 ? '…' : ''}</div>` : ''}
     </div>`;
@@ -32312,6 +32347,9 @@ function tcNewProjectNote() {
     document.getElementById('tc-pnote-section').value = '';
     document.getElementById('tc-pnote-content').value = '';
     document.getElementById('tc-pnote-meta').textContent = '';
+    // No Delete button when creating a new note — only when editing existing.
+    const delBtn = document.getElementById('tc-pnote-delete-btn');
+    if (delBtn) delBtn.style.display = 'none';
     document.getElementById('tc-pnotes-editor').style.display = '';
     document.getElementById('tc-pnote-title').focus();
     return;
@@ -32458,8 +32496,32 @@ function tcEditProjectNote(id) {
   document.getElementById('tc-pnote-content').value = task.notes || '';
   const date = task.updatedAt ? new Date(task.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
   document.getElementById('tc-pnote-meta').textContent = date ? `Last edited ${date}${task.createdBy ? ' by ' + task.createdBy : ''}` : '';
+  // Show Delete only when editing an existing note (not when creating new).
+  const delBtn = document.getElementById('tc-pnote-delete-btn');
+  if (delBtn) delBtn.style.display = '';
   document.getElementById('tc-pnotes-editor').style.display = '';
   document.getElementById('tc-pnote-title').focus();
+}
+
+// Delete the note currently open in the editor. Soft-delete via _deleted +
+// _updatedAt so the server's merge-by-id keeps the deletion through future
+// syncs from other tabs.
+function tcDeleteProjectNote() {
+  const id = document.getElementById('tc-pnote-id')?.value;
+  if (!id) return;
+  const task = (DB.tasks || []).find(t => t.id === id);
+  if (!task) return;
+  if (!confirm(`Delete note "${task.name || 'Untitled'}"? This cannot be undone.`)) return;
+  task._deleted = true;
+  task._updatedAt = new Date().toISOString();
+  saveDB();
+  logAct(`Note "${task.name || 'Untitled'}" deleted`);
+  // Close the editor and refresh the list.
+  document.getElementById('tc-pnotes-editor').style.display = 'none';
+  document.getElementById('tc-pnote-id').value = '';
+  const delBtn = document.getElementById('tc-pnote-delete-btn');
+  if (delBtn) delBtn.style.display = 'none';
+  tcRenderProjectNotes();
 }
 
 function tcSaveProjectNote() {
@@ -32507,6 +32569,8 @@ function tcCancelProjectNote() {
   // Clear so the next "+ New Note" doesn't carry over stale values
   const c = document.getElementById('tc-pnote-category'); if (c) c.value = '';
   const s = document.getElementById('tc-pnote-section');  if (s) s.value = '';
+  const idEl = document.getElementById('tc-pnote-id'); if (idEl) idEl.value = '';
+  const delBtn = document.getElementById('tc-pnote-delete-btn'); if (delBtn) delBtn.style.display = 'none';
 }
 
 // Populate the note-category datalist with the union of categories on
@@ -33252,6 +33316,10 @@ function tdParseMultiFiles() {
         id: taskId, name: name.trim(),
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
         priority, dueDate: dueDate || '', _noDate: !dueDate,
+        // Set type explicitly so dated tasks don't get auto-tagged as 'note'
+        // by the tcRender migration if they happen to be rendered before it
+        // runs. Matches the single-CSV parser's behavior at line ~33529.
+        type: dueDate ? 'task' : 'note',
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
         recurring: isRecurring, recurFreq: recurFreq,
         recurBmDay1: dateInfo.recurBmDay1 || deadInfo.recurBmDay1 || '',
@@ -33741,14 +33809,19 @@ function tdApplyProjectMapping() {
     // Skip tasks with no real due date (just got today as fallback)
     if (skipNoDate && t._noDate) return false;
     if (mapping) {
-      // Try per-task client matching first (e.g. "Hazard Engineering -
-      // Sales & Use Tax [Texas]" should land under Hazard Engineering even
-      // when the project-level fallback is "Sales Tax"). If no per-task
-      // match is found, fall back to the project-level mapping.
-      const perTask = tdMatchClientFromTaskName(t.name, allClients);
-      if (perTask) {
-        t.clientId = perTask.id;
-        t.clientName = perTask.biz;
+      // Per-task client matching only kicks in when the user left the
+      // project mapping completely blank — that's the case where they want
+      // a smart fallback. If they typed a custom project name like
+      // "Sales Tax" or picked a real client, respect that for every task
+      // in this CSV (the user's explicit choice always wins).
+      const hasExplicit = !!(mapping.clientId || (mapping.clientName || '').trim());
+      if (!hasExplicit) {
+        const perTask = tdMatchClientFromTaskName(t.name, allClients);
+        if (perTask) {
+          t.clientId = perTask.id;
+          t.clientName = perTask.biz;
+        }
+        // else leave blank → lands in Personal (No Client)
       } else {
         t.clientId = mapping.clientId;
         t.clientName = mapping.clientName;
