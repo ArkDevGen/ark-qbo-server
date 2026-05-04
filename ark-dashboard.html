@@ -31776,64 +31776,118 @@ function tcToggleGroup(groupId) {
 }
 
 function tcManageGroups() {
-  const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
+  // Render in-place when the modal already exists (so the typed search query
+  // stays put across renames / chip removals). Build a fresh overlay only on
+  // first open or after the modal was closed.
+  let overlay = document.getElementById('tc-manage-groups-overlay');
+  const isFirstOpen = !overlay;
+  if (isFirstOpen) {
+    overlay = document.createElement('div');
+    overlay.id = 'tc-manage-groups-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.onclick = e => { if (_bkdrop(e,overlay)) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
 
+  const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
   const allClients = (DB.clients || []).sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
   const groupedIds = new Set();
   groups.forEach(g => (g.clientIds || []).forEach(id => groupedIds.add(id)));
+  const ungroupedCount = allClients.filter(c => !groupedIds.has(c.id)).length;
 
-  overlay.innerHTML = `<div class="card" style="width:500px;max-height:80vh;overflow-y:auto;padding:0;overflow:visible;">
+  overlay.innerHTML = `<div class="card" style="width:560px;max-height:85vh;overflow-y:auto;padding:0;overflow:visible;">
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:15px;font-weight:700;color:var(--navy);">Manage Project Groups</div>
-      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Manage Project Groups</div>
+        <div style="font-size:11px;color:var(--text-d);margin-top:2px;">${groups.length} group${groups.length===1?'':'s'} · ${ungroupedCount} ungrouped client${ungroupedCount===1?'':'s'}</div>
+      </div>
+      <button onclick="document.getElementById('tc-manage-groups-overlay').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-d);">×</button>
     </div>
     <div style="padding:16px 20px;" id="tc-groups-content">
-      ${groups.map(g => `<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <input type="text" value="${g.name}" onchange="tcRenameGroup('${g.id}',this.value)" class="field-input" style="flex:1;font-weight:600;font-size:13px;">
-          <button onclick="tcDeleteGroup('${g.id}')" class="btn btn-danger btn-sm" style="font-size:10px;">Delete</button>
-        </div>
-        <div style="font-size:10px;color:var(--text-d);margin-bottom:4px;">Clients in this group:</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;">
-          ${(g.clientIds||[]).map(cid => {
-            const c = allClients.find(x => x.id === cid);
-            return c ? `<span style="font-size:11px;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;gap:4px;">${c.biz} <button onclick="tcRemoveFromGroup('${g.id}','${cid}')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-d);">×</button></span>` : '';
-          }).join('')}
-        </div>
-      </div>`).join('')}
+      ${groups.map(g => {
+        const groupClients = (g.clientIds||[]).map(cid => allClients.find(x => x.id === cid)).filter(Boolean);
+        return `<div style="margin-bottom:14px;padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <input type="text" value="${g.name}" onblur="tcRenameGroup('${g.id}',this.value)" class="field-input field-input-sm" style="flex:1;font-weight:600;font-size:13px;width:auto;">
+            <span style="font-size:10px;color:var(--text-d);white-space:nowrap;">${groupClients.length} client${groupClients.length===1?'':'s'}</span>
+            <button onclick="tcDeleteGroup('${g.id}')" class="btn btn-danger btn-sm" style="font-size:10px;" title="Delete this group">Delete</button>
+          </div>
+          ${groupClients.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+            ${groupClients.map(c => `<span style="font-size:11px;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:inline-flex;align-items:center;gap:4px;">${c.biz} <button onclick="tcRemoveFromGroup('${g.id}','${c.id}')" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-d);line-height:1;padding:0;" title="Remove">×</button></span>`).join('')}
+          </div>` : `<div style="font-size:11px;color:var(--text-d);font-style:italic;margin-bottom:8px;">No clients in this group yet.</div>`}
+          <div style="position:relative;">
+            <input type="text" id="tc-grp-search-${g.id}" placeholder="+ Add client to this group..." class="field-input field-input-sm" style="width:100%;font-size:12px;"
+              oninput="tcGroupSearchFilter('${g.id}',this.value)" onfocus="tcGroupSearchFilter('${g.id}',this.value)" onblur="setTimeout(()=>{const dd=document.getElementById('tc-grp-dd-${g.id}');if(dd)dd.style.display='none';},200)">
+            <div id="tc-grp-dd-${g.id}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;box-shadow:var(--shadow);margin-top:2px;"></div>
+          </div>
+        </div>`;
+      }).join('')}
       <div style="margin-top:12px;display:flex;gap:8px;">
-        <input type="text" id="tc-new-group-name" class="field-input" placeholder="New group name..." style="flex:1;">
+        <input type="text" id="tc-new-group-name" class="field-input field-input-sm" placeholder="New group name..." style="flex:1;width:auto;" onkeydown="if(event.key==='Enter'){event.preventDefault();tcCreateGroup();}">
         <button class="btn btn-primary btn-sm" onclick="tcCreateGroup()">+ Create Group</button>
-      </div>
-      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
-        <div style="font-size:11px;font-weight:600;color:var(--text-d);margin-bottom:8px;">Ungrouped clients — drag to a group or use the select below:</div>
-        <div style="display:flex;gap:8px;">
-          <select id="tc-assign-client" class="field-input" style="flex:1;">
-            <option value="">Select client...</option>
-            ${allClients.filter(c => !groupedIds.has(c.id)).map(c => `<option value="${c.id}">${c.biz}</option>`).join('')}
-          </select>
-          <select id="tc-assign-group" class="field-input" style="flex:1;">
-            <option value="">Select group...</option>
-            ${groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
-          </select>
-          <button class="btn btn-sm" onclick="tcAssignToGroup()">Add</button>
-        </div>
       </div>
     </div>
   </div>`;
-  document.body.appendChild(overlay);
+}
+
+// Filter the per-group "add client" dropdown. Lists every client that isn't
+// already in this group so re-assignment between groups is one click.
+function tcGroupSearchFilter(groupId, query) {
+  const dd = document.getElementById('tc-grp-dd-' + groupId);
+  if (!dd) return;
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if (!g) return;
+  const groupClientIds = new Set(g.clientIds || []);
+  const q = (query || '').toLowerCase().trim();
+  const candidates = (DB.clients || [])
+    .filter(c => !groupClientIds.has(c.id))
+    .filter(c => !q || c.biz.toLowerCase().includes(q))
+    .sort((a, b) => a.biz.localeCompare(b.biz))
+    .slice(0, 12);
+  if (!candidates.length) {
+    dd.style.display = 'block';
+    dd.innerHTML = `<div style="padding:8px 10px;font-size:11px;color:var(--text-d);font-style:italic;">No matching clients.</div>`;
+    return;
+  }
+  // Indicate when a candidate is already in another group — clicking will move it.
+  const otherGroupOf = (cid) => (DB.projectGroups || []).find(x => !x._deleted && x.id !== groupId && (x.clientIds || []).includes(cid));
+  dd.style.display = 'block';
+  dd.innerHTML = candidates.map(c => {
+    const other = otherGroupOf(c.id);
+    const note = other ? ` <span style="font-size:10px;color:var(--text-d);">(in ${other.name})</span>` : '';
+    return `<div onmousedown="event.preventDefault();tcAddClientToGroup('${groupId}','${c.id}')"
+      style="padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz}${note}</div>`;
+  }).join('');
+}
+
+// Add a client to this group, removing it from any other group it was in
+// (a client should only live in one group at a time).
+function tcAddClientToGroup(groupId, clientId) {
+  if (!DB.projectGroups) DB.projectGroups = [];
+  // Remove from any other group first
+  DB.projectGroups.forEach(x => {
+    if (x.id !== groupId && Array.isArray(x.clientIds)) {
+      x.clientIds = x.clientIds.filter(id => id !== clientId);
+    }
+  });
+  const g = DB.projectGroups.find(x => x.id === groupId);
+  if (g && !(g.clientIds || []).includes(clientId)) {
+    g.clientIds = [...(g.clientIds || []), clientId];
+  }
+  saveDB();
+  tcManageGroups();
+  tcBuildProjectSidebar();
 }
 
 function tcCreateGroup() {
-  const name = document.getElementById('tc-new-group-name')?.value.trim();
+  const input = document.getElementById('tc-new-group-name');
+  const name = input?.value.trim();
   if (!name) return;
   if (!DB.projectGroups) DB.projectGroups = [];
   DB.projectGroups.push({ id: uid(), name, userId: currentUser?.id || '', clientIds: [], collapsed: false });
+  if (input) input.value = '';
   saveDB();
-  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
   tcManageGroups();
   tcBuildProjectSidebar();
 }
@@ -31843,31 +31897,19 @@ function tcDeleteGroup(groupId) {
   const g = (DB.projectGroups || []).find(x => x.id === groupId);
   if(g){ g._deleted = true; g._updatedAt = new Date().toISOString(); }
   saveDB();
-  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
   tcManageGroups();
   tcBuildProjectSidebar();
 }
 
 function tcRenameGroup(groupId, newName) {
   const g = (DB.projectGroups || []).find(x => x.id === groupId);
-  if (g) { g.name = newName.trim(); saveDB(); tcBuildProjectSidebar(); }
+  const trimmed = (newName || '').trim();
+  if (g && trimmed && g.name !== trimmed) { g.name = trimmed; saveDB(); tcBuildProjectSidebar(); }
 }
 
 function tcRemoveFromGroup(groupId, clientId) {
   const g = (DB.projectGroups || []).find(x => x.id === groupId);
   if (g) { g.clientIds = (g.clientIds || []).filter(id => id !== clientId); saveDB(); }
-  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
-  tcManageGroups();
-  tcBuildProjectSidebar();
-}
-
-function tcAssignToGroup() {
-  const clientId = document.getElementById('tc-assign-client')?.value;
-  const groupId = document.getElementById('tc-assign-group')?.value;
-  if (!clientId || !groupId) { alert('Select both a client and a group'); return; }
-  const g = (DB.projectGroups || []).find(x => x.id === groupId);
-  if (g && !g.clientIds.includes(clientId)) { g.clientIds.push(clientId); saveDB(); }
-  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
   tcManageGroups();
   tcBuildProjectSidebar();
 }
@@ -33521,33 +33563,69 @@ function tdShowProjectMapping(projects) {
   const clientList = (DB.clients||[]).sort((a,b)=>(a.biz||'').localeCompare(b.biz||''));
 
   document.getElementById('td-project-list').innerHTML = projects.map((p, i) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text);">${p}</div>
-        <div style="font-size:11px;color:var(--text-d);">${taskCounts[p]||0} task${(taskCounts[p]||0)!==1?'s':''}</div>
+    <div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);">${p}</div>
+          <div style="font-size:11px;color:var(--text-d);">${taskCounts[p]||0} task${(taskCounts[p]||0)!==1?'s':''}</div>
+        </div>
+        <div style="position:relative;width:240px;">
+          <input type="text" id="td-proj-search-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-client" placeholder="Search client or type a project name…" autocomplete="off"
+            oninput="tdProjFilterClients(${i});tdProjUpdateHint(${i})" onfocus="tdProjFilterClients(${i})" style="width:100%;font-size:12px;margin:0;">
+          <input type="hidden" id="td-proj-clientid-${i}" data-project="${p.replace(/"/g,'&quot;')}">
+          <div id="td-proj-dd-${i}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:160px;overflow-y:auto;box-shadow:var(--shadow);"></div>
+        </div>
+        <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;white-space:nowrap;">
+          <input type="checkbox" class="td-proj-skip" data-project="${p.replace(/"/g,'&quot;')}" style="accent-color:var(--navy);">
+          Skip
+        </label>
       </div>
-      <div style="position:relative;width:200px;">
-        <input type="text" id="td-proj-search-${i}" data-project="${p.replace(/"/g,'&quot;')}" class="field-input td-proj-client" placeholder="Search client..." autocomplete="off"
-          oninput="tdProjFilterClients(${i})" onfocus="tdProjFilterClients(${i})" style="width:100%;font-size:12px;margin:0;">
-        <input type="hidden" id="td-proj-clientid-${i}" data-project="${p.replace(/"/g,'&quot;')}">
-        <div id="td-proj-dd-${i}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:160px;overflow-y:auto;box-shadow:var(--shadow);"></div>
-      </div>
-      <label style="font-size:11px;color:var(--text-d);display:flex;align-items:center;gap:4px;white-space:nowrap;">
-        <input type="checkbox" class="td-proj-skip" data-project="${p.replace(/"/g,'&quot;')}" style="accent-color:var(--navy);">
-        Skip
-      </label>
+      <div id="td-proj-hint-${i}" style="font-size:11px;color:var(--text-d);padding-left:2px;min-height:14px;"></div>
     </div>
   `).join('');
 
-  // Auto-match project names to clients
+  // Auto-match project names to clients. Falls back to a sensible custom
+  // project name (e.g. "Sales Tax") when the file is recognizably a multi-
+  // client list rather than a single-client export.
   projects.forEach((p, i) => {
     const pLower = p.toLowerCase();
     const match = clientList.find(c => pLower.includes(c.biz.toLowerCase()) || c.biz.toLowerCase().includes(pLower));
     if (match) {
       document.getElementById('td-proj-search-' + i).value = match.biz;
       document.getElementById('td-proj-clientid-' + i).value = match.id;
+    } else if (/sales\s*(?:&|and)?\s*use\s*tax|sales\s*tax/i.test(p)) {
+      document.getElementById('td-proj-search-' + i).value = 'Sales Tax';
+    } else if (/notes?$/i.test(p) || /\bark\s+notes\b/i.test(p)) {
+      document.getElementById('td-proj-search-' + i).value = 'Notes';
     }
+    tdProjUpdateHint(i);
   });
+}
+
+// Show a one-line preview of where this project's tasks will land. Updates
+// live as the user types so they can see the difference between picking a
+// real client vs. typing free text (which becomes a custom project name).
+function tdProjUpdateHint(idx) {
+  const input = document.getElementById('td-proj-search-' + idx);
+  const hidden = document.getElementById('td-proj-clientid-' + idx);
+  const hint = document.getElementById('td-proj-hint-' + idx);
+  if (!input || !hint) return;
+  const text = (input.value || '').trim();
+  // If a hidden clientId is set AND matches the visible text, it's a real client.
+  if (hidden?.value) {
+    const c = (DB.clients || []).find(x => x.id === hidden.value);
+    if (c && c.biz === text) {
+      hint.innerHTML = `<span style="color:var(--green);">✓ Will assign to client: <strong>${c.biz}</strong></span>`;
+      return;
+    }
+    // Stale hidden id (user kept typing after picking) — clear it.
+    hidden.value = '';
+  }
+  if (!text) {
+    hint.innerHTML = `<span style="color:var(--text-d);">📁 Will land in <strong>Personal (No Client)</strong> if left blank</span>`;
+  } else {
+    hint.innerHTML = `<span style="color:var(--accent);">📁 Will create project: <strong>${text}</strong></span>`;
+  }
 }
 
 function tdProjFilterClients(idx) {
@@ -33569,6 +33647,61 @@ function tdProjSelectClient(idx, id, name) {
   document.getElementById('td-proj-search-' + idx).value = name;
   document.getElementById('td-proj-clientid-' + idx).value = id;
   document.getElementById('td-proj-dd-' + idx).style.display = 'none';
+  tdProjUpdateHint(idx);
+}
+
+// Try to recover a CRM client from a task name like
+//   "Hazard Engineering - Sales & Use Tax [Texas]"
+//   "HTeaO Tyler (Oz Tea, LLC) - Sales & Use Tax [Texas]"
+//   "6 Java Boys - Send Payment Amounts"
+// Returns the matched client object, or null. Conservative on purpose —
+// only commits when the candidate cleanly matches a real CRM biz name so we
+// never wrongly tag generic tasks (e.g. "Send Payment Amount to Savannah").
+function tdMatchClientFromTaskName(taskName, clients) {
+  if (!taskName || !clients || !clients.length) return null;
+  let s = String(taskName).trim();
+  // Unwrap a single leading markdown link like "[Clover](https://...)" → "Clover"
+  s = s.replace(/^\[([^\]]+)\]\([^)]+\)\s*/, '$1 ').trim();
+  // Take everything before the first " - " or " – " (en dash). The right
+  // side is usually a noun phrase like "Sales & Use Tax" or "Send Payment".
+  const splitIdx = s.search(/\s+[-–]\s+/);
+  let head = splitIdx > 0 ? s.slice(0, splitIdx).trim() : s;
+  // Strip trailing parenthetical (legal name): "HTeaO Tyler (Oz Tea, LLC)"
+  // → keep both as candidates (the bare name AND the parenthetical).
+  const candidates = [];
+  const parenMatch = head.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) {
+    candidates.push(parenMatch[1].trim());
+    candidates.push(parenMatch[2].trim());
+  } else {
+    candidates.push(head);
+  }
+  // Drop noise candidates — too short / common nouns / bare verbs.
+  const STOP = new Set(['send', 'sales', 'tax', 'payment', 'note', 'notes', 'self', 'monthly', 'quarterly', 'annually']);
+  const usable = candidates
+    .map(c => c.replace(/[,.]$/g, '').trim())
+    .filter(c => c.length >= 4 && !STOP.has(c.toLowerCase()));
+  if (!usable.length) return null;
+
+  // Match each candidate against the CRM. Prefer exact (case-insensitive),
+  // then "client biz starts with candidate" (so "6 Java Boys" matches
+  // "6 Java Boys, LLC"), then either-side includes (with min length 5 to
+  // avoid e.g. "A&M" colliding with everything).
+  for (const cand of usable) {
+    const cLower = cand.toLowerCase();
+    let m = clients.find(c => (c.biz || '').toLowerCase() === cLower);
+    if (m) return m;
+    m = clients.find(c => (c.biz || '').toLowerCase().startsWith(cLower));
+    if (m) return m;
+    if (cand.length >= 5) {
+      m = clients.find(c => {
+        const biz = (c.biz || '').toLowerCase();
+        return biz.includes(cLower) || cLower.includes(biz);
+      });
+      if (m) return m;
+    }
+  }
+  return null;
 }
 
 function tdApplyProjectMapping() {
@@ -33597,6 +33730,7 @@ function tdApplyProjectMapping() {
   });
 
   const skipNoDate = document.getElementById('td-skip-no-date')?.checked || false;
+  const allClients = DB.clients || [];
 
   // Apply mappings to parsed tasks. Don't touch t.category — it's already
   // inferred per-task from the section name at parse time, and the
@@ -33607,8 +33741,18 @@ function tdApplyProjectMapping() {
     // Skip tasks with no real due date (just got today as fallback)
     if (skipNoDate && t._noDate) return false;
     if (mapping) {
-      t.clientId = mapping.clientId;
-      t.clientName = mapping.clientName;
+      // Try per-task client matching first (e.g. "Hazard Engineering -
+      // Sales & Use Tax [Texas]" should land under Hazard Engineering even
+      // when the project-level fallback is "Sales Tax"). If no per-task
+      // match is found, fall back to the project-level mapping.
+      const perTask = tdMatchClientFromTaskName(t.name, allClients);
+      if (perTask) {
+        t.clientId = perTask.id;
+        t.clientName = perTask.biz;
+      } else {
+        t.clientId = mapping.clientId;
+        t.clientName = mapping.clientName;
+      }
     }
     t.amId = defaultAM;
     return true;
