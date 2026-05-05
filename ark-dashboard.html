@@ -29880,6 +29880,22 @@ function tcSaveTask(){
   tcRender();
 }
 
+// Re-render the production view without losing the user's scroll position.
+// Marking a task done removes it from the visible list, which shrinks the
+// page height and effectively jumps the scroll back to the top. Capture y
+// before the re-render and restore after layout settles (two rAFs to give
+// any animations + paint a chance to commit).
+async function _tcRenderKeepScroll() {
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  await tcRender();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    // Clamp to the new max so we don't get a fight with the browser's
+    // auto-clamp when the page is shorter post-render.
+    const maxY = Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
+    window.scrollTo({ top: Math.min(y, maxY), behavior: 'instant' });
+  }));
+}
+
 function tcToggleComplete(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
   const who  = currentUser ? `${currentUser.fname} ${currentUser.lname||''}`.trim() : 'Jacob Malousek';
@@ -29910,7 +29926,7 @@ function tcToggleComplete(id){
       t.reviewTaskId = null;
     }
     logAct(`Task "${t.name}" reopened (${t.clientName})`);
-    saveDB(); tcRender(); return;
+    saveDB(); _tcRenderKeepScroll(); return;
   }
 
   if(!t.noteLog) t.noteLog = [];
@@ -30015,7 +30031,7 @@ function tcToggleComplete(id){
     plPromptDigestAfterClose(t);
   }
 
-  saveDB(); tcRender();
+  saveDB(); _tcRenderKeepScroll();
 }
 
 // ── Check if task is a monthly close task ────────────────────────────
