@@ -6953,12 +6953,18 @@ app.post('/production/project-alias', requireAuth, (req, res) => {
 // clientName. Used both when converting a synthetic folder into a real
 // client-backed one (clientId provided) AND when consolidating tasks into
 // a synthetic free-text folder (clientId blank, clientName non-empty).
-// Body: { taskIds: [...], clientId, clientName }
+// Optional section field — when provided (non-undefined), every relinked
+// task gets t.section set to it (use '' to clear). Powers drag-and-drop:
+// dropping a task on a subfolder also sets the section, and dropping a
+// folder on another folder retags all source tasks with section=src.name.
+// Body: { taskIds: [...], clientId, clientName, section? }
 app.post('/tasks/bulk-relink', requireAuth, (req, res) => {
   try {
     const ids = Array.isArray(req.body?.taskIds) ? req.body.taskIds : [];
     const clientId = (req.body?.clientId || '').toString();
     const clientName = (req.body?.clientName || '').toString();
+    const sectionProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'section');
+    const section = sectionProvided ? (req.body.section || '').toString() : null;
     if (!ids.length) return res.status(400).json({ error: 'taskIds required (array)' });
     if (!clientId && !clientName) return res.status(400).json({ error: 'clientId or clientName required' });
     if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
@@ -6971,6 +6977,7 @@ app.post('/tasks/bulk-relink', requireAuth, (req, res) => {
       if (t && t.id && idSet.has(t.id)) {
         t.clientId = clientId;
         t.clientName = clientName;
+        if (sectionProvided) t.section = section;
         t._updatedAt = stamp;
         relinked++;
       }

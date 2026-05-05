@@ -813,6 +813,8 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .tc-proj-item .tc-proj-chevron-empty{cursor:default;visibility:hidden;}
 .tc-proj-item.tc-proj-subitem{padding-left:34px;font-size:11.5px;}
 .tc-proj-item.tc-proj-subitem .icon{font-size:11px;}
+.tc-proj-item.tc-drag-over{background:var(--surface2);outline:2px dashed var(--gold);outline-offset:-2px;color:var(--navy);}
+.tc-group-header.tc-drag-over{background:var(--surface2);outline:2px dashed var(--gold);outline-offset:-2px;}
 .tc-proj-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);padding:16px 16px 6px;opacity:.6;}
 .tc-proj-divider{border-top:1px solid var(--border);margin:8px 16px;}
 /* No overflow-x here on purpose — the inner .tc-board has its own
@@ -31082,7 +31084,7 @@ function tcTaskCard(t, today, todayStr, depth){
     ? `border-left:4px solid ${priColor};`
     : '';
 
-  return `<div style="${wrapStyle}"><div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};${priStripe}border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open task details">
+  return `<div style="${wrapStyle}"><div draggable="true" ondragstart="tcDragTaskStart(event,'${t.id}')" ondragend="tcDragEnd(event)" style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:${bgColor};border:1px solid ${borderColor};${priStripe}border-radius:var(--radius);margin-bottom:6px;transition:all .15s;cursor:pointer;" id="tc-card-${t.id}" onclick="twfOpen('${t.id}')" title="Click to open · Drag to move/copy to a folder">
 
     <!-- Collapse/expand arrow — only when this task has children -->
     ${hasSubs ? `<span onclick="event.stopPropagation();tcToggleCollapse('${t.id}')" style="cursor:pointer;color:var(--text-d);font-size:13px;flex-shrink:0;padding:0 2px;width:16px;text-align:center;user-select:none;" title="${collapsed?'Expand':'Collapse'} sub-tasks">${collapsed?'▸':'▾'}</span>` : '<span style="width:16px;flex-shrink:0;"></span>'}
@@ -31570,7 +31572,14 @@ function tcBuildProjectSidebar() {
     const addSubBtn = isProj ? `<button class="tc-proj-edit" title="Add subfolder" onclick="event.stopPropagation();tcAddSubfolder('${key.replace(/'/g,"\\'")}')">➕</button>` : '';
     const linkBtn = (isProj && isSynthetic) ? `<button class="tc-proj-link" title="Link this folder to a client" onclick="event.stopPropagation();tcLinkSyntheticToClient('${key.replace(/'/g,"\\'")}')">🔗</button>` : '';
     const safeLabel = String(label).replace(/"/g, '&quot;');
-    let html = `<div class="tc-proj-item${_tcActiveView === view && !_tcActiveSection ? ' active' : ''}" data-view="${view}" onclick="tcSelectView('${view}')" title="${safeLabel}">
+    // Project rows are draggable (you can drag a folder into another folder
+    // to make it a subfolder) AND drop targets (drop a task or another
+    // folder on it). Top-level non-project rows (Upcoming/Today/etc.) are
+    // neither draggable nor drop targets.
+    const dragAttrs = isProj
+      ? `draggable="true" ondragstart="tcDragFolderStart(event,'${key.replace(/'/g,"\\'")}')" ondragend="tcDragEnd(event)" ondragover="tcDragOverFolder(event,'${key.replace(/'/g,"\\'")}')" ondragleave="tcDragLeaveFolder(event)" ondrop="tcDropOnFolder(event,'${key.replace(/'/g,"\\'")}','')"`
+      : '';
+    let html = `<div class="tc-proj-item${_tcActiveView === view && !_tcActiveSection ? ' active' : ''}" data-view="${view}" data-projkey="${key}" ${dragAttrs} onclick="tcSelectView('${view}')" title="${safeLabel}">
       ${chevron}<span class="icon">${icon}</span>
       <span class="label">${label}</span>
       <span class="tc-proj-actions">${editBtn}${addSubBtn}${linkBtn}</span>
@@ -31583,7 +31592,10 @@ function tcBuildProjectSidebar() {
         const isActiveSub = _tcActiveView === view && _tcActiveSection === sname;
         const safeName = sname.replace(/'/g, "\\'");
         const safeNameAttr = sname.replace(/"/g, '&quot;');
-        html += `<div class="tc-proj-item tc-proj-subitem${isActiveSub ? ' active' : ''}" data-view="${subView}" onclick="tcSelectSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')" title="${safeNameAttr}">
+        html += `<div class="tc-proj-item tc-proj-subitem${isActiveSub ? ' active' : ''}" data-view="${subView}" data-projkey="${key}" data-section="${safeNameAttr}"
+          ondragover="tcDragOverFolder(event,'${key.replace(/'/g,"\\'")}','${safeName}')" ondragleave="tcDragLeaveFolder(event)"
+          ondrop="tcDropOnFolder(event,'${key.replace(/'/g,"\\'")}','${safeName}')"
+          onclick="tcSelectSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')" title="${safeNameAttr}">
           <span class="icon">📂</span>
           <span class="label">${sname}</span>
           <span class="tc-proj-actions"><button class="tc-proj-edit" title="Remove subfolder" onclick="event.stopPropagation();tcRemoveSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">×</button></span>
@@ -31602,12 +31614,14 @@ function tcBuildProjectSidebar() {
 
   let projectsHtml = '';
 
-  // Render groups (collapsible)
+  // Render groups (collapsible). Group headers are also drop targets for
+  // folders — drag a folder onto a group header to add it to that group.
   groups.forEach(g => {
     const isCollapsed = g.collapsed;
     const groupProjects = clientProjects.filter(p => (g.clientIds || []).includes(p.id));
     const groupCount = groupProjects.reduce((s, p) => s + p.count, 0);
-    projectsHtml += `<div class="tc-proj-section" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="tcToggleGroup('${g.id}')">
+    projectsHtml += `<div class="tc-proj-section tc-group-header" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="tcToggleGroup('${g.id}')"
+      ondragover="tcDragOverGroup(event,'${g.id}')" ondragleave="tcDragLeaveGroup(event)" ondrop="tcDropOnGroup(event,'${g.id}')">
       <span>${isCollapsed ? '▶' : '▼'} ${g.name}</span>
       <span style="font-size:9px;font-weight:400;opacity:.5;">${groupCount}</span>
     </div>`;
@@ -31642,6 +31656,284 @@ function tcBuildProjectSidebar() {
 // (by name OR by section) and re-tag them all into a single synthetic
 // "Sales & Use Tax" folder, regardless of where they're scattered now.
 // Uses the bulk-relink endpoint so the multi-MB saveDB hang doesn't apply.
+// ── Drag-and-drop: tasks ↔ folders, folders → folders ───────────
+// Tracks what's being dragged. Two shapes:
+//   { kind:'task', taskId }
+//   { kind:'folder', projKey }
+let _tcDragPayload = null;
+
+function tcDragTaskStart(e, taskId) {
+  _tcDragPayload = { kind: 'task', taskId };
+  try {
+    e.dataTransfer.effectAllowed = 'copyMove';
+    // Some browsers require dataTransfer.setData to start a real drag.
+    e.dataTransfer.setData('text/plain', 'task:' + taskId);
+  } catch(_) {}
+  // Visually fade the source card.
+  const el = e.currentTarget;
+  if (el && el.style) el.style.opacity = '0.5';
+}
+
+function tcDragFolderStart(e, projKey) {
+  _tcDragPayload = { kind: 'folder', projKey };
+  try {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'folder:' + projKey);
+  } catch(_) {}
+  const el = e.currentTarget;
+  if (el && el.style) el.style.opacity = '0.55';
+}
+
+function tcDragEnd(e) {
+  const el = e.currentTarget;
+  if (el && el.style) el.style.opacity = '';
+  _tcDragPayload = null;
+  // Clean up any lingering drag-over highlights (browsers don't always fire dragleave).
+  document.querySelectorAll('.tc-proj-item.tc-drag-over').forEach(n => n.classList.remove('tc-drag-over'));
+}
+
+function tcDragOverFolder(e, projKey, sectionName) {
+  if (!_tcDragPayload) return;
+  // Block dropping a folder on itself or onto its own subfolders.
+  if (_tcDragPayload.kind === 'folder') {
+    if (_tcDragPayload.projKey === projKey) return; // dropping on self
+  }
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = (_tcDragPayload.kind === 'task') ? 'copyMove' : 'move'; } catch(_) {}
+  const el = e.currentTarget;
+  if (el && el.classList) el.classList.add('tc-drag-over');
+}
+
+function tcDragLeaveFolder(e) {
+  const el = e.currentTarget;
+  if (el && el.classList) el.classList.remove('tc-drag-over');
+}
+
+async function tcDropOnFolder(e, projKey, sectionName) {
+  e.preventDefault();
+  document.querySelectorAll('.tc-proj-item.tc-drag-over').forEach(n => n.classList.remove('tc-drag-over'));
+  const payload = _tcDragPayload;
+  _tcDragPayload = null;
+  if (!payload) return;
+
+  // Resolve destination: clientId / clientName / section the drop sets.
+  const isSynthetic = projKey.startsWith('name:');
+  const destClientId = isSynthetic ? '' : projKey;
+  const destClient = isSynthetic ? null : (DB.clients || []).find(c => c.id === projKey);
+  const destClientName = destClient ? (destClient.biz || '') : (isSynthetic ? projKey.slice(5) : '');
+  // Friendly label, applying alias if set.
+  const aliases = (DB.projectAliases && typeof DB.projectAliases === 'object') ? DB.projectAliases : {};
+  const destLabel = (aliases[projKey] || destClientName || (isSynthetic ? projKey.slice(5) : projKey)) + (sectionName ? ` › ${sectionName}` : '');
+
+  if (payload.kind === 'task') {
+    const t = (DB.tasks || []).find(x => x.id === payload.taskId);
+    if (!t) return;
+    // Already in the destination? No-op.
+    if (t.clientId === destClientId && (t.clientName || '') === destClientName && String(t.section || '') === String(sectionName || '')) {
+      showToast('Task is already in that folder.', false, 2500);
+      return;
+    }
+    const choice = await arkChoice({
+      title: `Drop task into "${destLabel}"`,
+      body: `Move "${t.name}" out of its current folder, or copy it so a duplicate also lives in "${destLabel}"?`,
+      buttons: [
+        { label: 'Move', value: 'move', primary: true },
+        { label: 'Copy', value: 'copy' },
+        { label: 'Cancel', value: null, ghost: true },
+      ],
+    });
+    if (!choice) return;
+
+    if (choice === 'move') {
+      // Optimistic local update.
+      t.clientId = destClientId;
+      t.clientName = destClientName;
+      t.section = String(sectionName || '');
+      t._updatedAt = new Date().toISOString();
+      tcRender();
+      tcBuildProjectSidebar();
+      try {
+        const resp = await authFetch(ARK_SERVER + '/tasks/bulk-relink', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskIds: [t.id], clientId: destClientId, clientName: destClientName, section: String(sectionName || '') }),
+        });
+        const data = await _tcParseRespOrToast(resp, 'Move');
+        if (!data || !data.success) return;
+        showToast(`✓ Moved to ${destLabel}`);
+      } catch (e) { showToast('Move failed: ' + e.message, true, 4000); }
+    } else if (choice === 'copy') {
+      // Build a fresh copy with a new id. Strip server/migration metadata
+      // and any subtask linkage so the copy stands alone.
+      const stamp = new Date().toISOString();
+      const newId = (typeof uid === 'function') ? uid() : ('t_' + Math.random().toString(36).slice(2, 12));
+      const copy = JSON.parse(JSON.stringify(t));
+      delete copy._deleted; delete copy._hiddenFor; delete copy._import; delete copy._checked; delete copy._row;
+      copy.id = newId;
+      copy.clientId = destClientId;
+      copy.clientName = destClientName;
+      copy.section = String(sectionName || '');
+      copy.parentId = null;
+      copy.parentTaskId = null;
+      copy.createdAt = stamp;
+      copy.updatedAt = stamp;
+      copy._updatedAt = stamp;
+      copy._importedAt = stamp;
+      copy._importedFromTodoist = false;
+      // Optimistic insert.
+      if (!Array.isArray(DB.tasks)) DB.tasks = [];
+      DB.tasks.push(copy);
+      tcRender();
+      tcBuildProjectSidebar();
+      try {
+        const resp = await authFetch(ARK_SERVER + '/tasks/bulk-add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tasks: [copy] }),
+        });
+        const data = await _tcParseRespOrToast(resp, 'Copy');
+        if (!data || !data.success) return;
+        showToast(`✓ Copied to ${destLabel}`);
+      } catch (e) { showToast('Copy failed: ' + e.message, true, 4000); }
+    }
+    return;
+  }
+
+  if (payload.kind === 'folder') {
+    const srcKey = payload.projKey;
+    if (srcKey === projKey) return; // self — already filtered, defensive.
+    // Gather every task currently in the source folder.
+    const srcSynthetic = srcKey.startsWith('name:');
+    const srcClientId = srcSynthetic ? '' : srcKey;
+    const srcClientName = srcSynthetic ? srcKey.slice(5) : ((DB.clients || []).find(c => c.id === srcKey)?.biz || '');
+    const srcLabel = (aliases[srcKey] || srcClientName || srcKey);
+    const srcTasks = (DB.tasks || []).filter(t => {
+      if (t._deleted) return false;
+      if (srcSynthetic) return !t.clientId && String(t.clientName || '').trim().toLowerCase() === srcKey.slice(5).toLowerCase();
+      return t.clientId === srcKey;
+    });
+    if (!srcTasks.length) {
+      showToast(`"${srcLabel}" has no tasks to move.`, true, 3000);
+      return;
+    }
+    const subSectionName = sectionName || srcLabel;
+    const choice = await arkChoice({
+      title: `Move folder "${srcLabel}" into "${destLabel}"?`,
+      body: `${srcTasks.length} task${srcTasks.length===1?'':'s'} in "${srcLabel}" will move into "${destLabel}" as a subfolder named "${subSectionName}". The original "${srcLabel}" folder disappears once empty.`,
+      buttons: [
+        { label: 'Move folder', value: 'move', primary: true },
+        { label: 'Cancel', value: null, ghost: true },
+      ],
+    });
+    if (!choice) return;
+    const ids = srcTasks.map(t => t.id);
+    const stamp = new Date().toISOString();
+    for (const t of srcTasks) {
+      t.clientId = destClientId;
+      t.clientName = destClientName;
+      t.section = subSectionName;
+      t._updatedAt = stamp;
+    }
+    _tcExpandedProjects.add(projKey);
+    _tcSaveExpandedProjects();
+    tcRender();
+    tcBuildProjectSidebar();
+    try {
+      const resp = await authFetch(ARK_SERVER + '/tasks/bulk-relink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds: ids, clientId: destClientId, clientName: destClientName, section: subSectionName }),
+      });
+      const data = await _tcParseRespOrToast(resp, 'Move folder');
+      if (!data || !data.success) return;
+      showToast(`✓ Moved ${data.relinked} task${data.relinked===1?'':'s'} into ${destLabel} › ${subSectionName}`);
+    } catch (e) { showToast('Move folder failed: ' + e.message, true, 4000); }
+  }
+}
+
+// Group-header drop handlers — drag a folder onto a project-group header
+// to add the folder to that group. Tasks aren't dropped on groups (groups
+// are folders-of-folders, not folders-of-tasks).
+function tcDragOverGroup(e, groupId) {
+  if (!_tcDragPayload || _tcDragPayload.kind !== 'folder') return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch(_) {}
+  const el = e.currentTarget;
+  if (el && el.classList) el.classList.add('tc-drag-over');
+}
+
+function tcDragLeaveGroup(e) {
+  const el = e.currentTarget;
+  if (el && el.classList) el.classList.remove('tc-drag-over');
+}
+
+async function tcDropOnGroup(e, groupId) {
+  e.preventDefault();
+  document.querySelectorAll('.tc-proj-item.tc-drag-over, .tc-group-header.tc-drag-over').forEach(n => n.classList.remove('tc-drag-over'));
+  const payload = _tcDragPayload;
+  _tcDragPayload = null;
+  if (!payload || payload.kind !== 'folder') return;
+  const projKey = payload.projKey;
+  if (!projKey) return;
+  // tcAddClientToGroup already handles "remove from any other group, add to
+  // this one" + _updatedAt stamping + saving via the dedicated endpoint.
+  // It accepts a projKey (real clientId OR synthetic "name:xxx") since the
+  // sidebar render filters by includes() against that same string.
+  if (typeof tcAddClientToGroup === 'function') tcAddClientToGroup(groupId, projKey);
+  const g = (DB.projectGroups || []).find(x => x.id === groupId);
+  if (g) showToast(`✓ Moved to "${g.name}"`);
+}
+
+// Helper: parse a relink/bulk-add response with Cloudflare/HTTP detection
+// and toast on failure. Returns the parsed data, or null on error.
+async function _tcParseRespOrToast(resp, label) {
+  const raw = await resp.text();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (_) {
+    const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+    const reason = looksLikeCloudflare
+      ? 'Cloudflare blocked the request. Add /tasks/ to the WAF skip rule.'
+      : `Server returned non-JSON (HTTP ${resp.status}).`;
+    showToast(label + ' failed: ' + reason, true, 5000);
+    return null;
+  }
+  if (!resp.ok || !data.success) {
+    showToast(label + ' failed: ' + (data.error || 'HTTP ' + resp.status), true, 5000);
+    return null;
+  }
+  return data;
+}
+
+// Modern multi-button choice dialog. Returns the chosen button's `value`,
+// or null on cancel/dismiss. Matches the toast/.card aesthetic.
+function arkChoice({ title, body, buttons }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.onclick = e => { if (e.target === overlay) close(null); };
+    const btnHtml = (buttons || []).map((b, i) => {
+      const cls = b.primary ? 'btn btn-primary btn-sm' : (b.ghost ? 'btn btn-ghost btn-sm' : 'btn btn-sm');
+      return `<button class="${cls}" data-i="${i}" style="margin-left:8px;">${b.label}</button>`;
+    }).join('');
+    overlay.innerHTML = `<div class="card" style="width:460px;padding:0;overflow:visible;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${title || ''}</div>
+        ${body ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;line-height:1.4;">${body}</div>` : ''}
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;">${btnHtml}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll('button[data-i]').forEach(b => {
+      b.onclick = () => close(buttons[parseInt(b.dataset.i, 10)].value);
+    });
+    document.addEventListener('keydown', function esc(e) {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', esc); close(null); }
+    });
+  });
+}
+
 // Toggle a project's expanded state in the sidebar (shows/hides its
 // subfolders). Persisted in localStorage so the tree state survives
 // refresh.
@@ -33550,7 +33842,7 @@ function tcBoardCard(t, today, todayStr) {
   else if (t.dueDate === todayStr) dueLabel = '<span class="due-label" style="color:var(--gold);">Today</span>';
   else dueLabel = `<span class="due-label" style="color:var(--text-d);">${t.dueDate}</span>`;
 
-  return `<div class="tc-bcard${isCompleted?' completed':''}" onclick="twfOpen('${t.id}')">
+  return `<div class="tc-bcard${isCompleted?' completed':''}" draggable="true" ondragstart="tcDragTaskStart(event,'${t.id}')" ondragend="tcDragEnd(event)" onclick="twfOpen('${t.id}')" title="Click to open · Drag to move/copy to a folder">
     <div style="display:flex;align-items:flex-start;gap:8px;">
       <input type="checkbox" ${isCompleted?'checked':''} onclick="event.stopPropagation();tcToggleComplete('${t.id}')" style="margin-top:2px;accent-color:var(--navy);cursor:pointer;">
       <div style="flex:1;min-width:0;">
