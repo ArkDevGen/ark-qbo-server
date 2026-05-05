@@ -6815,6 +6815,45 @@ app.post('/db/save', requireAuth, (req, res) => {
   }
 });
 
+// PATCH /clients/:id — apply a partial update to a single client without
+// uploading the whole DB. Same motivation as /tasks/bulk-delete: the
+// wholesale /db/save POST hangs when the payload is multi-MB. Body:
+// { patch: { productionNotes, ... } }. Only whitelisted top-level fields
+// are written so a client can't drop an arbitrary blob into the record.
+const _CLIENT_PATCH_FIELDS = new Set([
+  'productionNotes', 'biz', 'entity', 'ein', 'status',
+  'phone', 'email', 'address', 'website', 'notes',
+]);
+app.post('/clients/:id/patch', requireAuth, (req, res) => {
+  try {
+    const id = req.params.id;
+    const patch = (req.body && req.body.patch) || {};
+    if (!id) return res.status(400).json({ error: 'client id required' });
+    if (typeof patch !== 'object' || Array.isArray(patch)) return res.status(400).json({ error: 'patch must be an object' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.clients)) return res.status(400).json({ error: 'DB has no clients array' });
+    const client = db.clients.find(c => c && c.id === id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    let changed = 0;
+    for (const [k, v] of Object.entries(patch)) {
+      if (!_CLIENT_PATCH_FIELDS.has(k)) continue;
+      if (client[k] !== v) { client[k] = v; changed++; }
+    }
+    if (!changed) return res.json({ success: true, changed: 0, client });
+    client._updatedAt = new Date().toISOString();
+    client._updatedBy = req.arkUser.userName;
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Client patch by ${req.arkUser.userName}: ${id} (${Object.keys(patch).filter(k => _CLIENT_PATCH_FIELDS.has(k)).join(', ')})`);
+    res.json({ success: true, changed, client });
+  } catch (e) {
+    console.error('Client patch error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /tasks/bulk-delete — soft-delete a batch of tasks by ID without
 // uploading the entire DB. The wholesale /db/save POST chokes when the
 // dashboard payload is multi-MB; this endpoint takes just the task IDs
