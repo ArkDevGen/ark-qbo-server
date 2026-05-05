@@ -39950,6 +39950,16 @@ function stcSetFile(file) {
   stcSelectedFile = file;
   const zone = document.getElementById('stc-upload-zone');
   const nameEl = document.getElementById('stc-file-name');
+  // Original code below only handles CSV. Branch on extension so XLSX
+  // exports (the most common Scooters case) actually populate.
+  // Note: stcParseCSV is still called below for back-compat with .csv files;
+  // for .xlsx/.xls we route through stcParseXLSX instead.
+  const extLower = (file.name || '').toLowerCase();
+  if (extLower.endsWith('.xlsx') || extLower.endsWith('.xls')) {
+    stcParseXLSX(file);
+    if (nameEl) nameEl.textContent = file.name;
+    return;
+  }
   if(zone){ zone.style.borderColor='var(--navy)'; zone.style.borderStyle='solid'; }
   if(nameEl) nameEl.textContent = '📄 ' + file.name;
   if (file.name.toLowerCase().endsWith('.csv')) {
@@ -39997,6 +40007,71 @@ function stcParseCSV(file) {
     } catch(err) { console.warn('CSV parse error:', err); }
   };
   reader.readAsText(file);
+}
+
+// XLSX path. Sums Net Sales / Tax per store across every row in the
+// workbook (Power BI exports give one row per store per day, so the
+// monthly total is what we actually want for a tax filing). Strips the
+// zero-width-space prefix Power BI sticks in front of store IDs before
+// extracting the leading digits.
+function stcParseXLSX(file) {
+  if (!window.XLSX) {
+    stcToast('XLSX library not loaded yet — refresh the page and try again.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = window.XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) { stcToast('No rows found in the XLSX.'); return; }
+
+      const headers = Object.keys(rows[0]);
+      const findKey = re => headers.find(h => re.test(String(h)));
+      const storeKey = findKey(/store/i);
+      const netKey   = findKey(/net.?sales/i);
+      const taxKey   = findKey(/^tax$|sales.?tax/i);
+      if (!storeKey || !taxKey) {
+        stcToast(`Couldn't find Store or Tax column in this file. Found: ${headers.slice(0,8).join(', ')}…`);
+        return;
+      }
+
+      // Sum net + tax per store across every row.
+      const totals = {};
+      const cleanNum = v => {
+        const n = parseFloat(String(v).replace(/[$,"\s]/g, ''));
+        return isNaN(n) ? 0 : n;
+      };
+      for (const r of rows) {
+        const storeRaw = String(r[storeKey] || '').replace(/[​‌‍﻿]/g, '').trim();
+        const m = storeRaw.match(/(\d{2,4})/);
+        if (!m) continue;
+        const snum = m[1];
+        if (!totals[snum]) totals[snum] = { net: 0, tax: 0 };
+        if (netKey) totals[snum].net += cleanNum(r[netKey]);
+        totals[snum].tax += cleanNum(r[taxKey]);
+      }
+
+      let filled = 0;
+      for (const [snum, { net, tax }] of Object.entries(totals)) {
+        const ni = document.getElementById(`net_${snum}`);
+        const ti = document.getElementById(`tax_${snum}`);
+        if (ti) { ti.value = tax.toFixed(2); if (ni) ni.value = net.toFixed(2); filled++; }
+      }
+      if (!filled) {
+        const sampleStores = Object.keys(totals).slice(0, 8).join(', ');
+        stcToast(`Parsed ${Object.keys(totals).length} stores from file but none matched calculator inputs. Sample: ${sampleStores}`);
+        return;
+      }
+      stcRunCalculations();
+      stcToast(`✓ Loaded ${filled} stores from XLSX — calculations complete`);
+    } catch(err) {
+      console.warn('XLSX parse error:', err);
+      stcToast('XLSX parse failed: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
