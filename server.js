@@ -6854,6 +6854,41 @@ app.post('/clients/:id/patch', requireAuth, (req, res) => {
   }
 });
 
+// POST /tasks/bulk-add — append a batch of new task records to the DB
+// without going through the wholesale /db/save (which hangs on multi-MB
+// payloads and silently fails the localStorage write at the same size).
+// Body: { tasks: [...task objects] }
+// IDs that already exist on the server are skipped (idempotent retry).
+app.post('/tasks/bulk-add', requireAuth, (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.tasks) ? req.body.tasks : [];
+    if (!incoming.length) return res.status(400).json({ error: 'tasks required (array)' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.tasks)) db.tasks = [];
+    const existingIds = new Set(db.tasks.map(t => t && t.id).filter(Boolean));
+    let added = 0, skipped = 0;
+    const stamp = new Date().toISOString();
+    for (const t of incoming) {
+      if (!t || !t.id) { skipped++; continue; }
+      if (existingIds.has(t.id)) { skipped++; continue; }
+      // Stamp _updatedAt so future merges see this as the canonical version.
+      if (!t._updatedAt) t._updatedAt = stamp;
+      db.tasks.push(t);
+      existingIds.add(t.id);
+      added++;
+    }
+    db._savedAt = stamp;
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Tasks bulk-add by ${req.arkUser.userName}: ${added} added, ${skipped} skipped`);
+    res.json({ success: true, added, skipped, total: incoming.length });
+  } catch (e) {
+    console.error('Tasks bulk-add error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /tasks/bulk-delete — soft-delete a batch of tasks by ID without
 // uploading the entire DB. The wholesale /db/save POST chokes when the
 // dashboard payload is multi-MB; this endpoint takes just the task IDs

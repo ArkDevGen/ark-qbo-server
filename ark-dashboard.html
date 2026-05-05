@@ -33982,7 +33982,7 @@ function tdCheckAll(checked){
   document.querySelectorAll('.td-row-check').forEach(cb=>cb.checked=checked);
 }
 
-function tdExecuteImport(){
+async function tdExecuteImport(){
   if(!_tdParsed.length) return;
   const checks = document.querySelectorAll('.td-row-check');
   const toImport = _tdParsed.filter((_,i) => checks[i]?.checked);
@@ -33990,17 +33990,75 @@ function tdExecuteImport(){
 
   if(!DB.tasks) DB.tasks = [];
   const importedAt = new Date().toISOString();
-  toImport.forEach(t => {
-    const { _import, _checked, _row, ...clean } = t;
-    clean._importedFromTodoist = true;
-    clean._importedAt = importedAt;
-    DB.tasks.push(clean);
+  // Strip the parser-only flags before persisting and tag with the
+  // canonical _importedFromTodoist marker so Clear My Imported can find
+  // these later.
+  const clean = toImport.map(t => {
+    const { _import, _checked, _row, ...rest } = t;
+    rest._importedFromTodoist = true;
+    rest._importedAt = importedAt;
+    rest._updatedAt = importedAt;
+    return rest;
   });
-  saveDB();
-  logAct(`Imported ${toImport.length} task${toImport.length!==1?'s':''} from Todoist CSV`);
 
-  const res = document.getElementById('td-import-result');
-  res.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ ${toImport.length} task${toImport.length!==1?'s':''} imported successfully!</span>`;
+  // Hit the dedicated bulk-add endpoint instead of saveDB(). The wholesale
+  // /db/save was dropping the imports two ways at once: the multi-MB POST
+  // hung forever, and the localStorage.setItem step blew the ~5 MB quota
+  // when the DB grew big enough — so neither cache nor server got the
+  // imports, and they vanished on refresh.
+  const resEl = document.getElementById('td-import-result');
+  resEl.innerHTML = `<span style="color:var(--text-d);">Saving ${clean.length} task${clean.length!==1?'s':''} to server…</span>`;
+
+  let serverOk = false;
+  try {
+    const resp = await authFetch(ARK_SERVER + '/tasks/bulk-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: clean }),
+    });
+    const raw = await resp.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const reason = looksLikeCloudflare
+        ? `Cloudflare blocked the import (HTTP ${resp.status}). Add /tasks/ to the WAF skip rule.`
+        : `Server returned non-JSON (HTTP ${resp.status}).`;
+      resEl.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Import failed: ${reason}</span>`;
+      return;
+    }
+    if (!resp.ok || !data.success) {
+      resEl.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Import failed (HTTP ${resp.status}): ${data.error || 'unknown'}</span>`;
+      return;
+    }
+    serverOk = true;
+    console.log('[tdExecuteImport] bulk-add response:', data);
+  } catch(e) {
+    console.warn('[tdExecuteImport] network error:', e);
+    resEl.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Import network error: ${e.message}</span>`;
+    return;
+  }
+
+  // Server confirmed — now mirror to local in-memory DB and to localStorage
+  // so the next render sees the new tasks and a refresh doesn't have to
+  // round-trip the server.
+  for (const t of clean) DB.tasks.push(t);
+  try {
+    const cached = JSON.parse(localStorage.getItem(ARK_DB_KEY) || '{}');
+    if (!Array.isArray(cached.tasks)) cached.tasks = [];
+    const existingIds = new Set(cached.tasks.map(t => t && t.id).filter(Boolean));
+    for (const t of clean) if (!existingIds.has(t.id)) cached.tasks.push(t);
+    cached._savedAt = new Date().toISOString();
+    localStorage.setItem(ARK_DB_KEY, JSON.stringify(cached));
+  } catch(quotaErr) {
+    // localStorage quota exceeded is a known issue at this DB size — the
+    // tasks are safe on the server, so a refresh will re-pull them. Surface
+    // the warning so the user knows why a tab refresh might lag briefly.
+    console.warn('localStorage write skipped (quota?):', quotaErr);
+  }
+
+  logAct(`Imported ${clean.length} task${clean.length!==1?'s':''} from Todoist CSV`);
+  resEl.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ ${clean.length} task${clean.length!==1?'s':''} imported successfully!</span>`;
   document.getElementById('td-import-btn').style.display = 'none';
 
   tcRender();
