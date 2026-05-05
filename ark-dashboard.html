@@ -40083,8 +40083,13 @@ function stcParseXLSX(file) {
 // EXPORT / COPY
 // ══════════════════════════════════════════════════════════════════════════════
 function stcExportCSV() {
+  // If a calc hasn't been cached yet (or the previous run errored partway),
+  // try a fresh run on whatever's currently in the inputs before giving up.
+  if (!stcLastRows || !stcLastRows.length) {
+    try { stcRunCalculations(); } catch(err) { console.warn('stcExportCSV auto-run failed:', err); }
+  }
   const rows = stcLastRows;
-  if (!rows || !rows.length) { stcToast('Run calculations first'); return; }
+  if (!rows || !rows.length) { stcToast('Run calculations first — no values entered'); return; }
   const lines = ['Franchise,Store,City,State,Calc Sales,Calc Tax,Notes'];
   rows.forEach(r => {
     lines.push([r.franchise||'',r.store_num||'',r.city||'',r.state||'',
@@ -40103,8 +40108,11 @@ function stcExportCSV() {
 }
 
 function stcCopyResults() {
+  if (!stcLastRows || !stcLastRows.length) {
+    try { stcRunCalculations(); } catch(err) { console.warn('stcCopyResults auto-run failed:', err); }
+  }
   const rows = stcLastRows;
-  if (!rows || !rows.length) { stcToast('Run calculations first'); return; }
+  if (!rows || !rows.length) { stcToast('Run calculations first — no values entered'); return; }
   const lines = rows.map(r =>
     [r.franchise||'', r.store_num||'', r.city||'', r.state||'',
      r.calc_sales!==null?'$'+r.calc_sales.toFixed(2):'',
