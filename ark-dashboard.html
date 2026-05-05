@@ -30259,7 +30259,7 @@ function tcAcknowledgeNotify(taskId){
   showToast('✓ Acknowledgment sent');
 }
 
-function tcDeleteTask(id){
+async function tcDeleteTask(id){
   const t = (DB.tasks||[]).find(x=>x.id===id); if(!t) return;
   const uid = currentUser?.id;
   // Notify-only tasks use per-user soft delete: clicking Delete on one
@@ -30286,7 +30286,15 @@ function tcDeleteTask(id){
         n._updatedAt = when;
       }
     });
+    // Per-user hide is a small change but still goes through the wholesale
+    // saveDB. That's tolerable here because _hiddenFor is rarely critical
+    // and the user will immediately retry if it doesn't stick.
+    saveDB();
   } else {
+    // Global delete — route through the dedicated /tasks/bulk-delete endpoint
+    // instead of saveDB() which hangs on multi-MB DB payloads. Without this,
+    // the _deleted flag never reaches the server and the task resurrects on
+    // the next render (because loadDB pulls the still-undeleted server copy).
     t._deleted = true; t._updatedAt = when;
     (DB.notifications||[]).forEach(n => {
       if(n.taskId === id && !n._deleted){
@@ -30294,8 +30302,51 @@ function tcDeleteTask(id){
         n._updatedAt = when;
       }
     });
+    try {
+      const resp = await authFetch(ARK_SERVER + '/tasks/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds: [id], stamp: when }),
+      });
+      const raw = await resp.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch (_) {
+        const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+        const reason = looksLikeCloudflare
+          ? 'Cloudflare blocked the delete. Add /tasks/ to the WAF skip rule.'
+          : `Server returned non-JSON (HTTP ${resp.status}).`;
+        showToast('Delete failed: ' + reason, true, 5000);
+        // Roll back so the task doesn't appear deleted in the UI when it isn't on the server.
+        delete t._deleted;
+        tcRender();
+        return;
+      }
+      if (!resp.ok || !data.success) {
+        showToast('Delete failed: ' + (data.error || 'HTTP ' + resp.status), true, 5000);
+        delete t._deleted;
+        tcRender();
+        return;
+      }
+    } catch (e) {
+      console.warn('tcDeleteTask network error:', e);
+      showToast('Delete network error: ' + e.message, true, 5000);
+      delete t._deleted;
+      tcRender();
+      return;
+    }
+    // Mirror the delete into localStorage so a refresh before saveDB-style
+    // sync doesn't pull a still-alive copy from the cache.
+    try {
+      const cached = JSON.parse(localStorage.getItem(ARK_DB_KEY) || '{}');
+      if (Array.isArray(cached.tasks)) {
+        const cc = cached.tasks.find(x => x.id === id);
+        if (cc) { cc._deleted = true; cc._updatedAt = when; }
+        cached._savedAt = new Date().toISOString();
+        localStorage.setItem(ARK_DB_KEY, JSON.stringify(cached));
+      }
+    } catch(_) {}
   }
-  saveDB();
   logAct(`Task "${t.name}" ${perUser?'hidden from your view':'deleted'}`);
   if(typeof notifUpdateBadge === 'function') notifUpdateBadge();
   if(typeof notifRenderList === 'function') notifRenderList();
@@ -30694,6 +30745,12 @@ async function tcRender(){
   // ALL the project's open tasks — undated AND far-future included — like
   // Todoist's project page. Notes still route to the Notes tab via t.type.
   const inProjectView = isProjectView && !!fClient;
+  // Calendar view paints a full month grid and lets the user navigate ◀/▶
+  // through any month, so it should NOT be constrained by the showDaysAdvance
+  // window or the Mon-Sun upcoming window. Both clip the visible task set
+  // and made future weeks look empty even though the tasks were there.
+  const _isCalendarMode = (sessionStorage.getItem('tc_view_mode') || 'list') === 'calendar';
+
   let list = tasks.filter(t => {
     if(t.parentId) return false; // subtasks render under their parent, not in main list
     if(!inProjectView){
@@ -30706,16 +30763,21 @@ async function tcRender(){
     if(fStat === 'open'){
       if(t.status === 'completed') return false;
       if(inProjectView) return true; // project view: show all open project tasks, ignoring the date window
+      if(_isCalendarMode) return true; // calendar paints its own date grid — no window clipping
       const adv = t.showDaysAdvance != null ? t.showDaysAdvance : 3;
       const showDate = new Date(today); showDate.setDate(today.getDate() + adv);
       return t.dueDate <= showDate.toISOString().slice(0,10) || t.status === 'review' || t.isReviewTask || t.isNotifyTask;
     }
     if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate && t.dueDate < todayStr;
     if(fStat === 'due-today') return t.status !== 'completed' && t.dueDate === todayStr;
-    // "This Week" is now anchored to the Mon-Sun calendar window the user
-    // selected via the week navigator. Default offset (0) = current week's
-    // Monday through Sunday; clicking ▶ advances to next week, ◀ goes back.
-    if(fStat === 'upcoming')  return t.status !== 'completed' && t.dueDate >= weekMondayStr && t.dueDate <= weekSundayStr;
+    // "This Week" is anchored to a Mon-Sun window for the list/board views.
+    // Calendar mode wants the full set so the user can navigate to any month
+    // without losing tasks beyond the current week.
+    if(fStat === 'upcoming') {
+      if (t.status === 'completed') return false;
+      if (_isCalendarMode) return !!t.dueDate;
+      return t.dueDate >= weekMondayStr && t.dueDate <= weekSundayStr;
+    }
     if(fStat === 'completed') return t.status === 'completed';
     return true; // 'all'
   });
