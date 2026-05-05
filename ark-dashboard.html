@@ -32783,14 +32783,28 @@ function tcRenderProjectNotes() {
   // and the section grouping below has clean values to bucket on.
   if (typeof tcMigrateSections === 'function') tcMigrateSections();
   const search = (document.getElementById('tc-pnotes-search')?.value || '').toLowerCase();
-  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  // Source the active project from _tcActiveView when we're in project view.
+  // The filter dropdown can't hold synthetic "name:xxx" keys (no <option> for
+  // them), so reading the dropdown alone made the Notes tab inside a project
+  // view fall back to "show all notes" — exactly what the user reported.
+  const activeView = (typeof _tcActiveView === 'string') ? _tcActiveView : '';
+  const fClientFromView = activeView.startsWith('project:') ? activeView.slice(8) : '';
+  const fClient = fClientFromView || (document.getElementById('tc-filter-client')?.value || '');
   const fAM = document.getElementById('tc-filter-am')?.value || '';
   const groupBy = document.getElementById('tc-pnotes-groupby')?.value || '';
 
   let notes = (DB.tasks || []).filter(t => !_taskHiddenForMe(t) &&t.type === 'note' && t.status !== 'completed');
   if (fAM) notes = notes.filter(t => t.amId === fAM);
-  if (fClient && fClient !== '_noClient') notes = notes.filter(t => t.clientId === fClient);
-  else if (fClient === '_noClient') notes = notes.filter(t => !t.clientId);
+  if (fClient === '_noClient') {
+    notes = notes.filter(t => !t.clientId && !String(t.clientName || '').trim());
+  } else if (fClient && fClient.startsWith('name:')) {
+    // Synthetic project — match notes whose clientName text equals the
+    // bucket name (case-insensitive trim) and have no clientId.
+    const want = fClient.slice(5);
+    notes = notes.filter(t => !t.clientId && String(t.clientName || '').trim().toLowerCase() === want);
+  } else if (fClient) {
+    notes = notes.filter(t => t.clientId === fClient);
+  }
   if (search) notes = notes.filter(t => `${t.name} ${t.notes || ''} ${t.category || ''}`.toLowerCase().includes(search));
 
   notes.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
