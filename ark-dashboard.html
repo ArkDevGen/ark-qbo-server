@@ -3443,6 +3443,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <button class="btn btn-ghost btn-sm" onclick="tdImportOpen()">📥 Import</button>
         <!-- TEMP: remove once Production redesign ships -->
         <button class="btn btn-ghost btn-sm" onclick="tcClearMyImported()" title="Hard-delete tasks imported from Todoist assigned to you. Temporary cleanup action." style="color:var(--red);">🧹 Clear My Imported</button>
+        <button class="btn btn-ghost btn-sm" onclick="tcConsolidateSalesTax()" title="Move all sales-tax-looking tasks into a single Sales & Use Tax folder.">🧾 Consolidate Sales Tax</button>
         <button class="btn btn-ghost btn-sm" onclick="tcManageTemplates()" title="Reusable project task lists you can stamp onto a client">📋 Templates</button>
         <div style="position:relative;display:inline-block;">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('tc-newtask-menu').style.display=document.getElementById('tc-newtask-menu').style.display==='block'?'none':'block'">+ New ▾</button>
@@ -31543,6 +31544,127 @@ function tcBuildProjectSidebar() {
     '<div class="tc-proj-divider"></div>' +
     '<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Projects <span style="font-size:10px;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();tcManageGroups()">⚙</span></div>' +
     projectsHtml;
+}
+
+// One-click cleanup: find every task that looks like a sales-tax task
+// (by name OR by section) and re-tag them all into a single synthetic
+// "Sales & Use Tax" folder, regardless of where they're scattered now.
+// Uses the bulk-relink endpoint so the multi-MB saveDB hang doesn't apply.
+async function tcConsolidateSalesTax() {
+  const target = 'Sales & Use Tax';
+  const live = (DB.tasks || []).filter(t => !t._deleted);
+  // Match the same pattern the user identifies sales tax tasks by — names
+  // like "Hazard - Sales & Use Tax [Texas]", or section "TRADITIONAL -
+  // MONTHLY" / "SCOOTERS - QUARTERLY" / "HTEAO - MONTHLY", or any task
+  // whose category is "Sales Tax". Avoids the literal phrase "use tax"
+  // alone (could match unrelated tasks) by requiring "sales" or a known
+  // sales-tax section keyword.
+  const looksLikeSalesTax = (t) => {
+    const name = String(t.name || '').toLowerCase();
+    const section = String(t.section || '').toLowerCase();
+    const cat = String(t.category || '').toLowerCase();
+    if (cat === 'sales tax') return true;
+    if (/sales\s*(?:&|and)?\s*use\s*tax|sales\s*tax/.test(name)) return true;
+    // Section names from the SALES & USE TAX Todoist export
+    if (/(?:traditional|hteao|scooters)\s*[-–]\s*(?:monthly|quarterly|annually)/.test(section)) return true;
+    return false;
+  };
+  const candidates = live.filter(looksLikeSalesTax);
+  // Tasks already in the right bucket — skip them.
+  const needMove = candidates.filter(t => !(
+    !t.clientId && String(t.clientName || '').trim().toLowerCase() === target.toLowerCase()
+  ));
+  if (!candidates.length) {
+    showToast('No sales-tax-looking tasks found.', true, 4000);
+    return;
+  }
+  if (!needMove.length) {
+    showToast(`All ${candidates.length} sales tax tasks are already under "${target}".`);
+    return;
+  }
+  // Group by current bucket so the user can sanity-check what's about to move.
+  const buckets = {};
+  needMove.forEach(t => {
+    let key;
+    if (t.clientId) {
+      const c = (DB.clients || []).find(x => x.id === t.clientId);
+      key = c ? c.biz : `(unknown client ${t.clientId})`;
+    } else if (String(t.clientName || '').trim()) {
+      key = `${t.clientName}`;
+    } else {
+      key = '(no client)';
+    }
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+  const bucketLines = Object.entries(buckets).sort((a,b) => b[1]-a[1]).slice(0, 12)
+    .map(([k,v]) => `<div style="font-size:12px;color:var(--text-d);padding:2px 0;"><span style="font-family:'DM Mono',monospace;color:var(--accent);">${v}</span> · ${k}</div>`).join('');
+  const moreLine = Object.keys(buckets).length > 12 ? `<div style="font-size:11px;color:var(--text-d);font-style:italic;margin-top:4px;">…and ${Object.keys(buckets).length - 12} more buckets</div>` : '';
+
+  // Modern confirmation modal — matches the rest of the app per the
+  // saved popup-style preference.
+  const confirmed = await new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.onclick = e => { if (e.target === overlay) close(false); };
+    overlay.innerHTML = `<div class="card" style="width:520px;max-height:80vh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Consolidate sales tax tasks</div>
+        <div style="font-size:12px;color:var(--text-d);margin-top:4px;line-height:1.4;">Move <strong>${needMove.length}</strong> sales-tax-looking task${needMove.length===1?'':'s'} into a single <strong>"${target}"</strong> folder. They'll be removed from their current per-client folders.</div>
+      </div>
+      <div style="padding:14px 20px;flex:1;overflow-y:auto;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:6px;">Currently scattered across:</div>
+        ${bucketLines}${moreLine}
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;">
+        <button class="btn btn-ghost btn-sm" id="tc-consol-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="tc-consol-ok" style="margin-left:8px;">Move ${needMove.length} task${needMove.length===1?'':'s'}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#tc-consol-cancel').onclick = () => close(false);
+    overlay.querySelector('#tc-consol-ok').onclick = () => close(true);
+  });
+  if (!confirmed) return;
+
+  // Optimistic local update — sidebar updates instantly.
+  const ids = needMove.map(t => t.id);
+  const stamp = new Date().toISOString();
+  for (const t of needMove) {
+    t.clientId = '';
+    t.clientName = target;
+    t._updatedAt = stamp;
+  }
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  if (typeof tcRender === 'function') tcRender();
+
+  // Persist via bulk-relink — server tags clientId='' clientName=target.
+  try {
+    const resp = await authFetch(ARK_SERVER + '/tasks/bulk-relink', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskIds: ids, clientId: '', clientName: target }),
+    });
+    const raw = await resp.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const reason = looksLikeCloudflare
+        ? 'Cloudflare blocked the move. Add /tasks/ to the WAF skip rule.'
+        : `Server returned non-JSON (HTTP ${resp.status}).`;
+      showToast('Consolidate save failed: ' + reason, true, 6000);
+      return;
+    }
+    if (!resp.ok || !data.success) {
+      showToast('Consolidate save failed: ' + (data.error || 'HTTP ' + resp.status), true, 6000);
+      return;
+    }
+    showToast(`✓ Moved ${data.relinked} sales tax task${data.relinked===1?'':'s'} into "${target}"`);
+  } catch (e) {
+    console.warn('tcConsolidateSalesTax network error:', e);
+    showToast('Consolidate network error: ' + e.message, true, 6000);
+  }
 }
 
 // Inline-rename a project folder. Stores the new label in DB.projectAliases
