@@ -31807,12 +31807,29 @@ async function tcClearMyImported(){
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ taskIds: ids, stamp }),
     });
-    const data = await resp.json();
+    // Read as text first so a Cloudflare challenge page or Render error
+    // page surfaces a clear error instead of the cryptic "Unexpected
+    // token '<'" from resp.json().
+    const raw = await resp.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const looksLikeRender     = /render\.com|application error|502 bad gateway/i.test(raw);
+      const reason = looksLikeCloudflare
+        ? 'Cloudflare blocked the bulk-delete (HTTP ' + resp.status + '). Add /tasks/ to the WAF skip rule (covering POST/PUT/DELETE/PATCH).'
+        : looksLikeRender
+        ? 'Render returned an error page (HTTP ' + resp.status + '). Likely a 502 / cold start — try again.'
+        : 'Server returned non-JSON (HTTP ' + resp.status + ').';
+      alert(reason);
+      mine.forEach(t => { delete t._deleted; });
+      tcRender();
+      return;
+    }
     console.log('[ClearMyImported] bulk-delete response:', resp.status, data);
     if (resp.ok && data.success) serverOk = true;
     else {
       alert(`Bulk-delete failed (HTTP ${resp.status}): ${data.error || 'unknown'}`);
-      // Roll back the local marks so the next attempt has a clean slate.
       mine.forEach(t => { delete t._deleted; });
       tcRender();
       return;
