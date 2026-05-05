@@ -796,15 +796,16 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .view.active{display:block;}
 /* ── Production Layout ── */
 .tc-prod-layout{display:flex;gap:0;min-height:calc(100vh - 120px);}
-.tc-project-sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;position:sticky;top:0;max-height:calc(100vh - 120px);}
-.tc-proj-item{display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;font-size:12px;color:var(--text-d);transition:all .15s;border-left:3px solid transparent;}
+.tc-project-sidebar{width:240px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:12px 0;overflow-y:auto;position:sticky;top:0;max-height:calc(100vh - 120px);}
+.tc-proj-item{display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;font-size:12px;color:var(--text-d);transition:all .15s;border-left:3px solid transparent;position:relative;}
 .tc-proj-item:hover{background:var(--surface2);color:var(--text);}
 .tc-proj-item.active{background:var(--surface2);color:var(--navy);font-weight:600;border-left-color:var(--gold);}
 .tc-proj-item .icon{width:16px;text-align:center;flex-shrink:0;font-size:13px;}
 .tc-proj-item .label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tc-proj-item .count{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;flex-shrink:0;}
-.tc-proj-item .tc-proj-actions{display:flex;align-items:center;gap:2px;opacity:0;transition:opacity .15s;flex-shrink:0;}
-.tc-proj-item:hover .tc-proj-actions{opacity:1;}
+.tc-proj-item .tc-proj-actions{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:2px;opacity:0;transition:opacity .15s;background:linear-gradient(90deg, transparent 0, var(--surface2) 12px, var(--surface2) 100%);padding:2px 4px 2px 14px;border-radius:6px;pointer-events:none;}
+.tc-proj-item:hover .tc-proj-actions{opacity:1;pointer-events:auto;}
+.tc-proj-item.active .tc-proj-actions{background:linear-gradient(90deg, transparent 0, var(--surface) 12px, var(--surface) 100%);}
 .tc-proj-item .tc-proj-actions button{background:none;border:none;cursor:pointer;font-size:11px;line-height:1;padding:2px 4px;border-radius:4px;color:var(--text-d);}
 .tc-proj-item .tc-proj-actions button:hover{background:var(--surface);color:var(--navy);}
 .tc-proj-item .tc-proj-chevron{width:14px;text-align:center;flex-shrink:0;font-size:9px;color:var(--text-d);cursor:pointer;user-select:none;line-height:1;padding:2px;border-radius:3px;}
@@ -31568,7 +31569,8 @@ function tcBuildProjectSidebar() {
     const editBtn = isProj ? `<button class="tc-proj-edit" title="Rename folder" onclick="event.stopPropagation();tcEditProjectAlias('${key.replace(/'/g,"\\'")}')">✏️</button>` : '';
     const addSubBtn = isProj ? `<button class="tc-proj-edit" title="Add subfolder" onclick="event.stopPropagation();tcAddSubfolder('${key.replace(/'/g,"\\'")}')">➕</button>` : '';
     const linkBtn = (isProj && isSynthetic) ? `<button class="tc-proj-link" title="Link this folder to a client" onclick="event.stopPropagation();tcLinkSyntheticToClient('${key.replace(/'/g,"\\'")}')">🔗</button>` : '';
-    let html = `<div class="tc-proj-item${_tcActiveView === view && !_tcActiveSection ? ' active' : ''}" data-view="${view}" onclick="tcSelectView('${view}')">
+    const safeLabel = String(label).replace(/"/g, '&quot;');
+    let html = `<div class="tc-proj-item${_tcActiveView === view && !_tcActiveSection ? ' active' : ''}" data-view="${view}" onclick="tcSelectView('${view}')" title="${safeLabel}">
       ${chevron}<span class="icon">${icon}</span>
       <span class="label">${label}</span>
       <span class="tc-proj-actions">${editBtn}${addSubBtn}${linkBtn}</span>
@@ -31580,7 +31582,8 @@ function tcBuildProjectSidebar() {
         const subView = `project:${key}|section:${sname}`;
         const isActiveSub = _tcActiveView === view && _tcActiveSection === sname;
         const safeName = sname.replace(/'/g, "\\'");
-        html += `<div class="tc-proj-item tc-proj-subitem${isActiveSub ? ' active' : ''}" data-view="${subView}" onclick="tcSelectSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">
+        const safeNameAttr = sname.replace(/"/g, '&quot;');
+        html += `<div class="tc-proj-item tc-proj-subitem${isActiveSub ? ' active' : ''}" data-view="${subView}" onclick="tcSelectSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')" title="${safeNameAttr}">
           <span class="icon">📂</span>
           <span class="label">${sname}</span>
           <span class="tc-proj-actions"><button class="tc-proj-edit" title="Remove subfolder" onclick="event.stopPropagation();tcRemoveSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">×</button></span>
