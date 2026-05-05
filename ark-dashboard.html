@@ -31758,9 +31758,8 @@ async function tcClearMyImported(){
   const byImport = live.filter(t => (t._importedFromTodoist || t._import) && t.amId !== currentUser.id);
   const mine = [...byAM, ...byImport];
 
-  // If nothing matched, surface a diagnostic so we can tell whether the
-  // tasks aren't tagged as imports OR aren't assigned to this user at all,
-  // instead of silently saying "nothing found".
+  console.log('[ClearMyImported] start — live:', live.length, 'amId match:', byAM.length, 'import-only:', byImport.length, 'mine:', mine.length);
+
   if(!mine.length){
     const tagged = live.filter(t => t._importedFromTodoist || t._import).length;
     const assignedToMe = byAM.length;
@@ -31771,15 +31770,32 @@ async function tcClearMyImported(){
   const completedCount = mine.filter(t => t.status === 'completed').length;
   const openCount      = mine.length - completedCount;
   const msg = `Permanently delete ALL ${mine.length} of your tasks? (${openCount} open, ${completedCount} completed)\n\nThis cannot be undone.`;
-  if(!confirm(msg)) return;
-  // Soft-delete via _deleted flag so the deletion ships through saveDB() and
-  // the server's merge-by-id keeps the record marked deleted. Hard-removing
-  // from the array would let the server push them back on next sync.
-  const stamp = new Date().toISOString();
+  if(!confirm(msg)) { console.log('[ClearMyImported] user cancelled'); return; }
+  // Stamp _updatedAt one minute in the future so any clock-skew or migration
+  // touching tasks while this is in flight can't accidentally win the merge.
+  const stamp = new Date(Date.now() + 60_000).toISOString();
   mine.forEach(t => { t._deleted = true; t._updatedAt = stamp; });
-  // Immediate save bypasses the 1s debounce so the server has the _deleted
-  // flags before any concurrent SSE-triggered reload can race us.
-  await saveDB({ immediate: true });
+  const liveAfterMark = DB.tasks.filter(t => !t._deleted).length;
+  console.log('[ClearMyImported] marked deleted — live after mark:', liveAfterMark, '(expected ~' + (live.length - mine.length) + ')');
+  const ok = await saveDB({ immediate: true });
+  console.log('[ClearMyImported] saveDB returned:', ok);
+  // Verify by re-fetching from the server. If it still shows them as live,
+  // the merge logic dropped the delete and we need to know that immediately.
+  try {
+    const resp = await authFetch(ARK_SERVER + '/db/load');
+    if (resp.ok) {
+      const fresh = await resp.json();
+      if (fresh && Array.isArray(fresh.tasks)) {
+        const myIds = new Set(mine.map(t => t.id));
+        const stillLive = fresh.tasks.filter(t => myIds.has(t.id) && !t._deleted).length;
+        console.log('[ClearMyImported] server reports', stillLive, 'of the', mine.length, 'are still live (should be 0)');
+        if (stillLive > 0) {
+          alert(`Marked ${mine.length} tasks deleted locally and saved, but the server still shows ${stillLive} of them as live.\n\nThe server's merge logic is rejecting the delete (likely an _updatedAt mismatch). Open the Console tab — there should be log lines starting with [ClearMyImported] that pinpoint the failure.`);
+          return;
+        }
+      }
+    }
+  } catch(e) { console.warn('[ClearMyImported] verify-fetch failed:', e); }
   logAct(`Cleared ${mine.length} of my tasks (temp cleanup — ${openCount} open, ${completedCount} completed)`);
   tcRender();
   showToast(`✓ Deleted ${mine.length} task${mine.length===1?'':'s'}`);
