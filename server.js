@@ -6894,6 +6894,35 @@ app.post('/production/project-groups', requireAuth, (req, res) => {
   }
 });
 
+// POST /production/project-sections — save the list of manually-created
+// (empty) subfolders for a given project key. Auto-derived sections (from
+// task.section) don't go through here; those just exist on the task
+// records. This endpoint is only for empty subfolders that the user wants
+// to persist before any tasks are filed under them.
+// Body: { projectKey: string, sections: [...names] }
+app.post('/production/project-sections', requireAuth, (req, res) => {
+  try {
+    const projectKey = (req.body?.projectKey || '').toString().trim();
+    const sections = Array.isArray(req.body?.sections) ? req.body.sections : null;
+    if (!projectKey) return res.status(400).json({ error: 'projectKey required' });
+    if (!sections) return res.status(400).json({ error: 'sections required (array)' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!db.projectSections || typeof db.projectSections !== 'object') db.projectSections = {};
+    const cleaned = sections.map(s => String(s || '').trim()).filter(Boolean);
+    if (cleaned.length) db.projectSections[projectKey] = cleaned;
+    else delete db.projectSections[projectKey];
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Project sections by ${req.arkUser.userName}: ${projectKey} → [${cleaned.join(', ')}]`);
+    res.json({ success: true, projectKey, sections: cleaned });
+  } catch (e) {
+    console.error('Project sections error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /production/project-alias — set or clear a project folder display
 // name without dragging the whole DB through /db/save. The "key" is either
 // a clientId (for client-backed project folders) or "name:lowercase" (for
