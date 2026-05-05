@@ -2,6 +2,7 @@
 // Load environment variables from .env file
 // Must be the very first line before anything else
 // ─────────────────────────────────────────────────────────────────
+// (deploy ping — verifying staging auto-deploy after enabling on-commit)
 require('dotenv').config();
 
 const express     = require('express');
