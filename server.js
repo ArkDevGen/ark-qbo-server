@@ -6854,6 +6854,46 @@ app.post('/clients/:id/patch', requireAuth, (req, res) => {
   }
 });
 
+// POST /production/project-groups — save the current user's project group
+// list. Sidesteps the wholesale /db/save (which hangs on multi-MB payloads
+// and silently drops group edits). Body: { groups: [...] }. Other users'
+// groups are preserved untouched. Within the user's set, merge-by-id so
+// concurrent edits in two tabs don't clobber each other.
+app.post('/production/project-groups', requireAuth, (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.groups) ? req.body.groups : null;
+    if (!incoming) return res.status(400).json({ error: 'groups required (array)' });
+    const meId = req.body?.userId || ''; // who owns these groups
+    if (!meId) return res.status(400).json({ error: 'userId required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.projectGroups)) db.projectGroups = [];
+    const others = db.projectGroups.filter(g => g && g.userId !== meId);
+    const existingMine = db.projectGroups.filter(g => g && g.userId === meId);
+    // Merge incoming with the user's existing groups by id, newer-wins by
+    // _updatedAt — same conflict resolution the wholesale save uses.
+    const byId = new Map();
+    for (const g of existingMine) if (g && g.id) byId.set(g.id, g);
+    for (const g of incoming) {
+      if (!g || !g.id) continue;
+      const cur = byId.get(g.id);
+      if (!cur) { byId.set(g.id, g); continue; }
+      const curT = cur._updatedAt ? new Date(cur._updatedAt).getTime() : 0;
+      const incT = g._updatedAt ? new Date(g._updatedAt).getTime() : 0;
+      if (incT >= curT) byId.set(g.id, g);
+    }
+    db.projectGroups = [...others, ...Array.from(byId.values())];
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Project groups by ${req.arkUser.userName}: ${incoming.length} groups for user ${meId}`);
+    res.json({ success: true, count: incoming.length });
+  } catch (e) {
+    console.error('Project groups save error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /production/project-alias — set or clear a project folder display
 // name without dragging the whole DB through /db/save. The "key" is either
 // a clientId (for client-backed project folders) or "name:lowercase" (for
