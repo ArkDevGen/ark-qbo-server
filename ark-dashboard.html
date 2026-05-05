@@ -39614,6 +39614,11 @@ function stcMakeRow(store_num, franchise, city, state, calc_sales, calc_tax, not
 
 function stcCalcAll(smap) {
   const g = num => smap[num] || {net:0, tax:0};
+  // Local aliases for the rounding helpers — every per-store branch below
+  // calls r(...) / ri(...). Without these aliases the first call throws
+  // "r is not defined" and stops the calculation engine cold.
+  const r = stcR;
+  const ri = stcRi;
   const rows = [];
 
   // 6 Java Boys NE
