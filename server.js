@@ -6921,16 +6921,17 @@ app.post('/production/project-alias', requireAuth, (req, res) => {
 });
 
 // POST /tasks/bulk-relink — re-tag a batch of tasks with a new clientId +
-// clientName. Used when converting a synthetic free-text project folder
-// into a real client-backed one (after the client is added to Client
-// Center). Body: { taskIds: [...], clientId, clientName }
+// clientName. Used both when converting a synthetic folder into a real
+// client-backed one (clientId provided) AND when consolidating tasks into
+// a synthetic free-text folder (clientId blank, clientName non-empty).
+// Body: { taskIds: [...], clientId, clientName }
 app.post('/tasks/bulk-relink', requireAuth, (req, res) => {
   try {
     const ids = Array.isArray(req.body?.taskIds) ? req.body.taskIds : [];
     const clientId = (req.body?.clientId || '').toString();
     const clientName = (req.body?.clientName || '').toString();
     if (!ids.length) return res.status(400).json({ error: 'taskIds required (array)' });
-    if (!clientId) return res.status(400).json({ error: 'clientId required' });
+    if (!clientId && !clientName) return res.status(400).json({ error: 'clientId or clientName required' });
     if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
     const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
     if (!Array.isArray(db.tasks)) return res.status(400).json({ error: 'DB has no tasks array' });
