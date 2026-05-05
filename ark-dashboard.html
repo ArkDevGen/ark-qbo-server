@@ -30650,9 +30650,24 @@ function tcPopulateSectionSuggestions(clientId) {
 async function tcRender(){
   await tcPopulateFilters();
 
-  // Auto-tag no-date tasks as type:'note' if not already tagged
+  // Auto-tag tasks as type:'task' if they have a due date OR a recurring
+  // rule (recurFreq/recurring). Recurring tasks were ending up as type:'note'
+  // when the import couldn't project a concrete first-occurrence date — but
+  // a recurring rule alone is plenty to consider it a real task. Empty
+  // matches still default to 'note'.
   (DB.tasks || []).forEach(t => {
-    if (!t.type) t.type = t.dueDate ? 'task' : 'note';
+    if (!t.type) t.type = (t.dueDate || t.recurring || t.recurFreq) ? 'task' : 'note';
+  });
+  // Retroactively reclassify existing notes that actually have recurring
+  // rules. Three signals: structured recurring/recurFreq, or a
+  // "[Todoist: every …]" hint left in t.notes by the legacy importer.
+  // Idempotent — only flips 'note' → 'task', never the other way.
+  (DB.tasks || []).forEach(t => {
+    if (t.type !== 'note') return;
+    if (t._deleted) return;
+    const hasStructuredRecur = !!(t.recurring || t.recurFreq);
+    const hasLegacyHint = typeof t.notes === 'string' && /\[Todoist:\s*every\b/i.test(t.notes);
+    if (hasStructuredRecur || hasLegacyHint) t.type = 'task';
   });
 
   // Migrate sections embedded in legacy Todoist-imported notes (e.g. "desc · [PAYROLL] · [Todoist: every fri]")
@@ -33800,10 +33815,11 @@ function tdParseMultiFiles() {
         id: taskId, name: name.trim(),
         notes: [desc, sectionName ? `[${sectionName}]` : '', isRecurring ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
         priority, dueDate: dueDate || '', _noDate: !dueDate,
-        // Set type explicitly so dated tasks don't get auto-tagged as 'note'
-        // by the tcRender migration if they happen to be rendered before it
-        // runs. Matches the single-CSV parser's behavior at line ~33529.
-        type: dueDate ? 'task' : 'note',
+        // Set type explicitly so dated/recurring tasks don't get auto-tagged
+        // as 'note' by the tcRender migration. A recurring rule alone is
+        // enough to consider it a task — even if we couldn't project a
+        // concrete next-occurrence date at import time.
+        type: (dueDate || isRecurring || recurFreq) ? 'task' : 'note',
         clientId: '', clientName: '', amId: defaultAM, category: defaultCat,
         recurring: isRecurring, recurFreq: recurFreq,
         recurBmDay1: dateInfo.recurBmDay1 || deadInfo.recurBmDay1 || '',
@@ -34054,10 +34070,13 @@ function tdParseCSV(){
       notes:     [desc, sectionName ? `[Section: ${sectionName}]` : '', recurParsed ? `[Todoist: ${dateRaw}]` : ''].filter(Boolean).join(' · '),
       priority,
       // Leave empty when no concrete date was in the CSV — undated tasks
-      // become type:'note' and surface in the Notes panel rather than
-      // polluting Today / Upcoming with fake "due today" entries.
+      // without a recurring rule become type:'note' and surface in the
+      // Notes panel rather than polluting Today / Upcoming with fake "due
+      // today" entries. Tasks WITH a recurring rule (even if we couldn't
+      // project a concrete next-due) stay as type:'task' so they show up
+      // alongside the rest of the recurring queue.
       dueDate:   dueDate || '',
-      type:      dueDate ? 'task' : 'note',
+      type:      (dueDate || recurParsed) ? 'task' : 'note',
       clientId:   defaultClientId,
       clientName: defaultClientName,
       amId:       defaultAM,
