@@ -803,6 +803,10 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .tc-proj-item .icon{width:16px;text-align:center;flex-shrink:0;font-size:13px;}
 .tc-proj-item .label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tc-proj-item .count{font-size:10px;color:var(--text-d);font-family:'DM Mono',monospace;flex-shrink:0;}
+.tc-proj-item .tc-proj-actions{display:flex;align-items:center;gap:2px;opacity:0;transition:opacity .15s;flex-shrink:0;}
+.tc-proj-item:hover .tc-proj-actions{opacity:1;}
+.tc-proj-item .tc-proj-actions button{background:none;border:none;cursor:pointer;font-size:11px;line-height:1;padding:2px 4px;border-radius:4px;color:var(--text-d);}
+.tc-proj-item .tc-proj-actions button:hover{background:var(--surface);color:var(--navy);}
 .tc-proj-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);padding:16px 16px 6px;opacity:.6;}
 .tc-proj-divider{border-top:1px solid var(--border);margin:8px 16px;}
 /* No overflow-x here on purpose — the inner .tc-board has its own
@@ -9097,6 +9101,7 @@ function _buildDBPayload() {
     notebooks:      DB.notebooks||[],
     notebookEntries:DB.notebookEntries||[],
     projectGroups:  DB.projectGroups||[],
+    projectAliases: DB.projectAliases||{},
     ideas:          DB.ideas||[],
     devProjects:    DB.devProjects||[],
     devTemplates:   DB.devTemplates||[],
@@ -9145,6 +9150,7 @@ function _applyDBPayload(saved) {
     notebooks:      saved.notebooks      || [],
     notebookEntries:saved.notebookEntries|| [],
     projectGroups:  saved.projectGroups  || [],
+    projectAliases: saved.projectAliases || {},
     ideas:          saved.ideas          || [],
     devProjects:    saved.devProjects    || [],
     devTemplates:   saved.devTemplates   || [],
@@ -31362,10 +31368,19 @@ function tcBuildProjectSidebar() {
         label = 'No Client';
       }
     }
-    if (!projects[key]) projects[key] = { name: label, count: 0, hasDueDate: false };
+    if (!projects[key]) projects[key] = { name: label, count: 0, hasDueDate: false, isSynthetic: key.startsWith('name:') };
     projects[key].count++;
     if (t.dueDate) projects[key].hasDueDate = true;
   });
+
+  // Apply per-project display aliases (DB.projectAliases). Falls through to
+  // the resolved label from the loop above when no alias is set. The link
+  // to the actual client/synthetic bucket is unchanged — only the visible
+  // name swaps.
+  const aliases = (DB.projectAliases && typeof DB.projectAliases === 'object') ? DB.projectAliases : {};
+  for (const [k, p] of Object.entries(projects)) {
+    if (aliases[k]) p.name = aliases[k];
+  }
 
   // Split into client projects and personal projects
   const clientProjects = [];
@@ -31377,12 +31392,23 @@ function tcBuildProjectSidebar() {
   clientProjects.sort((a, b) => a.name.localeCompare(b.name));
   personalProjects.sort((a, b) => a.name.localeCompare(b.name));
 
-  const item = (view, icon, label, count, countColor) =>
-    `<div class="tc-proj-item${_tcActiveView === view ? ' active' : ''}" data-view="${view}" onclick="tcSelectView('${view}')">
+  // Editable project row. The pencil renames the folder (alias-only — never
+  // touches the underlying client). For synthetic free-text projects the
+  // link icon converts the folder to a real client-backed one once the
+  // client exists in Client Center. Both icons live inside .tc-proj-actions
+  // and reveal on hover (CSS at the .tc-proj-item rule below).
+  const item = (view, icon, label, count, countColor, projKey, isSynthetic) => {
+    const key = projKey != null ? String(projKey) : '';
+    const isProj = view.startsWith('project:');
+    const editBtn = isProj ? `<button class="tc-proj-edit" title="Rename folder" onclick="event.stopPropagation();tcEditProjectAlias('${key.replace(/'/g,"\\'")}')">✏️</button>` : '';
+    const linkBtn = (isProj && isSynthetic) ? `<button class="tc-proj-link" title="Link this folder to a client" onclick="event.stopPropagation();tcLinkSyntheticToClient('${key.replace(/'/g,"\\'")}')">🔗</button>` : '';
+    return `<div class="tc-proj-item${_tcActiveView === view ? ' active' : ''}" data-view="${view}" onclick="tcSelectView('${view}')">
       <span class="icon">${icon}</span>
       <span class="label">${label}</span>
+      <span class="tc-proj-actions">${editBtn}${linkBtn}</span>
       ${count > 0 ? `<span class="count" style="${countColor ? 'color:'+countColor+';font-weight:600;' : ''}">${count}</span>` : ''}
     </div>`;
+  };
 
   // Build grouped sidebar
   const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
@@ -31402,20 +31428,20 @@ function tcBuildProjectSidebar() {
       <span style="font-size:9px;font-weight:400;opacity:.5;">${groupCount}</span>
     </div>`;
     if (!isCollapsed) {
-      projectsHtml += groupProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+      projectsHtml += groupProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
     }
   });
 
   // Ungrouped projects
   if (ungroupedProjects.length) {
     if (groups.length) projectsHtml += '<div class="tc-proj-section">Other Projects</div>';
-    projectsHtml += ungroupedProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+    projectsHtml += ungroupedProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
   }
 
   // Personal projects
   if (personalProjects.length) {
     projectsHtml += '<div class="tc-proj-section">Personal</div>';
-    projectsHtml += personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '')).join('');
+    projectsHtml += personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
   }
 
   sidebar.innerHTML =
@@ -31426,6 +31452,232 @@ function tcBuildProjectSidebar() {
     '<div class="tc-proj-divider"></div>' +
     '<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Projects <span style="font-size:10px;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();tcManageGroups()">⚙</span></div>' +
     projectsHtml;
+}
+
+// Inline-rename a project folder. Stores the new label in DB.projectAliases
+// keyed by clientId or "name:lowercase" so the underlying client record /
+// task clientName fields are never touched. Persists via the small
+// /production/project-alias endpoint (avoids the wholesale saveDB hang).
+async function tcEditProjectAlias(projKey) {
+  if (!projKey) return;
+  if (!DB.projectAliases || typeof DB.projectAliases !== 'object') DB.projectAliases = {};
+  // Find the project row to compute the current label (alias OR resolved fallback).
+  const row = document.querySelector(`.tc-proj-item[data-view="project:${CSS.escape(projKey)}"]`);
+  const labelEl = row?.querySelector('.label');
+  const currentLabel = labelEl ? labelEl.textContent : '';
+  // Default value falls back to clientId → biz, or strip "name:" prefix.
+  let suggested = currentLabel;
+  if (!suggested) {
+    if (projKey.startsWith('name:')) suggested = projKey.slice(5);
+    else {
+      const c = (DB.clients || []).find(x => x.id === projKey);
+      if (c) suggested = c.biz || '';
+    }
+  }
+  const fallback = projKey.startsWith('name:') ? projKey.slice(5) : ((DB.clients || []).find(x => x.id === projKey)?.biz || '');
+  const newName = await arkPrompt({
+    title: 'Rename project folder',
+    body: 'This only changes how the folder appears in your sidebar. The client record and task assignments are unchanged.',
+    placeholder: 'Folder name…',
+    defaultValue: suggested,
+    okLabel: 'Save',
+    showResetTo: fallback && fallback !== suggested ? fallback : null,
+  });
+  if (newName === null) return;            // user cancelled
+  const trimmed = (newName || '').trim();
+  // Empty input clears the alias (back to the underlying client/synthetic name).
+  const aliasToSend = trimmed && trimmed !== fallback ? trimmed : '';
+  // Optimistic local update so the sidebar repaints instantly.
+  if (aliasToSend) DB.projectAliases[projKey] = aliasToSend;
+  else delete DB.projectAliases[projKey];
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  try {
+    const resp = await authFetch(ARK_SERVER + '/production/project-alias', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: projKey, alias: aliasToSend }),
+    });
+    const raw = await resp.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const reason = looksLikeCloudflare
+        ? 'Cloudflare blocked the rename. Add /production/ to the WAF skip rule.'
+        : `Server returned non-JSON (HTTP ${resp.status}).`;
+      showToast('Rename save failed: ' + reason, true, 5000);
+      return;
+    }
+    if (!resp.ok || !data.success) {
+      showToast('Rename save failed: ' + (data.error || 'HTTP ' + resp.status), true, 5000);
+      return;
+    }
+    showToast(aliasToSend ? '✓ Folder renamed' : '✓ Folder name reset');
+  } catch (e) {
+    console.warn('tcEditProjectAlias network error:', e);
+    showToast('Rename network error: ' + e.message, true, 5000);
+  }
+}
+
+// Convert a synthetic "name:xxx" project folder into a real client-backed
+// folder by re-tagging every task in that bucket with the picked client's
+// id + biz. The folder's display name is preserved by setting an alias on
+// the new clientId (so the user's free-text label sticks around).
+async function tcLinkSyntheticToClient(projKey) {
+  if (!projKey || !projKey.startsWith('name:')) return;
+  const synthName = projKey.slice(5);
+  // Find every task tagged under this synthetic bucket — by clientName text
+  // (case-insensitive trim). Skip tasks that already have a clientId.
+  const targetIds = (DB.tasks || []).filter(t => {
+    if (t._deleted) return false;
+    if (t.clientId) return false;
+    return String(t.clientName || '').trim().toLowerCase() === synthName;
+  }).map(t => t.id);
+  if (!targetIds.length) {
+    showToast('No tasks found in this folder to relink.', true, 4000);
+    return;
+  }
+  const picked = await arkPickClient({
+    title: `Link "${synthName}" to a client`,
+    body: `Pick the CRM client this folder belongs to. ${targetIds.length} task${targetIds.length===1?'':'s'} in this folder will be re-tagged to that client.`,
+  });
+  if (!picked) return;            // user cancelled
+  // Optimistic local update.
+  for (const t of (DB.tasks || [])) {
+    if (targetIds.includes(t.id)) {
+      t.clientId = picked.id;
+      t.clientName = picked.biz;
+      t._updatedAt = new Date().toISOString();
+    }
+  }
+  // Preserve the user's free-text label by aliasing it onto the new clientId.
+  if (synthName.toLowerCase() !== String(picked.biz || '').toLowerCase()) {
+    if (!DB.projectAliases || typeof DB.projectAliases !== 'object') DB.projectAliases = {};
+    DB.projectAliases[picked.id] = synthName;
+  }
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  if (typeof tcRender === 'function') tcRender();
+  // Persist: relink tasks server-side, then save the alias if applicable.
+  try {
+    const resp = await authFetch(ARK_SERVER + '/tasks/bulk-relink', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskIds: targetIds, clientId: picked.id, clientName: picked.biz || '' }),
+    });
+    const raw = await resp.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (_) {
+      const looksLikeCloudflare = /cloudflare|cf-ray|attention required|just a moment/i.test(raw);
+      const reason = looksLikeCloudflare
+        ? 'Cloudflare blocked the relink. Add /tasks/ to the WAF skip rule.'
+        : `Server returned non-JSON (HTTP ${resp.status}).`;
+      showToast('Link save failed: ' + reason, true, 5000);
+      return;
+    }
+    if (!resp.ok || !data.success) {
+      showToast('Link save failed: ' + (data.error || 'HTTP ' + resp.status), true, 5000);
+      return;
+    }
+    // Save the alias too (best-effort; non-blocking).
+    if (DB.projectAliases[picked.id]) {
+      try {
+        await authFetch(ARK_SERVER + '/production/project-alias', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: picked.id, alias: DB.projectAliases[picked.id] }),
+        });
+      } catch(_) {}
+    }
+    showToast(`✓ Linked ${data.relinked} task${data.relinked===1?'':'s'} to ${picked.biz}`);
+  } catch (e) {
+    console.warn('tcLinkSyntheticToClient network error:', e);
+    showToast('Link network error: ' + e.message, true, 5000);
+  }
+}
+
+// Modern in-page prompt — replaces native window.prompt(). Returns a Promise
+// that resolves to the entered string (or null if cancelled). Styled to
+// match the rest of the dashboard (.card overlay, navy/gold accents).
+function arkPrompt({ title, body, placeholder, defaultValue, okLabel, showResetTo }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.onclick = e => { if (e.target === overlay) close(null); };
+    const resetBtnHtml = showResetTo ? `<button class="btn btn-ghost btn-sm" id="ark-prompt-reset" style="margin-right:auto;font-size:11px;">Reset to "${String(showResetTo).replace(/"/g,'&quot;')}"</button>` : '';
+    overlay.innerHTML = `<div class="card" style="width:440px;padding:0;overflow:visible;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${title || 'Rename'}</div>
+        ${body ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;line-height:1.4;">${body}</div>` : ''}
+      </div>
+      <div style="padding:16px 20px;">
+        <input type="text" id="ark-prompt-input" class="field-input" placeholder="${(placeholder||'').replace(/"/g,'&quot;')}" value="${(defaultValue||'').replace(/"/g,'&quot;')}" style="width:100%;font-size:13px;">
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+        ${resetBtnHtml}
+        <button class="btn btn-ghost btn-sm" id="ark-prompt-cancel" style="margin-left:${resetBtnHtml ? '0' : 'auto'};">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="ark-prompt-ok">${okLabel || 'OK'}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#ark-prompt-input');
+    setTimeout(() => { input?.focus(); input?.select(); }, 30);
+    overlay.querySelector('#ark-prompt-cancel').onclick = () => close(null);
+    overlay.querySelector('#ark-prompt-ok').onclick = () => close(input.value);
+    if (showResetTo) overlay.querySelector('#ark-prompt-reset').onclick = () => close(showResetTo);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') close(input.value);
+      else if (e.key === 'Escape') close(null);
+    });
+  });
+}
+
+// Modern in-page client picker. Returns a Promise that resolves to the
+// chosen client object (with id + biz) or null if cancelled.
+function arkPickClient({ title, body }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.onclick = e => { if (e.target === overlay) close(null); };
+    overlay.innerHTML = `<div class="card" style="width:480px;max-height:80vh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${title || 'Pick a client'}</div>
+        ${body ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;line-height:1.4;">${body}</div>` : ''}
+      </div>
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);">
+        <input type="text" id="ark-pick-search" class="field-input" placeholder="Search clients…" style="width:100%;font-size:13px;">
+      </div>
+      <div id="ark-pick-list" style="flex:1;overflow-y:auto;padding:8px 12px;"></div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;">
+        <button class="btn btn-ghost btn-sm" id="ark-pick-cancel">Cancel</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const search = overlay.querySelector('#ark-pick-search');
+    const list = overlay.querySelector('#ark-pick-list');
+    overlay.querySelector('#ark-pick-cancel').onclick = () => close(null);
+    const allClients = ((DB.clients || []).filter(c => !c._deleted))
+      .sort((a, b) => (a.biz || '').localeCompare(b.biz || ''));
+    const render = () => {
+      const q = (search.value || '').trim().toLowerCase();
+      const filtered = q ? allClients.filter(c => (c.biz || '').toLowerCase().includes(q)) : allClients;
+      list.innerHTML = filtered.length
+        ? filtered.slice(0, 80).map(c => `<div class="ark-pick-row" data-id="${c.id}" style="padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${c.biz || '(unnamed)'} <span style="color:var(--text-d);font-size:11px;margin-left:6px;">${c.entity || ''}</span></div>`).join('')
+        : '<div style="padding:16px;color:var(--text-d);font-size:12px;text-align:center;">No clients match.</div>';
+      list.querySelectorAll('.ark-pick-row').forEach(row => {
+        row.onclick = () => {
+          const c = allClients.find(x => x.id === row.dataset.id);
+          if (c) close({ id: c.id, biz: c.biz });
+        };
+      });
+    };
+    search.addEventListener('input', render);
+    search.addEventListener('keydown', e => { if (e.key === 'Escape') close(null); });
+    setTimeout(() => search.focus(), 30);
+    render();
+  });
 }
 
 // ══════════════════════════════════════════════
