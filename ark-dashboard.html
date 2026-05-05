@@ -21873,6 +21873,27 @@ function tcEditShift(empId, inId, outId, date) {
   setTimeout(() => document.getElementById('tc-edit-in')?.focus(), 100);
 }
 
+// Read a failed response body and turn it into a human-readable cause.
+// Distinguishes Cloudflare WAF blocks (HTML challenge page) and Render
+// error pages from genuine server-level errors so the user gets actionable
+// detail instead of a bare HTTP status.
+async function _describePunchError(label, resp) {
+  let body = '';
+  try { body = await resp.text(); } catch(_) {}
+  if (/cloudflare|cf-ray|attention required|just a moment/i.test(body)) {
+    return `${label} blocked by Cloudflare WAF (HTTP ${resp.status}). Add /time/* to the WAF skip rule (and include PUT/DELETE methods).`;
+  }
+  if (/render\.com|application error|502 bad gateway/i.test(body)) {
+    return `${label}: Render returned an error page (HTTP ${resp.status}). Likely a 502 / cold start — try again in a few seconds.`;
+  }
+  // Try to surface the server's own error message if it returned JSON.
+  try {
+    const j = JSON.parse(body);
+    if (j && j.error) return `${label} (HTTP ${resp.status}): ${j.error}`;
+  } catch(_) {}
+  return `${label} failed (HTTP ${resp.status})`;
+}
+
 async function tcSaveShiftEdit(empId, inId, outId) {
   const punches = DB.timePunches[empId] || [];
   const inP = inId ? punches.find(x => x.id === inId) : null;
@@ -21889,7 +21910,7 @@ async function tcSaveShiftEdit(empId, inId, outId) {
         method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ empId, time: newIn }),
       });
-      if (!r.ok) errors.push(`Clock in update failed (${r.status})`);
+      if (!r.ok) errors.push(await _describePunchError('Clock in update', r));
       else { inP.time = newIn; inP.override = true; }
     }
     if (newOut && outP) {
@@ -21897,7 +21918,7 @@ async function tcSaveShiftEdit(empId, inId, outId) {
         method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ empId, time: newOut }),
       });
-      if (!r.ok) errors.push(`Clock out update failed (${r.status})`);
+      if (!r.ok) errors.push(await _describePunchError('Clock out update', r));
       else { outP.time = newOut; outP.override = true; }
     } else if (newOut && !outP && inP) {
       // Open shift — create a new clock-out punch
@@ -21910,7 +21931,7 @@ async function tcSaveShiftEdit(empId, inId, outId) {
         if(!DB.timePunches[empId]) DB.timePunches[empId] = [];
         DB.timePunches[empId].push(newPunch);
       } else {
-        errors.push(`Clock out add failed (${resp.status})`);
+        errors.push(await _describePunchError('Clock out add', resp));
       }
     }
   } catch(e) {
