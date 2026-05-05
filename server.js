@@ -6854,6 +6854,68 @@ app.post('/clients/:id/patch', requireAuth, (req, res) => {
   }
 });
 
+// POST /production/project-alias — set or clear a project folder display
+// name without dragging the whole DB through /db/save. The "key" is either
+// a clientId (for client-backed project folders) or "name:lowercase" (for
+// synthetic free-text folders). Empty alias clears the override.
+// Body: { key: string, alias: string }
+app.post('/production/project-alias', requireAuth, (req, res) => {
+  try {
+    const key = (req.body?.key || '').toString().trim();
+    const alias = (req.body?.alias || '').toString().trim();
+    if (!key) return res.status(400).json({ error: 'key required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!db.projectAliases || typeof db.projectAliases !== 'object') db.projectAliases = {};
+    if (alias) db.projectAliases[key] = alias;
+    else delete db.projectAliases[key];
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Project alias by ${req.arkUser.userName}: ${key} → ${alias || '(cleared)'}`);
+    res.json({ success: true, key, alias });
+  } catch (e) {
+    console.error('Project alias error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /tasks/bulk-relink — re-tag a batch of tasks with a new clientId +
+// clientName. Used when converting a synthetic free-text project folder
+// into a real client-backed one (after the client is added to Client
+// Center). Body: { taskIds: [...], clientId, clientName }
+app.post('/tasks/bulk-relink', requireAuth, (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.taskIds) ? req.body.taskIds : [];
+    const clientId = (req.body?.clientId || '').toString();
+    const clientName = (req.body?.clientName || '').toString();
+    if (!ids.length) return res.status(400).json({ error: 'taskIds required (array)' });
+    if (!clientId) return res.status(400).json({ error: 'clientId required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.tasks)) return res.status(400).json({ error: 'DB has no tasks array' });
+    const idSet = new Set(ids);
+    const stamp = new Date().toISOString();
+    let relinked = 0;
+    for (const t of db.tasks) {
+      if (t && t.id && idSet.has(t.id)) {
+        t.clientId = clientId;
+        t.clientName = clientName;
+        t._updatedAt = stamp;
+        relinked++;
+      }
+    }
+    db._savedAt = stamp;
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Tasks bulk-relink by ${req.arkUser.userName}: ${relinked}/${ids.length} → ${clientId}`);
+    res.json({ success: true, relinked, requested: ids.length });
+  } catch (e) {
+    console.error('Tasks bulk-relink error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /tasks/bulk-add — append a batch of new task records to the DB
 // without going through the wholesale /db/save (which hangs on multi-MB
 // payloads and silently fails the localStorage write at the same size).
