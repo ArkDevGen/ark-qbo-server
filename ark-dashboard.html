@@ -44707,6 +44707,24 @@ function plAnalyzePatterns(currentAccounts, historyData) {
       const avgAmount = amounts.reduce((s, h) => s + h.amount, 0) / amounts.length;
       // Only flag if the average is meaningful (>$100/mo)
       if (avgAmount < 100) continue;
+
+      // Skip periodic-but-not-monthly cadences (quarterly, semi-annual, annual).
+      // e.g., Legal showing in 4 of 16 months at ~3-month gaps is a quarterly
+      // charge, not a missing recurring expense.
+      const periodIdx = {};
+      periods.forEach((p, i) => { periodIdx[p] = i; });
+      const hitIdx = amounts.filter(h => h.amount > 0)
+        .map(h => periodIdx[h.period])
+        .filter(i => i !== undefined)
+        .sort((a, b) => a - b);
+      if (hitIdx.length >= 3) {
+        const gaps = [];
+        for (let i = 1; i < hitIdx.length; i++) gaps.push(hitIdx[i] - hitIdx[i-1]);
+        const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+        const tightGaps = gaps.filter(g => Math.abs(g - avgGap) <= 1).length / gaps.length;
+        if (avgGap >= 2 && tightGaps >= 0.6) continue;
+      }
+
       const displayName = origName.split(':').pop().replace(/^\d{3,6}\s+/g, '').trim() || origName;
       flags.push({
         severity: avgAmount > 500 ? 'CRITICAL' : 'WARNING',
