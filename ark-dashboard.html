@@ -29430,7 +29430,21 @@ function tcTaskMatchesClientFilter(t, fClient) {
 
 function tcMigrateRecurrence() {
   for (const t of (DB.tasks || [])) {
-    if (t.recurring && t.recurFreq) continue;
+    // Fix the "every 20th" → bimonthly day 2 + day 0 misparse from the older
+    // bulk importer. recurBmDay2 === '0' or 0 is the smoking gun (no month
+    // has a 0th day). Re-derive: day1+day2 concatenated is the original
+    // day-of-month (e.g. '2'+'0' = 20). Falls through to the [Todoist: …]
+    // re-parse below for any other recovery.
+    if (t.recurFreq === 'bimonthly' && (t.recurBmDay2 === '0' || t.recurBmDay2 === 0)) {
+      const dom = parseInt(String(t.recurBmDay1 || '') + String(t.recurBmDay2 || ''), 10);
+      if (dom >= 1 && dom <= 31) {
+        t.recurFreq = 'monthly';
+        t.recurDayOfMonth = dom;
+        t.recurBmDay1 = null;
+        t.recurBmDay2 = null;
+      }
+    }
+    if (t.recurring && t.recurFreq && t.recurFreq !== 'bimonthly') continue;
     if (!t.notes) continue;
     const m = String(t.notes).match(/\[Todoist:\s*([^\]]+)\]/);
     if (!m) continue;
@@ -33657,7 +33671,9 @@ function tdParseMultiFiles() {
         }
 
         // "every 1st, 16th" or "every 1st, every 16th" — bimonthly
-        const multiDay = recur.match(/^(\d{1,2})(st|nd|rd|th)?,?\s*(?:every\s+)?(\d{1,2})(st|nd|rd|th)?$/);
+        // Requires a real separator (comma or whitespace) between the two
+        // numbers — without that, "20th" backtracked into 2 + 0.
+        const multiDay = recur.match(/^(\d{1,2})(st|nd|rd|th)?(?:\s*,\s*|\s+)(?:every\s+)?(\d{1,2})(st|nd|rd|th)?$/);
         if (multiDay) {
           recurFreq = 'bimonthly';
           const d1 = parseInt(multiDay[1]), d2 = parseInt(multiDay[3]);
