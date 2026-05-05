@@ -31750,21 +31750,24 @@ function tcAddProject() {
 async function tcClearMyImported(){
   if(!currentUser?.id){ alert('You need to be logged in.'); return; }
   if(!Array.isArray(DB.tasks) || !DB.tasks.length){ alert('No tasks to clear.'); return; }
-  // Match tasks the current user imported, regardless of which AM was
-  // assigned at import time. tdExecuteImport strips _import on save and
-  // tags each saved task with _importedFromTodoist + createdBy. So check
-  // either flag (plus amId for backwards compatibility with older imports).
-  const myName = `${currentUser.fname || ''} ${currentUser.lname || ''}`.trim();
-  const myUser = currentUser.userName || '';
-  const mine = DB.tasks.filter(t => {
-    if (t._deleted) return false;
-    if (t.amId === currentUser.id) return true;
-    const isImport = t._importedFromTodoist || t._import;
-    if (isImport && myName && t.createdBy === myName) return true;
-    if (isImport && myUser && t.createdBy === myUser) return true;
-    return false;
-  });
-  if(!mine.length){ alert('No tasks found for your account.'); return; }
+  const live = DB.tasks.filter(t => !t._deleted);
+  // Two buckets:
+  //   1) Tasks where I'm the AM (anything I'm responsible for)
+  //   2) Any task tagged as a Todoist import (_importedFromTodoist)
+  const byAM = live.filter(t => t.amId === currentUser.id);
+  const byImport = live.filter(t => (t._importedFromTodoist || t._import) && t.amId !== currentUser.id);
+  const mine = [...byAM, ...byImport];
+
+  // If nothing matched, surface a diagnostic so we can tell whether the
+  // tasks aren't tagged as imports OR aren't assigned to this user at all,
+  // instead of silently saying "nothing found".
+  if(!mine.length){
+    const tagged = live.filter(t => t._importedFromTodoist || t._import).length;
+    const assignedToMe = byAM.length;
+    const sampleTask = live[0] ? `\n\nSample task fields:\n  amId: ${live[0].amId || '(blank)'}\n  _importedFromTodoist: ${live[0]._importedFromTodoist || false}\n  _import: ${live[0]._import || false}\n  createdBy: ${live[0].createdBy || '(blank)'}` : '';
+    alert(`No matches.\n\n• Live tasks total: ${live.length}\n• Tagged as Todoist imports: ${tagged}\n• Assigned to you (amId === your id): ${assignedToMe}\n• Your user id: ${currentUser.id}${sampleTask}\n\nIf "Tagged as Todoist imports" is 0 but you imported recently, the import flow isn't tagging tasks. If it's nonzero but Clear didn't pick them up, report this number to claude.`);
+    return;
+  }
   const completedCount = mine.filter(t => t.status === 'completed').length;
   const openCount      = mine.length - completedCount;
   const msg = `Permanently delete ALL ${mine.length} of your tasks? (${openCount} open, ${completedCount} completed)\n\nThis cannot be undone.`;
