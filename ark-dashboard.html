@@ -31614,7 +31614,10 @@ function tcBuildProjectSidebar() {
           onclick="tcSelectSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')" title="${safeNameAttr}">
           <span class="icon">📂</span>
           <span class="label">${sname}</span>
-          <span class="tc-proj-actions"><button class="tc-proj-edit" title="Remove subfolder" onclick="event.stopPropagation();tcRemoveSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">×</button></span>
+          <span class="tc-proj-actions">
+            <button class="tc-proj-edit" title="Rename subfolder" onclick="event.stopPropagation();tcRenameSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">✏️</button>
+            <button class="tc-proj-edit" title="Remove subfolder" onclick="event.stopPropagation();tcRemoveSubfolder('${key.replace(/'/g,"\\'")}','${safeName}')">×</button>
+          </span>
           ${scount > 0 ? `<span class="count">${scount}</span>` : `<span class="count" style="opacity:.4;">0</span>`}
         </div>`;
       }
@@ -32048,6 +32051,73 @@ async function tcAddSubfolder(projKey) {
   if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
   const ok = await _tcSaveProjectSections(projKey);
   if (ok) showToast(`✓ Subfolder "${trimmed}" added`);
+}
+
+// Rename a subfolder. Re-tags every task whose section matches the old
+// name AND lives in this project's bucket, plus updates the manual
+// projectSections entry if there is one. The auto-derived sections list
+// is regenerated from t.section on next render, so renaming via this
+// flow keeps everything in sync.
+async function tcRenameSubfolder(projKey, oldName) {
+  if (!projKey || !oldName) return;
+  const newName = await arkPrompt({
+    title: 'Rename subfolder',
+    body: 'Renames the subfolder and re-tags every task in it. Other folders are unaffected.',
+    placeholder: 'New subfolder name…',
+    defaultValue: oldName,
+    okLabel: 'Save',
+  });
+  if (newName === null) return;
+  const trimmed = (newName || '').trim();
+  if (!trimmed || trimmed === oldName) return;
+
+  // Find tasks in this project's bucket with the old section.
+  const isSynthetic = projKey.startsWith('name:');
+  const synthName = isSynthetic ? projKey.slice(5).toLowerCase() : '';
+  const matchingTasks = (DB.tasks || []).filter(t => {
+    if (t._deleted) return false;
+    if (String(t.section || '').trim() !== oldName) return false;
+    if (isSynthetic) return !t.clientId && String(t.clientName || '').trim().toLowerCase() === synthName;
+    return t.clientId === projKey;
+  });
+
+  // Optimistic local update: tasks + manual sections list.
+  const stamp = new Date().toISOString();
+  for (const t of matchingTasks) {
+    t.section = trimmed;
+    t._updatedAt = stamp;
+  }
+  if (DB.projectSections && Array.isArray(DB.projectSections[projKey])) {
+    const idx = DB.projectSections[projKey].indexOf(oldName);
+    if (idx >= 0) DB.projectSections[projKey][idx] = trimmed;
+    // Dedupe in case the new name already existed.
+    DB.projectSections[projKey] = [...new Set(DB.projectSections[projKey])];
+  }
+  // If the active section was the one being renamed, follow the rename.
+  if (_tcActiveSection === oldName) _tcActiveSection = trimmed;
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  if (typeof tcRender === 'function') tcRender();
+
+  // Persist tasks via bulk-relink (re-tag with same client, new section).
+  if (matchingTasks.length) {
+    const ids = matchingTasks.map(t => t.id);
+    const clientName = isSynthetic ? projKey.slice(5) : ((DB.clients || []).find(c => c.id === projKey)?.biz || '');
+    const clientId = isSynthetic ? '' : projKey;
+    try {
+      const resp = await authFetch(ARK_SERVER + '/tasks/bulk-relink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskIds: ids, clientId, clientName, section: trimmed }),
+      });
+      const data = await _tcParseRespOrToast(resp, 'Rename subfolder');
+      if (!data || !data.success) return;
+    } catch (e) { showToast('Rename network error: ' + e.message, true, 5000); return; }
+  }
+  // Persist the manual sections array (covers empty subfolders too).
+  if (DB.projectSections && Array.isArray(DB.projectSections[projKey])) {
+    await _tcSaveProjectSections(projKey);
+  }
+  showToast(`✓ Renamed to "${trimmed}"`);
 }
 
 // Remove a manually-created subfolder. Tasks with that section are NOT
