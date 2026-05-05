@@ -6815,6 +6815,39 @@ app.post('/db/save', requireAuth, (req, res) => {
   }
 });
 
+// POST /tasks/bulk-delete — soft-delete a batch of tasks by ID without
+// uploading the entire DB. The wholesale /db/save POST chokes when the
+// dashboard payload is multi-MB; this endpoint takes just the task IDs
+// (a few KB) and stamps _deleted + _updatedAt directly in the DB file.
+// Body: { taskIds: [...], stamp?: ISO timestamp }
+app.post('/tasks/bulk-delete', requireAuth, (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.taskIds) ? req.body.taskIds : [];
+    if (!ids.length) return res.status(400).json({ error: 'taskIds required (array)' });
+    const stamp = req.body?.stamp || new Date().toISOString();
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.tasks)) return res.status(400).json({ error: 'DB has no tasks array' });
+    const idSet = new Set(ids);
+    let marked = 0;
+    for (const t of db.tasks) {
+      if (t && t.id && idSet.has(t.id) && !t._deleted) {
+        t._deleted = true;
+        t._updatedAt = stamp;
+        marked++;
+      }
+    }
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Tasks bulk-delete by ${req.arkUser.userName}: ${marked}/${ids.length} marked deleted`);
+    res.json({ success: true, marked, requested: ids.length });
+  } catch (e) {
+    console.error('Tasks bulk-delete error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────
 // SALES TAX: Seed data + legacy rate migration
 // Serves static seed files that the dashboard imports on first use

@@ -31785,38 +31785,56 @@ async function tcClearMyImported(){
     const tagged = live.filter(t => t._importedFromTodoist || t._import).length;
     const assignedToMe = byAM.length;
     const sampleTask = live[0] ? `\n\nSample task fields:\n  amId: ${live[0].amId || '(blank)'}\n  _importedFromTodoist: ${live[0]._importedFromTodoist || false}\n  _import: ${live[0]._import || false}\n  createdBy: ${live[0].createdBy || '(blank)'}` : '';
-    alert(`No matches.\n\n• Live tasks total: ${live.length}\n• Tagged as Todoist imports: ${tagged}\n• Assigned to you (amId === your id): ${assignedToMe}\n• Your user id: ${currentUser.id}${sampleTask}\n\nIf "Tagged as Todoist imports" is 0 but you imported recently, the import flow isn't tagging tasks. If it's nonzero but Clear didn't pick them up, report this number to claude.`);
+    alert(`No matches.\n\n• Live tasks total: ${live.length}\n• Tagged as Todoist imports: ${tagged}\n• Assigned to you (amId === your id): ${assignedToMe}\n• Your user id: ${currentUser.id}${sampleTask}`);
     return;
   }
   const completedCount = mine.filter(t => t.status === 'completed').length;
   const openCount      = mine.length - completedCount;
   const msg = `Permanently delete ALL ${mine.length} of your tasks? (${openCount} open, ${completedCount} completed)\n\nThis cannot be undone.`;
   if(!confirm(msg)) { console.log('[ClearMyImported] user cancelled'); return; }
-  // Stamp _updatedAt one minute in the future so any clock-skew or migration
-  // touching tasks while this is in flight can't accidentally win the merge.
   const stamp = new Date(Date.now() + 60_000).toISOString();
   mine.forEach(t => { t._deleted = true; t._updatedAt = stamp; });
   const liveAfterMark = DB.tasks.filter(t => !t._deleted).length;
-  console.log('[ClearMyImported] marked deleted — live after mark:', liveAfterMark, '(expected ~' + (live.length - mine.length) + ')');
-  const ok = await saveDB({ immediate: true });
-  console.log('[ClearMyImported] saveDB returned:', ok);
-  // Verify by re-fetching from the server. If it still shows them as live,
-  // the merge logic dropped the delete and we need to know that immediately.
+  console.log('[ClearMyImported] marked deleted locally — live after mark:', liveAfterMark);
+  // Bulk-delete via the small dedicated endpoint — sends only task IDs
+  // (~30 KB) instead of the wholesale DB save which was hanging at
+  // multi-MB upload sizes.
+  let serverOk = false;
   try {
-    const resp = await authFetch(ARK_SERVER + '/db/load');
-    if (resp.ok) {
-      const fresh = await resp.json();
-      if (fresh && Array.isArray(fresh.tasks)) {
-        const myIds = new Set(mine.map(t => t.id));
-        const stillLive = fresh.tasks.filter(t => myIds.has(t.id) && !t._deleted).length;
-        console.log('[ClearMyImported] server reports', stillLive, 'of the', mine.length, 'are still live (should be 0)');
-        if (stillLive > 0) {
-          alert(`Marked ${mine.length} tasks deleted locally and saved, but the server still shows ${stillLive} of them as live.\n\nThe server's merge logic is rejecting the delete (likely an _updatedAt mismatch). Open the Console tab — there should be log lines starting with [ClearMyImported] that pinpoint the failure.`);
-          return;
-        }
-      }
+    const ids = mine.map(t => t.id);
+    const resp = await authFetch(ARK_SERVER + '/tasks/bulk-delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ taskIds: ids, stamp }),
+    });
+    const data = await resp.json();
+    console.log('[ClearMyImported] bulk-delete response:', resp.status, data);
+    if (resp.ok && data.success) serverOk = true;
+    else {
+      alert(`Bulk-delete failed (HTTP ${resp.status}): ${data.error || 'unknown'}`);
+      // Roll back the local marks so the next attempt has a clean slate.
+      mine.forEach(t => { delete t._deleted; });
+      tcRender();
+      return;
     }
-  } catch(e) { console.warn('[ClearMyImported] verify-fetch failed:', e); }
+  } catch(e) {
+    console.warn('[ClearMyImported] bulk-delete network error:', e);
+    alert(`Bulk-delete network error: ${e.message}`);
+    mine.forEach(t => { delete t._deleted; });
+    tcRender();
+    return;
+  }
+  // Mirror the deletes into localStorage so a refresh doesn't try to
+  // re-sync the whole DB and resurrect the just-deleted tasks.
+  try {
+    const cached = JSON.parse(localStorage.getItem(ARK_DB_KEY) || '{}');
+    if (Array.isArray(cached.tasks)) {
+      const idSet = new Set(mine.map(t => t.id));
+      for (const t of cached.tasks) if (idSet.has(t.id)) { t._deleted = true; t._updatedAt = stamp; }
+      cached._savedAt = new Date().toISOString();
+      localStorage.setItem(ARK_DB_KEY, JSON.stringify(cached));
+    }
+  } catch(_) {}
   logAct(`Cleared ${mine.length} of my tasks (temp cleanup — ${openCount} open, ${completedCount} completed)`);
   tcRender();
   showToast(`✓ Deleted ${mine.length} task${mine.length===1?'':'s'}`);
