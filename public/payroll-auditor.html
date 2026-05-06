@@ -7880,18 +7880,12 @@ function _populateDropdown(selId, inputId, options, savedValue) {
     otherOpt.value = '__other__';
     otherOpt.textContent = 'Other / type-in…';
     sel.appendChild(otherOpt);
+    // Always show the dropdown in CRM mode. Pre-select saved value if it
+    // matches an option; otherwise leave on the placeholder.
     const saved = (savedValue || '').trim();
-    if (saved && options.includes(saved)) {
-        sel.value = saved;
-        input.style.display = 'none';
-        sel.style.display = '';
-    } else if (saved) {
-        sel.style.display = 'none';
-        input.style.display = '';
-    } else {
-        input.style.display = 'none';
-        sel.style.display = '';
-    }
+    if (saved && options.includes(saved)) sel.value = saved;
+    sel.style.display = '';
+    input.style.display = 'none';
 }
 (function initCrmClients() {
     try {

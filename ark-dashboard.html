@@ -26578,14 +26578,21 @@ function nhRenderQueueBanner(byState){
 // ── Tick function — runs every 60 seconds ──
 let _nhLastFiredDate = ''; // e.g. '2026-03-14'
 
+// Scheduler is paused by default — flip localStorage 'ark_nh_fax_enabled' to '1'
+// (or set window.ARK_NH_FAX_ENABLED = true) to re-enable the 5 PM auto-fax run.
+function nhSchedulerEnabled(){
+  if (window.ARK_NH_FAX_ENABLED === true) return true;
+  try { return localStorage.getItem('ark_nh_fax_enabled') === '1'; } catch(e) { return false; }
+}
+
 function nhSchedulerTick(){
   const now = new Date();
   const today = now.toISOString().slice(0,10);
   const h = now.getHours();
   const m = now.getMinutes();
 
-  // Fire at exactly 17:00 (5:00 PM), once per calendar day
-  if(h === 17 && m === 0 && _nhLastFiredDate !== today){
+  // Fire at exactly 17:00 (5:00 PM), once per calendar day — only when enabled
+  if(h === 17 && m === 0 && _nhLastFiredDate !== today && nhSchedulerEnabled()){
     _nhLastFiredDate = today;
     localStorage.setItem(NH_FAX_SCHED_KEY, now.toISOString());
     nhRunScheduler(false);
