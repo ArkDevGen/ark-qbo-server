@@ -3129,8 +3129,11 @@ input[type="checkbox"]{accent-color:var(--navy);}
           </div>
 
           <!-- Message -->
-          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
-            <label class="field-label">Message</label>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px;position:relative;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <label class="field-label">Message</label>
+              <button type="button" onclick="ccSmsToggleEmoji(event)" title="Insert emoji" style="background:none;border:1px solid var(--border);border-radius:var(--radius);width:28px;height:24px;font-size:13px;cursor:pointer;color:var(--text-d);display:inline-flex;align-items:center;justify-content:center;">😊</button>
+            </div>
             <textarea id="sms-message" class="field-input" style="flex:1;min-height:80px;resize:vertical;"
               placeholder="Type your message…" oninput="smsCharCount()"></textarea>
             <div style="font-size:var(--text-sm);color:var(--text-d);text-align:right;" id="sms-char-count">0 / 160</div>
@@ -23315,6 +23318,49 @@ function smsCharCount(){
   if(el) el.style.color = msg.length > 160 ? '#c0392b' : 'var(--text-d)';
 }
 
+// Emoji picker for the Comm Center SMS compose. Reuses _CHAT_EMOJI_GROUPS
+// so the two pickers stay in sync without duplicating the curated list.
+let _ccSmsEmojiOpen = false;
+function ccSmsToggleEmoji(ev){
+  if (ev) ev.stopPropagation();
+  if (_ccSmsEmojiOpen) { ccSmsCloseEmoji(); return; }
+  let pop = document.getElementById('sms-emoji-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'sms-emoji-pop';
+    pop.style.cssText = 'position:absolute;right:0;top:28px;width:300px;max-height:280px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;z-index:1000;font-family:"DM Sans",sans-serif;';
+    pop.onclick = (e) => e.stopPropagation();
+    pop.innerHTML = _CHAT_EMOJI_GROUPS.map(g => `
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-d);padding:6px 4px 4px;">${g.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px;">
+        ${g.items.map(e => `<button type="button" onclick="ccSmsInsertEmoji('${e.replace(/'/g, "\\'")}')" style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:5px;border-radius:6px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">${e}</button>`).join('')}
+      </div>`).join('');
+    // Anchor to the textarea's parent (which has position:relative)
+    const ta = document.getElementById('sms-message');
+    const host = ta && ta.parentElement;
+    (host || document.body).appendChild(pop);
+  }
+  pop.style.display = '';
+  _ccSmsEmojiOpen = true;
+  setTimeout(() => document.addEventListener('click', ccSmsCloseEmoji, { once: true }), 0);
+}
+function ccSmsCloseEmoji(){
+  const pop = document.getElementById('sms-emoji-pop');
+  if (pop) pop.style.display = 'none';
+  _ccSmsEmojiOpen = false;
+}
+function ccSmsInsertEmoji(e){
+  const ta = document.getElementById('sms-message');
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end   = ta.selectionEnd   ?? ta.value.length;
+  ta.value = ta.value.slice(0, start) + e + ta.value.slice(end);
+  const pos = start + e.length;
+  ta.focus();
+  try { ta.setSelectionRange(pos, pos); } catch (_) {}
+  smsCharCount();
+}
+
 function smsSwitchMode(mode){
   const clientDiv = document.getElementById('sms-mode-client');
   const teamDiv   = document.getElementById('sms-mode-team');
@@ -40035,12 +40081,17 @@ function chatTogglePanel() {
         </div>
         <div id="chat-channel-list" style="flex:1;overflow-y:auto;"></div>
         <div id="chat-thread" style="flex:1;overflow-y:auto;display:none;"></div>
-        <div id="chat-compose" style="display:none;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;">
-          <div style="display:flex;gap:8px;">
+        <div id="chat-compose" style="display:none;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;position:relative;">
+          <!-- Staged attachments — chips show selected files before send. -->
+          <div id="chat-attach-strip" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input id="chat-file-input" type="file" multiple style="display:none;" onchange="chatStageFiles(this.files);this.value='';">
+            <button id="chat-attach-btn" onclick="document.getElementById('chat-file-input').click()" title="Attach file" style="background:none;border:1px solid var(--border);border-radius:var(--radius);width:32px;height:32px;font-size:14px;cursor:pointer;color:var(--text-d);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">📎</button>
+            <button id="chat-emoji-btn" onclick="chatToggleEmoji(event)" title="Insert emoji" style="background:none;border:1px solid var(--border);border-radius:var(--radius);width:32px;height:32px;font-size:14px;cursor:pointer;color:var(--text-d);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;">😊</button>
             <input id="chat-input" type="text" placeholder="Type a message..."
-              style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text);outline:none;"
+              style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--text);outline:none;min-width:0;"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}">
-            <button onclick="chatSend()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Send</button>
+            <button onclick="chatSend()" style="background:var(--navy);color:#fff;border:none;border-radius:var(--radius);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;">Send</button>
           </div>
         </div>
       </div>`;
@@ -40246,6 +40297,17 @@ async function chatOpenChannel(channelId, name) {
   }
   if (title) title.textContent = (isSms ? '📱 ' : '') + (name || channelId);
 
+  // Attach button doesn't apply to SMS yet (Sinch MMS is a separate config).
+  // Emoji button stays available on both channel kinds.
+  const attachBtn = document.getElementById('chat-attach-btn');
+  if (attachBtn) attachBtn.style.display = isSms ? 'none' : '';
+  // Drop any staged files when switching to an SMS channel so they don't
+  // silently get sent on the next non-SMS channel open.
+  if (isSms && _chatStagedFiles.length) {
+    _chatStagedFiles = [];
+    chatRenderAttachStrip();
+  }
+
   // Load messages
   await chatRefreshMessages();
 
@@ -40354,13 +40416,16 @@ function chatRenderMessages() {
     const isDmChannel = _chatChannel !== 'general';
     // For SMS channels: outbound = right (mine), inbound = left (theirs)
     const showOnRight = isSmsChannel ? isSmsOutbound : isMine;
+    const attachmentsHtml = _chatRenderAttachments(msg.attachments, showOnRight);
+    const textHtml = msg.text ? _chatEscape(msg.text) : '';
     if (showOnRight) {
       const delBtn = (isDmChannel || isSmsChannel) ? `<button class="chat-del" onclick="chatDeleteMsg('${msg.id}')" title="Delete" style="display:none;position:absolute;left:-2px;top:50%;transform:translateY(-50%);background:var(--surface);border:1px solid var(--border);border-radius:50%;width:22px;height:22px;font-size:10px;cursor:pointer;align-items:center;justify-content:center;color:var(--red);z-index:2;">x</button>` : '';
       const bubbleBg = isSmsChannel ? '#2e7d5e' : 'var(--navy)';
       html += `<div style="display:flex;justify-content:flex-end;padding:3px 12px;position:relative;" class="chat-msg-row" onmouseover="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='flex')" onmouseout="this.querySelector('.chat-del')&&(this.querySelector('.chat-del').style.display='none')">
         ${delBtn}
         <div style="max-width:75%;background:${bubbleBg};color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:12px;line-height:1.5;overflow-wrap:anywhere;">
-          ${_chatEscape(msg.text)}
+          ${textHtml}
+          ${attachmentsHtml}
           <div style="font-size:9px;opacity:.6;text-align:right;margin-top:2px;">${time}${smsPill}</div>
         </div>
       </div>`;
@@ -40377,7 +40442,8 @@ function chatRenderMessages() {
         <div style="max-width:75%;">
           <div style="font-size:10px;font-weight:600;color:var(--text-d);margin-bottom:2px;">${_chatEscape(displayName)}</div>
           <div style="background:${isSmsChannel?'#eaf4ef':'var(--surface2)'};border:1px solid ${isSmsChannel?'#c8e6d7':'var(--border)'};border-radius:4px 14px 14px 14px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);overflow-wrap:anywhere;">
-            ${_chatEscape(msg.text)}
+            ${textHtml}
+            ${attachmentsHtml}
             <div style="font-size:9px;color:var(--text-dd);margin-top:2px;">${time}${smsPill}</div>
           </div>
         </div>
@@ -40397,27 +40463,202 @@ function _chatEscape(str) {
   return div.innerHTML;
 }
 
+// Render an attachment list for a chat bubble. Images get an inline preview
+// that opens full-size in a new tab; everything else is a download chip.
+function _chatRenderAttachments(attachments, onRight) {
+  if (!Array.isArray(attachments) || !attachments.length) return '';
+  const fmtSize = (b) => b > 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+  return `<div style="display:flex;flex-direction:column;gap:6px;margin-top:${onRight ? '6px' : '6px'};">` +
+    attachments.map(a => {
+      const safeName = _chatEscape(a.name || 'file');
+      const safeUrl = _chatEscape(a.url || '');
+      const isImg = (a.type || '').startsWith('image/');
+      if (isImg) {
+        return `<a href="${safeUrl}" target="_blank" rel="noopener" style="display:block;max-width:240px;border-radius:8px;overflow:hidden;border:1px solid ${onRight ? 'rgba(255,255,255,.2)' : 'var(--border)'};">
+          <img src="${safeUrl}" alt="${safeName}" style="display:block;width:100%;max-height:240px;object-fit:cover;">
+        </a>`;
+      }
+      const icon = (a.type || '').includes('pdf') ? '📄' : '📎';
+      const fg = onRight ? '#fff' : 'var(--text)';
+      const muted = onRight ? 'rgba(255,255,255,.7)' : 'var(--text-d)';
+      const bg = onRight ? 'rgba(255,255,255,.12)' : 'var(--surface)';
+      const border = onRight ? 'rgba(255,255,255,.2)' : 'var(--border)';
+      return `<a href="${safeUrl}" target="_blank" rel="noopener" download style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid ${border};border-radius:8px;background:${bg};color:${fg};text-decoration:none;max-width:240px;">
+        <span style="font-size:18px;flex-shrink:0;">${icon}</span>
+        <span style="display:flex;flex-direction:column;min-width:0;">
+          <span style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${safeName}</span>
+          <span style="font-size:9px;color:${muted};">${fmtSize(a.size || 0)}</span>
+        </span>
+      </a>`;
+    }).join('') + `</div>`;
+}
+
+// ── Chat attachments + emoji picker ──────────────────────────────
+// Files staged client-side until send. On send: upload via multipart to
+// /chat/upload (mirrors the help-board pattern), then POST the message
+// with the returned attachment metadata. SMS channels don't accept
+// attachments — the attach button is hidden when an SMS channel is open.
+let _chatStagedFiles = [];
+
+function chatStageFiles(fileList) {
+  if (!fileList) return;
+  // SMS channel guard — the attach button is hidden but a paste/drop could
+  // still trigger this. Reject quietly.
+  if ((_chatChannel || '').startsWith('sms~')) {
+    showToast && showToast('SMS attachments coming with MMS — not yet supported');
+    return;
+  }
+  for (const f of fileList) {
+    if (_chatStagedFiles.length >= 10) break;
+    if (f.size > 25 * 1024 * 1024) {
+      showToast && showToast(`${f.name} is over 25MB — skipped`);
+      continue;
+    }
+    _chatStagedFiles.push(f);
+  }
+  chatRenderAttachStrip();
+}
+
+function chatUnstageFile(idx) {
+  _chatStagedFiles.splice(idx, 1);
+  chatRenderAttachStrip();
+}
+
+function chatRenderAttachStrip() {
+  const strip = document.getElementById('chat-attach-strip');
+  if (!strip) return;
+  if (!_chatStagedFiles.length) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+  strip.style.display = 'flex';
+  strip.innerHTML = _chatStagedFiles.map((f, i) => {
+    const isImg = (f.type || '').startsWith('image/');
+    const icon = isImg ? '🖼️' : (f.type || '').includes('pdf') ? '📄' : '📎';
+    const sizeKb = (f.size / 1024).toFixed(0);
+    const safeName = _chatEscape(f.name);
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:3px 8px 3px 10px;font-size:11px;color:var(--text);max-width:200px;">
+      <span style="flex-shrink:0;">${icon}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${safeName} · ${sizeKb} KB">${safeName}</span>
+      <button onclick="chatUnstageFile(${i})" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-d);font-size:12px;line-height:1;padding:0 2px;flex-shrink:0;">×</button>
+    </span>`;
+  }).join('');
+}
+
+async function _chatUploadStaged() {
+  if (!_chatStagedFiles.length) return [];
+  const fd = new FormData();
+  // bucketId pre-generated so we can clean up on a failed POST if needed
+  const bucketId = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+  fd.append('bucketId', bucketId);
+  for (const f of _chatStagedFiles) fd.append('files', f);
+  const resp = await authFetch(ARK_SERVER + '/chat/upload', { method: 'POST', body: fd });
+  if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+  const data = await resp.json();
+  // Server returns relative URLs; absolute-ize so messages render across hosts
+  return (data.attachments || []).map(a => ({ ...a, url: a.url.startsWith('http') ? a.url : (ARK_SERVER + a.url) }));
+}
+
+// Curated emoji set — covers the bulk of real chat usage without pulling in
+// an external picker library. Grouped so the popover scans naturally.
+const _CHAT_EMOJI_GROUPS = [
+  { label: 'Smileys', items: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😋','😎','🤓','🧐','🤔','😐','😑','😶','🙄','😏','😬','🤥','😴','🤤','😪','😮‍💨','🥱','😵','🤯','🥳','🥺','😢','😭','😤','😡','🤬','🤧','🥵','🥶','😱','😨','🤗'] },
+  { label: 'Gestures', items: ['👍','👎','👌','✌️','🤞','🤟','🤘','👈','👉','👆','👇','👋','🤚','🖐️','✋','🤝','🙏','💪','🫡','👏','🙌','🤲','✍️','🤳'] },
+  { label: 'Hearts', items: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💖','💗','💓','💞','💕','💔','❣️','💯','✨','⭐','🌟','💫','💥','🔥'] },
+  { label: 'Work', items: ['📋','📁','📂','📄','📑','🗂️','📊','📈','📉','💼','🗒️','📝','✏️','🖊️','🖋️','📌','📎','🔗','📅','📆','🗓️','⏰','💰','💵','💳','🧾','📞','☎️','📱','💻','🖥️','📧','✉️','💬','📣'] },
+  { label: 'Reactions', items: ['🎉','🎊','🍾','🥂','🚀','✅','❌','⚠️','🆗','🆘','💡','🤷','🤦','👀','👻','🤡','🐶','🐱','☕','🍕','🍔','🍻','😴'] },
+];
+let _chatEmojiOpen = false;
+
+function chatToggleEmoji(ev) {
+  if (ev) ev.stopPropagation();
+  if (_chatEmojiOpen) { chatCloseEmoji(); return; }
+  let pop = document.getElementById('chat-emoji-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'chat-emoji-pop';
+    pop.style.cssText = 'position:absolute;bottom:54px;left:12px;width:300px;max-height:280px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;z-index:1000;font-family:"DM Sans",sans-serif;';
+    pop.onclick = (e) => e.stopPropagation();
+    pop.innerHTML = _CHAT_EMOJI_GROUPS.map(g => `
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-d);padding:6px 4px 4px;">${g.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px;">
+        ${g.items.map(e => `<button onclick="chatInsertEmoji('${e.replace(/'/g, "\\'")}')" style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:5px;border-radius:6px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">${e}</button>`).join('')}
+      </div>`).join('');
+    document.getElementById('chat-compose').appendChild(pop);
+  }
+  pop.style.display = '';
+  _chatEmojiOpen = true;
+  setTimeout(() => document.addEventListener('click', chatCloseEmoji, { once: true }), 0);
+}
+
+function chatCloseEmoji() {
+  const pop = document.getElementById('chat-emoji-pop');
+  if (pop) pop.style.display = 'none';
+  _chatEmojiOpen = false;
+}
+
+function chatInsertEmoji(e) {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  input.value = input.value.slice(0, start) + e + input.value.slice(end);
+  const pos = start + e.length;
+  input.focus();
+  try { input.setSelectionRange(pos, pos); } catch (_) {}
+}
+
 async function chatSend() {
   const input = document.getElementById('chat-input');
   if (!input) return;
   const text = input.value.trim();
-  if (!text) return;
+  if (!text && !_chatStagedFiles.length) return;
+
+  // SMS channel: block attachments at the client too, even though server
+  // rejects them — clearer error surface.
+  if ((_chatChannel || '').startsWith('sms~') && _chatStagedFiles.length) {
+    showToast && showToast('SMS attachments coming with MMS — not yet supported');
+    return;
+  }
+
+  // Snapshot then clear UI state so a slow upload doesn't block the user
+  // from continuing to type. If the upload fails we restore.
+  const stagedSnapshot = _chatStagedFiles;
+  _chatStagedFiles = [];
+  chatRenderAttachStrip();
   input.value = '';
 
+  let attachments = [];
   try {
+    if (stagedSnapshot.length) {
+      const fd = new FormData();
+      const bucketId = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+      fd.append('bucketId', bucketId);
+      for (const f of stagedSnapshot) fd.append('files', f);
+      const upResp = await authFetch(ARK_SERVER + '/chat/upload', { method: 'POST', body: fd });
+      if (!upResp.ok) throw new Error('Upload failed: ' + upResp.status);
+      const data = await upResp.json();
+      attachments = (data.attachments || []).map(a => ({ ...a, url: a.url.startsWith('http') ? a.url : (ARK_SERVER + a.url) }));
+    }
+
     const resp = await authFetch(ARK_SERVER + '/chat/messages', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channelId: _chatChannel, text }),
+      body: JSON.stringify({ channelId: _chatChannel, text, attachments }),
     });
     if (resp.ok) {
       const msg = await resp.json();
-      // Add to local messages if not already there (SSE might deliver it too)
       if (!_chatMessages.find(m => m.id === msg.id)) {
         _chatMessages.push(msg);
         chatRenderMessages();
       }
+    } else {
+      throw new Error('Send failed: ' + resp.status);
     }
-  } catch (_) {}
+  } catch (e) {
+    // Restore so the user can retry
+    _chatStagedFiles = stagedSnapshot;
+    chatRenderAttachStrip();
+    input.value = text;
+    showToast && showToast('Send failed — try again');
+    console.warn('chatSend:', e.message);
+  }
 }
 
 async function chatLoadOlder() {
