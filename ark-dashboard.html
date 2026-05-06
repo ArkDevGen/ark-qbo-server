@@ -13035,6 +13035,7 @@ function empTab(tab){
     setActive(tReport);
     renderFaxTable();
     generateNHReport();
+    if (typeof renderStateFiling === 'function') renderStateFiling();
   }
 }
 
@@ -17965,6 +17966,299 @@ function deleteEmp(id){
   if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   logAct(`New hire deleted: ${e.fname} ${e.lname}`);
   renderEmps();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  STATE FILING — per-state CSV generators (Phase 2B)
+//  Priority states: NE, IA, MO, KS, SD. Each state has its own field
+//  set + column order matching its portal's expected upload format.
+//  Other states get a "universal" CSV based on the catch-all field set.
+// ══════════════════════════════════════════════════════════════════
+
+const STATE_FILING_DEADLINES = {
+  NE: 20, IA: 15, MO: 20, KS: 20, SD: 20,
+  AL: 7,  ME: 7,  GA: 10, VT: 10,
+  CT: 14, MA: 14, RI: 14, WV: 14,
+  MS: 15,
+};
+
+function _fmtDateMDY(iso){ if(!iso) return ''; const p=iso.split('-'); return p.length===3?`${p[1]}/${p[2]}/${p[0]}`:iso; }
+function _fmtSsn(s){ const d=(s||'').replace(/\D/g,''); return d.length===9?`${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}`:s||''; }
+function _fmtFein(s){ const d=(s||'').replace(/\D/g,''); return d.length===9?`${d.slice(0,2)}-${d.slice(2)}`:s||''; }
+function _fmtSoc(s){ const d=(s||'').replace(/\D/g,''); return d.length===6?`${d.slice(0,2)}-${d.slice(2)}`:s||''; }
+function _employerStreet(c){ return c?.addrStreet||c?.street||''; }
+function _employerCity(c){   return c?.addrCity||c?.city||''; }
+function _employerState(c){  return c?.addrState||c?.state||''; }
+function _employerZip(c){    return c?.addrZip||c?.zip||''; }
+
+const STATE_FILING_SCHEMAS = {
+  NE: {
+    label: 'Nebraska',
+    portal: 'https://ne-newhire.com',
+    columns: [
+      ['Employer FEIN',     (e,c)=>_fmtFein(c?.ein)],
+      ['Employer Name',     (e,c)=>c?.biz||''],
+      ['Employer Address',  (e,c)=>_employerStreet(c)],
+      ['Employer City',     (e,c)=>_employerCity(c)],
+      ['Employer State',    (e,c)=>_employerState(c)],
+      ['Employer ZIP',      (e,c)=>_employerZip(c)],
+      ['Employee SSN',      (e)=>_fmtSsn(e.ssn)],
+      ['Employee Last',     (e)=>e.lname||''],
+      ['Employee First',    (e)=>e.fname||''],
+      ['Employee Middle',   (e)=>e.mname||''],
+      ['Employee Address',  (e)=>e.street||''],
+      ['Employee City',     (e)=>e.city||''],
+      ['Employee State',    (e)=>e.state||''],
+      ['Employee ZIP',      (e)=>e.zip||''],
+      ['Date of Hire',      (e)=>_fmtDateMDY(e.hiredate)],
+      ['State of Hire',     (e)=>e.workState||'Nebraska'],
+    ],
+  },
+  IA: {
+    label: 'Iowa',
+    portal: 'https://secureapp.dhs.state.ia.us/epay/',
+    columns: [
+      ['Employer FEIN',                (e,c)=>_fmtFein(c?.ein)],
+      ['Employer Name',                (e,c)=>c?.biz||''],
+      ['Employer Address',             (e,c)=>_employerStreet(c)],
+      ['Employer City',                (e,c)=>_employerCity(c)],
+      ['Employer State',               (e,c)=>_employerState(c)],
+      ['Employer ZIP',                 (e,c)=>_employerZip(c)],
+      ['Employee SSN',                 (e)=>_fmtSsn(e.ssn)],
+      ['Employee Last',                (e)=>e.lname||''],
+      ['Employee First',               (e)=>e.fname||''],
+      ['Employee Middle',              (e)=>e.mname||''],
+      ['Employee Address',             (e)=>e.street||''],
+      ['Employee City',                (e)=>e.city||''],
+      ['Employee State',               (e)=>e.state||''],
+      ['Employee ZIP',                 (e)=>e.zip||''],
+      ['Date of Hire',                 (e)=>_fmtDateMDY(e.hiredate)],
+      ['Date of Birth',                (e)=>_fmtDateMDY(e.dob)],
+      ['State of Hire',                (e)=>e.workState||'Iowa'],
+      ['Dependent Health Insurance',   (e)=> (e.healthInsuranceAvailable==='yes'?'Y':e.healthInsuranceAvailable==='no'?'N':'')],
+      ['Health Eligibility Date',      (e)=>_fmtDateMDY(e.healthEligibilityDate)],
+    ],
+  },
+  MO: {
+    label: 'Missouri',
+    portal: 'https://www.missouriemployer.dss.mo.gov/NewHireInfo.aspx',
+    columns: [
+      ['Employer FEIN',     (e,c)=>_fmtFein(c?.ein)],
+      ['Employer Name',     (e,c)=>c?.biz||''],
+      ['Employer Address',  (e,c)=>_employerStreet(c)],
+      ['Employer City',     (e,c)=>_employerCity(c)],
+      ['Employer State',    (e,c)=>_employerState(c)],
+      ['Employer ZIP',      (e,c)=>_employerZip(c)],
+      ['Employee SSN',      (e)=>_fmtSsn(e.ssn)],
+      ['Employee Last',     (e)=>e.lname||''],
+      ['Employee First',    (e)=>e.fname||''],
+      ['Employee Middle',   (e)=>e.mname||''],
+      ['Employee Address',  (e)=>e.street||''],
+      ['Employee City',     (e)=>e.city||''],
+      ['Employee State',    (e)=>e.state||''],
+      ['Employee ZIP',      (e)=>e.zip||''],
+      ['Date of Hire',      (e)=>_fmtDateMDY(e.hiredate)],
+    ],
+  },
+  KS: {
+    label: 'Kansas',
+    portal: 'https://www.dol.ks.gov/employers/employer-services/new-hire-reporting',
+    columns: [
+      ['Employer FEIN',                  (e,c)=>_fmtFein(c?.ein)],
+      ['Employer Name',                  (e,c)=>c?.biz||''],
+      ['Employer Address',               (e,c)=>_employerStreet(c)],
+      ['Employer City',                  (e,c)=>_employerCity(c)],
+      ['Employer State',                 (e,c)=>_employerState(c)],
+      ['Employer ZIP',                   (e,c)=>_employerZip(c)],
+      ['Income Withholding Address',     (e,c)=>c?.iwoAddress||_employerStreet(c)],
+      ['Employee SSN',                   (e)=>_fmtSsn(e.ssn)],
+      ['Employee Last',                  (e)=>e.lname||''],
+      ['Employee First',                 (e)=>e.fname||''],
+      ['Employee Middle',                (e)=>e.mname||''],
+      ['Employee Address',               (e)=>e.street||''],
+      ['Employee City',                  (e)=>e.city||''],
+      ['Employee State',                 (e)=>e.state||''],
+      ['Employee ZIP',                   (e)=>e.zip||''],
+      ['Date of Hire',                   (e)=>_fmtDateMDY(e.hiredate)],
+      ['State of Hire',                  (e)=>e.workState||'Kansas'],
+    ],
+  },
+  SD: {
+    label: 'South Dakota',
+    portal: 'https://dlr.sd.gov/ra/new_hire_reporting/default.aspx',
+    columns: [
+      ['Employer FEIN',     (e,c)=>_fmtFein(c?.ein)],
+      ['Employer Name',     (e,c)=>c?.biz||''],
+      ['Employer Address',  (e,c)=>_employerStreet(c)],
+      ['Employer City',     (e,c)=>_employerCity(c)],
+      ['Employer State',    (e,c)=>_employerState(c)],
+      ['Employer ZIP',      (e,c)=>_employerZip(c)],
+      ['Employee SSN',      (e)=>_fmtSsn(e.ssn)],
+      ['Employee Last',     (e)=>e.lname||''],
+      ['Employee First',    (e)=>e.fname||''],
+      ['Employee Middle',   (e)=>e.mname||''],
+      ['Employee Address',  (e)=>e.street||''],
+      ['Employee City',     (e)=>e.city||''],
+      ['Employee State',    (e)=>e.state||''],
+      ['Employee ZIP',      (e)=>e.zip||''],
+      ['Date of Hire',      (e)=>_fmtDateMDY(e.hiredate)],
+    ],
+  },
+};
+
+const STATE_FILING_UNIVERSAL = {
+  label: 'Universal (other states)',
+  portal: '',
+  columns: [
+    ['Employer FEIN',                (e,c)=>_fmtFein(c?.ein)],
+    ['Employer Name',                (e,c)=>c?.biz||''],
+    ['Employer Address',             (e,c)=>_employerStreet(c)],
+    ['Employer City',                (e,c)=>_employerCity(c)],
+    ['Employer State',               (e,c)=>_employerState(c)],
+    ['Employer ZIP',                 (e,c)=>_employerZip(c)],
+    ['Employer Phone',               (e,c)=>c?.phone||''],
+    ['Employee SSN',                 (e)=>_fmtSsn(e.ssn)],
+    ['Employee Last',                (e)=>e.lname||''],
+    ['Employee First',               (e)=>e.fname||''],
+    ['Employee Middle',              (e)=>e.mname||''],
+    ['Employee Address',             (e)=>e.street||''],
+    ['Employee City',                (e)=>e.city||''],
+    ['Employee State',               (e)=>e.state||''],
+    ['Employee ZIP',                 (e)=>e.zip||''],
+    ['Date of Hire',                 (e)=>_fmtDateMDY(e.hiredate)],
+    ['Date of Birth',                (e)=>_fmtDateMDY(e.dob)],
+    ['State of Hire',                (e)=>e.workState||''],
+    ['Job Title',                    (e)=>e.jobTitle||''],
+    ['SOC Code',                     (e)=>_fmtSoc(e.socCode)],
+    ['Pay Rate',                     (e)=>e.payRate||''],
+    ['Pay Frequency',                (e)=>e.payFrequency||''],
+    ['Hire Type',                    (e)=>e.hireType||'employee'],
+    ['Dependent Health Insurance',   (e)=> (e.healthInsuranceAvailable==='yes'?'Y':e.healthInsuranceAvailable==='no'?'N':'')],
+    ['Health Eligibility Date',      (e)=>_fmtDateMDY(e.healthEligibilityDate)],
+    ['Mother Maiden Name (PR only)', (e)=>e.momMaiden||''],
+    ['Prior Separation Date',        (e)=>_fmtDateMDY(e.priorSeparationDate)],
+  ],
+};
+
+const _STATE_NAME_TO_CODE = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY','District of Columbia':'DC','Puerto Rico':'PR','Virgin Islands':'VI'
+};
+function stateCode(name){
+  if (!name) return '';
+  const n = name.trim();
+  if (n.length === 2) return n.toUpperCase();
+  return _STATE_NAME_TO_CODE[n] || '';
+}
+
+function _filingPendingEmployees(){
+  return (DB.employees||[]).filter(e => e && !e._deleted && e.fname && !e.reportPrinted);
+}
+
+function renderStateFiling(){
+  const body = document.getElementById('state-filing-body');
+  if (!body) return;
+  const pending = _filingPendingEmployees();
+  if (!pending.length) {
+    body.innerHTML = `<div style="text-align:center;color:var(--text-d);font-size:13px;padding:20px 0;">✓ No unfiled new hires. Add one or import a census to see filings here.</div>`;
+    return;
+  }
+  const groups = {};
+  pending.forEach(e => {
+    const code = stateCode(e.workState || e.state || '') || '??';
+    if (!groups[code]) groups[code] = [];
+    groups[code].push(e);
+  });
+  const priorityOrder = ['NE','IA','MO','KS','SD'];
+  const priorityHtml = priorityOrder.map(code => {
+    const list = groups[code] || [];
+    const schema = STATE_FILING_SCHEMAS[code];
+    const cnt = list.length;
+    const deadline = STATE_FILING_DEADLINES[code] || 20;
+    return `<div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:${cnt?'var(--surface)':'var(--surface2)'};">
+      <div style="font-size:22px;width:40px;text-align:center;">${cnt>0?'📤':'📭'}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:700;color:var(--text);">${schema.label} <span style="font-size:11px;font-weight:600;color:var(--text-d);">· ${deadline}-day deadline</span></div>
+        <div style="font-size:12px;color:var(--text-d);margin-top:2px;">${cnt===0?'No pending hires.':`${cnt} pending hire${cnt===1?'':'s'} ready to file.`} ${schema.portal?`<a href="${schema.portal}" target="_blank" rel="noopener" style="color:var(--accent);">${schema.portal}</a>`:''}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" ${cnt===0?'disabled':''} onclick="downloadStateFiling('${code}')">⬇ ${schema.label} CSV</button>
+      <button class="btn btn-ghost btn-sm" ${cnt===0?'disabled':''} onclick="markStateFiled('${code}')" title="Mark all in this group as filed">✓ Mark filed</button>
+    </div>`;
+  }).join('');
+  const otherCodes = Object.keys(groups).filter(c => !priorityOrder.includes(c));
+  const otherCount = otherCodes.reduce((s,c)=>s+groups[c].length,0);
+  const otherSummary = otherCodes.length
+    ? otherCodes.map(c => `${c} (${groups[c].length})`).join(', ')
+    : 'No pending hires in other states.';
+  const otherHtml = `<div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px dashed var(--border);border-radius:8px;background:var(--surface2);">
+    <div style="font-size:22px;width:40px;text-align:center;">${otherCount>0?'🌎':'📭'}</div>
+    <div style="flex:1;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);">Other states <span style="font-size:11px;font-weight:600;color:var(--text-d);">· universal CSV (manual portal upload)</span></div>
+      <div style="font-size:12px;color:var(--text-d);margin-top:2px;">${otherSummary}</div>
+    </div>
+    <button class="btn btn-primary btn-sm" ${otherCount===0?'disabled':''} onclick="downloadStateFiling('__other__')">⬇ Universal CSV</button>
+  </div>`;
+  body.innerHTML = priorityHtml + otherHtml;
+}
+
+function _csvEscape(v){ const s=String(v==null?'':v); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
+
+function _buildFilingCsv(employees, schema){
+  const headers = schema.columns.map(c => c[0]);
+  const lines = [headers.join(',')];
+  employees.forEach(e => {
+    const client = (DB.clients||[]).find(c => c.id === e.clientId) || null;
+    const row = schema.columns.map(c => _csvEscape(c[1](e, client)));
+    lines.push(row.join(','));
+  });
+  return lines.join('\n');
+}
+
+function downloadStateFiling(code){
+  const pending = _filingPendingEmployees();
+  let employees, schema, fileTag;
+  if (code === '__other__') {
+    const priorityCodes = new Set(['NE','IA','MO','KS','SD']);
+    employees = pending.filter(e => !priorityCodes.has(stateCode(e.workState || e.state || '')));
+    schema = STATE_FILING_UNIVERSAL;
+    fileTag = 'universal';
+  } else {
+    employees = pending.filter(e => stateCode(e.workState || e.state || '') === code);
+    schema = STATE_FILING_SCHEMAS[code];
+    fileTag = code.toLowerCase();
+  }
+  if (!employees.length || !schema) {
+    showToast && showToast('No employees to file for ' + code);
+    return;
+  }
+  const csv = _buildFilingCsv(employees, schema);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `nh-filing-${fileTag}-${stamp}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  logAct(`Filing CSV downloaded for ${schema.label}: ${employees.length} employee${employees.length===1?'':'s'}`);
+  showToast && showToast(`✓ Downloaded ${employees.length} for ${schema.label}`);
+}
+
+function markStateFiled(code){
+  const pending = _filingPendingEmployees();
+  const matches = pending.filter(e => stateCode(e.workState || e.state || '') === code);
+  if (!matches.length) return;
+  if (!confirm(`Mark ${matches.length} ${code} hire${matches.length===1?'':'s'} as filed? This sets reportPrinted=true and removes them from the pending queue.`)) return;
+  const today = new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'});
+  matches.forEach(e => {
+    e.reportPrinted     = true;
+    e.reportPrintedDate = today;
+    e.reportFaxMethod   = 'manual-state-csv';
+    e.reportFaxedAt     = new Date().toISOString();
+    e._updatedAt        = new Date().toISOString();
+  });
+  logAct(`State filing marked complete: ${matches.length} ${code} hire(s)`);
+  saveDB();
+  renderStateFiling();
+  if (typeof generateNHReport === 'function') generateNHReport();
 }
 
 // ══════════════════════════════════════════════════════════════════
