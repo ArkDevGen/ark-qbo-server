@@ -3052,6 +3052,11 @@ app.get('/payroll-admin', (req, res) => {
   res.sendFile(__dirname + '/public/payroll-admin.html');
 });
 
+// ── Payroll Auditor (embedded in payroll center) ─────────────────
+app.get('/payroll-auditor', (req, res) => {
+  res.sendFile(__dirname + '/public/payroll-auditor.html');
+});
+
 // Get all payroll data (admin only — requires valid CRM session)
 app.get('/payroll/admin/data', requireAuth, (req, res) => {
   // Strip sensitive fields like passwords and session tokens before sending
