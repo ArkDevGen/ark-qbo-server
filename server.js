@@ -8369,8 +8369,16 @@ app.get('/chat/messages', requireAuth, (req, res) => {
 // Send a message (internal chat OR SMS — routed by channel type)
 app.post('/chat/messages', requireAuth, async (req, res) => {
   try {
-    const { channelId, text } = req.body;
-    if (!channelId || !text?.trim()) return res.status(400).json({ error: 'channelId and text required' });
+    const { channelId, text, attachments } = req.body;
+    // Allow empty text when there are attachments (image/file-only messages)
+    const cleanAttachments = Array.isArray(attachments)
+      ? attachments
+          .filter(a => a && a.url && a.name)
+          .map(a => ({ name: String(a.name).slice(0, 200), url: String(a.url), type: String(a.type || ''), size: Number(a.size) || 0 }))
+          .slice(0, 10)
+      : [];
+    if (!channelId) return res.status(400).json({ error: 'channelId required' });
+    if (!text?.trim() && !cleanAttachments.length) return res.status(400).json({ error: 'text or attachments required' });
 
     const userId = req.arkUser.userId;
     const senderName = req.arkUser.user ? `${req.arkUser.user.fname || ''} ${req.arkUser.user.lname || ''}`.trim() : (req.arkUser.userName || 'Unknown');
@@ -8382,6 +8390,12 @@ app.post('/chat/messages', requireAuth, async (req, res) => {
 
     // ── SMS channel: send via Sinch, then save as chat message ──
     if (channelId.startsWith('sms~')) {
+      // SMS doesn't carry chat attachments — Sinch MMS is a separate config.
+      // Reject early so the user knows the file wasn't sent rather than
+      // silently dropping it.
+      if (cleanAttachments.length) {
+        return res.status(400).json({ error: 'SMS does not support attachments yet (MMS config pending)' });
+      }
       const toPhone = channelId.replace('sms~', '');
       const digits = toPhone.replace(/\D/g, '');
       const toE164 = digits.startsWith('1') ? '+' + digits : '+1' + digits;
@@ -8431,7 +8445,8 @@ app.post('/chat/messages', requireAuth, async (req, res) => {
     // ── Regular internal chat message ──
     const msg = {
       id: crypto.randomUUID(), channelId, senderId: userId, senderName,
-      text: text.trim(), createdAt: new Date().toISOString(),
+      text: (text || '').trim(), createdAt: new Date().toISOString(),
+      ...(cleanAttachments.length ? { attachments: cleanAttachments } : {}),
     };
 
     const messages = _loadChatMessages();
@@ -8827,6 +8842,59 @@ app.get('/help/attachment/:postId/:filename', requireAuth, (req, res) => {
     const safeName = req.params.filename.replace(/[^a-zA-Z0-9._-]/g, '');
     const filePath = path.join(HELP_ATTACH_DIR, safePostId, safeName);
     if (!filePath.startsWith(HELP_ATTACH_DIR)) return res.status(403).end(); // path traversal guard
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+    res.sendFile(filePath);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// CHAT ATTACHMENTS — files uploaded for team-chat / DM messages.
+// Mirrors the help-attachment pattern so we don't reinvent storage:
+// multer memory upload → write to per-bucket dir → return metadata
+// the client embeds on the message object. Bucket id is generated
+// client-side before send so the upload and the message stay linked.
+// SMS channels (channelId starts with 'sms~') intentionally DON'T
+// support attachments here — Sinch MMS is a separate config.
+// ─────────────────────────────────────────────────────────────────
+const CHAT_ATTACH_DIR = path.join(DATA_DIR, 'chat-attachments');
+fs.mkdirSync(CHAT_ATTACH_DIR, { recursive: true });
+
+const chatUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 10 }, // 25MB per file, 10 files max
+});
+
+app.post('/chat/upload', requireAuth, chatUpload.array('files', 10), (req, res) => {
+  try {
+    const bucketId = (req.body.bucketId || crypto.randomUUID()).replace(/[^a-zA-Z0-9-]/g, '');
+    if (!bucketId) return res.status(400).json({ error: 'bucketId required' });
+    const dir = path.join(CHAT_ATTACH_DIR, bucketId);
+    fs.mkdirSync(dir, { recursive: true });
+    const saved = [];
+    for (const f of (req.files || [])) {
+      const safeName = Date.now() + '-' + f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+      fs.writeFileSync(path.join(dir, safeName), f.buffer);
+      saved.push({
+        name: f.originalname,
+        savedAs: safeName,
+        size: f.size,
+        type: f.mimetype,
+        url: `/chat/attachment/${bucketId}/${safeName}`,
+      });
+    }
+    res.json({ ok: true, bucketId, attachments: saved });
+  } catch (e) {
+    console.error('Chat upload error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/chat/attachment/:bucketId/:filename', requireAuth, (req, res) => {
+  try {
+    const safeBucket = req.params.bucketId.replace(/[^a-zA-Z0-9-]/g, '');
+    const safeName = req.params.filename.replace(/[^a-zA-Z0-9._-]/g, '');
+    const filePath = path.join(CHAT_ATTACH_DIR, safeBucket, safeName);
+    if (!filePath.startsWith(CHAT_ATTACH_DIR)) return res.status(403).end();
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
     res.sendFile(filePath);
   } catch (e) { res.status(500).json({ error: e.message }); }
