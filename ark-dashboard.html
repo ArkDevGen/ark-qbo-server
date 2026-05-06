@@ -17697,15 +17697,46 @@ function saveEmp(){
     wotc: wotcCapture(hiredate),
   };
   obj._updatedAt = new Date().toISOString();
+  let prevEligible = false;
   if(DB._editEmp){
-    const i=DB.employees.findIndex(x=>x.id===DB._editEmp);DB.employees[i]=obj;
+    const i=DB.employees.findIndex(x=>x.id===DB._editEmp);
+    prevEligible = !!(DB.employees[i] && DB.employees[i].wotc && DB.employees[i].wotc.eligible);
+    DB.employees[i]=obj;
     logAct(`New hire updated: ${fname} ${lname}`);
   } else {
     DB.employees.push(obj);
     logAct(`New hire added: ${fname} ${lname}`);
   }
+  // Fire a one-time notification when an employee becomes WOTC-eligible.
+  // Brand-new eligible hires always notify; edits notify only on flip.
+  if (obj.wotc && obj.wotc.eligible && !prevEligible) {
+    try { notifyWotcEligible(obj); } catch(e) { console.warn('WOTC notify error:', e); }
+  }
   closeModal('modal-emp');renderEmps();
 }
+
+// Routes a WOTC-eligible notification to the client's Payroll Manager
+// (with Account Manager fallback). If PM is '__inhouse__' we skip — the
+// client runs their own payroll and there's no internal owner to notify.
+function notifyWotcEligible(emp){
+  if (!emp || !emp.clientId) return;
+  const client = (DB.clients||[]).find(c => c.id === emp.clientId);
+  if (!client) return;
+  const pm = (typeof getPayrollManager === 'function') ? getPayrollManager(client) : null;
+  if (!pm || pm.inhouse || !pm.id || pm.id === '__inhouse__') return;
+  if (typeof notifCreate !== 'function') return;
+  const empName = `${emp.fname||''} ${emp.lname||''}`.trim();
+  const groups = (emp.wotc.targetGroups || []).join(', ');
+  const dl = emp.wotc.deadline8850 ? ` Form 8850 deadline: ${emp.wotc.deadline8850}.` : '';
+  notifCreate({
+    type: 'info',
+    targetAm: pm.id,
+    title: `🎯 WOTC eligible — ${empName}`,
+    body: `New hire at ${client.biz} qualifies for WOTC under: ${groups || 'a target group'}.${dl}`,
+    priority: 'medium',
+  });
+}
+
 function deleteEmp(id){
   const e=DB.employees.find(x=>x.id===id);if(!e)return;
   if(!confirm(`Delete new hire ${e.fname} ${e.lname}?`))return;
