@@ -6902,6 +6902,64 @@ app.post('/employees/bulk-add', requireAuth, (req, res) => {
   }
 });
 
+// PATCH /employees/:id/wotc — update the WOTC pre-screening payload on a
+// single employee without going through /db/save. Body: { wotc: {...} }.
+// Used by the New Hire modal (initial screen) and the WOTC Center (when a
+// reviewer marks the form as 'filed' or 'certified').
+const _WOTC_FIELDS = new Set([
+  'dob','answers','eligible','targetGroups','screenedAt','screenedBy',
+  'deadline8850','formStatus','filedAt','filedBy','certifiedAt','certificationNumber','notes',
+]);
+app.patch('/employees/:id/wotc', requireAuth, (req, res) => {
+  try {
+    const id = req.params.id;
+    const wotc = (req.body && req.body.wotc) || null;
+    if (!id) return res.status(400).json({ error: 'employee id required' });
+    if (!wotc || typeof wotc !== 'object') return res.status(400).json({ error: 'wotc payload required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.employees)) return res.status(404).json({ error: 'DB has no employees array' });
+    const emp = db.employees.find(e => e && e.id === id);
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const cur = emp.wotc || {};
+    for (const [k, v] of Object.entries(wotc)) {
+      if (_WOTC_FIELDS.has(k)) cur[k] = v;
+    }
+    emp.wotc = cur;
+    emp._updatedAt = new Date().toISOString();
+    db._savedAt = emp._updatedAt;
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    res.json({ success: true, employee: emp });
+  } catch (e) {
+    console.error('WOTC patch error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /employees/wotc-eligible — list all employees flagged eligible. Used
+// by the WOTC Center to render a per-client filterable view.
+app.get('/employees/wotc-eligible', requireAuth, (req, res) => {
+  try {
+    if (!fs.existsSync(ARK_DB_FILE)) return res.json({ employees: [] });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    const employees = (db.employees || [])
+      .filter(e => e && !e._deleted && e.wotc && e.wotc.eligible === true)
+      .map(e => ({
+        id: e.id,
+        fname: e.fname || '',
+        lname: e.lname || '',
+        clientId: e.clientId || '',
+        hiredate: e.hiredate || '',
+        wotc: e.wotc || null,
+      }));
+    res.json({ success: true, employees, count: employees.length });
+  } catch (e) {
+    console.error('WOTC list error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PATCH /clients/:id — apply a partial update to a single client without
 // uploading the whole DB. Same motivation as /tasks/bulk-delete: the
 // wholesale /db/save POST hangs when the payload is multi-MB. Body:
