@@ -3570,7 +3570,6 @@ input[type="checkbox"]{accent-color:var(--navy);}
         <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="_tcClearActiveSavedView();tcRender()">
           <option value="">All Team</option>
         </select>
-        <button class="btn btn-ghost btn-sm" onclick="tcCreateSavedViewPrompt()" title="Save current filters as a view, pinned to the sidebar." style="padding:6px 10px;font-size:11.5px;">💾 Save view</button>
         <select id="tc-group-by" class="field-input" style="width:140px;" onchange="this.dataset.userPicked='1';tcRender()">
           <option value="due">Group by Due Date</option>
           <option value="section">Group by Section</option>
@@ -3579,6 +3578,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <option value="category">Group by Category</option>
           <option value="none">No Grouping</option>
         </select>
+        <button class="btn btn-ghost btn-sm" onclick="tcCreateSavedViewPrompt()" title="Save current filters as a view, pinned to the sidebar." style="padding:6px 10px;font-size:11.5px;">💾 Save view</button>
       </div>
     </div>
 
@@ -3628,18 +3628,20 @@ input[type="checkbox"]{accent-color:var(--navy);}
 
     <!-- View toggle -->
     <div id="tc-view-toggle" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
-      <div style="display:flex;gap:0;">
-        <button class="tc-vtoggle active" data-view="list" onclick="tcSwitchView('list')">☰ List</button>
-        <button class="tc-vtoggle" data-view="board" onclick="tcSwitchView('board')">▦ Board</button>
-        <button class="tc-vtoggle" data-view="calendar" onclick="tcSwitchView('calendar')">📅 Calendar</button>
-      </div>
-      <!-- Calendar-week navigator. Visible when the active view is showing
-           a Mon-Sun week (Upcoming filter or any project view in Board mode).
-           Hidden by default — tcRender flips display based on context. -->
-      <div id="tc-week-nav" style="display:none;align-items:center;gap:6px;">
-        <button onclick="tcWeekPrev()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Previous week">◀</button>
-        <span id="tc-week-label" onclick="tcWeekToday()" style="font-size:12px;font-weight:600;color:var(--text);min-width:200px;text-align:center;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);" title="Click to jump to this week"></span>
-        <button onclick="tcWeekNext()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Next week">▶</button>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="display:flex;gap:0;">
+          <button class="tc-vtoggle active" data-view="list" onclick="tcSwitchView('list')">☰ List</button>
+          <button class="tc-vtoggle" data-view="board" onclick="tcSwitchView('board')">▦ Board</button>
+          <button class="tc-vtoggle" data-view="calendar" onclick="tcSwitchView('calendar')">📅 Calendar</button>
+        </div>
+        <!-- Calendar-week navigator. Visible when the active view is showing
+             a Mon-Sun week (Upcoming filter or any project view in Board mode).
+             Hidden by default — tcRender flips display based on context. -->
+        <div id="tc-week-nav" style="display:none;align-items:center;gap:6px;">
+          <button onclick="tcWeekPrev()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Previous week">◀</button>
+          <span id="tc-week-label" onclick="tcWeekToday()" style="font-size:12px;font-weight:600;color:var(--text);min-width:200px;text-align:center;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);" title="Click to jump to this week"></span>
+          <button onclick="tcWeekNext()" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:13px;" title="Next week">▶</button>
+        </div>
       </div>
       <div id="tc-smart-banner"></div>
     </div>
@@ -35381,18 +35383,38 @@ function tcRenderCalendar(container, list, today, todayStr) {
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  // Build tasks by date
+  // Calendar math
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+
+  // Visible window of the calendar grid (6 rows × 7 cols = 42 days, starting
+  // `firstDay` days before the 1st). Used to project recurring occurrences
+  // onto each cell — without this, recurring tasks only appeared on their
+  // single stored dueDate and looked missing on every later week.
+  const _toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const winStartD = new Date(year, month, 1 - firstDay);
+  const winEndD   = new Date(year, month, 1 - firstDay + 41);
+  const windowStart = _toDateStr(winStartD);
+  const windowEnd   = _toDateStr(winEndD);
+
+  // Build tasks by date — real occurrence on its dueDate, plus virtual
+  // copies for every projected occurrence of a recurring task that falls
+  // inside the visible window. Mirrors the board view's projection logic.
   const tasksByDate = {};
   list.forEach(t => {
     if (!t.dueDate) return;
     if (!tasksByDate[t.dueDate]) tasksByDate[t.dueDate] = [];
     tasksByDate[t.dueDate].push(t);
+    if (t.recurring && t.recurFreq && t.status !== 'completed') {
+      const occs = tcOccurrencesInRange(t, windowStart, windowEnd);
+      for (const d of occs) {
+        if (d === t.dueDate) continue; // already added as the real task
+        if (!tasksByDate[d]) tasksByDate[d] = [];
+        tasksByDate[d].push({ ...t, dueDate: d, _virtualRecur: true });
+      }
+    }
   });
-
-  // Calendar math
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrev = new Date(year, month, 0).getDate();
 
   let html = `<div class="tc-cal-nav">
     <button onclick="_tcCalMonth--;if(_tcCalMonth<0){_tcCalMonth=11;_tcCalYear--;}tcRender();">◀</button>
@@ -35463,8 +35485,19 @@ function tcRenderCalendar(container, list, today, todayStr) {
 }
 
 function tcCalShowDay(dateStr) {
-  // Show overlay with all tasks for a specific day
-  const tasks = (DB.tasks||[]).filter(t => !_taskHiddenForMe(t) && t.dueDate === dateStr && t.status !== 'completed');
+  // Show overlay with all tasks for a specific day. Mirror tcRenderCalendar:
+  // include the real task on its dueDate plus any recurring task whose
+  // pattern lands on this date.
+  const candidates = (DB.tasks||[]).filter(t => !_taskHiddenForMe(t) && t.status !== 'completed' && t.dueDate);
+  const tasks = [];
+  for (const t of candidates) {
+    if (t.dueDate === dateStr) {
+      tasks.push(t);
+    } else if (t.recurring && t.recurFreq) {
+      const occ = tcOccurrencesInRange(t, dateStr, dateStr);
+      if (occ.length) tasks.push({ ...t, dueDate: dateStr, _virtualRecur: true });
+    }
+  }
   if (!tasks.length) return;
   const d = new Date(dateStr + 'T12:00:00');
   const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
