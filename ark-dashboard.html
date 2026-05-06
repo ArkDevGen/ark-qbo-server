@@ -30368,29 +30368,39 @@ function tcSaveTask(){
 // re-render scroll so the anchor sits at the same y. Pass the toggled task
 // id so we don't pick that card as the anchor (it may disappear).
 async function _tcRenderKeepScroll(skipTaskId) {
+  // Board and calendar views nest task cards inside columns/grids that have
+  // their own overflow:auto. Re-render resets the inner scroll to 0, which
+  // moves the anchor's viewport position even though window.scrollY didn't
+  // change — anchoring there would mis-correct the window scroll. List view
+  // has no inner scroller, so anchor preservation is safe there.
+  const viewMode = sessionStorage.getItem('tc_view_mode') || 'list';
+  const useAnchor = (viewMode === 'list');
+
   let anchorTaskId = null, anchorTopBefore = 0;
-  const cards = document.querySelectorAll('#view-tasks [id^="tc-card-"]');
-  // Prefer a card visible in the viewport. Fall back to the nearest card
-  // above/below if the toggled card is the only one in view.
-  for (const c of cards) {
-    if (skipTaskId && c.id === `tc-card-${skipTaskId}`) continue;
-    const r = c.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < window.innerHeight) {
-      anchorTaskId = c.id.slice('tc-card-'.length);
-      anchorTopBefore = r.top;
-      break;
-    }
-  }
-  if (!anchorTaskId) {
-    // No other in-view card. Pick any remaining card so we still preserve
-    // a meaningful relative position (typically the one just above the
-    // toggled card when the user is scrolled to the bottom).
-    for (let i = cards.length - 1; i >= 0; i--) {
-      const c = cards[i];
+  if (useAnchor) {
+    const cards = document.querySelectorAll('#view-tasks [id^="tc-card-"]');
+    // Prefer a card visible in the viewport. Fall back to the nearest card
+    // above/below if the toggled card is the only one in view.
+    for (const c of cards) {
       if (skipTaskId && c.id === `tc-card-${skipTaskId}`) continue;
-      anchorTaskId = c.id.slice('tc-card-'.length);
-      anchorTopBefore = c.getBoundingClientRect().top;
-      break;
+      const r = c.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < window.innerHeight) {
+        anchorTaskId = c.id.slice('tc-card-'.length);
+        anchorTopBefore = r.top;
+        break;
+      }
+    }
+    if (!anchorTaskId) {
+      // No other in-view card. Pick any remaining card so we still preserve
+      // a meaningful relative position (typically the one just above the
+      // toggled card when the user is scrolled to the bottom).
+      for (let i = cards.length - 1; i >= 0; i--) {
+        const c = cards[i];
+        if (skipTaskId && c.id === `tc-card-${skipTaskId}`) continue;
+        anchorTaskId = c.id.slice('tc-card-'.length);
+        anchorTopBefore = c.getBoundingClientRect().top;
+        break;
+      }
     }
   }
   const yBefore = window.scrollY || document.documentElement.scrollTop || 0;
@@ -30406,7 +30416,8 @@ async function _tcRenderKeepScroll(skipTaskId) {
         return;
       }
     }
-    // Fallback: clamp old scrollY to new max document height.
+    // Fallback (and board/calendar views): clamp the captured scrollY to
+    // the new max document height. Same behavior as the pre-anchor code.
     const maxY = Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
     window.scrollTo(0, Math.min(yBefore, maxY));
   }));
