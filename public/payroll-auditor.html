@@ -962,7 +962,10 @@
             </div>
             <!-- Preparer Field -->
             <div class="preparer-row">
-                <label for="preparerInput"><i class="bi bi-person-badge me-1" style="color:var(--blue3)"></i>Prepared by:</label>
+                <label for="preparerSelect"><i class="bi bi-person-badge me-1" style="color:var(--blue3)"></i>Prepared by:</label>
+                <select id="preparerSelect" class="preparer-input" onchange="onPreparerSelectChange(this.value)" style="display:none;">
+                    <option value="">— Select preparer —</option>
+                </select>
                 <input type="text" id="preparerInput" class="preparer-input" placeholder="Your name or initials" maxlength="80" oninput="onPreparerChange(this.value)">
             </div>
             <!-- Pay Period Dates -->
@@ -7849,45 +7852,75 @@ function onClientSelectChange(val) {
     if (input) input.value = val;
     onClientNameChange(val);
 }
+function onPreparerSelectChange(val) {
+    const sel = document.getElementById('preparerSelect');
+    const input = document.getElementById('preparerInput');
+    if (val === '__other__') {
+        sel.style.display = 'none';
+        input.style.display = '';
+        input.value = '';
+        input.focus();
+        onPreparerChange('');
+        return;
+    }
+    if (input) input.value = val;
+    onPreparerChange(val);
+}
+function _populateDropdown(selId, inputId, options, savedValue) {
+    const sel = document.getElementById(selId);
+    const input = document.getElementById(inputId);
+    if (!sel || !input || !options.length) return;
+    options.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+    });
+    const otherOpt = document.createElement('option');
+    otherOpt.value = '__other__';
+    otherOpt.textContent = 'Other / type-in…';
+    sel.appendChild(otherOpt);
+    const saved = (savedValue || '').trim();
+    if (saved && options.includes(saved)) {
+        sel.value = saved;
+        input.style.display = 'none';
+        sel.style.display = '';
+    } else if (saved) {
+        sel.style.display = 'none';
+        input.style.display = '';
+    } else {
+        input.style.display = 'none';
+        sel.style.display = '';
+    }
+}
 (function initCrmClients() {
     try {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
-        if (!token) return; // standalone mode — keep text input
+        if (!token) return; // standalone mode — keep text inputs
         fetch('/db/load?token=' + encodeURIComponent(token), { cache: 'no-store' })
             .then(r => r.ok ? r.json() : null)
             .then(db => {
-                if (!db || !Array.isArray(db.clients)) return;
-                const clients = db.clients
-                    .map(c => (c && (c.biz || c.name || '')).toString().trim())
-                    .filter(Boolean)
-                    .sort((a, b) => a.localeCompare(b));
-                if (!clients.length) return;
-                const sel = document.getElementById('clientNameSelect');
-                const input = document.getElementById('clientNameInput');
-                if (!sel || !input) return;
-                clients.forEach(name => {
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    opt.textContent = name;
-                    sel.appendChild(opt);
-                });
-                const otherOpt = document.createElement('option');
-                otherOpt.value = '__other__';
-                otherOpt.textContent = 'Other / type-in…';
-                sel.appendChild(otherOpt);
-                const saved = (window.clientName || '').trim();
-                if (saved && clients.includes(saved)) {
-                    sel.value = saved;
-                    input.style.display = 'none';
-                    sel.style.display = '';
-                } else if (saved) {
-                    // Saved value not in CRM list — keep text input visible
-                    sel.style.display = 'none';
-                    input.style.display = '';
-                } else {
-                    input.style.display = 'none';
-                    sel.style.display = '';
+                if (!db) return;
+                if (Array.isArray(db.clients)) {
+                    const clients = db.clients
+                        .map(c => (c && (c.biz || c.name || '')).toString().trim())
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b));
+                    _populateDropdown('clientNameSelect', 'clientNameInput', clients, window.clientName);
+                }
+                if (Array.isArray(db.accountManagers)) {
+                    const ams = db.accountManagers
+                        .filter(a => a && (a.status || 'Active') === 'Active')
+                        .map(a => {
+                            const fname = (a.fname || '').trim();
+                            const lname = (a.lname || '').trim();
+                            const full = (fname + ' ' + lname).trim();
+                            return full || (a.email || '').trim();
+                        })
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b));
+                    _populateDropdown('preparerSelect', 'preparerInput', ams, window.preparerName);
                 }
             })
             .catch(() => {});
