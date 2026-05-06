@@ -6820,6 +6820,88 @@ app.post('/db/save', requireAuth, (req, res) => {
   }
 });
 
+// POST /employees/bulk-add — append employees to ark-db.json without going
+// through the wholesale /db/save (which hangs on multi-MB payloads). Body:
+// { clientId, source, employees: [{fname,lname,...}, ...] }. Dedupes within
+// the target client by SSN (when present) or fname+lname.
+const _EMP_FIELDS = new Set([
+  'fname','lname','mname','ssn','hiredate','street','city','state','zip',
+  'workState','locationId','franchiseId','email','phone','position','status',
+  'reportPrinted','reportPrintedDate','reportFaxMethod','reportFaxId','reportFaxedAt',
+]);
+function _normalizeName(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+/g,' '); }
+function _normalizeSsn(s){ return (s||'').toString().replace(/\D/g,''); }
+app.post('/employees/bulk-add', requireAuth, (req, res) => {
+  try {
+    const { clientId, employees, source } = req.body || {};
+    if (!clientId) return res.status(400).json({ error: 'clientId required' });
+    if (!Array.isArray(employees) || !employees.length) {
+      return res.status(400).json({ error: 'employees array required' });
+    }
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.employees)) db.employees = [];
+
+    const existing = db.employees.filter(e => e && !e._deleted && e.clientId === clientId);
+    const seenBySsn  = new Map();
+    const seenByName = new Map();
+    for (const e of existing) {
+      const ssn = _normalizeSsn(e.ssn);
+      if (ssn) seenBySsn.set(ssn, e);
+      const key = _normalizeName(e.fname) + '|' + _normalizeName(e.lname);
+      if (key !== '|') seenByName.set(key, e);
+    }
+
+    const now = new Date().toISOString();
+    const added = [];
+    const skipped = [];
+    for (const inc of employees) {
+      const fname = ((inc && inc.fname) || '').toString().trim();
+      const lname = ((inc && inc.lname) || '').toString().trim();
+      if (!fname && !lname) { skipped.push({ reason: 'no name', input: inc }); continue; }
+      const ssnNorm = _normalizeSsn(inc.ssn);
+      const nameKey = _normalizeName(fname) + '|' + _normalizeName(lname);
+      if (ssnNorm && seenBySsn.has(ssnNorm)) {
+        skipped.push({ reason: 'duplicate ssn', name: `${fname} ${lname}`.trim() });
+        continue;
+      }
+      if (!ssnNorm && seenByName.has(nameKey)) {
+        skipped.push({ reason: 'duplicate name', name: `${fname} ${lname}`.trim() });
+        continue;
+      }
+      const rec = { id: 'emp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8) };
+      for (const [k,v] of Object.entries(inc)) {
+        if (_EMP_FIELDS.has(k)) rec[k] = v;
+      }
+      rec.fname = fname;
+      rec.lname = lname;
+      rec.clientId = clientId;
+      rec._source = source || 'census';
+      rec._addedAt = now;
+      rec._addedBy = req.arkUser.userName;
+      rec._updatedAt = now;
+      // Census imports are existing employees — exclude from NH report queue
+      if (rec._source === 'census' && rec.reportPrinted == null) {
+        rec.reportPrinted = true;
+        rec.reportPrintedDate = 'Imported from census';
+      }
+      db.employees.push(rec);
+      added.push(rec);
+      if (ssnNorm) seenBySsn.set(ssnNorm, rec);
+      seenByName.set(nameKey, rec);
+    }
+
+    db._savedAt = now;
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Employees bulk-add by ${req.arkUser.userName}: +${added.length} for ${clientId} (${source||'census'}, ${skipped.length} skipped)`);
+    res.json({ success: true, added: added.length, skipped: skipped.length, employees: added, skippedDetail: skipped });
+  } catch (e) {
+    console.error('Employees bulk-add error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PATCH /clients/:id — apply a partial update to a single client without
 // uploading the whole DB. Same motivation as /tasks/bulk-delete: the
 // wholesale /db/save POST hangs when the payload is multi-MB. Body:
@@ -7126,6 +7208,80 @@ app.post('/tasks/bulk-delete', requireAuth, (req, res) => {
     res.json({ success: true, marked, requested: ids.length });
   } catch (e) {
     console.error('Tasks bulk-delete error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /tasks/patch — apply a small patch to a single task by id, optionally
+// patch a linked task (e.g., a paired review task) and append new task
+// records (recurring spawn, freshly-created review task). Sidesteps the
+// wholesale /db/save POST which hangs/silently-fails on multi-MB payloads,
+// so check-the-box completion actually persists for everyone.
+// Body: {
+//   id: string (required),
+//   patch: { ...whitelisted fields },
+//   linkedId?: string,
+//   linkedPatch?: { ...whitelisted fields },
+//   newTasks?: [...task objects]   // idempotent on id
+// }
+const _TASK_PATCH_FIELDS = new Set([
+  'status', 'completedAt', 'completedBy',
+  'reviewStatus', 'reviewTaskId',
+  'noteLog', 'closeChecklist',
+  '_updatedAt', '_updatedBy', '_deleted',
+]);
+app.post('/tasks/patch', requireAuth, (req, res) => {
+  try {
+    const id = (req.body?.id || '').toString();
+    const patch = req.body?.patch;
+    const linkedId = (req.body?.linkedId || '').toString();
+    const linkedPatch = req.body?.linkedPatch;
+    const newTasks = Array.isArray(req.body?.newTasks) ? req.body.newTasks : [];
+    if (!id) return res.status(400).json({ error: 'id required' });
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return res.status(400).json({ error: 'patch object required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.tasks)) return res.status(400).json({ error: 'DB has no tasks array' });
+
+    const apply = (taskId, p) => {
+      const t = db.tasks.find(x => x && x.id === taskId);
+      if (!t) return false;
+      let changed = 0;
+      for (const [k, v] of Object.entries(p)) {
+        if (!_TASK_PATCH_FIELDS.has(k)) continue;
+        t[k] = v; changed++;
+      }
+      return changed;
+    };
+
+    if (!db.tasks.find(x => x && x.id === id)) return res.status(404).json({ error: 'task not found' });
+    const changed = apply(id, patch);
+    let linkedChanged = 0;
+    if (linkedId && linkedPatch && typeof linkedPatch === 'object' && !Array.isArray(linkedPatch)) {
+      linkedChanged = apply(linkedId, linkedPatch);
+    }
+
+    let added = 0;
+    if (newTasks.length) {
+      const existingIds = new Set(db.tasks.map(t => t && t.id).filter(Boolean));
+      const stamp = new Date().toISOString();
+      for (const t of newTasks) {
+        if (!t || !t.id || existingIds.has(t.id)) continue;
+        if (!t._updatedAt) t._updatedAt = stamp;
+        db.tasks.push(t);
+        existingIds.add(t.id);
+        added++;
+      }
+    }
+
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    const fields = Object.keys(patch).filter(k => _TASK_PATCH_FIELDS.has(k)).join(', ');
+    console.log(`Task patch by ${req.arkUser.userName}: ${id} (${fields})${linkedChanged?` + linked ${linkedId}`:''}${added?` + ${added} new`:''}`);
+    res.json({ success: true, changed, linkedChanged, added });
+  } catch (e) {
+    console.error('Task patch error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

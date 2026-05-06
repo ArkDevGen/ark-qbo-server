@@ -1959,6 +1959,7 @@ input[type="checkbox"]{accent-color:var(--navy);}
             <select id="emp-client-filter" class="field-input" style="min-width:160px;" onchange="renderEmps()">
               <option value="">All Clients</option>
             </select>
+            <button class="btn btn-ghost btn-sm" onclick="openCensusImport()" title="Drop in an active-employee census per client">📥 Import Census</button>
             <button class="btn btn-primary btn-sm" onclick="openAddEmp()">+ Add New Hire</button>
           </div>
         </div>
@@ -8494,6 +8495,73 @@ Now here is what I want to build: [describe your feature]</pre>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('modal-emp')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEmp()">Save New Hire</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ CENSUS IMPORT MODAL ════ -->
+<div class="overlay" id="modal-census" style="display:none" onclick="overlayClose(event,'modal-census')">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <div class="modal-title">📥 Import Employee Census</div>
+      <button class="modal-close" onclick="closeModal('modal-census')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text-d);margin-bottom:14px;line-height:1.5;">
+        Drop in an active-employee census for one client. We'll dedupe by SSN (or by name when SSN isn't present), set them as <strong>active</strong>, and skip them in the new-hire report queue. Any payroll auditor finding can later push genuine new hires here.
+      </div>
+
+      <div class="form-grid">
+        <div class="section-label">Step 1 — Pick the client</div>
+        <div class="fg full">
+          <label>Client *</label>
+          <select id="census-client" onchange="onCensusClientChange()" style="width:100%;height:40px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface2);">
+            <option value="">— Select client —</option>
+          </select>
+        </div>
+
+        <div class="section-label">Step 2 — Drop the census file</div>
+        <div class="fg full">
+          <div id="census-drop" onclick="document.getElementById('census-file').click()" style="border:2px dashed var(--border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;">
+            <div style="font-size:28px;margin-bottom:6px;">📂</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">Drop CSV / XLSX here, or click to browse</div>
+            <div style="font-size:11px;color:var(--text-d);margin-top:3px;">Any payroll provider — column headers are auto-detected</div>
+          </div>
+          <input type="file" id="census-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="censusOnFile(this.files[0])">
+          <div id="census-file-status" style="font-size:11px;margin-top:6px;min-height:14px;text-align:center;color:var(--text-d);"></div>
+        </div>
+
+        <div id="census-mapping-section" style="display:none;">
+          <div class="section-label">Step 3 — Map columns</div>
+          <div style="font-size:12px;color:var(--text-d);margin-bottom:10px;">We tried to match common column names. Adjust if anything's off — only First and Last Name are required.</div>
+          <div class="fg full">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:var(--surface2);">
+                  <th style="text-align:left;padding:6px 8px;font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;color:var(--text-d);">Field</th>
+                  <th style="text-align:left;padding:6px 8px;font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;color:var(--text-d);">Census column</th>
+                </tr>
+              </thead>
+              <tbody id="census-mapping-body"></tbody>
+            </table>
+          </div>
+          <div class="fg full" style="margin-top:10px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;">
+              <input type="checkbox" id="census-only-active" checked>
+              <span>Only import rows whose status column is empty or says "Active"</span>
+            </label>
+          </div>
+          <div id="census-preview-wrap" style="margin-top:12px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:6px;">Preview <span id="census-preview-count" style="color:var(--text-m);font-weight:500;text-transform:none;letter-spacing:0;"></span></div>
+            <div id="census-preview-body" style="max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface);"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-census')">Cancel</button>
+      <button class="btn btn-primary" id="census-import-btn" onclick="censusImport()" disabled>Import 0 employees</button>
     </div>
   </div>
 </div>
@@ -17509,6 +17577,290 @@ function deleteEmp(id){
   if(victim){ victim._deleted=true; victim._updatedAt=new Date().toISOString(); }
   logAct(`New hire deleted: ${e.fname} ${e.lname}`);
   renderEmps();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CENSUS IMPORT — drop a per-client active-employee roster
+//  Parses CSV/XLSX, auto-detects common column names, lets the user
+//  override mappings, then POSTs to /employees/bulk-add (server-side
+//  write — sidesteps the wholesale saveDB() that hangs at multi-MB).
+// ══════════════════════════════════════════════════════════════════
+
+const CENSUS_FIELDS = [
+  { key:'fname',    label:'First Name *',    required:true,  hints:['first name','firstname','first','given name','given'] },
+  { key:'lname',    label:'Last Name *',     required:true,  hints:['last name','lastname','last','surname','family name','family'] },
+  { key:'mname',    label:'Middle Name',     required:false, hints:['middle name','middle','middle initial','mi'] },
+  { key:'ssn',      label:'SSN',             required:false, hints:['ssn','social security','social','tax id','taxpayer id'] },
+  { key:'hiredate', label:'Hire Date',       required:false, hints:['hire date','date of hire','hired','start date','start'] },
+  { key:'status',   label:'Status',          required:false, hints:['status','employee status','active','employment status'] },
+  { key:'street',   label:'Street',          required:false, hints:['street','address','address 1','addr1','home address'] },
+  { key:'city',     label:'City',            required:false, hints:['city','town'] },
+  { key:'state',    label:'State',           required:false, hints:['state','st','region'] },
+  { key:'zip',      label:'ZIP',             required:false, hints:['zip','zip code','postal','postal code'] },
+  { key:'email',    label:'Email',           required:false, hints:['email','e-mail','email address'] },
+  { key:'phone',    label:'Phone',           required:false, hints:['phone','phone number','mobile','cell'] },
+  { key:'position', label:'Position / Job',  required:false, hints:['position','title','job title','job','role'] },
+];
+
+let _censusRows = [];      // raw rows from file (array of objects)
+let _censusHeaders = [];   // detected column headers
+let _censusMapping = {};   // { fname:'First Name', lname:'Last Name', ... }
+
+function openCensusImport(){
+  const sel = document.getElementById('census-client');
+  if (!sel) return;
+  // Populate with clients that have payroll service (or all clients as a fallback)
+  const clients = (DB.clients||[]).filter(c => c && !c._deleted)
+    .slice().sort((a,b)=> (a.biz||'').localeCompare(b.biz||''));
+  sel.innerHTML = '<option value="">— Select client —</option>' +
+    clients.map(c => {
+      const services = (c.services||[]).map(s=>s.toLowerCase());
+      const hasPayroll = services.some(s => s.includes('payroll'));
+      const tag = hasPayroll ? ' [Payroll]' : '';
+      return `<option value="${c.id}">${(c.biz||'(unnamed)').replace(/</g,'&lt;')}${tag}</option>`;
+    }).join('');
+  _censusRows = []; _censusHeaders = []; _censusMapping = {};
+  document.getElementById('census-mapping-section').style.display = 'none';
+  document.getElementById('census-file-status').textContent = '';
+  document.getElementById('census-file').value = '';
+  document.getElementById('census-import-btn').disabled = true;
+  document.getElementById('census-import-btn').textContent = 'Import 0 employees';
+  openModal('modal-census');
+}
+
+function onCensusClientChange(){
+  // If a file is already loaded, just refresh the import button label
+  censusUpdateImportBtn();
+}
+
+async function censusOnFile(file){
+  const status = document.getElementById('census-file-status');
+  if (!file) { status.textContent = ''; return; }
+  status.textContent = `Reading ${file.name}…`;
+  try {
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    let rows;
+    if (ext === 'csv') {
+      const text = await file.text();
+      rows = censusParseCsv(text);
+    } else {
+      // XLSX/XLS — use SheetJS (already loaded at top of file)
+      if (typeof XLSX === 'undefined') { status.textContent = '⚠ XLSX library not loaded'; return; }
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+    }
+    if (!rows.length) { status.textContent = '⚠ No rows found in file'; return; }
+    _censusRows = rows;
+    _censusHeaders = Object.keys(rows[0]||{});
+    _censusMapping = censusAutoMap(_censusHeaders);
+    status.textContent = `✓ Loaded ${rows.length} row${rows.length===1?'':'s'} from ${file.name}`;
+    censusRenderMapping();
+    censusRenderPreview();
+    document.getElementById('census-mapping-section').style.display = '';
+    censusUpdateImportBtn();
+  } catch(e){
+    console.error('Census parse error:', e);
+    status.textContent = '⚠ Could not read file: ' + e.message;
+  }
+}
+
+function censusParseCsv(text){
+  // Robust enough for typical payroll exports — handles quoted fields w/ commas
+  const rows = [];
+  let cur = [], field = '', inQuote = false, i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+        inQuote = false; i++; continue;
+      }
+      field += ch; i++; continue;
+    }
+    if (ch === '"') { inQuote = true; i++; continue; }
+    if (ch === ',') { cur.push(field); field = ''; i++; continue; }
+    if (ch === '\r') { i++; continue; }
+    if (ch === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; i++; continue; }
+    field += ch; i++;
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  if (!rows.length) return [];
+  const headers = rows.shift().map(h => (h||'').trim());
+  return rows.filter(r => r.some(v => (v||'').trim().length))
+    .map(r => {
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = (r[idx]||'').trim(); });
+      return obj;
+    });
+}
+
+function censusAutoMap(headers){
+  const map = {};
+  const norm = s => (s||'').toString().trim().toLowerCase().replace(/[_\-]+/g,' ').replace(/\s+/g,' ');
+  for (const f of CENSUS_FIELDS) {
+    let bestHeader = '', bestScore = 0;
+    for (const h of headers) {
+      const nh = norm(h);
+      let score = 0;
+      for (const hint of f.hints) {
+        if (nh === hint) score = Math.max(score, 100);
+        else if (nh.startsWith(hint) || nh.endsWith(hint)) score = Math.max(score, 80);
+        else if (nh.includes(hint)) score = Math.max(score, 60);
+      }
+      if (score > bestScore) { bestScore = score; bestHeader = h; }
+    }
+    if (bestScore >= 60) map[f.key] = bestHeader;
+  }
+  // Special case: a single "Name" column → split into fname/lname at import time
+  if (!map.fname && !map.lname) {
+    const nameCol = headers.find(h => norm(h) === 'name' || norm(h) === 'employee name' || norm(h) === 'full name');
+    if (nameCol) { map.fname = '__split:' + nameCol; map.lname = '__split:' + nameCol; }
+  }
+  return map;
+}
+
+function censusRenderMapping(){
+  const body = document.getElementById('census-mapping-body');
+  const opts = ['<option value="">— Skip —</option>']
+    .concat(_censusHeaders.map(h => `<option value="${(h||'').replace(/"/g,'&quot;')}">${(h||'').replace(/</g,'&lt;')}</option>`));
+  body.innerHTML = CENSUS_FIELDS.map(f => {
+    const cur = _censusMapping[f.key] || '';
+    const isSplit = cur.startsWith('__split:');
+    const splitNote = isSplit ? `<div style="font-size:10px;color:var(--text-d);margin-top:2px;">Splitting "${cur.slice(8)}" by space</div>` : '';
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text);${f.required?'':'opacity:.85;'}">${f.label}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--border);">
+        <select onchange="censusSetMapping('${f.key}',this.value)" class="field-input" style="font-size:12px;padding:5px 8px;height:30px;width:100%;">
+          ${opts.join('')}
+        </select>
+        ${splitNote}
+      </td>
+    </tr>`;
+  }).join('');
+  // Pre-select current mappings
+  const selects = body.querySelectorAll('select');
+  selects.forEach((sel, idx) => {
+    const f = CENSUS_FIELDS[idx];
+    const cur = _censusMapping[f.key] || '';
+    if (cur && !cur.startsWith('__split:')) sel.value = cur;
+  });
+}
+
+function censusSetMapping(fieldKey, headerValue){
+  if (headerValue) _censusMapping[fieldKey] = headerValue;
+  else delete _censusMapping[fieldKey];
+  censusRenderPreview();
+  censusUpdateImportBtn();
+}
+
+function censusBuildEmployees(){
+  // Convert raw rows to {fname,lname,...} using current mapping. Filter by status.
+  const onlyActive = document.getElementById('census-only-active').checked;
+  const out = [];
+  for (const row of _censusRows) {
+    const rec = {};
+    for (const f of CENSUS_FIELDS) {
+      const m = _censusMapping[f.key];
+      if (!m) continue;
+      if (m.startsWith('__split:')) {
+        const colName = m.slice(8);
+        const full = (row[colName]||'').toString().trim();
+        if (!full) continue;
+        // Try "Last, First" first, then "First Last"
+        if (full.includes(',')) {
+          const [ln, fn] = full.split(',', 2).map(s => s.trim());
+          if (f.key === 'fname') rec.fname = (fn||'').split(/\s+/)[0] || '';
+          if (f.key === 'lname') rec.lname = ln || '';
+        } else {
+          const parts = full.split(/\s+/);
+          if (f.key === 'fname') rec.fname = parts[0] || '';
+          if (f.key === 'lname') rec.lname = parts.length > 1 ? parts[parts.length-1] : '';
+        }
+      } else {
+        rec[f.key] = (row[m]||'').toString().trim();
+      }
+    }
+    if (!rec.fname && !rec.lname) continue;
+    if (onlyActive && rec.status) {
+      const s = rec.status.toLowerCase();
+      if (s && !s.includes('active') && !s.includes('current')) continue;
+    }
+    // Normalize hire date to YYYY-MM-DD if it's parseable
+    if (rec.hiredate) {
+      const d = new Date(rec.hiredate);
+      if (!isNaN(d)) rec.hiredate = d.toISOString().slice(0,10);
+    }
+    out.push(rec);
+  }
+  return out;
+}
+
+function censusRenderPreview(){
+  const wrap = document.getElementById('census-preview-body');
+  const countEl = document.getElementById('census-preview-count');
+  const emps = censusBuildEmployees();
+  countEl.textContent = `(${emps.length} of ${_censusRows.length} rows)`;
+  if (!emps.length) {
+    wrap.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-d);font-size:12px;">No rows to import — adjust mappings above.</div>';
+    return;
+  }
+  const head = ['First','Last','SSN','Hire Date','Status'];
+  const sample = emps.slice(0, 30);
+  wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px;">
+    <thead><tr style="background:var(--surface2);position:sticky;top:0;">
+      ${head.map(h => `<th style="text-align:left;padding:5px 8px;font-weight:700;color:var(--text-d);">${h}</th>`).join('')}
+    </tr></thead>
+    <tbody>${sample.map(e => `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--border);">${(e.fname||'').replace(/</g,'&lt;')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--border);">${(e.lname||'').replace(/</g,'&lt;')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;">${(e.ssn||'').replace(/</g,'&lt;')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--border);">${(e.hiredate||'').replace(/</g,'&lt;')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text-d);">${(e.status||'').replace(/</g,'&lt;')}</td>
+    </tr>`).join('')}</tbody>
+  </table>${emps.length > 30 ? `<div style="padding:6px 8px;font-size:11px;color:var(--text-d);text-align:center;">+${emps.length-30} more…</div>` : ''}`;
+}
+
+function censusUpdateImportBtn(){
+  const btn = document.getElementById('census-import-btn');
+  const clientId = document.getElementById('census-client').value;
+  const emps = censusBuildEmployees();
+  btn.disabled = !clientId || !emps.length || !_censusMapping.fname || !_censusMapping.lname;
+  btn.textContent = `Import ${emps.length} employee${emps.length===1?'':'s'}`;
+}
+
+async function censusImport(){
+  const clientId = document.getElementById('census-client').value;
+  const client = (DB.clients||[]).find(c => c.id === clientId);
+  if (!clientId || !client) { showToast && showToast('Pick a client first'); return; }
+  const employees = censusBuildEmployees();
+  if (!employees.length) { showToast && showToast('Nothing to import'); return; }
+  const btn = document.getElementById('census-import-btn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  try {
+    const resp = await fetch(ARK_SERVER + '/employees/bulk-add', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + (_serverToken||'') },
+      body: JSON.stringify({ clientId, employees, source:'census' }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data.error || 'Import failed');
+    // Merge added employees into in-memory DB so they show up immediately
+    if (Array.isArray(data.employees)) {
+      data.employees.forEach(e => DB.employees.push(e));
+    }
+    logAct(`Census imported for ${client.biz}: +${data.added}, ${data.skipped} skipped`);
+    showToast && showToast(`✓ Imported ${data.added} for ${client.biz}${data.skipped ? ` (${data.skipped} skipped — duplicates)` : ''}`);
+    closeModal('modal-census');
+    renderEmps();
+  } catch(e){
+    showToast && showToast('⚠ Import failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -30010,18 +30362,72 @@ function tcSaveTask(){
 
 // Re-render the production view without losing the user's scroll position.
 // Marking a task done removes it from the visible list, which shrinks the
-// page height and effectively jumps the scroll back to the top. Capture y
-// before the re-render and restore after layout settles (two rAFs to give
-// any animations + paint a chance to commit).
-async function _tcRenderKeepScroll() {
-  const y = window.scrollY || document.documentElement.scrollTop || 0;
+// page height — restoring window.scrollY alone snaps to the top because the
+// browser already clamped it. Anchor strategy: pick a still-visible card
+// that survives the re-render, remember its viewport-relative y, then after
+// re-render scroll so the anchor sits at the same y. Pass the toggled task
+// id so we don't pick that card as the anchor (it may disappear).
+async function _tcRenderKeepScroll(skipTaskId) {
+  let anchorTaskId = null, anchorTopBefore = 0;
+  const cards = document.querySelectorAll('#view-tasks [id^="tc-card-"]');
+  // Prefer a card visible in the viewport. Fall back to the nearest card
+  // above/below if the toggled card is the only one in view.
+  for (const c of cards) {
+    if (skipTaskId && c.id === `tc-card-${skipTaskId}`) continue;
+    const r = c.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < window.innerHeight) {
+      anchorTaskId = c.id.slice('tc-card-'.length);
+      anchorTopBefore = r.top;
+      break;
+    }
+  }
+  if (!anchorTaskId) {
+    // No other in-view card. Pick any remaining card so we still preserve
+    // a meaningful relative position (typically the one just above the
+    // toggled card when the user is scrolled to the bottom).
+    for (let i = cards.length - 1; i >= 0; i--) {
+      const c = cards[i];
+      if (skipTaskId && c.id === `tc-card-${skipTaskId}`) continue;
+      anchorTaskId = c.id.slice('tc-card-'.length);
+      anchorTopBefore = c.getBoundingClientRect().top;
+      break;
+    }
+  }
+  const yBefore = window.scrollY || document.documentElement.scrollTop || 0;
+
   await tcRender();
+
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    // Clamp to the new max so we don't get a fight with the browser's
-    // auto-clamp when the page is shorter post-render.
+    if (anchorTaskId) {
+      const a = document.getElementById(`tc-card-${anchorTaskId}`);
+      if (a) {
+        const delta = a.getBoundingClientRect().top - anchorTopBefore;
+        if (delta) window.scrollBy(0, delta);
+        return;
+      }
+    }
+    // Fallback: clamp old scrollY to new max document height.
     const maxY = Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
-    window.scrollTo({ top: Math.min(y, maxY), behavior: 'instant' });
+    window.scrollTo(0, Math.min(yBefore, maxY));
   }));
+}
+
+// Persist a task patch via the small /tasks/patch endpoint instead of the
+// wholesale /db/save POST (which silently fails on multi-MB DBs, leaving
+// task completions un-synced — refresh resurrects the task for everyone).
+// Fire-and-forget; we keep the local mutation + saveDB() call for the rest
+// of the DB (activity log, notifications) so this is purely additive.
+function _tcPatchTask(payload) {
+  try {
+    return authFetch(ARK_SERVER + '/tasks/patch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .catch(e => { console.warn('Task patch failed:', e.message); });
+  } catch (e) {
+    console.warn('Task patch threw:', e.message);
+  }
 }
 
 function tcToggleComplete(id){
@@ -30047,17 +30453,32 @@ function tcToggleComplete(id){
     t.status = 'open';
     t.completedAt = null; t.completedBy = null;
     t.reviewStatus = null;
+    let _linkedId = null, _linkedPatch = null;
     // If there's a linked review task still open, remove it
     if(t.reviewTaskId){
       const _rt = (DB.tasks||[]).find(x => x.id === t.reviewTaskId);
-      if(_rt){ _rt._deleted = true; _rt._updatedAt = new Date().toISOString(); }
+      if(_rt){
+        _rt._deleted = true; _rt._updatedAt = when;
+        _linkedId = _rt.id;
+        _linkedPatch = { _deleted: true, _updatedAt: when };
+      }
       t.reviewTaskId = null;
     }
     logAct(`Task "${t.name}" reopened (${t.clientName})`);
-    saveDB(); _tcRenderKeepScroll(); return;
+    _tcPatchTask({
+      id: t.id,
+      patch: { status:'open', completedAt:null, completedBy:null, reviewStatus:null, reviewTaskId:null, _updatedAt: when, _updatedBy: who },
+      ...(_linkedId ? { linkedId: _linkedId, linkedPatch: _linkedPatch } : {}),
+    });
+    saveDB(); _tcRenderKeepScroll(id); return;
   }
 
   if(!t.noteLog) t.noteLog = [];
+
+  // Tasks freshly pushed into DB.tasks during this toggle (review-task,
+  // recurring next-instance). Sent to /tasks/patch as newTasks so the
+  // server file gets them even when the wholesale /db/save hangs.
+  const _newTasks = [];
 
   // ── Mode 1: Review & Approve ──────────────────────────────────────
   if(t.reviewType === 'approve' && t.reviewerId){
@@ -30089,6 +30510,7 @@ function tcToggleComplete(id){
     };
     t.reviewTaskId = reviewTask.id;
     DB.tasks.push(reviewTask);
+    _newTasks.push(reviewTask);
     logAct(`Review task created for ${reviewer?.fname||'reviewer'} — "${t.name}" (${t.clientName})`);
     // Notify the reviewer
     notifCreate({ type:'sent-for-review', targetAm: t.reviewerId, title:'Task submitted for review', body:`"${t.name}" (${t.clientName||''}) · from ${who}`, taskId: reviewTask.id, from: who });
@@ -30151,6 +30573,7 @@ function tcToggleComplete(id){
       }
     }
     DB.tasks.push(next);
+    _newTasks.push(next);
     logAct(`Task "${t.name}" auto-spawned next due ${nextDue} (${t.clientName})`);
   }
 
@@ -30159,7 +30582,25 @@ function tcToggleComplete(id){
     plPromptDigestAfterClose(t);
   }
 
-  saveDB(); _tcRenderKeepScroll();
+  // Persist the task change directly via the small endpoint — the wholesale
+  // saveDB() POST silently fails on multi-MB DBs and that's why completion
+  // doesn't survive a refresh.
+  _tcPatchTask({
+    id: t.id,
+    patch: {
+      status: t.status,
+      completedAt: t.completedAt || null,
+      completedBy: t.completedBy || null,
+      reviewStatus: t.reviewStatus || null,
+      reviewTaskId: t.reviewTaskId || null,
+      noteLog: t.noteLog || [],
+      _updatedAt: when,
+      _updatedBy: who,
+    },
+    ...(_newTasks.length ? { newTasks: _newTasks } : {}),
+  });
+
+  saveDB(); _tcRenderKeepScroll(id);
 }
 
 // ── Check if task is a monthly close task ────────────────────────────

@@ -5272,6 +5272,15 @@ function errHtml(e, type, cfg) {
 
     const fuzzyWarn = isFuzzy ? `<div style="margin-bottom:.4rem;font-size:.76rem;color:#92400e;background:#fef9c3;border-radius:6px;padding:.2rem .55rem;display:inline-flex;align-items:center;gap:.3rem;"><span>⚠️</span> Name matched with low confidence — verify this is the correct employee</div>` : '';
 
+    // "Extra on payroll" employees can be pushed straight to the CRM New
+    // Hire Reporter — only show the button when running embedded in the
+    // CRM (token present) and a CRM client is selected.
+    const isExtraType = (type === 'extra' || type === 'salary_extra');
+    const canSendNH = isExtraType && !!window.ARK_TOKEN && !!(window.clientName && window._crmClientByName && window._crmClientByName[window.clientName]);
+    const sendNHBtn = canSendNH
+        ? `<button class="resolve-btn" style="border-color:#0B2447;color:#0B2447;" onclick="sendExtraToNewHires(this,'${esc(e.employee).replace(/'/g,"\\'")}')">📋 Send to NH Reporter</button>`
+        : '';
+
     return `<div class="err-card" style="border-left-color:${cfg.color}" data-errkey="${esc(key)}" data-employee="${esc(e.employee)}">
         <div class="err-card-icon" style="background:${cfg.bg};color:${cfg.color}"><i class="bi ${cfg.icon}"></i></div>
         <div class="err-card-body" style="position:relative;">
@@ -5280,7 +5289,10 @@ function errHtml(e, type, cfg) {
                     <div class="err-emp">${esc(e.employee)}</div>
                     ${e.location ? `<span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.7rem;font-weight:700;background:#eff6ff;color:var(--blue2);border-radius:99px;padding:.1rem .55rem;margin-top:.15rem;"><i class="bi bi-geo-alt-fill" style="font-size:.65rem;"></i>${esc(e.location)}</span>` : ''}
                 </div>
-                <button class="resolve-btn" onclick="startResolve(this,'${esc(key).replace(/'/g,"\\'")}')">✓ Mark Resolved</button>
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                    ${sendNHBtn}
+                    <button class="resolve-btn" onclick="startResolve(this,'${esc(key).replace(/'/g,"\\'")}')">✓ Mark Resolved</button>
+                </div>
             </div>
             ${fuzzyWarn}
             <div class="err-plain">${plainMsg(type, e.message)}</div>
@@ -7866,6 +7878,11 @@ function onPreparerSelectChange(val) {
     if (input) input.value = val;
     onPreparerChange(val);
 }
+// Map of client biz name → clientId, populated when running in CRM mode.
+// Used by sendExtraToNewHires() to POST against the right CRM client.
+window._crmClientByName = {};
+window.ARK_TOKEN = '';
+
 function _populateDropdown(selId, inputId, options, savedValue) {
     const sel = document.getElementById(selId);
     const input = document.getElementById(inputId);
@@ -7880,8 +7897,6 @@ function _populateDropdown(selId, inputId, options, savedValue) {
     otherOpt.value = '__other__';
     otherOpt.textContent = 'Other / type-in…';
     sel.appendChild(otherOpt);
-    // Always show the dropdown in CRM mode. Pre-select saved value if it
-    // matches an option; otherwise leave on the placeholder.
     const saved = (savedValue || '').trim();
     if (saved && options.includes(saved)) sel.value = saved;
     sel.style.display = '';
@@ -7892,16 +7907,19 @@ function _populateDropdown(selId, inputId, options, savedValue) {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
         if (!token) return; // standalone mode — keep text inputs
+        window.ARK_TOKEN = token;
         fetch('/db/load?token=' + encodeURIComponent(token), { cache: 'no-store' })
             .then(r => r.ok ? r.json() : null)
             .then(db => {
                 if (!db) return;
                 if (Array.isArray(db.clients)) {
-                    const clients = db.clients
-                        .map(c => (c && (c.biz || c.name || '')).toString().trim())
-                        .filter(Boolean)
-                        .sort((a, b) => a.localeCompare(b));
-                    _populateDropdown('clientNameSelect', 'clientNameInput', clients, window.clientName);
+                    const sorted = db.clients
+                        .filter(c => c && !c._deleted && (c.biz || c.name))
+                        .map(c => ({ id: c.id, biz: ((c.biz || c.name) || '').toString().trim() }))
+                        .filter(c => c.biz)
+                        .sort((a, b) => a.biz.localeCompare(b.biz));
+                    sorted.forEach(c => { window._crmClientByName[c.biz] = c.id; });
+                    _populateDropdown('clientNameSelect', 'clientNameInput', sorted.map(c => c.biz), window.clientName);
                 }
                 if (Array.isArray(db.accountManagers)) {
                     const ams = db.accountManagers
@@ -7920,6 +7938,72 @@ function _populateDropdown(selId, inputId, options, savedValue) {
             .catch(() => {});
     } catch (e) {}
 })();
+
+// ── Send an "extra on payroll" employee to the CRM New Hire Reporter ──
+async function sendExtraToNewHires(btn, employeeName) {
+    if (!window.ARK_TOKEN) {
+        btn.textContent = '⚠ CRM token missing';
+        return;
+    }
+    const clientName = (window.clientName || '').trim();
+    const clientId = clientName ? window._crmClientByName[clientName] : null;
+    if (!clientId) {
+        btn.textContent = '⚠ Pick a CRM client first';
+        setTimeout(() => { btn.textContent = '📋 Send to NH Reporter'; }, 2500);
+        return;
+    }
+    // Parse "Last, First" or "First Last"
+    let fname = '', lname = '', mname = '';
+    const raw = (employeeName || '').toString().trim();
+    if (raw.includes(',')) {
+        const [ln, rest] = raw.split(',', 2).map(s => s.trim());
+        const restParts = (rest || '').split(/\s+/);
+        fname = restParts[0] || '';
+        if (restParts.length > 1) mname = restParts.slice(1).join(' ');
+        lname = ln || '';
+    } else {
+        const parts = raw.split(/\s+/);
+        fname = parts[0] || '';
+        if (parts.length > 2) mname = parts.slice(1, -1).join(' ');
+        lname = parts.length > 1 ? parts[parts.length - 1] : '';
+    }
+    if (!fname && !lname) {
+        btn.textContent = '⚠ Could not parse name';
+        return;
+    }
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+        const resp = await fetch('/employees/bulk-add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.ARK_TOKEN },
+            body: JSON.stringify({
+                clientId,
+                source: 'auditor-detected',
+                employees: [{ fname, lname, mname, reportPrinted: false }],
+            }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || 'Send failed');
+        if (data.added > 0) {
+            btn.textContent = '✓ Sent to NH Reporter';
+            btn.style.background = '#f0fdf4';
+            btn.style.borderColor = '#16a34a';
+            btn.style.color = '#15803d';
+        } else {
+            btn.textContent = 'Already in CRM';
+            btn.style.background = '#fef9c3';
+            btn.style.borderColor = '#ca8a04';
+            btn.style.color = '#854d0e';
+        }
+    } catch (e) {
+        console.error('sendExtraToNewHires error:', e);
+        btn.disabled = false;
+        btn.textContent = '⚠ ' + (e.message || 'Failed');
+        setTimeout(() => { btn.textContent = orig; }, 2500);
+    }
+}
 
 // ── Pay period init ────────────────────────────────────
 (function initPayPeriod() {
