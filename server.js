@@ -6828,6 +6828,11 @@ const _EMP_FIELDS = new Set([
   'fname','lname','mname','ssn','hiredate','street','city','state','zip',
   'workState','locationId','franchiseId','email','phone','position','status',
   'reportPrinted','reportPrintedDate','reportFaxMethod','reportFaxId','reportFaxedAt',
+  // Catch-all NH-reporting fields (Phase 2A)
+  'dob','momMaiden','hireType','priorSeparationDate',
+  'jobTitle','socCode','payRate','payFrequency',
+  'healthInsuranceAvailable','healthEligibilityDate',
+  'icContractAmount','icContractStart','icContractLength','icPaymentStart',
 ]);
 function _normalizeName(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+/g,' '); }
 function _normalizeSsn(s){ return (s||'').toString().replace(/\D/g,''); }
@@ -7286,6 +7291,9 @@ const _TASK_PATCH_FIELDS = new Set([
   'status', 'completedAt', 'completedBy',
   'reviewStatus', 'reviewTaskId',
   'noteLog', 'closeChecklist',
+  // Mutable scheduling — needed so the list view's "Reschedule overdue"
+  // action can bump dueDate without going through the wholesale /db/save.
+  'dueDate', 'priority',
   '_updatedAt', '_updatedBy', '_deleted',
 ]);
 app.post('/tasks/patch', requireAuth, (req, res) => {

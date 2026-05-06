@@ -868,6 +868,65 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .tc-board-add{padding:8px 14px;text-align:center;font-size:var(--text-md);color:var(--text-d);cursor:pointer;border-top:1px dashed var(--border);transition:color .15s;}
 .tc-board-add:hover{color:var(--navy);}
 
+/* ════════════════════════════════════════
+   PRODUCTION LIST VIEW — Todoist-style day sections
+   Activates when groupBy='due' + viewMode='list'.
+   ════════════════════════════════════════ */
+.tc-tlist{padding:0 4px;}
+.tc-tweek{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px;}
+.tc-tweek-cell{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-d);transition:background .15s;}
+.tc-tweek-cell:hover{background:var(--surface2);color:var(--text);}
+.tc-tweek-cell.today{color:var(--gold);}
+.tc-tweek-dow{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
+.tc-tweek-num{font-size:14px;font-weight:700;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.tc-tweek-cell.today .tc-tweek-num{background:var(--red);color:#fff;}
+.tc-tweek-count{font-size:9px;font-weight:600;color:var(--text-dd);min-height:11px;}
+.tc-tsection{margin-bottom:22px;}
+.tc-tsection-header{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--text);padding:6px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px;cursor:pointer;user-select:none;}
+.tc-tsection-header .count{font-weight:400;color:var(--text-d);font-size:12px;}
+.tc-tsection-header .reschedule{margin-left:auto;font-size:12px;font-weight:600;color:var(--gold);text-decoration:none;cursor:pointer;}
+.tc-tsection-header .reschedule:hover{text-decoration:underline;}
+.tc-tsection-header .day-of-week{color:var(--text-d);font-weight:500;}
+.tc-tsection.collapsed .tc-tsection-body{display:none;}
+.tc-tsection-collapse{display:inline-block;width:14px;text-align:center;color:var(--text-d);}
+.tc-trow{display:flex;align-items:flex-start;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);transition:background .12s;position:relative;cursor:pointer;}
+.tc-trow:hover{background:var(--surface2);}
+.tc-trow.completed .tc-trow-name{text-decoration:line-through;color:var(--text-d);}
+.tc-trow-drag{flex-shrink:0;width:14px;color:var(--text-dd);font-size:14px;line-height:1;cursor:grab;align-self:center;opacity:0;transition:opacity .15s;}
+.tc-trow:hover .tc-trow-drag{opacity:.6;}
+.tc-trow-check{flex-shrink:0;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);background:transparent;display:flex;align-items:center;justify-content:center;margin-top:2px;cursor:pointer;transition:border-color .15s;}
+.tc-trow-check:hover{border-color:var(--navy);}
+.tc-trow-check.pri-high{border-color:#f0b429;}
+.tc-trow-check.pri-urgent{border-color:var(--red);background:rgba(176,58,58,.08);}
+.tc-trow-check.done{background:#2e7d5e;border-color:#2e7d5e;color:#fff;}
+.tc-trow-check.review{border-color:#2e5fa1;color:#6ea8fe;}
+.tc-trow-main{flex:1;min-width:0;}
+.tc-trow-name{font-size:13px;font-weight:500;color:var(--text);line-height:1.35;}
+.tc-trow-desc{font-size:11.5px;color:var(--text-d);margin-top:2px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;}
+.tc-trow-meta{display:flex;align-items:center;gap:10px;margin-top:3px;flex-wrap:wrap;font-size:11px;color:var(--text-d);}
+.tc-trow-meta .due{color:var(--text-d);}
+.tc-trow-meta .due.overdue{color:#c0392b;}
+.tc-trow-meta .due.today{color:#c79516;}
+.tc-trow-meta .recur{font-size:10px;}
+.tc-trow-meta .subs{display:inline-flex;align-items:center;gap:3px;}
+.tc-trow-right{display:flex;align-items:center;gap:8px;flex-shrink:0;align-self:center;}
+.tc-trow-am{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tc-trow-proj{font-size:11px;color:var(--text-d);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tc-trow-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;}
+.tc-trow:hover .tc-trow-actions{opacity:1;}
+.tc-trow-actions button{background:none;border:1px solid transparent;border-radius:var(--radius-sm);width:26px;height:26px;cursor:pointer;font-size:13px;color:var(--text-d);display:inline-flex;align-items:center;justify-content:center;transition:all .12s;}
+.tc-trow-actions button:hover{background:var(--surface);border-color:var(--border);color:var(--text);}
+.tc-trow-badges{display:inline-flex;align-items:center;gap:4px;margin-left:6px;}
+.tc-trow-badges .badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;}
+.tc-tadd{display:flex;align-items:center;gap:8px;padding:8px 6px;font-size:12.5px;color:var(--text-d);cursor:pointer;border-bottom:1px solid transparent;transition:color .15s;}
+.tc-tadd:hover{color:var(--gold);}
+.tc-tadd-circle{width:18px;height:18px;border-radius:50%;border:1.5px dashed var(--text-dd);display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1;flex-shrink:0;}
+.tc-tadd:hover .tc-tadd-circle{border-color:var(--gold);color:var(--gold);}
+.tc-tadd-form{display:flex;align-items:center;gap:8px;padding:8px 6px;}
+.tc-tadd-form input{flex:1;background:var(--surface);border:1px solid var(--navy);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;}
+.tc-tadd-form button{font-size:11px;padding:6px 12px;}
+
+
 /* ── Calendar View ── */
 .tc-cal-nav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;}
 .tc-cal-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;cursor:pointer;color:var(--text-d);font-size:14px;transition:all .15s;}
@@ -1994,6 +2053,22 @@ input[type="checkbox"]{accent-color:var(--navy);}
         </div>
         <div id="nh-report-output" style="padding:20px 24px;">
           <div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:32px 0;">Click Generate Report to load all employees whose new hire report has not yet been filed.</div>
+        </div>
+      </div>
+
+      <!-- ── STATE FILING CENTER ── -->
+      <div class="card" style="margin-bottom:22px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">State Filing — Generate per-state CSVs</div>
+            <div class="card-subtitle">Download a state-correct CSV with the right field set + format for each state's portal. Employees w/ <code>reportPrinted</code> = false are included.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" onclick="renderStateFiling()" title="Refresh counts">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="state-filing-body" style="padding:20px 24px;">
+          <div style="text-align:center;color:var(--text-d);font-size:13px;font-style:italic;padding:24px 0;">Loading…</div>
         </div>
       </div>
 
@@ -8545,14 +8620,64 @@ Now here is what I want to build: [describe your feature]</pre>
         <div class="fg"><label>First Name *</label><input id="memp-fname" placeholder="John"></div>
         <div class="fg"><label>Middle Name</label><input id="memp-mname" placeholder="(optional)"></div>
         <div class="fg"><label>Last Name *</label><input id="memp-lname" placeholder="Doe"></div>
-        <div class="fg"><label>Date of Hire *</label><input id="memp-hiredate" type="date"></div>
         <div class="fg"><label>Social Security Number *</label><input id="memp-ssn" placeholder="XXX-XX-XXXX" maxlength="11" oninput="fmtSSN(this)"></div>
+        <div class="fg"><label>Date of Birth *</label><input id="memp-dob" type="date" onchange="wotcUpdateAge()"></div>
+        <div class="fg"><label>Mother's Maiden Name <span style="font-size:11px;color:var(--text-d);font-weight:400;">— Puerto Rico only</span></label><input id="memp-mom-maiden" placeholder="(optional)"></div>
 
         <div class="section-label">Address</div>
         <div class="fg full"><label>Street Address *</label><input id="memp-street" placeholder="123 Main St"></div>
         <div class="fg"><label>City *</label><input id="memp-city" placeholder="Ashland"></div>
         <div class="fg"><label>State *</label><select id="memp-state"></select></div>
         <div class="fg"><label>ZIP Code *</label><input id="memp-zip" placeholder="68003" maxlength="10"></div>
+
+        <div class="section-label">Hire Details</div>
+        <div class="fg full">
+          <label>Hire Type *</label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:4px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+              <input type="radio" name="memp-hiretype" value="employee" checked onchange="onHireTypeChange()"> W-2 Employee
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+              <input type="radio" name="memp-hiretype" value="contractor" onchange="onHireTypeChange()"> Independent Contractor
+            </label>
+          </div>
+        </div>
+        <div class="fg"><label>Date of Hire *</label><input id="memp-hiredate" type="date" onchange="wotcUpdateAge()"></div>
+        <div class="fg"><label>Prior Separation Date <span style="font-size:11px;color:var(--text-d);font-weight:400;">— for rehires (≥60 days = new report needed)</span></label><input id="memp-prior-sep" type="date"></div>
+
+        <div class="section-label">Pay &amp; Position</div>
+        <div class="fg"><label>Job Title *</label><input id="memp-job-title" placeholder="Server, Manager, etc."></div>
+        <div class="fg"><label>SOC Code * <span style="font-size:11px;color:var(--text-d);font-weight:400;">— 6-digit Standard Occupational Classification</span></label><input id="memp-soc-code" placeholder="35-3023" maxlength="7" pattern="\d{2}-?\d{4}"></div>
+        <div class="fg"><label>Pay Rate / Salary</label><input id="memp-pay-rate" type="number" step="0.01" min="0" placeholder="15.00"></div>
+        <div class="fg"><label>Pay Frequency</label>
+          <select id="memp-pay-freq">
+            <option value="">— Select —</option>
+            <option value="hourly">Hourly</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Bi-weekly</option>
+            <option value="semimonthly">Semi-monthly</option>
+            <option value="monthly">Monthly</option>
+            <option value="salary">Annual salary</option>
+          </select>
+        </div>
+
+        <div class="section-label">Benefits</div>
+        <div class="fg"><label>Dependent Health Insurance Available?</label>
+          <select id="memp-health-avail" onchange="onHealthAvailChange()">
+            <option value="">— Not specified —</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div class="fg" id="memp-health-date-row" style="display:none;"><label>Date Eligible for Coverage</label><input id="memp-health-date" type="date"></div>
+
+        <div id="memp-ic-section" style="display:none;">
+          <div class="section-label">Independent Contractor Details</div>
+          <div class="fg"><label>Contract Amount ($) *</label><input id="memp-ic-amount" type="number" step="0.01" min="0" placeholder="2500.00"></div>
+          <div class="fg"><label>Contract Start Date *</label><input id="memp-ic-start" type="date"></div>
+          <div class="fg"><label>Contract Length / Duration <span style="font-size:11px;color:var(--text-d);font-weight:400;">— required by Ohio</span></label><input id="memp-ic-length" placeholder="6 months, ongoing, etc."></div>
+          <div class="fg"><label>Date Payment Begins</label><input id="memp-ic-payment-start" type="date"></div>
+        </div>
 
         <div class="section-label" style="margin-top:14px;">
           <span>WOTC Pre-Screening (Form 8850)</span>
@@ -8565,13 +8690,13 @@ Now here is what I want to build: [describe your feature]</pre>
         <div id="wotc-section" style="display:none;">
           <div class="fg full" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
 
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:8px;">Section 1 — Demographics</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:8px;">Demographics</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:14px;">
-              <div><label style="font-size:11px;font-weight:600;color:var(--text-d);">Date of Birth</label><input type="date" id="wotc-dob" class="field-input" style="width:100%;"></div>
+              <div><label style="font-size:11px;font-weight:600;color:var(--text-d);">Date of Birth</label><input type="text" id="wotc-dob-display" class="field-input" readonly style="width:100%;background:var(--surface);color:var(--text-d);" placeholder="From Personal Information above"></div>
               <div><label style="font-size:11px;font-weight:600;color:var(--text-d);">Age on hire date</label><input type="text" id="wotc-age" class="field-input" readonly style="width:100%;background:var(--surface);color:var(--text-d);"></div>
             </div>
 
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:8px;">Section 2 — Pre-screening questions</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-d);margin-bottom:8px;">Pre-screening questions</div>
             <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
               <label class="wotc-q"><input type="checkbox" id="wotc-q-veteran"> Are you a member of a family that received SNAP benefits, OR a veteran with a service-connected disability or who has been unemployed for at least 4 weeks in the past year, OR a disabled veteran?</label>
               <label class="wotc-q"><input type="checkbox" id="wotc-q-tanf"> Have you (or any member of your household) received TANF (Temporary Assistance for Needy Families) for any 9 months in the last 18 months?</label>
@@ -17625,17 +17750,43 @@ function onEmpLocationChange(){
     hint.textContent='';
   }
 }
+// Helpers for the new catch-all sections — keep the IC-specific block and
+// the health-insurance date hidden until the relevant parent answer is set.
+function onHireTypeChange(){
+  const type = (document.querySelector('input[name="memp-hiretype"]:checked')||{}).value || 'employee';
+  const ic = document.getElementById('memp-ic-section');
+  if (ic) ic.style.display = (type === 'contractor') ? '' : 'none';
+}
+function onHealthAvailChange(){
+  const avail = document.getElementById('memp-health-avail').value;
+  const row = document.getElementById('memp-health-date-row');
+  if (row) row.style.display = (avail === 'yes') ? '' : 'none';
+}
+
 function openAddEmp(){
   DB._editEmp=null;
   document.getElementById('memp-title').textContent='Add New Hire';
-  ['memp-fname','memp-mname','memp-lname','memp-ssn','memp-street','memp-city','memp-zip','memp-client-search'].forEach(id=>document.getElementById(id).value='');
+  // Personal info + address + identity
+  [
+    'memp-fname','memp-mname','memp-lname','memp-ssn','memp-dob','memp-mom-maiden',
+    'memp-street','memp-city','memp-zip','memp-client-search',
+    'memp-prior-sep','memp-job-title','memp-soc-code','memp-pay-rate','memp-health-date',
+    'memp-ic-amount','memp-ic-start','memp-ic-length','memp-ic-payment-start',
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('memp-client-id').value='';
   document.getElementById('memp-hiredate').value='';
   document.getElementById('memp-state').value='Nebraska';
+  document.getElementById('memp-pay-freq').value='';
+  document.getElementById('memp-health-avail').value='';
   document.getElementById('memp-client-dd').style.display='none';
   document.getElementById('memp-location-row').style.display='none';
   document.getElementById('memp-location-id').innerHTML='';
   document.getElementById('memp-location-hint').textContent='';
+  // Default hire type to W-2 employee, hide IC section
+  const empRadio = document.querySelector('input[name="memp-hiretype"][value="employee"]');
+  if (empRadio) empRadio.checked = true;
+  onHireTypeChange();
+  onHealthAvailChange();
   const frRow = document.getElementById('memp-franchise-row');
   const frSel = document.getElementById('memp-franchise-id');
   if (frRow) frRow.style.display='none';
@@ -17643,6 +17794,7 @@ function openAddEmp(){
   wotcReset();
   document.getElementById('modal-emp').style.display='flex';
 }
+
 function openEditEmp(id){
   const e=DB.employees.find(x=>x.id===id);if(!e)return;
   DB._editEmp=id;
@@ -17651,18 +17803,42 @@ function openEditEmp(id){
   document.getElementById('memp-mname').value=e.mname||'';
   document.getElementById('memp-lname').value=e.lname||'';
   document.getElementById('memp-ssn').value=e.ssn||'';
+  document.getElementById('memp-dob').value=e.dob||(e.wotc&&e.wotc.dob)||'';
+  document.getElementById('memp-mom-maiden').value=e.momMaiden||'';
   document.getElementById('memp-hiredate').value=e.hiredate||'';
   document.getElementById('memp-street').value=e.street||'';
   document.getElementById('memp-city').value=e.city||'';
   document.getElementById('memp-state').value=e.state||'Nebraska';
   document.getElementById('memp-zip').value=e.zip||'';
   document.getElementById('memp-client-id').value=e.clientId||'';
+  // Hire details
+  const hireType = e.hireType || 'employee';
+  const hireRadio = document.querySelector(`input[name="memp-hiretype"][value="${hireType}"]`);
+  if (hireRadio) hireRadio.checked = true;
+  document.getElementById('memp-prior-sep').value = e.priorSeparationDate || '';
+  // Pay & position
+  document.getElementById('memp-job-title').value = e.jobTitle || '';
+  document.getElementById('memp-soc-code').value  = e.socCode || '';
+  document.getElementById('memp-pay-rate').value  = e.payRate || '';
+  document.getElementById('memp-pay-freq').value  = e.payFrequency || '';
+  // Benefits
+  document.getElementById('memp-health-avail').value = e.healthInsuranceAvailable || '';
+  document.getElementById('memp-health-date').value  = e.healthEligibilityDate || '';
+  // IC details
+  document.getElementById('memp-ic-amount').value        = e.icContractAmount || '';
+  document.getElementById('memp-ic-start').value         = e.icContractStart || '';
+  document.getElementById('memp-ic-length').value        = e.icContractLength || '';
+  document.getElementById('memp-ic-payment-start').value = e.icPaymentStart || '';
+  onHireTypeChange();
+  onHealthAvailChange();
   const client=DB.clients.find(c=>c.id===e.clientId);
   document.getElementById('memp-client-search').value=client?client.biz:'';
   document.getElementById('memp-client-dd').style.display='none';
   populateEmpLocations(e.clientId, e.locationId||null);
   populateEmpFranchises(e.clientId, e.franchiseId||null);
   wotcLoad(e.wotc || null);
+  // Keep the WOTC age display in sync with the now-shared DOB field
+  wotcUpdateAge();
   document.getElementById('modal-emp').style.display='flex';
 }
 function saveEmp(){
@@ -17674,10 +17850,32 @@ function saveEmp(){
   const city=document.getElementById('memp-city').value.trim();
   const state=document.getElementById('memp-state').value;
   const zip=document.getElementById('memp-zip').value.trim();
+  const dob=document.getElementById('memp-dob').value;
+  const jobTitle=document.getElementById('memp-job-title').value.trim();
+  const socCode=document.getElementById('memp-soc-code').value.trim();
+  const hireType=(document.querySelector('input[name="memp-hiretype"]:checked')||{}).value || 'employee';
   if(!fname||!lname){alert('First and last name are required.');return;}
   if(!hiredate){alert('Date of hire is required.');return;}
   if(!ssn){alert('Social Security Number is required.');return;}
+  if(!dob){alert('Date of birth is required.');return;}
   if(!street||!city||!state||!zip){alert('Full address is required.');return;}
+  if(!jobTitle){alert('Job title is required.');return;}
+  // SOC code: required for all (Indiana SB 148 + future-proofing). Warn but
+  // allow blank — flagging non-compliance loudly so the user goes back if
+  // they have time, but doesn't block save (some hires don't yet have a job
+  // classification on day 1).
+  if(!socCode){
+    if(!confirm('SOC code is blank. Indiana requires it within 28 days; we collect for all clients to future-proof. Save anyway?')) return;
+  } else if (!/^\d{2}-?\d{4}$/.test(socCode)){
+    alert('SOC code must be 6 digits (e.g. 35-3023 or 353023).');return;
+  }
+  // For independent contractors, contract amount and start date are required
+  if(hireType==='contractor'){
+    const amt=document.getElementById('memp-ic-amount').value;
+    const start=document.getElementById('memp-ic-start').value;
+    if(!amt) {alert('Contract amount is required for independent contractors.');return;}
+    if(!start){alert('Contract start date is required for independent contractors.');return;}
+  }
   // Resolve work location and derive the state for NH report routing
   const locationId = document.getElementById('memp-location-id')?.value||null;
   let workState = state; // employee's home state as fallback
@@ -17695,10 +17893,28 @@ function saveEmp(){
     fname,lname,
     mname:document.getElementById('memp-mname').value.trim(),
     ssn,hiredate,street,city,state,zip,
+    dob,
+    momMaiden: document.getElementById('memp-mom-maiden').value.trim(),
     clientId:document.getElementById('memp-client-id').value,
     locationId,
     franchiseId: document.getElementById('memp-franchise-id')?.value || null,
     workState,
+    // Hire details
+    hireType,
+    priorSeparationDate: document.getElementById('memp-prior-sep').value || '',
+    // Pay & position
+    jobTitle,
+    socCode: socCode.replace('-',''),  // store unformatted; display logic re-formats
+    payRate: document.getElementById('memp-pay-rate').value || '',
+    payFrequency: document.getElementById('memp-pay-freq').value || '',
+    // Benefits
+    healthInsuranceAvailable: document.getElementById('memp-health-avail').value || '',
+    healthEligibilityDate: document.getElementById('memp-health-date').value || '',
+    // IC-specific (only relevant when hireType='contractor')
+    icContractAmount:  hireType==='contractor' ? (document.getElementById('memp-ic-amount').value || '') : '',
+    icContractStart:   hireType==='contractor' ? (document.getElementById('memp-ic-start').value  || '') : '',
+    icContractLength:  hireType==='contractor' ? (document.getElementById('memp-ic-length').value || '') : '',
+    icPaymentStart:    hireType==='contractor' ? (document.getElementById('memp-ic-payment-start').value || '') : '',
     wotc: wotcCapture(hiredate),
   };
   obj._updatedAt = new Date().toISOString();
@@ -17789,10 +18005,10 @@ function wotcReset(){
   const btn = document.getElementById('wotc-toggle-btn');
   if (sec) sec.style.display = 'none';
   if (btn) btn.textContent = '+ Open';
-  const dob = document.getElementById('wotc-dob');
-  if (dob) { dob.value = ''; dob.removeEventListener('change', wotcUpdateAge); dob.addEventListener('change', wotcUpdateAge); }
   const age = document.getElementById('wotc-age');
   if (age) age.value = '';
+  const dobDisp = document.getElementById('wotc-dob-display');
+  if (dobDisp) dobDisp.value = '';
   WOTC_QUESTION_IDS.forEach(q => {
     const cb = document.getElementById('wotc-q-' + q);
     if (cb) {
@@ -17813,7 +18029,6 @@ function wotcLoad(saved){
   const btn = document.getElementById('wotc-toggle-btn');
   if (sec) sec.style.display = '';
   if (btn) btn.textContent = '− Hide';
-  if (saved.dob) document.getElementById('wotc-dob').value = saved.dob;
   WOTC_QUESTION_IDS.forEach(q => {
     const cb = document.getElementById('wotc-q-' + q);
     if (cb) cb.checked = !!(saved.answers && saved.answers[q]);
@@ -17823,11 +18038,13 @@ function wotcLoad(saved){
 }
 
 function wotcUpdateAge(){
-  const dobEl = document.getElementById('wotc-dob');
+  const dobEl = document.getElementById('memp-dob');
   const ageEl = document.getElementById('wotc-age');
+  const dobDisp = document.getElementById('wotc-dob-display');
   const hireEl = document.getElementById('memp-hiredate');
   if (!dobEl || !ageEl) return;
   const dob = dobEl.value;
+  if (dobDisp) dobDisp.value = dob || '';
   const hire = hireEl?.value || new Date().toISOString().slice(0,10);
   if (!dob) { ageEl.value = ''; wotcUpdateResult(); return; }
   const d1 = new Date(dob), d2 = new Date(hire);
@@ -17884,7 +18101,7 @@ function wotcUpdateResult(){
 }
 
 function wotcCapture(hiredate){
-  const dob = document.getElementById('wotc-dob')?.value || '';
+  const dob = document.getElementById('memp-dob')?.value || '';
   const ageStr = document.getElementById('wotc-age')?.value || '';
   const age = ageStr ? parseInt(ageStr, 10) : null;
   const answers = {};
@@ -31957,7 +32174,12 @@ async function tcRender(){
   // through any month, so it should NOT be constrained by the showDaysAdvance
   // window or the Mon-Sun upcoming window. Both clip the visible task set
   // and made future weeks look empty even though the tasks were there.
-  const _isCalendarMode = (sessionStorage.getItem('tc_view_mode') || 'list') === 'calendar';
+  const _viewMode = sessionStorage.getItem('tc_view_mode') || 'list';
+  const _isCalendarMode = _viewMode === 'calendar';
+  // List view (when grouped by due) renders day-by-day Todoist-style and
+  // wants the full upcoming task set, not just this Mon-Sun, so the 7-day
+  // week strip and forward scrolling have content. Same intent as calendar.
+  const _isTodoistList = _viewMode === 'list' && groupBy === 'due';
 
   let list = tasks.filter(t => {
     if(t.parentId) return false; // subtasks render under their parent, not in main list
@@ -31976,19 +32198,19 @@ async function tcRender(){
     if(fStat === 'open'){
       if(t.status === 'completed') return false;
       if(inProjectView) return true; // project view: show all open project tasks, ignoring the date window
-      if(_isCalendarMode) return true; // calendar paints its own date grid — no window clipping
+      if(_isCalendarMode || _isTodoistList) return true; // calendar/list-by-due paint their own date layout
       const adv = t.showDaysAdvance != null ? t.showDaysAdvance : 3;
       const showDate = new Date(today); showDate.setDate(today.getDate() + adv);
       return t.dueDate <= showDate.toISOString().slice(0,10) || t.status === 'review' || t.isReviewTask || t.isNotifyTask;
     }
     if(fStat === 'overdue')   return t.status !== 'completed' && t.status !== 'review' && t.dueDate && t.dueDate < todayStr;
     if(fStat === 'due-today') return t.status !== 'completed' && t.dueDate === todayStr;
-    // "This Week" is anchored to a Mon-Sun window for the list/board views.
-    // Calendar mode wants the full set so the user can navigate to any month
-    // without losing tasks beyond the current week.
+    // "This Week" is anchored to a Mon-Sun window for the legacy list/board.
+    // Calendar and the new Todoist-style list want the full upcoming set so
+    // forward scrolling / month navigation has content beyond Sunday.
     if(fStat === 'upcoming') {
       if (t.status === 'completed') return false;
-      if (_isCalendarMode) return !!t.dueDate;
+      if (_isCalendarMode || _isTodoistList) return !!t.dueDate;
       return t.dueDate >= weekMondayStr && t.dueDate <= weekSundayStr;
     }
     if(fStat === 'completed') return t.status === 'completed';
@@ -32151,8 +32373,18 @@ async function tcRender(){
   } else {
     const el = document.getElementById('tc-view-list');
     if (el) {
-      if (!list.length) { el.innerHTML = emptyHtml; }
-      else {
+      if (!list.length && groupBy !== 'due') {
+        el.innerHTML = emptyHtml;
+      } else if (groupBy === 'due') {
+        // Todoist-style render: day-section structure with week strip,
+        // overdue bucket, inline + Add task per day, hover-reveal actions.
+        // Always render so today/tomorrow's "+ Add task" stays reachable
+        // even on a quiet day.
+        el.innerHTML = tcRenderTodoistList(list, today, todayStr, fClient, fStat);
+      } else {
+        // Other groupBy modes (client, AM, category, section) keep the
+        // legacy card renderer — those are analysis layouts, not the
+        // primary day-based workflow.
         el.innerHTML = Object.entries(groups).map(([groupName, items]) => `
           <div style="margin-bottom:24px;">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-d);padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">${groupName} <span style="font-weight:400;opacity:.6;">(${items.length})</span></div>
@@ -32304,6 +32536,351 @@ function tcToggleCollapse(id){
   if (_tcCollapsedTasks.has(id)) _tcCollapsedTasks.delete(id);
   else _tcCollapsedTasks.add(id);
   if (typeof tcRender === 'function') tcRender();
+}
+
+// ── Production list view — Todoist-style day sections ─────────────
+// Activates when viewMode='list' AND groupBy='due' (the default). Other
+// groupBy modes (client/AM/category) still use the legacy tcTaskCard
+// renderer above so power-users keep their analysis layouts.
+let _tcOverdueCollapsed = false;
+let _tcQuickAddDate = null; // date string of the day section currently in inline-add mode
+
+// Render the whole list view: top week strip → overdue section →
+// one section per upcoming day → no-date section → completed section.
+// Sections are skipped when empty (except today/tomorrow, which always
+// show so the inline + Add task affordance is reachable).
+function tcRenderTodoistList(list, today, todayStr, fClient, fStat) {
+  // Bucket by date status
+  const overdue = [];
+  const noDate = [];
+  const completed = [];
+  const byDate = {}; // dateStr -> [tasks]
+  for (const t of list) {
+    if (t.parentId) continue; // subtasks render under their parent
+    if (t.type === 'note') continue;
+    if (t.status === 'completed') { completed.push(t); continue; }
+    if (!t.dueDate) { noDate.push(t); continue; }
+    if (t.dueDate < todayStr) { overdue.push(t); continue; }
+    if (!byDate[t.dueDate]) byDate[t.dueDate] = [];
+    byDate[t.dueDate].push(t);
+  }
+  const upcomingDates = Object.keys(byDate).sort();
+
+  // Build the next-7-day strip (today + 6 days). Always shown so the user
+  // has consistent navigation even when a day has no tasks.
+  let stripHtml = '<div class="tc-tweek">';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    const dStr = d.toISOString().slice(0, 10);
+    const dow = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayNum = d.getDate();
+    const count = (byDate[dStr] || []).length;
+    const cls = (dStr === todayStr) ? 'tc-tweek-cell today' : 'tc-tweek-cell';
+    stripHtml += `<div class="${cls}" onclick="tcScrollToDay('${dStr}')">
+      <div class="tc-tweek-dow">${dow}</div>
+      <div class="tc-tweek-num">${dayNum}</div>
+      <div class="tc-tweek-count">${count ? count + (count === 1 ? ' task' : ' tasks') : ''}</div>
+    </div>`;
+  }
+  stripHtml += '</div>';
+
+  // Overdue section — collapsible. Only painted if there's anything overdue.
+  let overdueHtml = '';
+  if (overdue.length) {
+    overdue.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+    const collapsed = _tcOverdueCollapsed ? 'collapsed' : '';
+    overdueHtml = `<div class="tc-tsection ${collapsed}" id="tc-section-overdue">
+      <div class="tc-tsection-header" onclick="tcToggleOverdueCollapse()">
+        <span class="tc-tsection-collapse">${_tcOverdueCollapsed ? '▸' : '▾'}</span>
+        <span style="color:#c0392b;">Overdue</span>
+        <span class="count">${overdue.length}</span>
+        <a class="reschedule" onclick="event.stopPropagation();tcRescheduleOverdue()">Reschedule →</a>
+      </div>
+      <div class="tc-tsection-body">${overdue.map(t => _tcTodoistRow(t, today, todayStr)).join('')}</div>
+    </div>`;
+  }
+
+  // Day sections — today and tomorrow always render (so inline + Add task
+  // is reachable on quiet days); future days only render if they have tasks.
+  const tmrwD = new Date(today); tmrwD.setDate(today.getDate() + 1);
+  const tmrwStr = tmrwD.toISOString().slice(0, 10);
+  const datesToRender = new Set(upcomingDates);
+  datesToRender.add(todayStr);
+  datesToRender.add(tmrwStr);
+  const orderedDates = [...datesToRender].sort();
+  const dayHtml = orderedDates.map(dStr => {
+    const d = new Date(dStr + 'T12:00:00');
+    const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+    let label;
+    if (dStr === todayStr)      label = `${monthDay} <span class="day-of-week">· Today · ${weekday}</span>`;
+    else if (dStr === tmrwStr)  label = `${monthDay} <span class="day-of-week">· Tomorrow · ${weekday}</span>`;
+    else                        label = `${monthDay} <span class="day-of-week">· ${weekday}</span>`;
+    const items = (byDate[dStr] || []);
+    const rows = items.map(t => _tcTodoistRow(t, today, todayStr)).join('');
+    return `<div class="tc-tsection" id="tc-day-${dStr}">
+      <div class="tc-tsection-header">${label}${items.length ? `<span class="count">${items.length}</span>` : ''}</div>
+      <div class="tc-tsection-body">
+        ${rows}
+        ${_tcRenderQuickAdd(dStr)}
+      </div>
+    </div>`;
+  }).join('');
+
+  // No-date section — only if the user has tasks without dueDate.
+  let noDateHtml = '';
+  if (noDate.length) {
+    noDateHtml = `<div class="tc-tsection" id="tc-section-nodate">
+      <div class="tc-tsection-header">📌 No Due Date <span class="count">${noDate.length}</span></div>
+      <div class="tc-tsection-body">${noDate.map(t => _tcTodoistRow(t, today, todayStr)).join('')}</div>
+    </div>`;
+  }
+
+  // Completed section — shown when filter='completed' or 'all'.
+  let completedHtml = '';
+  if (completed.length && (fStat === 'completed' || fStat === 'all')) {
+    completedHtml = `<div class="tc-tsection" id="tc-section-completed">
+      <div class="tc-tsection-header">✓ Completed <span class="count">${completed.length}</span></div>
+      <div class="tc-tsection-body">${completed.map(t => _tcTodoistRow(t, today, todayStr)).join('')}</div>
+    </div>`;
+  }
+
+  return `<div class="tc-tlist">${stripHtml}${overdueHtml}${dayHtml}${noDateHtml}${completedHtml}</div>`;
+}
+
+// One Todoist-style row. Visually compact: priority circle, bold title,
+// optional description preview, meta row (subs/date/recurring), and a
+// right-side stack with AM avatar, project breadcrumb, and hover-only
+// action buttons. Click row → open detail; click circle → toggle complete.
+function _tcTodoistRow(t, today, todayStr, depth) {
+  depth = depth || 0;
+  const isCompleted = t.status === 'completed';
+  const isReview = t.status === 'review';
+  const isOverdue = !isCompleted && !isReview && t.dueDate && t.dueDate < todayStr;
+  const isToday = t.dueDate === todayStr;
+  const subs = (typeof tcGetSubtasks === 'function') ? tcGetSubtasks(t.id) : [];
+  const hasSubs = subs.length > 0;
+  const subsDone = subs.filter(s => s.status === 'completed').length;
+
+  const client = (DB.clients || []).find(c => c.id === t.clientId);
+  const clientName = client ? client.biz : (t.clientName || '');
+  const amName = (typeof getAMName === 'function') ? getAMName(t.amId) : '';
+  const amInitial = amName && amName !== '—' ? amName.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase() : '';
+
+  // Check circle classes — priority colors flow through the border.
+  let checkClass = 'tc-trow-check';
+  if (isCompleted) checkClass += ' done';
+  else if (isReview) checkClass += ' review';
+  else if (t.priority === 'urgent') checkClass += ' pri-urgent';
+  else if (t.priority === 'high')   checkClass += ' pri-high';
+  const checkContent = isCompleted ? '✓' : isReview ? '⏳' : '';
+  const checkOnclick = (t.isReviewTask || t.isNotifyTask)
+    ? '' : `event.stopPropagation();tcToggleComplete('${t.id}');`;
+
+  // Due-date label. Today's section already says "Today", so within the
+  // Today section we suppress the date entirely; otherwise show short date.
+  let dueText = '';
+  let dueCls = 'due';
+  if (isOverdue) {
+    const overdueDays = Math.round((today - new Date(t.dueDate + 'T12:00:00')) / 86400000);
+    dueText = `${new Date(t.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${overdueDays}d late)`;
+    dueCls += ' overdue';
+  } else if (isToday) {
+    // Skip — section header already says "Today"
+  } else if (t.dueDate) {
+    dueText = new Date(t.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Subtle badges — only show when meaningful.
+  const badges = [];
+  if (t.isReviewTask) badges.push(`<span class="badge" style="background:#2e5fa122;color:#6ea8fe;">REVIEW</span>`);
+  else if (t.isNotifyTask) badges.push(`<span class="badge" style="background:#3a2a6b22;color:#b69bff;">NOTIFY</span>`);
+  else if (isReview) badges.push(`<span class="badge" style="background:#2e5fa122;color:#6ea8fe;">IN REVIEW</span>`);
+  else if (t.reviewStatus === 'rejected') badges.push(`<span class="badge" style="background:#3a1a1a;color:#ff8888;">RETURNED</span>`);
+
+  // Project breadcrumb — client biz + section if any.
+  const breadcrumb = clientName
+    ? `${_chatEscape ? _chatEscape(clientName) : clientName}${t.section ? ` <span style="opacity:.5;">/</span> ${t.section}` : ''}`
+    : (t.section ? t.section : '');
+
+  const noteCount = (t.noteLog || []).length;
+  const safeName = (str) => String(str || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const recurIcon = t.recurring ? `<span class="recur" title="Recurring">↻</span>` : '';
+  const subsHtml = hasSubs ? `<span class="subs" title="Sub-tasks">⊟ ${subsDone}/${subs.length}</span>` : '';
+  const indentStyle = depth > 0 ? `padding-left:${28 + depth * 24}px;` : '';
+
+  const desc = t.notes ? `<div class="tc-trow-desc">${safeName(t.notes).split('\n')[0]}</div>` : '';
+
+  // Hover actions — keep minimal: edit, comment (notes), delete.
+  const reviewActions = t.isReviewTask
+    ? `<button onclick="event.stopPropagation();tcApproveReview('${t.id}')" title="Approve" style="color:#2e7d5e;">✓</button>
+       <button onclick="event.stopPropagation();tcRejectReview('${t.id}')" title="Reject" style="color:var(--red);">✗</button>`
+    : t.isNotifyTask
+    ? `<button onclick="event.stopPropagation();tcDismissNotify('${t.id}')" title="Dismiss">×</button>`
+    : `<button onclick="event.stopPropagation();tcEditTask('${t.id}')" title="Edit">✏️</button>
+       <button onclick="event.stopPropagation();tcOpenDetail('${t.id}')" title="Notes ${noteCount}">${noteCount > 0 ? `💬<sub style="font-size:8px;">${noteCount}</sub>` : '💬'}</button>
+       <button onclick="event.stopPropagation();tcDeleteTask('${t.id}')" title="Delete" style="color:var(--red);">🗑</button>`;
+
+  const rowClass = `tc-trow${isCompleted ? ' completed' : ''}`;
+  return `<div class="${rowClass}" id="tc-card-${t.id}" style="${indentStyle}" draggable="true" ondragstart="tcDragTaskStart(event,'${t.id}')" ondragend="tcDragEnd(event)" onclick="twfOpen('${t.id}')" title="Click to open · Drag to move folders">
+    <span class="tc-trow-drag">⋮⋮</span>
+    <div class="${checkClass}" onclick="${checkOnclick}" title="${isCompleted ? 'Mark open' : 'Mark complete'}">${checkContent}</div>
+    <div class="tc-trow-main">
+      <div class="tc-trow-name">${safeName(t.name)}<span class="tc-trow-badges">${badges.join('')}</span></div>
+      ${desc}
+      <div class="tc-trow-meta">
+        ${subsHtml}
+        ${dueText ? `<span class="${dueCls}">${dueText}</span>` : ''}
+        ${recurIcon}
+        ${t.category && t.category !== 'Other' ? `<span style="opacity:.7;">${safeName(t.category)}</span>` : ''}
+      </div>
+    </div>
+    <div class="tc-trow-right">
+      ${amInitial ? `<span class="tc-trow-am" title="${safeName(amName)}">${amInitial}</span>` : ''}
+      ${breadcrumb ? `<span class="tc-trow-proj" title="${safeName(clientName)}${t.section ? ' / ' + safeName(t.section) : ''}">${breadcrumb}</span>` : ''}
+      <div class="tc-trow-actions" onclick="event.stopPropagation()">${reviewActions}</div>
+    </div>
+  </div>
+  ${(hasSubs && !(_tcCollapsedTasks && _tcCollapsedTasks.has(t.id)))
+      ? subs.map(s => _tcTodoistRow(s, today, todayStr, depth + 1)).join('')
+      : ''}`;
+}
+
+// Inline + Add task affordance per day section. Click → expands into a
+// single-input form. Enter creates the task (name + dueDate=section);
+// Esc cancels. Heavyweight options stay available via Edit after create.
+function _tcRenderQuickAdd(dateStr) {
+  if (_tcQuickAddDate === dateStr) {
+    return `<div class="tc-tadd-form" onclick="event.stopPropagation()">
+      <input id="tc-quickadd-input-${dateStr}" placeholder="Task name…" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();tcQuickAddSubmit('${dateStr}');}else if(event.key==='Escape'){tcQuickAddCancel();}">
+      <button class="btn btn-primary btn-sm" onclick="tcQuickAddSubmit('${dateStr}')">Add</button>
+      <button class="btn btn-ghost btn-sm" onclick="tcQuickAddCancel()">Cancel</button>
+    </div>`;
+  }
+  return `<div class="tc-tadd" onclick="tcQuickAddOpen('${dateStr}')">
+    <span class="tc-tadd-circle">+</span>
+    <span>Add task</span>
+  </div>`;
+}
+
+function tcToggleOverdueCollapse() {
+  _tcOverdueCollapsed = !_tcOverdueCollapsed;
+  if (typeof _tcRenderKeepScroll === 'function') _tcRenderKeepScroll();
+  else tcRender();
+}
+
+function tcScrollToDay(dateStr) {
+  const el = document.getElementById('tc-day-' + dateStr);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Bump every overdue OPEN task to today (status stays 'open'). Persists
+// each via /tasks/patch so the change survives a refresh even when the
+// wholesale /db/save is hung. Confirms first because this is a bulk edit.
+async function tcRescheduleOverdue() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const overdue = (DB.tasks || []).filter(t =>
+    !_taskHiddenForMe(t) && t.status !== 'completed' && t.status !== 'review'
+    && t.dueDate && t.dueDate < todayStr && !t.parentId
+  );
+  if (!overdue.length) return;
+  if (!confirm(`Move ${overdue.length} overdue task${overdue.length === 1 ? '' : 's'} to today?`)) return;
+  const when = new Date().toISOString();
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
+  // Local-first so the UI feels instant; server patches fire in parallel
+  for (const t of overdue) {
+    t.dueDate = todayStr;
+    t._updatedAt = when;
+    t._updatedBy = who;
+  }
+  tcRender();
+  // Server patches — fire-and-forget, surface a toast on failure
+  const failures = [];
+  await Promise.all(overdue.map(t =>
+    (typeof _tcPatchTask === 'function' ? _tcPatchTask({
+      id: t.id,
+      patch: { dueDate: todayStr, _updatedAt: when, _updatedBy: who },
+    }) : Promise.resolve()).catch(e => failures.push(t.id))
+  ));
+  if (failures.length) showToast && showToast(`${failures.length} task${failures.length === 1 ? '' : 's'} failed to sync — try again`);
+  else showToast && showToast(`${overdue.length} task${overdue.length === 1 ? '' : 's'} rescheduled to today`);
+}
+
+function tcQuickAddOpen(dateStr) {
+  _tcQuickAddDate = dateStr;
+  tcRender();
+  setTimeout(() => {
+    const input = document.getElementById('tc-quickadd-input-' + dateStr);
+    if (input) input.focus();
+  }, 0);
+}
+
+function tcQuickAddCancel() {
+  _tcQuickAddDate = null;
+  tcRender();
+}
+
+// Inline create. Inherits client from the active project view if any so
+// "+ Add task" inside a project folder lands in that project. Persists
+// via /tasks/bulk-add so the new record survives even when /db/save hangs.
+async function tcQuickAddSubmit(dateStr) {
+  const input = document.getElementById('tc-quickadd-input-' + dateStr);
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) { _tcQuickAddDate = null; tcRender(); return; }
+
+  const fClient = document.getElementById('tc-filter-client')?.value || '';
+  const inProjectView = (typeof _tcActiveView === 'string') && _tcActiveView.startsWith('project:');
+  const inheritedClientId = inProjectView ? _tcActiveView.slice(8) : (fClient || '');
+  const client = inheritedClientId ? (DB.clients || []).find(c => c.id === inheritedClientId) : null;
+  const inheritedSection = inProjectView && _tcActiveSection ? _tcActiveSection : '';
+
+  const when = new Date().toISOString();
+  const who = currentUser ? `${currentUser.fname} ${currentUser.lname || ''}`.trim() : '';
+  const newTask = {
+    id: uid(),
+    name,
+    type: 'task',
+    clientId: inheritedClientId === '_noClient' ? '' : inheritedClientId,
+    clientName: client ? client.biz : '',
+    section: inheritedSection,
+    amId: currentUser?.id || '',
+    category: 'Other',
+    dueDate: dateStr,
+    priority: 'medium',
+    showDaysAdvance: 14,
+    status: 'open',
+    recurring: false,
+    noteLog: [],
+    parentId: null,
+    parentTaskId: null,
+    createdAt: when, updatedAt: when, _updatedAt: when,
+    createdBy: who, _updatedBy: who,
+    completedAt: null, completedBy: null,
+  };
+
+  // Optimistic local insert
+  if (!Array.isArray(DB.tasks)) DB.tasks = [];
+  DB.tasks.push(newTask);
+  _tcQuickAddDate = dateStr; // keep the form open for rapid-fire entry
+  input.value = '';
+  tcRender();
+  setTimeout(() => {
+    const i2 = document.getElementById('tc-quickadd-input-' + dateStr);
+    if (i2) i2.focus();
+  }, 0);
+
+  // Persist via the small endpoint so we don't depend on /db/save
+  try {
+    await authFetch(ARK_SERVER + '/tasks/bulk-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: [newTask] }),
+    });
+  } catch (e) {
+    showToast && showToast('Saved locally — sync failed, will retry');
+  }
 }
 
 // ── Pinned project info (slice 3) ────────────────────────────────
