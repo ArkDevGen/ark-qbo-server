@@ -6949,6 +6949,70 @@ app.post('/production/project-alias', requireAuth, (req, res) => {
   }
 });
 
+// POST /production/saved-views — save the current user's saved Production
+// views (named filter combos pinned to the sidebar). Same merge pattern as
+// project-groups: other users untouched, within this user merge-by-id with
+// _updatedAt newer-wins. Body: { userId, views: [...] }
+app.post('/production/saved-views', requireAuth, (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.views) ? req.body.views : null;
+    if (!incoming) return res.status(400).json({ error: 'views required (array)' });
+    const meId = req.body?.userId || '';
+    if (!meId) return res.status(400).json({ error: 'userId required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.tcSavedViews)) db.tcSavedViews = [];
+    const others = db.tcSavedViews.filter(v => v && v.userId !== meId);
+    const existingMine = db.tcSavedViews.filter(v => v && v.userId === meId);
+    const byId = new Map();
+    for (const v of existingMine) if (v && v.id) byId.set(v.id, v);
+    for (const v of incoming) {
+      if (!v || !v.id) continue;
+      const cur = byId.get(v.id);
+      if (!cur) { byId.set(v.id, v); continue; }
+      const curT = cur._updatedAt ? new Date(cur._updatedAt).getTime() : 0;
+      const incT = v._updatedAt ? new Date(v._updatedAt).getTime() : 0;
+      if (incT >= curT) byId.set(v.id, v);
+    }
+    db.tcSavedViews = [...others, ...Array.from(byId.values())];
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Saved views by ${req.arkUser.userName}: ${incoming.length} views for user ${meId}`);
+    res.json({ success: true, count: incoming.length });
+  } catch (e) {
+    console.error('Saved views error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /production/pinned-projects — replace the current user's pinned
+// folder list (an ordered array of project keys — clientIds or
+// "name:lowercase" synthetic keys). Other users' lists are untouched.
+// Body: { userId, keys: [...] }
+app.post('/production/pinned-projects', requireAuth, (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.keys) ? req.body.keys : null;
+    if (!incoming) return res.status(400).json({ error: 'keys required (array)' });
+    const meId = req.body?.userId || '';
+    if (!meId) return res.status(400).json({ error: 'userId required' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!db.tcPinnedProjects || typeof db.tcPinnedProjects !== 'object') db.tcPinnedProjects = {};
+    const cleaned = incoming.map(k => String(k || '').trim()).filter(Boolean);
+    if (cleaned.length) db.tcPinnedProjects[meId] = cleaned;
+    else delete db.tcPinnedProjects[meId];
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`Pinned projects by ${req.arkUser.userName}: ${cleaned.length} keys for user ${meId}`);
+    res.json({ success: true, count: cleaned.length });
+  } catch (e) {
+    console.error('Pinned projects error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /tasks/bulk-relink — re-tag a batch of tasks with a new clientId +
 // clientName. Used both when converting a synthetic folder into a real
 // client-backed one (clientId provided) AND when consolidating tasks into

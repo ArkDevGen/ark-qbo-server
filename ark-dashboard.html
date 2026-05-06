@@ -817,6 +817,16 @@ textarea.field-input{resize:vertical;min-height:72px;line-height:1.5;}
 .tc-group-header.tc-drag-over{background:var(--surface2);outline:2px dashed var(--gold);outline-offset:-2px;}
 .tc-proj-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-d);padding:16px 16px 6px;opacity:.6;}
 .tc-proj-divider{border-top:1px solid var(--border);margin:8px 16px;}
+.tc-sidebar-search{padding:10px 14px 6px;}
+.tc-sidebar-search input{width:100%;font-size:11.5px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);box-sizing:border-box;}
+.tc-sidebar-search input:focus{outline:none;border-color:var(--gold);background:var(--surface);}
+.tc-proj-item .tc-proj-pin{font-size:11px;cursor:pointer;line-height:1;padding:2px 4px;border-radius:4px;color:var(--text-d);background:none;border:none;}
+.tc-proj-item .tc-proj-pin.pinned{color:var(--gold);opacity:1;}
+.tc-proj-item .tc-proj-pin:hover{background:var(--surface);color:var(--gold);}
+.tc-savedview-actions{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:2px;opacity:0;transition:opacity .15s;}
+.tc-proj-item:hover .tc-savedview-actions{opacity:1;}
+.tc-savedview-actions button{background:none;border:none;cursor:pointer;font-size:11px;line-height:1;padding:2px 4px;border-radius:4px;color:var(--text-d);}
+.tc-savedview-actions button:hover{background:var(--surface);color:var(--navy);}
 /* No overflow-x here on purpose — the inner .tc-board has its own
    overflow-x:auto so the day columns scroll within their container.
    Adding overflow on tc-content also broke position:sticky for the
@@ -3490,9 +3500,9 @@ input[type="checkbox"]{accent-color:var(--navy);}
       <!-- Toolbar: search + filter + group -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="search-wrap" style="flex:1;min-width:200px;">
-          <input id="tc-search" class="field-input" placeholder="Search tasks…" oninput="tcRender()">
+          <input id="tc-search" class="field-input" placeholder="Search tasks…" oninput="_tcClearActiveSavedView();tcRender()">
         </div>
-        <select id="tc-filter-status" class="field-input" style="width:120px;" onchange="tcRender()">
+        <select id="tc-filter-status" class="field-input" style="width:120px;" onchange="_tcClearActiveSavedView();tcRender()">
           <option value="open">Open</option>
           <option value="overdue">Overdue</option>
           <option value="due-today">Due Today</option>
@@ -3500,12 +3510,13 @@ input[type="checkbox"]{accent-color:var(--navy);}
           <option value="completed">Completed</option>
           <option value="all">All Tasks</option>
         </select>
-        <select id="tc-filter-client" class="field-input" style="width:160px;" onchange="tcRender()">
+        <select id="tc-filter-client" class="field-input" style="width:160px;" onchange="_tcClearActiveSavedView();tcRender()">
           <option value="">All Clients</option>
         </select>
-        <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="tcRender()">
+        <select id="tc-filter-am" class="field-input" style="width:140px;" onchange="_tcClearActiveSavedView();tcRender()">
           <option value="">All Team</option>
         </select>
+        <button class="btn btn-ghost btn-sm" onclick="tcCreateSavedViewPrompt()" title="Save current filters as a view, pinned to the sidebar." style="padding:6px 10px;font-size:11.5px;">💾 Save view</button>
         <select id="tc-group-by" class="field-input" style="width:140px;" onchange="this.dataset.userPicked='1';tcRender()">
           <option value="due">Group by Due Date</option>
           <option value="section">Group by Section</option>
@@ -9112,6 +9123,8 @@ function _buildDBPayload() {
     projectGroups:  DB.projectGroups||[],
     projectAliases: DB.projectAliases||{},
     projectSections: DB.projectSections||{},
+    tcSavedViews:   DB.tcSavedViews||[],
+    tcPinnedProjects: DB.tcPinnedProjects||{},
     ideas:          DB.ideas||[],
     devProjects:    DB.devProjects||[],
     devTemplates:   DB.devTemplates||[],
@@ -9162,6 +9175,8 @@ function _applyDBPayload(saved) {
     projectGroups:  saved.projectGroups  || [],
     projectAliases: saved.projectAliases || {},
     projectSections: saved.projectSections || {},
+    tcSavedViews:   saved.tcSavedViews   || [],
+    tcPinnedProjects: saved.tcPinnedProjects || {},
     ideas:          saved.ideas          || [],
     devProjects:    saved.devProjects    || [],
     devTemplates:   saved.devTemplates   || [],
@@ -31445,9 +31460,258 @@ function tcSelectView(view) {
   if (typeof tcRenderPinnedInfo === 'function') tcRenderPinnedInfo();
 }
 
+// Sidebar state — search query, focus tracking, and currently active saved
+// view id. All transient (no persistence) so refresh starts the user with a
+// clean sidebar regardless of last-session state.
+let _tcSidebarSearch = '';
+let _tcSidebarSearchHadFocus = false;
+let _tcActiveSavedViewId = '';
+
+function tcSidebarSearch(value) {
+  _tcSidebarSearch = String(value || '');
+  _tcSidebarSearchHadFocus = true;
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+}
+
+// Pinned-folder helpers. The store is { userId: [projKey,...] } so two users
+// on the same DB never see each other's pins. Mirrors the DB.tcPinnedProjects
+// shape the server endpoint expects.
+function _tcGetPinnedProjects() {
+  const userId = (currentUser && currentUser.id) || '';
+  if (!userId) return [];
+  const map = (DB.tcPinnedProjects && typeof DB.tcPinnedProjects === 'object') ? DB.tcPinnedProjects : {};
+  const list = Array.isArray(map[userId]) ? map[userId] : [];
+  return list.slice();
+}
+function _tcIsPinnedProject(projKey) {
+  return _tcGetPinnedProjects().includes(String(projKey));
+}
+async function _tcSavePinnedProjects() {
+  const userId = (currentUser && currentUser.id) || '';
+  if (!userId) return false;
+  const keys = _tcGetPinnedProjects();
+  try {
+    const cached = JSON.parse(localStorage.getItem('arkDB') || '{}');
+    if (!cached.tcPinnedProjects || typeof cached.tcPinnedProjects !== 'object') cached.tcPinnedProjects = {};
+    if (keys.length) cached.tcPinnedProjects[userId] = keys; else delete cached.tcPinnedProjects[userId];
+    try { localStorage.setItem('arkDB', JSON.stringify(cached)); } catch(_) {}
+  } catch(_) {}
+  try {
+    const resp = await authFetch(ARK_SERVER + '/production/pinned-projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, keys }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn('Pinned save failed:', resp.status, txt.slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Pinned save network error:', e);
+    return false;
+  }
+}
+async function tcTogglePinProject(projKey) {
+  const userId = (currentUser && currentUser.id) || '';
+  if (!userId) return;
+  if (!DB.tcPinnedProjects || typeof DB.tcPinnedProjects !== 'object') DB.tcPinnedProjects = {};
+  const cur = Array.isArray(DB.tcPinnedProjects[userId]) ? DB.tcPinnedProjects[userId].slice() : [];
+  const i = cur.indexOf(projKey);
+  if (i >= 0) cur.splice(i, 1);
+  else cur.push(projKey);
+  DB.tcPinnedProjects[userId] = cur;
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+  await _tcSavePinnedProjects();
+}
+
+// Saved-view helpers. A saved view captures the toolbar filter state under
+// a name and pins it to the sidebar. Click → restore filters + re-render.
+async function _tcSaveSavedViews() {
+  const userId = (currentUser && currentUser.id) || '';
+  if (!userId) return false;
+  const mine = (DB.tcSavedViews || []).filter(v => v && v.userId === userId);
+  try {
+    const cached = JSON.parse(localStorage.getItem('arkDB') || '{}');
+    if (!Array.isArray(cached.tcSavedViews)) cached.tcSavedViews = [];
+    const others = cached.tcSavedViews.filter(v => v && v.userId !== userId);
+    cached.tcSavedViews = [...others, ...mine];
+    try { localStorage.setItem('arkDB', JSON.stringify(cached)); } catch(_) {}
+  } catch(_) {}
+  try {
+    const resp = await authFetch(ARK_SERVER + '/production/saved-views', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, views: mine }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn('Saved-views save failed:', resp.status, txt.slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Saved-views network error:', e);
+    return false;
+  }
+}
+
+// Clears the active saved-view highlight when the user changes any filter
+// manually. Called from the toolbar's oninput/onchange handlers so the user
+// gets a clear "I'm no longer in that saved view" signal as soon as they
+// drift. No-op when no saved view is active.
+function _tcClearActiveSavedView() {
+  if (!_tcActiveSavedViewId) return;
+  _tcActiveSavedViewId = '';
+  // Pop the synthetic 'savedView:<id>' active view back to a clean slate so
+  // tcSelectView's project highlight logic isn't confused on the next click.
+  if (typeof _tcActiveView === 'string' && _tcActiveView.startsWith('savedView:')) {
+    _tcActiveView = '';
+  }
+  if (typeof tcBuildProjectSidebar === 'function') tcBuildProjectSidebar();
+}
+
+// Capture the current filter state. Used by both "save new view" and
+// "remember which view is active so the highlight clears when filters drift."
+function _tcSnapshotFilters() {
+  return {
+    search: document.getElementById('tc-search')?.value || '',
+    status: document.getElementById('tc-filter-status')?.value || '',
+    clientId: document.getElementById('tc-filter-client')?.value || '',
+    amId: document.getElementById('tc-filter-am')?.value || '',
+    groupBy: document.getElementById('tc-group-by')?.value || '',
+  };
+}
+
+async function tcCreateSavedViewPrompt() {
+  const filters = _tcSnapshotFilters();
+  const name = await arkPrompt({
+    title: 'Save current view',
+    body: 'Captures search, status, client, AM, and grouping. Pin to sidebar so you can re-apply with one click.',
+    placeholder: 'View name (e.g. "Sales Tax Queue")',
+    okLabel: 'Save view',
+  });
+  if (!name) return;
+  const userId = (currentUser && currentUser.id) || '';
+  if (!userId) { showToast('No user — log in first.', true); return; }
+  const id = (typeof uid === 'function') ? uid() : ('sv_' + Math.random().toString(36).slice(2, 12));
+  const stamp = new Date().toISOString();
+  if (!Array.isArray(DB.tcSavedViews)) DB.tcSavedViews = [];
+  DB.tcSavedViews.push({ id, userId, name: String(name).trim(), icon: '🔍', filters, _updatedAt: stamp });
+  _tcActiveSavedViewId = id;
+  tcBuildProjectSidebar();
+  const ok = await _tcSaveSavedViews();
+  if (ok) showToast(`✓ Saved view "${name}"`);
+}
+
+function tcApplySavedView(id) {
+  const v = (DB.tcSavedViews || []).find(x => x && x.id === id && !x._deleted);
+  if (!v) return;
+  const f = v.filters || {};
+  const setVal = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
+  setVal('tc-search', f.search);
+  setVal('tc-filter-status', f.status || 'open');
+  setVal('tc-filter-client', f.clientId);
+  setVal('tc-filter-am', f.amId);
+  if (f.groupBy) {
+    setVal('tc-group-by', f.groupBy);
+    const grpEl = document.getElementById('tc-group-by');
+    if (grpEl) grpEl.dataset.userPicked = '1';
+  }
+  _tcActiveSavedViewId = id;
+  // Saved views are not project views — clear active project selection and
+  // hide the project-only UI bits (notes tab, pinned-info, etc.) so we
+  // present a clean filtered task list.
+  _tcActiveView = 'savedView:' + id;
+  _tcActiveSection = '';
+  const tasksPanel = document.getElementById('tc-tasks-panel');
+  const notesPanel = document.getElementById('tc-notes-panel');
+  const projTabs = document.getElementById('tc-project-tabs');
+  const projNotes = document.getElementById('tc-project-notes');
+  const viewToggle = document.getElementById('tc-view-toggle');
+  if (tasksPanel) tasksPanel.style.display = '';
+  if (notesPanel) notesPanel.style.display = 'none';
+  if (projTabs) projTabs.style.display = 'none';
+  if (projNotes) projNotes.style.display = 'none';
+  if (viewToggle) viewToggle.style.display = '';
+  // Restore the saved view-mode (list/board/calendar) container visibility.
+  const savedMode = sessionStorage.getItem('tc_view_mode') || 'list';
+  ['list','board','calendar'].forEach(m => {
+    const el = document.getElementById('tc-view-' + m);
+    if (el) el.style.display = (m === savedMode) ? '' : 'none';
+  });
+  tcRender();
+  tcBuildProjectSidebar();
+  if (typeof tcRenderPinnedInfo === 'function') tcRenderPinnedInfo();
+}
+
+async function tcRenameSavedView(id) {
+  const v = (DB.tcSavedViews || []).find(x => x && x.id === id);
+  if (!v) return;
+  const name = await arkPrompt({
+    title: 'Rename saved view',
+    placeholder: 'View name',
+    defaultValue: v.name || '',
+    okLabel: 'Save',
+  });
+  if (!name) return;
+  v.name = String(name).trim();
+  v._updatedAt = new Date().toISOString();
+  tcBuildProjectSidebar();
+  await _tcSaveSavedViews();
+}
+
+async function tcDeleteSavedView(id) {
+  const v = (DB.tcSavedViews || []).find(x => x && x.id === id);
+  if (!v) return;
+  const ok = await arkConfirmModal({
+    title: `Delete "${v.name || 'this view'}"?`,
+    body: 'This removes the saved view from your sidebar. Your filters and tasks are unaffected.',
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
+  v._deleted = true;
+  v._updatedAt = new Date().toISOString();
+  if (_tcActiveSavedViewId === id) _tcActiveSavedViewId = '';
+  tcBuildProjectSidebar();
+  await _tcSaveSavedViews();
+}
+
+// Modern confirm — Promise<boolean>. Used for destructive saved-view delete.
+function arkConfirmModal({ title, body, okLabel, danger }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10001;display:flex;align-items:center;justify-content:center;';
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.onclick = e => { if (e.target === overlay) close(false); };
+    const okClass = danger ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm';
+    overlay.innerHTML = `<div class="card" style="width:440px;padding:0;overflow:visible;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">${title || ''}</div>
+        ${body ? `<div style="font-size:12px;color:var(--text-d);margin-top:4px;line-height:1.4;">${body}</div>` : ''}
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);text-align:right;">
+        <button class="btn btn-ghost btn-sm" data-cancel style="margin-left:8px;">Cancel</button>
+        <button class="${okClass}" data-ok style="margin-left:8px;">${okLabel || 'Confirm'}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-cancel]').onclick = () => close(false);
+    overlay.querySelector('[data-ok]').onclick = () => close(true);
+    overlay.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+    });
+  });
+}
+
 function tcBuildProjectSidebar() {
   const sidebar = document.getElementById('tc-project-sidebar');
   if (!sidebar) return;
+
+  // Reset focus tracker — only the search-input handler sets it true.
+  _tcSidebarSearchHadFocus = (document.activeElement && document.activeElement.id === 'tc-sidebar-search-input');
 
   const tasks = (DB.tasks || []).filter(t => !_taskHiddenForMe(t));
   const fAM = document.getElementById('tc-filter-am')?.value || '';
@@ -31502,7 +31766,7 @@ function tcBuildProjectSidebar() {
         }
       } else {
         key = '_noClient';
-        label = 'No Client';
+        label = 'Inbox';
       }
     }
     if (!projects[key]) projects[key] = { name: label, count: 0, hasDueDate: false, isSynthetic: key.startsWith('name:') };
@@ -31519,15 +31783,15 @@ function tcBuildProjectSidebar() {
     if (aliases[k]) p.name = aliases[k];
   }
 
-  // Split into client projects and personal projects
+  // Pull the Inbox bucket out so it renders at the top above the smart
+  // views, not at the bottom under "Personal." The rest are client folders.
+  const inboxBucket = projects['_noClient'] ? { id: '_noClient', ...projects['_noClient'] } : { id: '_noClient', name: 'Inbox', count: 0, hasDueDate: false, isSynthetic: false };
   const clientProjects = [];
-  const personalProjects = [];
   for (const [id, p] of Object.entries(projects)) {
-    if (id === '_noClient') personalProjects.push({ id, ...p });
-    else clientProjects.push({ id, ...p });
+    if (id === '_noClient') continue;
+    clientProjects.push({ id, ...p });
   }
   clientProjects.sort((a, b) => a.name.localeCompare(b.name));
-  personalProjects.sort((a, b) => a.name.localeCompare(b.name));
 
   // Build a sections-by-project map: { projectKey: Map(section → taskCount) }.
   // Pulls from t.section on every live task that grouped into that project,
@@ -31587,6 +31851,14 @@ function tcBuildProjectSidebar() {
     const editBtn = isProj ? `<button class="tc-proj-edit" title="Rename folder" onclick="event.stopPropagation();tcEditProjectAlias('${key.replace(/'/g,"\\'")}')">✏️</button>` : '';
     const addSubBtn = isProj ? `<button class="tc-proj-edit" title="Add subfolder" onclick="event.stopPropagation();tcAddSubfolder('${key.replace(/'/g,"\\'")}')">➕</button>` : '';
     const linkBtn = (isProj && isSynthetic) ? `<button class="tc-proj-link" title="Link this folder to a client" onclick="event.stopPropagation();tcLinkSyntheticToClient('${key.replace(/'/g,"\\'")}')">🔗</button>` : '';
+    // Pin star — only on real project rows (not Inbox, not smart views).
+    // Pinned folders show a filled star always; unpinned ones reveal a hollow
+    // star on hover (handled by the .tc-proj-actions opacity rule).
+    const isPinnable = isProj && key !== '_noClient';
+    const pinned = isPinnable && _tcIsPinnedProject(key);
+    const pinBtn = isPinnable
+      ? `<button class="tc-proj-pin${pinned ? ' pinned' : ''}" title="${pinned ? 'Unpin' : 'Pin to top'}" onclick="event.stopPropagation();tcTogglePinProject('${key.replace(/'/g,"\\'")}')">${pinned ? '★' : '☆'}</button>`
+      : '';
     const safeLabel = String(label).replace(/"/g, '&quot;');
     // Project rows are draggable (you can drag a folder into another folder
     // to make it a subfolder) AND drop targets (drop a task or another
@@ -31598,7 +31870,7 @@ function tcBuildProjectSidebar() {
     let html = `<div class="tc-proj-item${_tcActiveView === view && !_tcActiveSection ? ' active' : ''}" data-view="${view}" data-projkey="${key}" ${dragAttrs} onclick="tcSelectView('${view}')" title="${safeLabel}">
       ${chevron}<span class="icon">${icon}</span>
       <span class="label">${label}</span>
-      <span class="tc-proj-actions">${editBtn}${addSubBtn}${linkBtn}</span>
+      <span class="tc-proj-actions">${pinBtn}${editBtn}${addSubBtn}${linkBtn}</span>
       ${count > 0 ? `<span class="count" style="${countColor ? 'color:'+countColor+';font-weight:600;' : ''}">${count}</span>` : ''}
     </div>`;
     if (isExpanded && hasSections) {
@@ -31625,6 +31897,11 @@ function tcBuildProjectSidebar() {
     return html;
   };
 
+  // Apply the sidebar search filter (matches against the visible label only —
+  // the user's intent is "find this folder by name" not "search tasks").
+  const searchQ = (_tcSidebarSearch || '').trim().toLowerCase();
+  const matchesSearch = (label) => !searchQ || String(label || '').toLowerCase().includes(searchQ);
+
   // Build grouped sidebar
   const groups = (DB.projectGroups || []).filter(g => !g._deleted && g.userId === (currentUser?.id || ''));
   const groupedClientIds = new Set();
@@ -31635,40 +31912,100 @@ function tcBuildProjectSidebar() {
 
   // Render groups (collapsible). Group headers are also drop targets for
   // folders — drag a folder onto a group header to add it to that group.
+  // When a search query is active and no folder in the group matches, hide
+  // the entire group header so the sidebar collapses to just relevant rows.
   groups.forEach(g => {
     const isCollapsed = g.collapsed;
     const groupProjects = clientProjects.filter(p => (g.clientIds || []).includes(p.id));
+    const visibleProjects = groupProjects.filter(p => matchesSearch(p.name));
+    if (searchQ && !visibleProjects.length) return;
     const groupCount = groupProjects.reduce((s, p) => s + p.count, 0);
     projectsHtml += `<div class="tc-proj-section tc-group-header" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="tcToggleGroup('${g.id}')"
       ondragover="tcDragOverGroup(event,'${g.id}')" ondragleave="tcDragLeaveGroup(event)" ondrop="tcDropOnGroup(event,'${g.id}')">
       <span>${isCollapsed ? '▶' : '▼'} ${g.name}</span>
       <span style="font-size:9px;font-weight:400;opacity:.5;">${groupCount}</span>
     </div>`;
-    if (!isCollapsed) {
-      projectsHtml += groupProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
+    // While searching, force-expand groups so the matches are visible.
+    if (!isCollapsed || searchQ) {
+      projectsHtml += visibleProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
     }
   });
 
   // Ungrouped projects
-  if (ungroupedProjects.length) {
+  const visibleUngrouped = ungroupedProjects.filter(p => matchesSearch(p.name));
+  if (visibleUngrouped.length) {
     if (groups.length) projectsHtml += '<div class="tc-proj-section">Other Projects</div>';
-    projectsHtml += ungroupedProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
+    projectsHtml += visibleUngrouped.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
   }
 
-  // Personal projects
-  if (personalProjects.length) {
-    projectsHtml += '<div class="tc-proj-section">Personal</div>';
-    projectsHtml += personalProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
+  // Pinned folders — per-user list of project keys promoted to the top.
+  const pinnedKeys = _tcGetPinnedProjects();
+  const pinnedProjects = pinnedKeys
+    .map(k => clientProjects.find(p => p.id === k))
+    .filter(Boolean)
+    .filter(p => matchesSearch(p.name));
+  let pinnedHtml = '';
+  if (pinnedProjects.length) {
+    pinnedHtml = '<div class="tc-proj-section">⭐ Pinned</div>' +
+      pinnedProjects.map(p => item('project:' + p.id, '📁', p.name, p.count, '', p.id, p.isSynthetic)).join('');
   }
+
+  // Saved views — named filter combos, per-user. Click to apply, ✏️ rename,
+  // × delete. Active state matches `_tcActiveSavedViewId`. Search filters
+  // these by name too so a search box reaches every sidebar row.
+  const savedViews = (DB.tcSavedViews || []).filter(v => v && !v._deleted && v.userId === (currentUser?.id || ''));
+  savedViews.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  const visibleSaved = savedViews.filter(v => matchesSearch(v.name));
+  let savedViewsHtml = '';
+  if (visibleSaved.length) {
+    savedViewsHtml = `<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Saved Views <span style="font-size:10px;cursor:pointer;color:var(--gold);" title="Save current filters as a view" onclick="event.stopPropagation();tcCreateSavedViewPrompt()">+</span></div>` +
+      visibleSaved.map(v => {
+        const safeName = String(v.name || 'Untitled').replace(/"/g, '&quot;');
+        const safeIcon = String(v.icon || '🔍');
+        const isActive = _tcActiveSavedViewId === v.id;
+        return `<div class="tc-proj-item${isActive ? ' active' : ''}" data-saved-view="${v.id}" onclick="tcApplySavedView('${v.id}')" title="${safeName}">
+          <span class="tc-proj-chevron tc-proj-chevron-empty"></span>
+          <span class="icon">${safeIcon}</span>
+          <span class="label">${safeName}</span>
+          <span class="tc-savedview-actions">
+            <button title="Rename" onclick="event.stopPropagation();tcRenameSavedView('${v.id}')">✏️</button>
+            <button title="Delete" onclick="event.stopPropagation();tcDeleteSavedView('${v.id}')">×</button>
+          </span>
+        </div>`;
+      }).join('');
+  }
+
+  // Inbox is always visible (it's a destination for unfiled tasks even when
+  // empty). Project view 'project:_noClient' already routes to it.
+  const inboxHtml = item('project:_noClient', '📥', 'Inbox', inboxBucket.count, inboxBucket.count > 0 ? 'var(--blue)' : '', '_noClient', false);
+
+  // Smart views match the search query against their fixed labels too.
+  const smartHtml =
+    (matchesSearch('Inbox') ? inboxHtml : '') +
+    (matchesSearch('Today') ? item('today', '🟡', 'Today', cToday, cToday > 0 ? 'var(--gold)' : '') : '') +
+    (matchesSearch('Overdue') ? item('overdue', '🔴', 'Overdue', cOverdue, cOverdue > 0 ? '#b03a3a' : '') : '') +
+    (matchesSearch('Upcoming') ? item('upcoming', '📅', 'Upcoming', cUpcoming, '') : '') +
+    (matchesSearch('Notes') ? item('notes', '📌', 'Notes', cNotes, '') : '');
 
   sidebar.innerHTML =
-    item('upcoming', '📅', 'Upcoming', cUpcoming, '') +
-    item('today', '🟡', 'Today', cToday, cToday > 0 ? 'var(--gold)' : '') +
-    item('overdue', '🔴', 'Overdue', cOverdue, cOverdue > 0 ? '#b03a3a' : '') +
-    item('notes', '📌', 'Notes', cNotes, '') +
+    `<div class="tc-sidebar-search">
+       <input type="text" id="tc-sidebar-search-input" placeholder="🔎 Search folders…" value="${(_tcSidebarSearch || '').replace(/"/g, '&quot;')}" oninput="tcSidebarSearch(this.value)">
+     </div>` +
+    smartHtml +
+    (savedViewsHtml ? '<div class="tc-proj-divider"></div>' + savedViewsHtml : '') +
+    (pinnedHtml ? '<div class="tc-proj-divider"></div>' + pinnedHtml : '') +
     '<div class="tc-proj-divider"></div>' +
-    '<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Projects <span style="font-size:10px;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();tcManageGroups()">⚙</span></div>' +
+    '<div class="tc-proj-section" style="display:flex;align-items:center;justify-content:space-between;">Projects <span style="display:flex;gap:8px;"><span style="font-size:10px;cursor:pointer;color:var(--gold);" title="Save current filters as a view" onclick="event.stopPropagation();tcCreateSavedViewPrompt()">💾</span><span style="font-size:10px;cursor:pointer;color:var(--gold);" title="Manage groups" onclick="event.stopPropagation();tcManageGroups()">⚙</span></span></div>' +
     projectsHtml;
+
+  // Re-focus the search input after re-render so typing isn't interrupted.
+  if (_tcSidebarSearchHadFocus) {
+    const el = document.getElementById('tc-sidebar-search-input');
+    if (el) {
+      el.focus();
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch(_) {}
+    }
+  }
 }
 
 // One-click cleanup: find every task that looks like a sales-tax task
