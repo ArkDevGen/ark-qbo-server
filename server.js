@@ -7720,6 +7720,12 @@ app.post('/hteao/parse-revel', requireAuth, upload.single('file'), (req, res) =>
     const tipsTotal      = money(totalRow['Tips Total']);
     const liabTips       = money(totalRow['Liabilities Tips Total']);
     const declaredTips   = money(totalRow['Declared Tips']);
+    // Sales-tax-related fields surfaced to the client so the same upload
+    // also feeds the Sales Tax Center cache (variance check uses Taxable
+    // Sales × combined rate vs. Sales Tax actually collected).
+    const taxableSales    = money(totalRow['Taxable Sales']);
+    const nontaxableSales = money(totalRow['Nontaxable Sales']);
+    const netSales        = money(totalRow['Net Sales']);
 
     const employeeTips = tipsTotal + liabTips + declaredTips;
 
@@ -7771,6 +7777,15 @@ app.post('/hteao/parse-revel', requireAuth, upload.single('file'), (req, res) =>
           balanced: Math.abs(creditsTotal - debitsTotal) < 0.01,
         },
       },
+      // Sales-tax snapshot — used by the Sales Tax Center cache so the same
+      // CSV drop populates both flows. All values come from the Total row.
+      salesTax: {
+        grossSales:        +grossSales.toFixed(2),
+        taxableSales:      +taxableSales.toFixed(2),
+        nontaxableSales:   +nontaxableSales.toFixed(2),
+        netSales:          +netSales.toFixed(2),
+        salesTaxCollected: +salesTax.toFixed(2),
+      },
       sourceFile: {
         name: req.file.originalname,
         size: req.file.size,
@@ -7779,6 +7794,53 @@ app.post('/hteao/parse-revel', requireAuth, upload.single('file'), (req, res) =>
     });
   } catch (e) {
     console.error('HTeaO parse error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /hteao/salestax-cache — save (upsert by id) the user's per-store
+// sales-tax snapshots derived from Revel CSV uploads, and auto-purge
+// rows that are older than ~2 months. Body: { rows: [...] }.
+// Each row carries provenance (sourceFile, sourceFileHash) so the
+// Sales Tax Center can show what was applied. Other rows are preserved
+// untouched (the cache is global, not per-user).
+app.post('/hteao/salestax-cache', requireAuth, (req, res) => {
+  try {
+    const incoming = Array.isArray(req.body?.rows) ? req.body.rows : null;
+    if (!incoming) return res.status(400).json({ error: 'rows required (array)' });
+    if (!fs.existsSync(ARK_DB_FILE)) return res.status(404).json({ error: 'DB file not found' });
+    const db = JSON.parse(fs.readFileSync(ARK_DB_FILE, 'utf8'));
+    if (!Array.isArray(db.hteaoSalesTaxCache)) db.hteaoSalesTaxCache = [];
+    const byId = new Map();
+    for (const r of db.hteaoSalesTaxCache) if (r && r.id) byId.set(r.id, r);
+    for (const r of incoming) {
+      if (!r || !r.id) continue;
+      const cur = byId.get(r.id);
+      if (!cur) { byId.set(r.id, r); continue; }
+      const curT = cur._updatedAt ? new Date(cur._updatedAt).getTime() : 0;
+      const incT = r._updatedAt   ? new Date(r._updatedAt).getTime()   : 0;
+      if (incT >= curT) byId.set(r.id, r);
+    }
+    // Auto-purge: drop rows whose period ended more than ~70 days ago
+    // (covers the user's "month, maybe two to be safe" rule). Provenance
+    // for filed sales-tax returns lives separately on DB.salesTaxFilings,
+    // so deleting the cache row doesn't lose the audit trail.
+    const cutoffMs = Date.now() - (70 * 24 * 60 * 60 * 1000);
+    const cleaned = [];
+    for (const r of byId.values()) {
+      if (!r) continue;
+      const periodEndMs = r.periodEnd ? new Date(r.periodEnd + 'T00:00:00Z').getTime() : 0;
+      if (periodEndMs && periodEndMs < cutoffMs) continue; // stale
+      cleaned.push(r);
+    }
+    db.hteaoSalesTaxCache = cleaned;
+    db._savedAt = new Date().toISOString();
+    db._savedBy = req.arkUser.userName;
+    fs.writeFileSync(ARK_DB_FILE, JSON.stringify(db));
+    console.log(`HTeaO sales-tax cache by ${req.arkUser.userName}: ${incoming.length} incoming, ${cleaned.length} retained`);
+    res.json({ success: true, kept: cleaned.length });
+  } catch (e) {
+    console.error('HTeaO sales-tax cache error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

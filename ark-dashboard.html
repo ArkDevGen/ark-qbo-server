@@ -9132,6 +9132,7 @@ function _buildDBPayload() {
     // HTeaO Revel integration
     hteaoStores:    DB.hteaoStores||[],
     hteaoPushLog:   DB.hteaoPushLog||[],
+    hteaoSalesTaxCache: DB.hteaoSalesTaxCache||[],
     // Sales Tax Filing Center
     salesTaxRates:       DB.salesTaxRates||[],
     salesTaxFilings:     DB.salesTaxFilings||[],
@@ -9184,6 +9185,7 @@ function _applyDBPayload(saved) {
     // HTeaO Revel integration
     hteaoStores:    saved.hteaoStores    || [],
     hteaoPushLog:   saved.hteaoPushLog   || [],
+    hteaoSalesTaxCache: saved.hteaoSalesTaxCache || [],
     // Sales Tax Filing Center
     salesTaxRates:       saved.salesTaxRates       || [],
     salesTaxFilings:     saved.salesTaxFilings     || [],
@@ -24603,6 +24605,8 @@ let _stfImportedTaxable = {};    // {jurisdictionId: taxableAmount} from parsed 
 let _stfSourceTotal = null;      // Total tax from the parsed source report (reconciliation check)
 let _stfSourceFile = null;       // Filename of last parsed source — for audit/debugging
 let _stfPosIssues = [];          // POS-rate mismatches detected from source (persistent after apply)
+let _stfHteaoCacheId = '';       // id of the HTeaO sales-tax cache row applied to this filing (consumed on submit)
+let _stfHteaoBannerDismissed = false; // user dismissed the HTeaO drop-in banner for this open
 
 function stfGetSetupClients(){
   // Clients with at least 1 configured jurisdiction
@@ -24671,6 +24675,8 @@ function stfOpenClient(clientId){
   _stfSourceTotal = null;
   _stfSourceFile = null;
   _stfPosIssues = [];
+  _stfHteaoCacheId = '';
+  _stfHteaoBannerDismissed = false;
   document.getElementById('stf-empty-state').style.display = 'none';
   const active = document.getElementById('stf-active');
   active.style.display = '';
@@ -24748,6 +24754,52 @@ function stfRenderPanel(){
             💾 <strong>Draft resumed</strong> from ${new Date(d.savedAt).toLocaleString()} ${d.savedBy?`by ${d.savedBy}`:''}
           </div>
           <button onclick="stfDiscardDraft('${c.id}')" class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 10px;color:var(--red);border-color:var(--red);">Discard draft</button>
+        </div>`;
+      })()}
+
+      ${(() => {
+        // HTeaO drop-in banner — surfaces sales-tax numbers cached by the
+        // HTeaO JE upload flow so the user doesn't re-drop the same CSV.
+        // Looks up by (clientId, period) — period comes from the period
+        // input if the form is mounted, otherwise the default period.
+        if (_stfHteaoBannerDismissed) return '';
+        const liveP = document.getElementById('stf-period')?.value || defaultPeriod;
+        const row = htFindCacheRowForFiling(c.id, liveP);
+        if (!row) return '';
+        const fmt = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const calcNet = combinedRate > 0 ? row.salesTaxCollected / combinedRate : 0;
+        const variance = +(row.taxableSales - calcNet).toFixed(2);
+        const bigVar = Math.abs(variance) > 5;
+        const varBadge = combinedRate > 0
+          ? (bigVar
+              ? `<span style="background:#fff1f1;color:var(--red);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;" title="Reported taxable minus (sales tax ÷ combined rate). |variance| > $5 — POS rate may be miscalibrated.">⚠ Variance ${fmt(variance)}</span>`
+              : `<span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;" title="Reported taxable matches (sales tax ÷ combined rate) within $5.">✓ Reconciles ${fmt(variance)}</span>`)
+          : `<span style="background:var(--surface2);color:var(--text-d);padding:2px 8px;border-radius:10px;font-size:11px;" title="Configure jurisdictions to see the variance check.">Variance pending</span>`;
+        const captured = row.capturedAt ? new Date(row.capturedAt).toLocaleString() : '';
+        const sourceFile = row.sourceFile || 'Revel CSV';
+        const ratePct = combinedRate > 0 ? `${(combinedRate*100).toFixed(4).replace(/0+$/,'').replace(/\.$/,'')}%` : '—';
+        return `<div style="background:#f4f8fc;border:2px solid var(--navy);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--navy);font-family:'Cormorant Garamond',serif;font-size:18px;">📥 HTeaO data available for ${liveP}</div>
+              <div style="font-size:11px;color:var(--text-d);margin-top:3px;">Captured ${captured} from <code style="font-size:10px;">${sourceFile}</code> · click Apply to pre-fill this filing.</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button onclick="stfApplyHteaoCache('${row.id}')" class="btn btn-primary btn-sm" style="font-size:11px;">✓ Apply</button>
+              <button onclick="_stfHteaoBannerDismissed=true;stfRenderPanel();" class="btn btn-ghost btn-sm" style="font-size:11px;padding:5px 10px;" title="Dismiss for now (the cache row stays available until consumed or purged)">✕</button>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #d8e1ec;border-radius:var(--radius-sm);padding:10px 12px;font-size:11.5px;display:grid;grid-template-columns:auto auto;gap:4px 16px;line-height:1.7;">
+            <div style="color:var(--text-d);">Gross sales</div>
+            <div class="mono" style="font-weight:600;text-align:right;">${fmt(row.grossSales)}</div>
+            <div style="color:var(--text-d);">Taxable sales <span style="font-size:9px;color:var(--text-d);">(reported)</span></div>
+            <div class="mono" style="font-weight:600;text-align:right;">${fmt(row.taxableSales)}</div>
+            <div style="color:var(--text-d);">Calculated net <span style="font-size:9px;color:var(--text-d);">(tax ÷ ${ratePct})</span></div>
+            <div class="mono" style="font-weight:600;text-align:right;">${fmt(calcNet)}</div>
+            <div style="color:var(--text-d);border-top:1px solid var(--border);padding-top:4px;">Sales tax collected</div>
+            <div class="mono" style="font-weight:700;text-align:right;color:var(--navy);border-top:1px solid var(--border);padding-top:4px;">${fmt(row.salesTaxCollected)}</div>
+          </div>
+          <div style="margin-top:8px;display:flex;justify-content:flex-end;">${varBadge}</div>
         </div>`;
       })()}
 
@@ -25690,6 +25742,51 @@ function stfRenderTotalOnlyPreview(parsed, fileName){
   _stfSetStatus(`✓ Parsed <strong>${fileName}</strong> — total tax ${fmt(parsed.total)}`, 'ok');
 }
 
+// Apply an HTeaO sales-tax cache row to the active filing — pre-fills
+// gross + per-jurisdiction tax via the same path as the Lightspeed
+// total-only flow. Stores the cache row id so the filing's submit
+// handler can mark it consumed (which makes the banner stop showing).
+function stfApplyHteaoCache(rowId){
+  const row = (DB.hteaoSalesTaxCache || []).find(r => r && r.id === rowId);
+  if (!row) { showToast('Cache row not found.', true); return; }
+  if (!_stfActiveClient) return;
+  const locals = _stfLocalJurs();
+  const state  = _stfStateJur();
+  const combinedRate = _stfCombinedRate();
+  if (combinedRate <= 0){ alert('Configure jurisdictions before applying.'); return; }
+
+  const total = row.salesTaxCollected || 0;
+  // Distribute total tax across jurisdictions using the same rules the
+  // Lightspeed apply uses — single-local clients get one combined entry,
+  // multi-local clients get a rate-weighted split.
+  if (locals.length === 1 && state){
+    _stfPerJurTax[locals[0].id] = (_stfPerJurTax[locals[0].id] || 0) + total;
+  } else {
+    const allJurs = [state, ...locals].filter(Boolean);
+    for (const j of allJurs){
+      const share = total * (j.rate / combinedRate);
+      _stfPerJurTax[j.id] = (_stfPerJurTax[j.id] || 0) + share;
+    }
+  }
+  if (row.grossSales > 0) _stfGrossInput = row.grossSales;
+  _stfSourceFile  = row.sourceFile || `HTeaO ${row.storeCode}`;
+  _stfSourceTotal = total;
+  _stfHteaoCacheId = row.id;
+  // HTeaO CSVs only give us a total; per-jurisdiction POS-rate checks
+  // can't run without per-jurisdiction tax, so leave _stfPosIssues alone.
+  // The banner already showed the variance against rate × taxable.
+  _stfHteaoBannerDismissed = true; // dismiss after apply so it doesn't reappear
+  stfRenderPanel();
+  // Variance toast — only when sufficiently far off (the user asked for >$5).
+  const calcNet = total / combinedRate;
+  const variance = +(row.taxableSales - calcNet).toFixed(2);
+  if (Math.abs(variance) > 5) {
+    showToast(`Applied — variance ${variance >= 0 ? '+' : ''}$${variance.toFixed(2)} between reported taxable and calculated net. Verify before filing.`, true, 6000);
+  } else {
+    showToast(`Applied HTeaO data — total tax $${total.toFixed(2)}`);
+  }
+}
+
 // Apply a total-only parse to the client's inputs. Single-local → use
 // combined mode. Multi-local → proportion the total by configured rates.
 function stfApplyTotalOnly(){
@@ -25772,6 +25869,8 @@ function stfClose(){
   _stfSourceTotal = null;
   _stfSourceFile = null;
   _stfPosIssues = [];
+  _stfHteaoCacheId = '';
+  _stfHteaoBannerDismissed = false;
   document.getElementById('stf-empty-state').style.display = '';
   document.getElementById('stf-active').style.display = 'none';
   stfRenderList();
@@ -26147,6 +26246,13 @@ function stfSubmit(){
   };
   DB.salesTaxFilings = DB.salesTaxFilings || [];
   DB.salesTaxFilings.unshift(rec);
+
+  // Mark the HTeaO cache row consumed (if the filing was pre-filled from
+  // it) so the drop-in banner stops showing. Fire-and-forget — the local
+  // mutation lands immediately and the server sync is best-effort.
+  if (_stfHteaoCacheId) {
+    htMarkCacheConsumed(_stfHteaoCacheId, rec.id);
+  }
 
   // Advance Next Due Date based on frequency
   if (c.stNextdue && c.stFreq){
@@ -56671,12 +56777,26 @@ async function htHandleFiles(fileList){
 
       // Match to configured store by Revel code
       const store = (DB.hteaoStores || []).find(s => s.revelCode === data.storeCode);
+      // Sales-tax cache row — stashed on every successful parse so the
+      // Sales Tax Center can pull these numbers later without re-uploading.
+      // Resolved clientId (via realmId → c.qboRealmId or franchise) lets
+      // the Sales Tax form look this up by client+period directly.
+      const cacheRow = htBuildSalesTaxCacheRow({
+        storeCode: data.storeCode,
+        store,
+        period: data.period,
+        salesTax: data.salesTax,
+        sourceFile: data.sourceFile,
+        sourceFileHash: sha256,
+      });
       _htParsedJEs.push({
         id: uid(),
         storeCode: data.storeCode,
         store,                            // may be undefined if not configured
         period: data.period,
         journal: data.journal,
+        salesTax: data.salesTax,          // {grossSales, taxableSales, nontaxableSales, netSales, salesTaxCollected}
+        salesTaxCacheId: cacheRow ? cacheRow.id : '',
         sourceFile: data.sourceFile,
         sourceFileHash: sha256,           // SHA-256 for audit log provenance
         file,                             // keep the File object in case we attach it later
@@ -56696,6 +56816,136 @@ async function htHandleFiles(fileList){
 
   statusEl.textContent = '';
   htShowReview();
+  // Sync any newly-cached sales-tax rows to the server (also triggers the
+  // ~70-day auto-purge on the backend). Fire-and-forget — failure here
+  // doesn't block the JE flow; the rows are still present locally.
+  htSyncSalesTaxCache();
+}
+
+// Resolve the ARK client that owns a given QBO realmId. Checks both top-
+// level c.qboRealmId and any c.franchises[].qboRealmId. Returns the parent
+// client id (sales tax filings are filed by the legal entity, not the
+// franchise sub-row) or '' if not found.
+function htResolveClientFromRealm(realmId){
+  if (!realmId) return '';
+  for (const c of (DB.clients || [])){
+    if (c._deleted) continue;
+    if (c.qboRealmId === realmId) return c.id;
+    for (const f of (c.franchises || [])){
+      if (f.qboRealmId === realmId) return c.id;
+    }
+  }
+  return '';
+}
+
+// Build a sales-tax cache row from a parsed Revel CSV. Idempotent by
+// (storeCode + periodStart): re-uploading the same file replaces the
+// existing row's id so the latest numbers win without piling up dupes.
+function htBuildSalesTaxCacheRow({ storeCode, store, period, salesTax, sourceFile, sourceFileHash }){
+  if (!salesTax) return null;
+  if (!period?.start) return null;
+  const periodKey = period.start.slice(0, 7); // YYYY-MM
+  const realmId = store?.realmId || '';
+  const clientId = htResolveClientFromRealm(realmId);
+  // Reuse the row id if a row for this storeCode+period already exists, so
+  // dropping the same CSV twice doesn't duplicate. If the matching row was
+  // already consumed by a filing, we DON'T overwrite it — instead we mint
+  // a new row (the user is re-running, possibly because the original
+  // numbers changed; the consumed row stays linked to its filing).
+  const existing = (DB.hteaoSalesTaxCache || []).find(r =>
+    r && !r.consumed && r.storeCode === storeCode && r.period === periodKey
+  );
+  const stamp = new Date().toISOString();
+  const row = {
+    id: existing ? existing.id : uid(),
+    storeCode,
+    realmId,
+    clientId,                       // '' if unresolved — banner will skip
+    storeDisplayName: store?.displayName || '',
+    period: periodKey,
+    periodStart: period.start || '',
+    periodEnd: period.end || '',
+    grossSales:        salesTax.grossSales || 0,
+    taxableSales:      salesTax.taxableSales || 0,
+    nontaxableSales:   salesTax.nontaxableSales || 0,
+    netSales:          salesTax.netSales || 0,
+    salesTaxCollected: salesTax.salesTaxCollected || 0,
+    sourceFile:     sourceFile?.name || '',
+    sourceFileHash: sourceFileHash || '',
+    capturedAt: stamp,
+    capturedBy: (currentUser && currentUser.userName) || '',
+    consumed: false,
+    consumedFilingId: null,
+    consumedAt: null,
+    _updatedAt: stamp,
+  };
+  if (!Array.isArray(DB.hteaoSalesTaxCache)) DB.hteaoSalesTaxCache = [];
+  if (existing) {
+    const i = DB.hteaoSalesTaxCache.findIndex(r => r.id === existing.id);
+    if (i >= 0) DB.hteaoSalesTaxCache[i] = row;
+    else DB.hteaoSalesTaxCache.push(row);
+  } else {
+    DB.hteaoSalesTaxCache.push(row);
+  }
+  return row;
+}
+
+// Push the current cache to the server. Mirrors the local cache to
+// localStorage in a try/catch so quota failures (multi-MB DBs) don't
+// throw. Server applies merge-by-id + auto-purge of stale rows.
+async function htSyncSalesTaxCache(){
+  const rows = (DB.hteaoSalesTaxCache || []).filter(Boolean);
+  try {
+    const cached = JSON.parse(localStorage.getItem('arkDB') || '{}');
+    cached.hteaoSalesTaxCache = rows;
+    try { localStorage.setItem('arkDB', JSON.stringify(cached)); } catch(_) {}
+  } catch(_) {}
+  try {
+    const resp = await authFetch(ARK_SERVER + '/hteao/salestax-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn('HTeaO sales-tax cache sync failed:', resp.status, txt.slice(0, 200));
+      return false;
+    }
+    // Server may have purged stale rows — sync the local copy with the
+    // returned count by stripping anything past the cutoff locally too.
+    const cutoffMs = Date.now() - (70 * 24 * 60 * 60 * 1000);
+    DB.hteaoSalesTaxCache = rows.filter(r => {
+      const t = r?.periodEnd ? new Date(r.periodEnd + 'T00:00:00Z').getTime() : 0;
+      return !t || t >= cutoffMs;
+    });
+    return true;
+  } catch (e) {
+    console.warn('HTeaO sales-tax cache sync error:', e);
+    return false;
+  }
+}
+
+// Mark a cache row consumed by a sales-tax filing. Called from the
+// Sales Tax Center after the user clicks "Apply" on the drop-in banner.
+async function htMarkCacheConsumed(rowId, filingId){
+  const r = (DB.hteaoSalesTaxCache || []).find(x => x && x.id === rowId);
+  if (!r) return;
+  r.consumed = true;
+  r.consumedFilingId = filingId || null;
+  r.consumedAt = new Date().toISOString();
+  r._updatedAt = r.consumedAt;
+  await htSyncSalesTaxCache();
+}
+
+// Look up a non-consumed cache row for a given client + period (YYYY-MM).
+// Used by the Sales Tax filing form to surface the drop-in banner.
+function htFindCacheRowForFiling(clientId, periodYM){
+  if (!clientId || !periodYM) return null;
+  const rows = (DB.hteaoSalesTaxCache || []).filter(r => r && !r.consumed && r.clientId === clientId);
+  // Most recent first within the period
+  const matches = rows.filter(r => r.period === periodYM)
+    .sort((a, b) => String(b.capturedAt || '').localeCompare(String(a.capturedAt || '')));
+  return matches[0] || null;
 }
 
 // Compute SHA256 hash of a File (browser SubtleCrypto). Returns hex string.
@@ -56795,6 +57045,26 @@ function htReviewCard(je){
   const balBadge = j.totals.balanced
     ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;">✓ Balanced</span>`
     : `<span style="background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;">⚠ Out of balance</span>`;
+  // Sales-tax cache badge — confirms the same drop also fed the Sales Tax
+  // Center. Shows the headline numbers (gross / taxable / collected) and
+  // whether the row was resolved to an ARK client. If clientId is empty
+  // the row is still cached but won't surface in the filing form until
+  // the user maps the store to a QBO realm.
+  const stx = je.salesTax;
+  const fmtN = n => '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const cacheRow = je.salesTaxCacheId
+    ? (DB.hteaoSalesTaxCache || []).find(r => r && r.id === je.salesTaxCacheId)
+    : null;
+  const stxBadge = stx ? (cacheRow && cacheRow.clientId
+    ? `<span style="background:#eef3fb;color:var(--navy);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;" title="Sales Tax Center will offer to apply these numbers when you file for this client.">📊 Sales-tax data captured</span>`
+    : `<span style="background:var(--surface2);color:var(--text-d);padding:2px 8px;border-radius:10px;font-size:var(--text-xs);font-weight:700;" title="Sales-tax numbers cached, but the Revel store isn't linked to an ARK client yet.">📊 Sales-tax cached (unlinked)</span>`
+  ) : '';
+  const stxRow = stx ? `<div style="padding:10px 18px;border-top:1px solid var(--border);background:var(--surface);font-size:var(--text-sm);display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
+    <span style="font-weight:600;color:var(--text);">Sales-tax snapshot:</span>
+    <span><span style="color:var(--text-d);">Gross</span> <span class="mono" style="font-weight:600;">${fmtN(stx.grossSales)}</span></span>
+    <span><span style="color:var(--text-d);">Taxable</span> <span class="mono" style="font-weight:600;">${fmtN(stx.taxableSales)}</span></span>
+    <span><span style="color:var(--text-d);">Tax collected</span> <span class="mono" style="font-weight:600;color:var(--navy);">${fmtN(stx.salesTaxCollected)}</span></span>
+  </div>` : '';
   const unmappedWarn = !je.store
     ? `<div class="notice notice-warn" style="margin:12px 16px;">⚠ This Revel store code isn't configured yet. Set it up in <a href="javascript:void(0)" onclick="htOpenStoreConfig('${je.storeCode.replace(/'/g,"\\'")}')" style="color:inherit;text-decoration:underline;">Store Setup</a> before pushing.</div>`
     : '';
@@ -56808,8 +57078,9 @@ function htReviewCard(je){
           Date ${j.date}
         </div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         ${balBadge}
+        ${stxBadge}
       </div>
     </div>
     ${unmappedWarn}
@@ -56822,6 +57093,7 @@ function htReviewCard(je){
         <td class="num mono" style="font-weight:700;">$${j.totals.credits.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       </tr></tfoot>
     </table></div>
+    ${stxRow}
     <div style="padding:10px 18px;font-size:var(--text-sm);color:var(--text-d);border-top:1px solid var(--border);">📎 Source: ${je.sourceFile.name} (${(je.sourceFile.size/1024).toFixed(1)} KB)</div>
   </div>`;
 }
