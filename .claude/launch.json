@@ -2,11 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "ark-server",
+      "name": "ark-qbo-server",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
-      "port": 3000,
-      "autoPort": true
+      "port": 3000
     }
   ]
 }
